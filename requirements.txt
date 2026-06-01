@@ -1,0 +1,12 @@
+rich
+PyYAML
+requests
+python-dotenv
+# pydantic-ai-slim[openai,openrouter,anthropic,google,xai,mistral,cerebras,cohere,groq,bedrock,huggingface]
+pydantic-ai
+mcp
+fastembed
+qdrant-client
+kuzu
+google-genai
+prompt-toolkit

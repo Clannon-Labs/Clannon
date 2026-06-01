@@ -1,0 +1,235 @@
+anthropic:
+  orchestrator:
+    model: claude-3-5-sonnet-latest
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: claude-3-5-sonnet-latest
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: claude-3-5-haiku-latest
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: claude-3-5-sonnet-latest
+    task: "Web research, summarization"
+  planner:
+    model: claude-3-7-sonnet-latest # Maximize thinking tokens for deep architectural planning
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: claude-3-5-haiku-latest
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+openai:
+  orchestrator:
+    model: gpt-5.2
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: gpt-5.2
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: gpt-5.2-mini
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: gpt-5.2
+    task: "Web research, summarization"
+  planner:
+    model: gpt-5.2 # Configured with reasoning_effort="high" inside ModelSettings
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: gpt-5.2-mini
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+google:
+  orchestrator:
+    model: gemini-2.5-pro
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: gemini-2.5-pro
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: gemini-2.5-flash
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: gemini-2.5-flash
+    task: "Web research, summarization"
+  planner:
+    model: gemini-2.5-pro
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: gemini-2.5-flash
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+xai:
+  orchestrator:
+    model: grok-2-latest
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: grok-2-latest
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: grok-2-latest
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: grok-2-latest
+    task: "Web research, summarization"
+  planner:
+    model: grok-3-reasoner # If you have API access to the new reasoning tier
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: grok-2-mini
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+openrouter:
+  orchestrator:
+    model: anthropic/claude-3.5-sonnet
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: anthropic/claude-3.5-sonnet
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: google/gemini-2.5-flash
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: perplexity/sonar-reasoning
+    task: "Web research, summarization"
+  planner:
+    model: deepseek/deepseek-r1
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: google/gemini-2.5-flash
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+groq:
+  orchestrator:
+    model: llama-4-scout # Multimodal Mixture-of-Experts with a massive native context window
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: llama-3.3-70b-instruct
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: llama-3.1-8b-instruct
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: llama-3.3-70b-instruct
+    task: "Web research, summarization"
+  planner:
+    model: deepseek-r1 # Open-source reasoning flagship unmatched in deep logic verification
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: llama-3.1-8b-instruct # High tokens-per-second output ensures fast structural indexing
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+mistral:
+  orchestrator:
+    model: mistral-large-latest
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: codestral-latest
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: mistral-small-latest
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: mistral-large-latest
+    task: "Web research, summarization"
+  planner:
+    model: mistral-large-latest
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: mistral-small-latest
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+cohere:
+  orchestrator:
+    model: command-r-plus-08-2024
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: command-r-plus-08-2024
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: command-r-08-2024
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: command-r-plus-08-2024
+    task: "Web research, summarization"
+  planner:
+    model: command-r-plus-08-2024
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: command-r-08-2024
+    task: "Memory compression, pruning, summarizing old entries"
+
+# Note: Cerebras is built for extreme inference speed,
+# making it incredible for fast memory parsing and slop detection
+
+cerebras:
+  orchestrator:
+    model: llama3.1-70b
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: llama3.1-70b
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: llama3.1-8b
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: llama3.1-70b
+    task: "Web research, summarization"
+  planner:
+    model: llama3.1-70b
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: llama3.1-8b
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+# Note: Bedrock models require the exact ARN or AWS model ID string
+
+bedrock:
+  orchestrator:
+    model: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: us.anthropic.claude-3-5-haiku-20241022-v1:0
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: amazon.nova-pro-v1:0
+    task: "Web research, summarization"
+  planner:
+    model: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: amazon.nova-micro-v1:0
+    task: "Memory compression, pruning, summarizing old entries"
+
+
+# Note: Hugging Face routing usually points to specific repo IDs on serverless inference endpoints
+
+huggingface:
+  orchestrator:
+    model: meta-llama/Llama-3.3-70B-Instruct
+    task: "Central brain, tool routing, memory decisions, multi-step planning"
+  code:
+    model: Qwen/Qwen2.5-Coder-32B-Instruct
+    task: "Code generation, refactoring, debugging"
+  slop_detector:
+    model: meta-llama/Llama-3.1-8B-Instruct
+    task: "AI slop detection via commit forensics and code pattern analysis"
+  research:
+    model: meta-llama/Llama-3.3-70B-Instruct
+    task: "Web research, summarization"
+  planner:
+    model: deepseek-ai/DeepSeek-R1
+    task: "Architecture decisions, roadmaps, long-form reasoning"
+  memory:
+    model: meta-llama/Llama-3.1-8B-Instruct
+    task: "Memory compression, pruning, summarizing old entries"

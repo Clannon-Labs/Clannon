@@ -1,0 +1,1 @@
+"""Architecture smoke-test expert."""

@@ -1,0 +1,54 @@
+# Python / Environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env*
+!.env.example
+.DS_Store
+.pytest_cache/
+
+# Logs
+*.log
+vraksha.log
+
+security/
+
+/memory/
+
+# Exclude SQLite and Temp Files
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Repository Artifacts
+FUTURE_SELF_REVIEW_PLAN.md
+.runtime_index.md
+
+# Architecture Backups & Legacy Residue
+.architecture/*
+
+# Documentation
+/docs/
+
+# Progress
+/progress/
+
+#Examples
+/examples/
+
+#Backups
+legacy_capabilities_backup/
+
+stress_test_agent.md
+handoff.md
+src_sample_tree_structure.md
+
+# LLM Views
+llm_view_snapshot.json
+
+# Agents
+.codex/
+.claude
+.agents/

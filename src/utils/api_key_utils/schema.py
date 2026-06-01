@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+PROVIDER_KEY_SCHEMA = {
+    "anthropic": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_TOKEN"],
+    "openai": ["OPENAI_API_KEY", "CHATGPT_API_KEY", "GPT_API_KEY", "OPENAI_TOKEN", "CHATGPT_TOKEN"],
+    "google": ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_TOKEN", "GOOGLE_TOKEN"],
+    "xai": ["XAI_API_KEY", "GROK_API_KEY", "X_API_KEY", "XAI_TOKEN", "GROK_TOKEN"],
+    "openrouter": ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY", "OPENROUTER_TOKEN"],
+    "mistral": ["MISTRAL_API_KEY", "MISTRAL_TOKEN"],
+    "bedrock": ["AWS_BEARER_TOKEN_BEDROCK", "BEDROCK_API_KEY", "BEDROCK_TOKEN"],
+    "cerebras": ["CEREBRAS_API_KEY", "CEREBRAS_TOKEN"],
+    "cohere": ["CO_API_KEY", "COHERE_API_KEY", "COHERE_TOKEN"],
+    "groq": ["GROQ_API_KEY", "GROQ_TOKEN"],
+    "ollama": ["OLLAMA_BASE_URL", "OLLAMA_HOST"],
+    "huggingface": ["HF_TOKEN", "HUGGINGFACE_API_KEY", "HUGGINGFACE_TOKEN", "HF_API_KEY"],
+    "github": ["GITHUB_TOKEN", "GH_TOKEN"],
+}
