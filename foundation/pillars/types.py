@@ -59,6 +59,7 @@ class Modality(str, Enum):
     IMAGE = "image"
     AUDIO = "audio"
     VIDEO = "video"
+    UNSUPPORTED_MODALITY = "unsupported"
 
 
 # ---------------------------------------------------------------------------

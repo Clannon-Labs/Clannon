@@ -7,6 +7,7 @@ requests
 python-dotenv
 rich
 prompt-toolkit
+python-magic
 
 # ============================================================
 # AGENT FRAMEWORK
@@ -74,7 +75,7 @@ yara-python                  # threat signature scanning
 # ============================================================
 
 outlines                     # constrained generation
-guardrails-ai                # schema validation and guardrails
+# guardrails-ai                # schema validation and guardrails
 
 # ============================================================
 # LAYER 3 — TOOL SANDBOXING

@@ -26,10 +26,11 @@ How to use it:
             flow.ctx.sanitization = result
             flow.ctx.detected_modalities = result.modalities
 
-    3. Flow updates stage and terminal state automatically
-       when you call flow.block(), flow.fail(), flow.warn(), flow.next().
-       You do not call ctx.advance() or ctx.mark_blocked() manually
-       in normal pipeline stage code — Flow does it.
+    3. Flow updates terminal state automatically when you call
+       flow.block() or flow.fail(). Flow.new() sets the initial INTAKE stage.
+       Per-stage transitions are represented by Flow.meta.origin and the
+       journal. If you need current_stage to track each layer, update it in
+       the pipeline wrapper or add explicit Flow support for that mapping.
 
     4. On failure, inspect the full context:
             logger.error("pipeline failed", **flow.ctx.snapshot())
@@ -65,9 +66,9 @@ from uuid import uuid4
 
 class PipelineStage(str, Enum):
     """
-    Tracks which stage the pipeline is currently in.
-    Written to ctx.current_stage at the start of each stage.
+    Tracks coarse pipeline state.
     Used for logging, dead letter output, and debugging.
+    Flow.new() sets INTAKE.
     Flow.block() sets BLOCKED automatically.
     Flow.fail() sets FAILED automatically.
     """
@@ -161,7 +162,8 @@ class VrakshaContext:
 
     # ------------------------------------------------------------------
     # Stage tracking
-    # Written automatically by Flow — do not set manually in stage code.
+    # Flow.new(), Flow.block(), and Flow.fail() update this automatically.
+    # Flow.next() and Flow.warn() do not currently advance it.
     # ------------------------------------------------------------------
 
     current_stage: PipelineStage = PipelineStage.CREATED
@@ -297,14 +299,15 @@ class VrakshaContext:
     def advance(self, stage: PipelineStage) -> None:
         """
         Move to the next pipeline stage.
-        Called automatically by Flow — do not call manually in stage code.
+        Use this from a pipeline wrapper if you need explicit stage tracking.
         """
         self.current_stage = stage
 
     def record_duration(self, stage: str, duration_ms: float) -> None:
         """
         Record how long a stage took.
-        Called automatically by Flow via .next(), .block(), .fail(), .warn().
+        Flow journal entries already carry transition durations. Use this only
+        if you also want a stage-name to duration map on the context.
         """
         self.stage_durations[stage] = duration_ms
 

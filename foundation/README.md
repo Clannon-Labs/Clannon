@@ -364,13 +364,15 @@ flow.ctx.verifier_result = result        # written by verifier
 flow.ctx.orchestrator_response = result  # written by orchestrator
 ```
 
-**Let Flow manage stage and terminal state:**
+**Let Flow manage terminal state:**
 
 ```python
 # Flow.block() calls ctx.mark_blocked() automatically
 # Flow.fail()  calls ctx.mark_failed()  automatically
-# Flow.next()  calls ctx.advance()      automatically
-# Do not call these directly in stage code.
+# Flow.new()   sets the initial INTAKE stage
+#
+# Flow.next() and Flow.warn() do not currently advance ctx.current_stage.
+# Use Flow.meta.origin and flow.audit() for transition history.
 ```
 
 **Log with `snapshot()`:**
@@ -453,8 +455,8 @@ enum belongs to one layer, such as `security/`, define it in that layer's own
 - Add business logic, I/O, or LLM calls to any file here.
 - Define layer-specific types here; they belong in that layer's `schema.py`.
 - Read environment variables here; that belongs in `config/settings.py`.
-- Call `ctx.mark_blocked()`, `ctx.mark_failed()`, or `ctx.advance()` directly in
-  stage code. Use `flow.block()`, `flow.fail()`, or `flow.next()` instead.
+- Call `ctx.mark_blocked()` or `ctx.mark_failed()` directly in stage code. Use
+  `flow.block()` or `flow.fail()` instead.
 
 ## Dependency Rule
 

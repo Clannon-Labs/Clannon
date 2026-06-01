@@ -45,12 +45,21 @@ async def run(flow: Flow) -> Flow:
 
 If a stage blocks or fails, `Flow.chain()` skips the remaining stages
 automatically because `flow.should_stop` becomes true.
+Warnings do not stop the chain. A WARN flow still reaches the next stage with
+`flow.warned`, `flow.reason`, and `flow.threat` available.
+
+`Flow.chain()` is for straight-line execution. If a stage can send work back to
+an earlier stage, such as the output filter asking the orchestrator to revise,
+use an explicit loop in `core/pipeline.py`.
 
 ## Payload Versus Context
 
 Use the payload for what the next stage should process.
 
 Use `flow.ctx` for request-scoped state that later stages may inspect.
+Use `Flow.meta.origin` and `flow.audit()` for the transition history. The
+current implementation does not advance `flow.ctx.current_stage` on every
+`flow.next()` or `flow.warn()` call.
 
 Example:
 
@@ -238,7 +247,13 @@ async def run(flow: Flow) -> Flow:
             )
 
         if result.output.warn:
-            return flow.warn(result.output.reason or "verifier warning", ThreatLevel.LOW, Origin.VERIFIER, started)
+            flow.ctx.verifier_block_reason = result.output.reason
+            return flow.warn(
+                result.output.reason or "verifier warning",
+                ThreatLevel.LOW,
+                Origin.VERIFIER,
+                started,
+            )
 
         return flow.next(normalized, Origin.VERIFIER, started)
 
@@ -262,16 +277,26 @@ from foundation import Flow, ModelUnavailableError, Origin
 
 async def run(flow: Flow) -> Flow:
     started = time.monotonic()
-    normalized = await flow.load()
+    payload = await flow.load()
 
     try:
-        memory_context = await memory.read_relevant(
-            session_id=flow.ctx.session_id,
-            query=normalized,
-        )
+        if flow.ctx.filter_result and flow.ctx.filter_result.retry:
+            prompt = build_revision_prompt(
+                original_input=flow.ctx.normalized_input,
+                previous_response=flow.ctx.orchestrator_response,
+                filter_result=flow.ctx.filter_result,
+            )
+        else:
+            prompt = build_orchestrator_prompt(
+                normalized_input=payload,
+                memory_context=await memory.read_relevant(
+                    session_id=flow.ctx.session_id,
+                    query=payload,
+                ),
+            )
 
         result = await orchestrator_agent.run(
-            user_prompt=build_orchestrator_prompt(normalized, memory_context),
+            user_prompt=prompt,
             deps=OrchestratorDeps(
                 trace_id=flow.meta.trace_id,
                 tool_handler=tool_handler.invoke,
@@ -416,8 +441,8 @@ class FilterResult(BaseModel):
     sanitized_output: str | None = None
 ```
 
-The stage can either pass the output forward, block it, or send it back to the
-orchestrator for another attempt.
+The stage can either pass the output forward, block it, or mark that a retry is
+needed. If retry is allowed, the pipeline loop calls the orchestrator again.
 
 ```python
 from foundation import BlockReason, Flow, Origin, ThreatLevel, constants
@@ -442,8 +467,7 @@ async def run(flow: Flow) -> Flow:
 
     if result.output.retry and flow.ctx.filter_retry_count < constants.MAX_OUTPUT_RETRIES:
         flow.ctx.filter_retry_count += 1
-        revised = await orchestrator.revise_after_filter(flow, result.output)
-        return flow.next(revised, Origin.ORCHESTRATOR, started)
+        return flow.next(candidate, Origin.FILTER, started)
 
     flow.ctx.filter_blocked = True
     flow.ctx.filter_block_reason = result.output.reason

@@ -186,7 +186,8 @@ class Flow(Generic[T]):
 
     Do not instantiate directly — use Flow.new().
     Do not mutate fields directly — use .next(), .block(), .fail(), .warn().
-    Every method returns a new Flow. The original is never modified.
+    Transition methods return a new Flow. Flow.next() also offloads the old
+    payload cache so large raw data can be released promptly.
 
     Fields:
         handle      — lightweight payload descriptor + lazy loader
@@ -431,7 +432,8 @@ class Flow(Generic[T]):
     ) -> "Flow[T]":
         """
         Flag this flow with a warning. Pipeline continues.
-        The orchestrator will see the warning via ctx.
+        The next stage receives this Flow with status WARN, reason, and threat.
+        Write to flow.ctx as well if later stages need durable warning state.
         Journal entry is written automatically.
 
         reason  — what was flagged
