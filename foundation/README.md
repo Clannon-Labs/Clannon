@@ -212,6 +212,15 @@ flow.ctx.detected_modalities = result.modalities
 flow.ctx.tool_calls.append(ToolCallRecord(tool_name="search", arguments={...}))
 ```
 
+## Using Flow Across Layers
+
+For a full architecture walkthrough, see **[FLOW_GUIDE.md](https://github.com/vraksha/vraksha/blob/refractor/foundation/FLOW_GUIDE.md)**.
+
+That guide shows how `Flow` should move through sanitizers, normalization,
+verification, the Pydantic AI orchestrator, tool and expert handlers, output
+filtering, output delivery, and memory writes. It also covers how to add a new
+layer without breaking the Flow contract.
+
 ## transport.py: Envelope and Meta
 
 `Envelope` and `Meta` are the low-level primitives that `Flow` uses.

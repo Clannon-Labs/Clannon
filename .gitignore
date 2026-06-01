@@ -37,9 +37,11 @@ FUTURE_SELF_REVIEW_PLAN.md
 
 #Examples
 /examples/
+samples/
 
 #Backups
 legacy_capabilities_backup/
+Backup/
 
 stress_test_agent.md
 handoff.md

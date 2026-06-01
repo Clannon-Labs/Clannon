@@ -1,12 +1,109 @@
-rich
+# ============================================================
+# CORE CONFIGURATION & UTILITIES
+# ============================================================
+
 PyYAML
 requests
 python-dotenv
-# pydantic-ai-slim[openai,openrouter,anthropic,google,xai,mistral,cerebras,cohere,groq,bedrock,huggingface]
-pydantic-ai
-mcp
-fastembed
-qdrant-client
-kuzu
-google-genai
+rich
 prompt-toolkit
+
+# ============================================================
+# AGENT FRAMEWORK
+# ============================================================
+
+pydantic-ai                  # core agent framework
+pydantic[email]              # strict schema validation + email type support
+jsonschema                   # secondary JSON validation before pydantic validation
+
+# ============================================================
+# MODEL PROVIDERS & PROTOCOLS
+# ============================================================
+
+# google-genai                 # Gemini API
+mcp                          # Model Context Protocol
+
+# ============================================================
+# VECTOR SEARCH & MEMORY
+# ============================================================
+
+fastembed                    # local embeddings
+qdrant-client                # vector database
+kuzu                         # graph database
+
+cryptography                 # memory encryption at rest
+
+# ============================================================
+# LAYER 1 — INPUT SANITIZATION & SECURITY
+# ============================================================
+
+# --- Text Security ---
+presidio-analyzer            # PII detection
+presidio-anonymizer          # PII anonymization/redaction
+detect-secrets               # API keys, tokens, credentials detection
+bleach                       # HTML sanitization
+llm-guard                    # prompt injection, toxicity, secrets scanning
+rebuff                       # secondary prompt injection detection
+
+# --- PDF Security ---
+pymupdf                      # PDF text/image extraction
+pikepdf                      # PDF structure inspection, JS stripping
+
+# pdfid is a standalone script by Didier Stevens
+# https://blog.didierstevens.com/programs/pdf-tools/
+
+# --- Image Security ---
+Pillow                       # image sanitization and metadata stripping
+
+# exiftool is a system package:
+# apt install libimage-exiftool-perl
+
+# --- Audio / Video Security ---
+ffmpeg-python                # media transcoding and sanitization
+mutagen                      # audio metadata inspection
+
+# --- Universal File Scanning ---
+yara-python                  # threat signature scanning
+
+# Optional:
+# clamd                      # ClamAV binding
+# apt install clamav clamav-daemon
+
+# ============================================================
+# LAYER 2 — STRUCTURED VERIFICATION
+# ============================================================
+
+outlines                     # constrained generation
+guardrails-ai                # schema validation and guardrails
+
+# ============================================================
+# LAYER 3 — TOOL SANDBOXING
+# ============================================================
+
+restrictedpython             # sandboxed Python execution
+
+# System-level (not pip):
+# - Docker + seccomp
+# - gVisor
+# - Firecracker
+
+# ============================================================
+# ASYNC & CONCURRENCY
+# ============================================================
+
+anyio                        # async primitives
+asyncio-pool                 # worker pool management
+
+# ============================================================
+# OBSERVABILITY & TRACING
+# ============================================================
+
+structlog                    # structured logging
+opentelemetry-sdk            # distributed tracing
+opentelemetry-exporter-otlp  # OTLP trace export
+
+tenacity                     # retries
+cachetools                   # in-memory caching
+orjson                       # fast JSON serialization
+uvloop                       # faster event loop (Linux)
+
