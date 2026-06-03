@@ -6,8 +6,6 @@ from pathlib import Path
 from foundation import Flow, Origin, BlockReason, ThreatLevel
 from foundation import Modality, constants, PipelineStage
 from foundation import (
-    VrakshaError,
-    InputError,
     UnsupportedModalityError,
     InputTooLargeError,
     MalformedInputError
@@ -15,59 +13,79 @@ from foundation import (
 
 
 def _is_too_large(file) -> bool:
-    return True if Path(file).stat().st_size > constants.MAX_INPUT_SIZE_BYTES else False
+    try:
+        if isinstance(file, (str, os.PathLike)):
+            return Path(file).stat().st_size > constants.MAX_INPUT_SIZE_BYTES
+
+        elif isinstance(file, bytes):
+            return len(file) > constants.MAX_INPUT_SIZE_BYTES
+
+        else:
+            raise InputTooLargeError("cannot determine size of input type")
+
+    except (OSError, PermissionError) as e:
+        raise MalformedInputError("could not read input file", cause=e)
 
 
 def _detect_modalities(file) -> list[Modality]:
     modalities = []
 
-    if isinstance(file, (str, os.PathLike)):
-        mime = magic.from_file(file, mime=True)
-        
-        if mime.startswith("text/"):
-            modalities.append(Modality.TEXT)
-        
-        elif mime.startswith("application/pdf"):
-            modalities.append(Modality.PDF)
+    try:
+        if isinstance(file, (str, os.PathLike)):
+            mime = magic.from_file(file, mime=True)
 
-        elif mime.startswith("image/"):
-            modalities.append(Modality.IMAGE)
+            if mime.startswith("text/"):
+                modalities.append(Modality.TEXT)
 
-        elif mime.startswith("audio/"):
-            modalities.append(Modality.AUDIO)
+            elif mime.startswith("application/pdf"):
+                modalities.append(Modality.PDF)
 
-        elif mime.startswith("video/"):
-            modalities.append(Modality.VIDEO)
+            elif mime.startswith("image/"):
+                modalities.append(Modality.IMAGE)
 
-        return modalities
-    
-    else:
-        mime = magic.from_buffer(file, mime=True)
-        
-        if mime.startswith("text/"):
-            modalities.append(Modality.TEXT)
-        
-        elif mime.startswith("application/pdf"):
-            modalities.append(Modality.PDF)
+            elif mime.startswith("audio/"):
+                modalities.append(Modality.AUDIO)
 
-        elif mime.startswith("image/"):
-            modalities.append(Modality.IMAGE)
+            elif mime.startswith("video/"):
+                modalities.append(Modality.VIDEO)
 
-        elif mime.startswith("audio/"):
-            modalities.append(Modality.AUDIO)
+            else:
+                raise raise UnsupportedModalityError(f"Unsupported modality {mime}")
 
-        elif mime.startswith("video/"):
-            modalities.append(Modality.VIDEO)
+            return modalities
 
-            
+        else:
+            mime = magic.from_buffer(file, mime=True)
 
-    
+            if mime.startswith("text/"):
+                modalities.append(Modality.TEXT)
+
+            elif mime.startswith("application/pdf"):
+                modalities.append(Modality.PDF)
+
+            elif mime.startswith("image/"):
+                modalities.append(Modality.IMAGE)
+
+            elif mime.startswith("audio/"):
+                modalities.append(Modality.AUDIO)
+
+            elif mime.startswith("video/"):
+                modalities.append(Modality.VIDEO)
+
+            else:
+                raise UnsupportedModalityError(f"Unsupported modality {mime}")
+
+            return modalities
+
+
+    except Exception as e:
+        raise MalformedInputError("Could not detect mime type", cause=e)
 
 async def process(flow: Flow) -> Flow:
     started = time.monotonic()
 
     try:
-        raw_input = await flow.load()
+        raw_input = await flow.load() # Load the payload/data in its current condition
 
         if _is_too_large(raw_input):
             return flow.block(
@@ -90,7 +108,26 @@ async def process(flow: Flow) -> Flow:
         flow.ctx.detected_modalities = [m.value for m in modalities]
         flow.ctx.advance(PipelineStage.INTAKE)
 
+        # Forward it to next layer in the pipeline
+        # This creates a new flow object but with the same old context
         return flow.next(raw_input, Origin.INTAKE, started)
+
+    except UnsupportedModalityError as e:
+        return flow.block(
+            BlockReason.UNSUPPORTED_MODALITY,
+            ThreatLevel.HIGH,
+            Origin.INTAKE,
+            started
+        )
+
+    except MalformedInputError as e:
+        # expected bad input.. block, not fail
+        return flow.block(
+            BlockReason.MALFORMED_INPUT,  # add this to BlockReason
+            ThreatLevel.NONE,
+            Origin.INTAKE,
+            started
+        )
 
     except Exception as e:
         return flow.fail(e, Origin.INTAKE, started)

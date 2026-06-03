@@ -329,7 +329,7 @@ class Flow(Generic[T]):
             handle=new_handle,
             status=Status.OK,
             meta=new_meta,
-            ctx=self.ctx,
+            ctx=self.ctx, # This is the sauce right here, it preserves the context while updating current stage
             journal=[*self.journal, entry],
         )
 
