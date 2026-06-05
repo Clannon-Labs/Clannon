@@ -1,4 +1,5 @@
 from .flow import Flow, PayloadHandle, JournalEntry
+from .model_registry import ModelProfile, ModelRegistry, load_model_registry
 from .pillars.transport import Envelope, Status, Meta
 
 from .pillars.errors import (
@@ -51,6 +52,9 @@ __all__ = [
     "Flow",
     "PayloadHandle",
     "JournalEntry",
+    "ModelProfile",
+    "ModelRegistry",
+    "load_model_registry",
 
     # transport primitives (used inside flow, available if needed directly)
     "Envelope",

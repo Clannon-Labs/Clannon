@@ -1,63 +1,105 @@
+defaults:
+  provider: openai
+  verifier: openai
+  normalizer: openai
+  orchestrator: openai
+  filter: openai
+  media_expert: google
+
 anthropic:
   orchestrator:
     model: claude-3-5-sonnet-latest
+    capabilities: [text, json, tools]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
   code:
     model: claude-3-5-sonnet-latest
+    capabilities: [text, json, tools]
     task: "Code generation, refactoring, debugging"
   slop_detector:
     model: claude-3-5-haiku-latest
+    capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
     model: claude-3-5-sonnet-latest
+    capabilities: [text, json]
     task: "Web research, summarization"
   planner:
     model: claude-3-7-sonnet-latest # Maximize thinking tokens for deep architectural planning
+    capabilities: [text, json]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
     model: claude-3-5-haiku-latest
+    capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
 
 openai:
   orchestrator:
     model: gpt-5.2
+    capabilities: [text, json, tools]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
+  verifier:
+    model: gpt-5.2-mini
+    capabilities: [text, json, tools]
+    task: "Input verification with structured output and optional tools"
+  normalizer:
+    model: gpt-5.2-mini
+    capabilities: [text, json]
+    task: "Target model profile for code-only normalizer decisions"
+  filter:
+    model: gpt-5.2-mini
+    capabilities: [text, json]
+    task: "Output safety filtering with structured output"
   code:
     model: gpt-5.2
+    capabilities: [text, json, tools]
     task: "Code generation, refactoring, debugging"
   slop_detector:
     model: gpt-5.2-mini
+    capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
     model: gpt-5.2
+    capabilities: [text, json]
     task: "Web research, summarization"
   planner:
     model: gpt-5.2 # Configured with reasoning_effort="high" inside ModelSettings
+    capabilities: [text, json]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
     model: gpt-5.2-mini
+    capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
 
 google:
   orchestrator:
     model: gemini-2.5-pro
+    capabilities: [text, json, tools, image, audio, video]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
+  media_expert:
+    model: gemini-2.5-flash
+    capabilities: [text, json, image, audio, video]
+    task: "Fast multimodal understanding for normalizer/expert fallback"
   code:
     model: gemini-2.5-pro
+    capabilities: [text, json, tools, image]
     task: "Code generation, refactoring, debugging"
   slop_detector:
     model: gemini-2.5-flash
+    capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
     model: gemini-2.5-flash
+    capabilities: [text, json, image]
     task: "Web research, summarization"
   planner:
     model: gemini-2.5-pro
+    capabilities: [text, json, image, audio, video]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
     model: gemini-2.5-flash
+    capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
 

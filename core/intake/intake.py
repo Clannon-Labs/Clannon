@@ -10,6 +10,7 @@ from foundation import (
     InputTooLargeError,
     MalformedInputError
 )
+from .rate_limiter import check_request_rate
 
 
 def _is_too_large(file) -> bool:
@@ -28,7 +29,7 @@ def _is_too_large(file) -> bool:
                 return possible_path.stat().st_size > constants.MAX_INPUT_SIZE_BYTES
             return len(file.encode("utf-8", errors="replace")) > constants.MAX_INPUT_SIZE_BYTES
 
-        elif isinstance(file, bytes):
+        elif isinstance(file, (bytes, bytearray, memoryview)):
             return len(file) > constants.MAX_INPUT_SIZE_BYTES
 
         else:
@@ -98,6 +99,11 @@ def _detect_modalities(file) -> list[Modality]:
             return modalities
 
         else:
+            if isinstance(file, bytearray):
+                file = bytes(file)
+            elif isinstance(file, memoryview):
+                file = file.tobytes()
+
             mime = magic.from_buffer(file, mime=True)
 
             if mime.startswith("text/"):
@@ -131,6 +137,15 @@ async def process(flow: Flow) -> Flow:
 
     try:
         raw_input = await flow.load() # Load the payload/data in its current condition
+
+        rate_limit = check_request_rate(flow.ctx.session_id)
+        if not rate_limit.allowed:
+            return flow.block(
+                BlockReason.RATE_LIMITED,
+                ThreatLevel.NONE,
+                Origin.INTAKE,
+                started
+            )
 
         if _is_too_large(raw_input):
             return flow.block(

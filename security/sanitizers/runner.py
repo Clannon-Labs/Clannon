@@ -16,7 +16,7 @@ Ordering is important:
 import time
 import asyncio
 
-from foundation import Flow, Origin, BlockReason
+from foundation import Flow, Origin, BlockReason, PipelineStage
 from foundation import constants, SanitizationError
 from . import pre_sanitization
 from .workers import text, pdf, image, video, audio
@@ -34,6 +34,7 @@ async def run(flow: Flow) -> Flow:
 
     try:
         raw = await flow.load()
+        flow.ctx.advance(PipelineStage.SANITIZING)
         modalities = flow.ctx.detected_modalities
 
         # Pre-sanitization is a hard gate. No modality parser should touch the
@@ -60,6 +61,13 @@ async def run(flow: Flow) -> Flow:
         if "pdf" in modalities: tasks.append(pdf.scan(raw))
         if "video" in modalities: tasks.append(video.scan(raw))
         if "audio" in modalities: tasks.append(audio.scan(raw))
+        if not tasks:
+            return flow.block(
+                BlockReason.UNSUPPORTED_MODALITY,
+                pre_result.threat_level,
+                Origin.SANITIZER,
+                started
+            )
 
         async with asyncio.timeout(constants.SANITIZER_TIMEOUT_TOTAL_S):
             results = await asyncio.gather(*tasks, return_exceptions=True)

@@ -9,6 +9,7 @@ directly in a module, it belongs here instead.
 
 Sections:
     PIPELINE        — overall request lifecycle limits
+    INTAKE          — request admission and raw input limits
     SANITIZERS      — parallel worker limits and file size caps
     VERIFIER        — input verification LLM limits
     ORCHESTRATOR    — main LLM reasoning loop limits
@@ -35,6 +36,21 @@ MAX_OUTPUT_RETRIES          = 3       # times the filter can reject and re-send
 
 
 # ---------------------------------------------------------------------------
+# INTAKE
+# Cheap admission checks before sanitizers, normalizers, or LLMs do work.
+# The in-memory rate limiter is per process. Replace its backend with Redis
+# when running multiple app containers that need shared request accounting.
+# ---------------------------------------------------------------------------
+
+RATE_LIMIT_WINDOW_S         = 60.0    # rolling per-session request window
+RATE_LIMIT_MAX_REQUESTS     = 30      # max requests per session in the window
+RATE_LIMIT_MAX_TRACKED_KEYS = 10_000  # max session keys kept by in-memory limiter
+GLOBAL_RATE_LIMIT_WINDOW_S  = 1.0     # rolling global burst window
+GLOBAL_RATE_LIMIT_MAX_REQUESTS = 10   # max total requests in the burst window
+MAX_INPUT_SIZE_BYTES        = 50 * 1024 * 1024   # 50 MB hard cap on raw input
+
+
+# ---------------------------------------------------------------------------
 # SANITIZERS
 # Parallel workers that inspect raw input.
 # TOTAL timeout is the wall time for all workers combined (they run in parallel).
@@ -46,7 +62,6 @@ SANITIZER_TIMEOUT_WORKER_S  = 10.0   # single worker timeout (text, pdf, image e
 SANITIZER_MAX_WORKERS       = 10     # global semaphore — max concurrent workers
                                      # across all incoming requests
 
-MAX_INPUT_SIZE_BYTES        = 50 * 1024 * 1024   # 50 MB hard cap on raw input
 MAX_TEXT_INPUT_CHARS        = 100_000             # character cap on text content
 MAX_PDF_PAGES               = 500                 # pages before we reject the pdf
 MAX_IMAGE_DIMENSION_PX      = 8192                # width or height cap in pixels

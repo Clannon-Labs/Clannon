@@ -109,6 +109,7 @@ class BlockReason(str, Enum):
     VERIFIER_REJECTED    — verifier LLM classified input as dangerous
     FILTER_REJECTED      — output filter rejected orchestrator's response
     INPUT_TOO_LARGE      — input exceeded size limits
+    RATE_LIMITED         — request exceeded intake rate limits
     UNSUPPORTED_MODALITY — input contains a modality we don't handle
     POLICY_VIOLATION     — content violates a hardcoded policy (not LLM judgment)
     MAX_RETRIES_EXCEEDED — filter retry loop exhausted without a clean response
@@ -119,6 +120,7 @@ class BlockReason(str, Enum):
     VERIFIER_REJECTED    = "verifier_rejected"
     FILTER_REJECTED      = "filter_rejected"
     INPUT_TOO_LARGE      = "input_too_large"
+    RATE_LIMITED         = "rate_limited"
     UNSUPPORTED_MODALITY = "unsupported_modality"
     POLICY_VIOLATION     = "policy_violation"
     MAX_RETRIES_EXCEEDED = "max_retries_exceeded"
