@@ -113,6 +113,7 @@ class BlockReason(str, Enum):
     POLICY_VIOLATION     — content violates a hardcoded policy (not LLM judgment)
     MAX_RETRIES_EXCEEDED — filter retry loop exhausted without a clean response
     """
+    MALFORMED_INPUT      = "malformed_input"
     MALICIOUS_CONTENT    = "malicious_content"
     INJECTION_DETECTED   = "injection_detected"
     VERIFIER_REJECTED    = "verifier_rejected"

@@ -14,8 +14,19 @@ from foundation import (
 
 def _is_too_large(file) -> bool:
     try:
-        if isinstance(file, (str, os.PathLike)):
+        if isinstance(file, os.PathLike):
             return Path(file).stat().st_size > constants.MAX_INPUT_SIZE_BYTES
+
+        elif isinstance(file, str):
+            possible_path = Path(file)
+            try:
+                is_file_path = "\n" not in file and possible_path.exists() and possible_path.is_file()
+            except OSError:
+                is_file_path = False
+
+            if is_file_path:
+                return possible_path.stat().st_size > constants.MAX_INPUT_SIZE_BYTES
+            return len(file.encode("utf-8", errors="replace")) > constants.MAX_INPUT_SIZE_BYTES
 
         elif isinstance(file, bytes):
             return len(file) > constants.MAX_INPUT_SIZE_BYTES
@@ -31,7 +42,7 @@ def _detect_modalities(file) -> list[Modality]:
     modalities = []
 
     try:
-        if isinstance(file, (str, os.PathLike)):
+        if isinstance(file, os.PathLike):
             mime = magic.from_file(file, mime=True)
 
             if mime.startswith("text/"):
@@ -50,7 +61,39 @@ def _detect_modalities(file) -> list[Modality]:
                 modalities.append(Modality.VIDEO)
 
             else:
-                raise raise UnsupportedModalityError(f"Unsupported modality {mime}")
+                raise UnsupportedModalityError(f"Unsupported modality {mime}")
+
+            return modalities
+
+        elif isinstance(file, str):
+            possible_path = Path(file)
+            try:
+                is_file_path = "\n" not in file and possible_path.exists() and possible_path.is_file()
+            except OSError:
+                is_file_path = False
+
+            if is_file_path:
+                mime = magic.from_file(str(possible_path), mime=True)
+            else:
+                mime = magic.from_buffer(file.encode("utf-8", errors="replace"), mime=True)
+
+            if mime.startswith("text/"):
+                modalities.append(Modality.TEXT)
+
+            elif mime.startswith("application/pdf"):
+                modalities.append(Modality.PDF)
+
+            elif mime.startswith("image/"):
+                modalities.append(Modality.IMAGE)
+
+            elif mime.startswith("audio/"):
+                modalities.append(Modality.AUDIO)
+
+            elif mime.startswith("video/"):
+                modalities.append(Modality.VIDEO)
+
+            else:
+                raise UnsupportedModalityError(f"Unsupported modality {mime}")
 
             return modalities
 
@@ -77,6 +120,8 @@ def _detect_modalities(file) -> list[Modality]:
 
             return modalities
 
+    except UnsupportedModalityError:
+        raise
 
     except Exception as e:
         raise MalformedInputError("Could not detect mime type", cause=e)
@@ -123,7 +168,7 @@ async def process(flow: Flow) -> Flow:
     except MalformedInputError as e:
         # expected bad input.. block, not fail
         return flow.block(
-            BlockReason.MALFORMED_INPUT,  # add this to BlockReason
+            BlockReason.MALFORMED_INPUT,
             ThreatLevel.NONE,
             Origin.INTAKE,
             started
@@ -131,4 +176,3 @@ async def process(flow: Flow) -> Flow:
 
     except Exception as e:
         return flow.fail(e, Origin.INTAKE, started)
-

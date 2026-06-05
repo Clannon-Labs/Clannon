@@ -1,3 +1,3 @@
-from .runner import run as runner
+from . import runner
 
 __all__=["runner"]

@@ -64,7 +64,7 @@
 """
 
 from foundation import Flow
-from core import intake, normalizer, orchestrator, output
+from core import intake, normalizer, orchestrator, output # only intake is available till now
 from security.sanitizers import runner as sanitizer
 from security.verifier import verifier
 from security.filter import filter as output_filter

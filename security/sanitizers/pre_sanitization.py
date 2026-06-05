@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+import asyncio
+import io
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import clamd
+import yara
+
+from foundation import SanitizationError, ThreatLevel
+
+
+CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
+CLAMAV_PORT = int(os.getenv("CLAMAV_PORT", "3310"))
+YARA_RULES_DIR = os.getenv("AGENT_YARA_DIR", "rules")
+
+
+@dataclass(slots=True)
+class EngineScanResult:
+    engine: str
+    threat_level: ThreatLevel
+    reason: str | None = None
+    signature: str | None = None
+    skipped: bool = False
+
+    @property
+    def passed(self) -> bool:
+        return not self.threat_level.should_block
+
+
+@dataclass(slots=True)
+class PreSanitizationResult:
+    threat_level: ThreatLevel = ThreatLevel.NONE
+    reason: str | None = None
+    passed: bool = True
+    engine_results: list[EngineScanResult] = field(default_factory=list)
+
+
+def _payload_to_bytes(raw: Any) -> bytes:
+    if isinstance(raw, bytes):
+        return raw
+    if isinstance(raw, bytearray):
+        return bytes(raw)
+    if isinstance(raw, memoryview):
+        return raw.tobytes()
+    if isinstance(raw, str):
+        possible_path = Path(raw)
+        try:
+            is_file_path = "\n" not in raw and possible_path.exists() and possible_path.is_file()
+        except OSError:
+            is_file_path = False
+        if is_file_path:
+            return possible_path.read_bytes()
+        return raw.encode("utf-8", errors="replace")
+    return repr(raw).encode("utf-8", errors="replace")
+
+
+class ClamScanner:
+    def __init__(
+        self,
+        host: str = CLAMAV_HOST,
+        port: int = CLAMAV_PORT,
+        timeout_s: float = 10.0,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.timeout_s = timeout_s
+
+    async def scan(self, raw: Any) -> EngineScanResult:
+        payload = _payload_to_bytes(raw)
+        return await asyncio.to_thread(self._scan_sync, payload)
+
+    def _scan_sync(self, payload: bytes) -> EngineScanResult:
+        try:
+            client = clamd.ClamdNetworkSocket(
+                host=self.host,
+                port=self.port,
+                timeout=self.timeout_s,
+            )
+            response = client.instream(io.BytesIO(payload))
+        except clamd.ClamdError as exc:
+            raise SanitizationError(
+                f"ClamAV scan failed: {exc}",
+                modality="all",
+                worker="clamav",
+            ) from exc
+
+        status, signature = response.get("stream", ("ERROR", None))
+        if status == "OK":
+            return EngineScanResult(engine="clamav", threat_level=ThreatLevel.NONE)
+
+        if status == "FOUND":
+            return EngineScanResult(
+                engine="clamav",
+                threat_level=ThreatLevel.HIGH,
+                reason=f"ClamAV detected malware signature: {signature}",
+                signature=str(signature),
+            )
+
+        raise SanitizationError(
+            f"ClamAV returned an unexpected response: {response}",
+            modality="all",
+            worker="clamav",
+        )
+
+
+class YaraScanner:
+    def __init__(self, rules_dir: str | Path = YARA_RULES_DIR) -> None:
+        self.rules_dir = Path(rules_dir)
+
+    async def scan(self, raw: Any) -> EngineScanResult:
+        payload = _payload_to_bytes(raw)
+        return await asyncio.to_thread(self._scan_sync, payload)
+
+    def _scan_sync(self, payload: bytes) -> EngineScanResult:
+        rule_files = self._rule_files()
+        if not rule_files:
+            return EngineScanResult(
+                engine="yara",
+                threat_level=ThreatLevel.NONE,
+                reason=f"No YARA rules found in {self.rules_dir}",
+                skipped=True,
+            )
+
+        try:
+            rules = yara.compile(
+                filepaths={str(index): str(path) for index, path in enumerate(rule_files)}
+            )
+            matches = rules.match(data=payload)
+        except Exception as exc:
+            raise SanitizationError(
+                f"YARA scan failed: {exc}",
+                modality="all",
+                worker="yara",
+            ) from exc
+
+        if not matches:
+            return EngineScanResult(engine="yara", threat_level=ThreatLevel.NONE)
+
+        signature = ", ".join(match.rule for match in matches)
+        return EngineScanResult(
+            engine="yara",
+            threat_level=ThreatLevel.HIGH,
+            reason=f"YARA matched threat rule(s): {signature}",
+            signature=signature,
+        )
+
+    def _rule_files(self) -> list[Path]:
+        if not self.rules_dir.exists():
+            return []
+        return sorted(
+            path
+            for path in self.rules_dir.rglob("*")
+            if path.suffix.lower() in {".yar", ".yara"} and path.is_file()
+        )
+
+
+async def scan(raw: Any) -> PreSanitizationResult:
+    engine_results = [
+        await ClamScanner().scan(raw),
+        await YaraScanner().scan(raw),
+    ]
+
+    for result in engine_results:
+        if result.threat_level.should_block:
+            return PreSanitizationResult(
+                threat_level=result.threat_level,
+                reason=result.reason,
+                passed=False,
+                engine_results=engine_results,
+            )
+
+    return PreSanitizationResult(engine_results=engine_results)
+
+
+async def run(raw: Any) -> PreSanitizationResult:
+    return await scan(raw)

@@ -43,8 +43,10 @@ presidio-analyzer            # PII detection
 presidio-anonymizer          # PII anonymization/redaction
 detect-secrets               # API keys, tokens, credentials detection
 bleach                       # HTML sanitization
-llm-guard                    # prompt injection, toxicity, secrets scanning
-rebuff                       # secondary prompt injection detection
+
+# These are too heavy :)
+# llm-guard                    # prompt injection, toxicity, secrets scanning
+# rebuff                       # secondary prompt injection detection
 
 # --- PDF Security ---
 pymupdf                      # PDF text/image extraction
@@ -66,8 +68,7 @@ mutagen                      # audio metadata inspection
 # --- Universal File Scanning ---
 yara-python                  # threat signature scanning
 
-# Optional:
-# clamd                      # ClamAV binding
+clamd                        # ClamAV binding
 # apt install clamav clamav-daemon
 
 # ============================================================
@@ -107,4 +108,3 @@ tenacity                     # retries
 cachetools                   # in-memory caching
 orjson                       # fast JSON serialization
 uvloop                       # faster event loop (Linux)
-
