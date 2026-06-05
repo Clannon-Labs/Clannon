@@ -1,0 +1,171 @@
+# Sanitizers Module
+
+The sanitizers module is the pipeline's security cleanup layer. Its job is to
+inspect incoming payloads before later stages touch them, block clearly unsafe
+inputs, and pass forward a sanitized payload when a worker can clean the input
+without damaging quality.
+
+The active path is:
+
+1. `security/sanitizers/runner.py`
+2. `security/sanitizers/pre_sanitization.py`
+3. `security/sanitizers/workers/*`
+
+## Sanitizer Runner
+
+`runner.py` is the stage entry point used by the pipeline.
+
+It:
+
+- Loads the payload from the current `Flow`.
+- Runs universal pre-sanitization first.
+- Runs modality-specific sanitizer workers only after pre-sanitization passes.
+- Runs matching modality workers concurrently.
+- Blocks the flow when a worker reports a blocking threat level.
+- Stores sanitizer results in `flow.ctx.sanitization`.
+- Passes the sanitized payload to the next stage when a worker produced one.
+
+The original input is not destroyed by this stage. The default downstream
+payload becomes the sanitized output, but sanitizer reports and context keep the
+stage-level details available for inspection.
+
+## Pre-Sanitization
+
+`pre_sanitization.py` is the universal gate that runs before text, image, PDF,
+audio, or video workers.
+
+It currently uses:
+
+- ClamAV through the `clamd` Python client.
+- YARA through `yara-python`.
+
+ClamAV scans the raw payload through the clamd TCP `INSTREAM` API. YARA compiles
+local `.yar` and `.yara` files from the configured rules directory and matches
+them against the same raw payload.
+
+If the YARA rules directory is missing, it is created automatically. If no rules
+exist yet, YARA reports a skipped clean result so local development can continue.
+
+Relevant environment variables:
+
+```env
+CLAMAV_HOST=127.0.0.1
+CLAMAV_PORT=3310
+AGENT_YARA_DIR=rules
+```
+
+In Docker Compose, ClamAV runs as its own service and the app points to it with:
+
+```env
+CLAMAV_HOST=clamav
+CLAMAV_PORT=3310
+AGENT_YARA_DIR=/vraksha/rules
+```
+
+## Text Worker
+
+`workers/text.py` handles text payloads.
+
+It uses:
+
+- `detect-secrets` to detect API keys, tokens, and credentials.
+- `presidio-analyzer` to detect PII.
+- `presidio-anonymizer` to anonymize detected PII.
+- `bleach` to strip HTML tags and attributes.
+
+Secrets are treated as high risk and can block the pipeline. PII and HTML are
+sanitized into `sanitized_text` when possible.
+
+The async `scan()` function is only the entry point. The actual blocking work is
+done in `_scan_sync()` and moved to a worker thread so the runner can keep other
+modality workers concurrent.
+
+## Image Worker
+
+`workers/image.py` handles image payloads.
+
+It uses:
+
+- Pillow to validate image structure and dimensions.
+- `exiftool` to strip metadata without recompressing image pixels.
+
+The worker rejects invalid images and decompression bombs. When metadata exists,
+it strips metadata losslessly and returns `sanitized_image`.
+
+## PDF Worker
+
+`workers/pdf.py` handles PDF payloads.
+
+It uses:
+
+- PyMuPDF (`fitz`) for page-count validation.
+- `pikepdf` for structural parsing, dangerous-entry stripping, and safe re-save.
+
+It blocks encrypted PDFs that cannot be inspected, invalid PDFs, and PDFs that
+exceed the configured page limit. It strips active PDF features such as
+JavaScript actions, launch actions, embedded files, rich media, and XFA/forms
+before returning `sanitized_pdf`.
+
+## Audio Worker
+
+`workers/audio.py` handles audio payloads.
+
+It uses:
+
+- `ffmpeg`/`ffprobe` through `ffmpeg-python` to validate and remux audio.
+- `mutagen` to inspect audio metadata.
+
+It rejects inputs without an audio stream and blocks audio that exceeds the
+configured duration limit. Metadata stripping is done through stream-copy remux
+when possible, preserving audio quality instead of re-encoding.
+
+## Video Worker
+
+`workers/video.py` handles video payloads.
+
+It uses:
+
+- `ffmpeg`/`ffprobe` through `ffmpeg-python` to validate and remux video.
+
+It rejects inputs without a video stream and blocks video that exceeds the
+configured duration limit. Metadata stripping is done through stream-copy remux
+when possible, preserving video quality instead of re-encoding.
+
+## Runtime Dependencies
+
+Python dependencies for this layer live in `requirements.txt`.
+
+System dependencies needed by the active sanitizer workers are installed in the
+Docker image:
+
+- `ffmpeg`
+- `libimage-exiftool-perl`
+- `libmagic1`
+
+ClamAV runs as a separate Docker Compose service instead of inside the app
+container.
+
+## Tests
+
+Current sanitizer tests live in:
+
+- `tests/text_sanitization.py`
+- `tests/pre_sanitization.py`
+
+Run them with:
+
+```bash
+python -m pytest -s tests/text_sanitization.py tests/pre_sanitization.py
+```
+
+The ClamAV EICAR test requires a running clamd daemon. If clamd is not
+available, that test is skipped.
+
+## Not Active In The Pipeline
+
+`security/vendors/pdfid/` contains standalone Didier Stevens PDF tools. They are
+not imported by the active sanitizer pipeline.
+
+They can be useful for manual PDF investigation, but the working PDF sanitizer
+currently uses `PyMuPDF` and `pikepdf` because those provide structured Python
+APIs that are easier to test and integrate.
