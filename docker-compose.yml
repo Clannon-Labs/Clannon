@@ -8,28 +8,26 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/vraksha
-      - ./rules:/app/rules
     env_file:
       - .env.local
     environment:
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
-      - AGENT_YARA_DIR=/app/rules
+      - AGENT_YARA_DIR=/vraksha/rules
       - HF_HOME=/vraksha/assets/hf_cache
     stdin_open: true
     tty: true
     restart: always
 
-  services:
-    clamav:
-      image: clamav/clamav:latest
-      container_name: agent_clamav
-      # Expose via internal TCP network to completely bypass cross-platform socket headaches
-      ports:
-        - "3310:3310"
-      volumes:
-        - clamav_data:/var/lib/clamav
-      restart: unless-stopped
+  clamav:
+    image: clamav/clamav:latest
+    container_name: agent_clamav
+    # Expose via internal TCP network to completely bypass cross-platform socket headaches.
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -38,11 +36,6 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_storage:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   clamav_data:

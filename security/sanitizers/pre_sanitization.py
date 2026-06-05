@@ -1,3 +1,20 @@
+"""
+Universal pre-sanitization gate.
+
+This module runs before every modality-specific sanitizer worker. It scans the
+raw payload exactly as received from intake so malware/signature threats are
+blocked before text, image, PDF, audio, or video workers spend time parsing the
+content.
+
+Two engines are used:
+
+* ClamAV, via the clamd Python client and a running clamd daemon.
+* YARA, via yara-python and local .yar/.yara rule files.
+
+The public run()/scan() function returns a PreSanitizationResult. A blocking
+result should stop the sanitizer runner before any other workers are scheduled.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,6 +37,7 @@ YARA_RULES_DIR = os.getenv("AGENT_YARA_DIR", "rules")
 
 @dataclass(slots=True)
 class EngineScanResult:
+    """Result from one pre-sanitization engine, such as ClamAV or YARA."""
     engine: str
     threat_level: ThreatLevel
     reason: str | None = None
@@ -33,6 +51,7 @@ class EngineScanResult:
 
 @dataclass(slots=True)
 class PreSanitizationResult:
+    """Aggregate result returned to the sanitizer runner."""
     threat_level: ThreatLevel = ThreatLevel.NONE
     reason: str | None = None
     passed: bool = True
@@ -40,6 +59,13 @@ class PreSanitizationResult:
 
 
 def _payload_to_bytes(raw: Any) -> bytes:
+    """
+    Convert raw pipeline payloads into bytes for binary scanners.
+
+    Strings are treated as file paths only when they point to an existing file;
+    otherwise they are encoded as plain text. This keeps normal user messages
+    from being accidentally interpreted as missing paths.
+    """
     if isinstance(raw, bytes):
         return raw
     if isinstance(raw, bytearray):
@@ -59,6 +85,7 @@ def _payload_to_bytes(raw: Any) -> bytes:
 
 
 class ClamScanner:
+    """ClamAV scanner using clamd's TCP INSTREAM protocol."""
     def __init__(
         self,
         host: str = CLAMAV_HOST,
@@ -70,10 +97,17 @@ class ClamScanner:
         self.timeout_s = timeout_s
 
     async def scan(self, raw: Any) -> EngineScanResult:
+        """Normalize the payload and run the blocking clamd scan in a thread."""
         payload = _payload_to_bytes(raw)
         return await asyncio.to_thread(self._scan_sync, payload)
 
     def _scan_sync(self, payload: bytes) -> EngineScanResult:
+        """
+        Send bytes to clamd and translate its response into EngineScanResult.
+
+        The ClamAV daemon must be reachable at CLAMAV_HOST:CLAMAV_PORT. A
+        connection failure is a sanitizer failure rather than a clean result.
+        """
         try:
             client = clamd.ClamdNetworkSocket(
                 host=self.host,
@@ -108,14 +142,23 @@ class ClamScanner:
 
 
 class YaraScanner:
+    """YARA scanner that compiles .yar/.yara files from a rules directory."""
     def __init__(self, rules_dir: str | Path = YARA_RULES_DIR) -> None:
         self.rules_dir = Path(rules_dir)
+        self.rules_dir.mkdir(parents=True, exist_ok=True)
 
     async def scan(self, raw: Any) -> EngineScanResult:
+        """Normalize the payload and run the blocking YARA scan in a thread."""
         payload = _payload_to_bytes(raw)
         return await asyncio.to_thread(self._scan_sync, payload)
 
     def _scan_sync(self, payload: bytes) -> EngineScanResult:
+        """
+        Compile available YARA rules and match them against the payload.
+
+        Missing rules are reported as skipped/clean so local development can run
+        before rules are added. Invalid rules raise SanitizationError.
+        """
         rule_files = self._rule_files()
         if not rule_files:
             return EngineScanResult(
@@ -149,6 +192,7 @@ class YaraScanner:
         )
 
     def _rule_files(self) -> list[Path]:
+        """Return all YARA rule files below the configured rules directory."""
         if not self.rules_dir.exists():
             return []
         return sorted(
@@ -159,6 +203,13 @@ class YaraScanner:
 
 
 async def scan(raw: Any) -> PreSanitizationResult:
+    """
+    Run all universal pre-sanitization engines in order.
+
+    ClamAV runs before YARA because antivirus signatures are a cheap and broad
+    malware gate. The function returns the first blocking engine result while
+    preserving engine details collected up to that point.
+    """
     engine_results = [
         await ClamScanner().scan(raw),
         await YaraScanner().scan(raw),
@@ -177,4 +228,5 @@ async def scan(raw: Any) -> PreSanitizationResult:
 
 
 async def run(raw: Any) -> PreSanitizationResult:
+    """Alias used by the sanitizer runner."""
     return await scan(raw)

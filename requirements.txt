@@ -62,7 +62,7 @@ Pillow                       # image sanitization and metadata stripping
 # apt install libimage-exiftool-perl
 
 # --- Audio / Video Security ---
-ffmpeg-python                # media transcoding and sanitization
+ffmpeg-python                # media probing/remuxing and sanitization
 mutagen                      # audio metadata inspection
 
 # --- Universal File Scanning ---

@@ -1,3 +1,18 @@
+"""
+Sanitizer stage runner.
+
+This is the stage-level entry point used by core/pipeline.py. It preserves the
+pipeline contract: load the previous stage payload, write sanitizer findings to
+flow.ctx, and return flow.next(), flow.block(), or flow.fail().
+
+Ordering is important:
+
+1. Universal pre-sanitization runs first on the raw payload.
+2. Modality-specific workers run only if pre-sanitization passes.
+3. The next payload is the sanitized worker output when available, otherwise
+   the original payload from intake.
+"""
+
 import time
 import asyncio
 
@@ -8,12 +23,21 @@ from .workers import text, pdf, image, video, audio
 
 
 async def run(flow: Flow) -> Flow:
+    """
+    Run pre-sanitization, then all modality workers for this input.
+
+    flow.ctx.detected_modalities is written by intake. The runner fans out to
+    the matching modality workers and aggregates their scan reports. Any HIGH or
+    CRITICAL threat blocks the pipeline before later stages run.
+    """
     started = time.monotonic()
 
     try:
         raw = await flow.load()
         modalities = flow.ctx.detected_modalities
 
+        # Pre-sanitization is a hard gate. No modality parser should touch the
+        # input until ClamAV/YARA have had a chance to reject it.
         pre_result = await pre_sanitization.run(raw)
         if pre_result.threat_level.should_block:
             flow.ctx.sanitization = pre_result
@@ -29,6 +53,8 @@ async def run(flow: Flow) -> Flow:
 
         tasks = []
 
+        # Workers are scheduled based on intake's modality detection. They run
+        # concurrently under the total sanitizer timeout below.
         if "text" in modalities: tasks.append(text.scan(raw))
         if "image" in modalities: tasks.append(image.scan(raw))
         if "pdf" in modalities: tasks.append(pdf.scan(raw))
@@ -38,7 +64,11 @@ async def run(flow: Flow) -> Flow:
         async with asyncio.timeout(constants.SANITIZER_TIMEOUT_TOTAL_S):
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        # The default handoff is the original payload. Workers can replace it
+        # with sanitized_text/sanitized_image-style outputs when they produce a
+        # safe payload for downstream stages.
         sanitized_payload = raw
+        sanitized_outputs = {}
         for result in results:
             if isinstance(result, Exception):
                 return flow.fail(result, Origin.SANITIZER, started)
@@ -46,6 +76,27 @@ async def run(flow: Flow) -> Flow:
             result_sanitized_text = getattr(result, "sanitized_text", None)
             if result_sanitized_text is not None:
                 sanitized_payload = result_sanitized_text
+                sanitized_outputs["text"] = result_sanitized_text
+
+            result_sanitized_image = getattr(result, "sanitized_image", None)
+            if result_sanitized_image is not None:
+                sanitized_payload = result_sanitized_image
+                sanitized_outputs["image"] = result_sanitized_image
+
+            result_sanitized_pdf = getattr(result, "sanitized_pdf", None)
+            if result_sanitized_pdf is not None:
+                sanitized_payload = result_sanitized_pdf
+                sanitized_outputs["pdf"] = result_sanitized_pdf
+
+            result_sanitized_audio = getattr(result, "sanitized_audio", None)
+            if result_sanitized_audio is not None:
+                sanitized_payload = result_sanitized_audio
+                sanitized_outputs["audio"] = result_sanitized_audio
+
+            result_sanitized_video = getattr(result, "sanitized_video", None)
+            if result_sanitized_video is not None:
+                sanitized_payload = result_sanitized_video
+                sanitized_outputs["video"] = result_sanitized_video
 
             if result.threat_level.should_block:
                 flow.ctx.sanitization_blocked = True
@@ -62,6 +113,7 @@ async def run(flow: Flow) -> Flow:
         flow.ctx.sanitization = {
             "pre_sanitization": pre_result,
             "workers": results,
+            "sanitized_outputs": sanitized_outputs,
         }
         return flow.next(sanitized_payload, Origin.SANITIZER, started)
 
