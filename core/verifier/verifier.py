@@ -14,12 +14,16 @@ from typing import Any
 from foundation import (
     BlockReason,
     Flow,
+    ModelUnavailableError,
+    NormalizedInput,
     Origin,
     PipelineStage,
     VerifierError,
 )
 
+from .agent import verify_with_llm
 from .checks import verify_deterministic
+from .constants import TEXT_MODALITIES
 
 
 def _block_reason(categories: list[str]) -> BlockReason:
@@ -42,9 +46,9 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     """
     Pipeline entry point for verification.
 
-    This first version is deterministic and fast. The function shape leaves a
-    narrow place for a later structured LLM verifier without changing the
-    pipeline contract or the orchestrator handoff.
+    Deterministic checks run first for speed and hard handoff validation. Text
+    and PDF inputs that pass those checks are then classified by the structured
+    verifier LLM before reaching the orchestrator.
     """
     started = time.monotonic()
 
@@ -52,6 +56,15 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         normalized = await flow.load()
         flow.ctx.advance(PipelineStage.VERIFYING)
         result = verify_deterministic(flow, normalized)
+
+        if (
+            isinstance(normalized, NormalizedInput)
+            and normalized.modality in TEXT_MODALITIES
+            and result.proceed
+            and not result.dangerous
+            and not result.threat_level.should_block
+        ):
+            result = await verify_with_llm(normalized, result)
 
         flow.ctx.verifier_result = result
 
@@ -79,6 +92,9 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         return flow.next(normalized, Origin.VERIFIER, started)
 
     except VerifierError as exc:
+        return flow.fail(exc, Origin.VERIFIER, started)
+
+    except ModelUnavailableError as exc:
         return flow.fail(exc, Origin.VERIFIER, started)
 
     except Exception as exc:

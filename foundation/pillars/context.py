@@ -203,7 +203,7 @@ class VrakshaContext:
 
     # ------------------------------------------------------------------
     # VERIFICATION
-    # Written by: security/verifier/verifier.py
+    # Written by: core/verifier/verifier.py
     # ------------------------------------------------------------------
 
     verifier_result: Any | None = None   # PLACEHOLDER: will be foundation.VerificationResult

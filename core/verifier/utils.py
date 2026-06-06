@@ -54,10 +54,11 @@ def sanitizer_summary(flow: Flow[Any]) -> dict[str, Any]:
 
     workers = []
     for worker_result in sanitization.get("workers", []):
+        threat_level = getattr(worker_result, "threat_level", None)
         workers.append(
             {
                 "name": type(worker_result).__name__,
-                "threat_level": getattr(worker_result, "threat_level", None),
+                "threat_level": threat_level.value if isinstance(threat_level, ThreatLevel) else threat_level,
                 "passed": getattr(worker_result, "passed", None),
                 "reason": getattr(worker_result, "reason", None),
             }
