@@ -1,5 +1,6 @@
 from .flow import Flow, PayloadHandle, JournalEntry
 from .contracts import NormalizedInput, VerificationResult
+from .payload import coerce_to_bytes
 from .model_registry import ModelProfile, ModelRegistry, load_model_registry
 from .pillars.transport import Envelope, Status, Meta
 
@@ -55,6 +56,7 @@ __all__ = [
     "JournalEntry",
     "NormalizedInput",
     "VerificationResult",
+    "coerce_to_bytes",
     "ModelProfile",
     "ModelRegistry",
     "load_model_registry",

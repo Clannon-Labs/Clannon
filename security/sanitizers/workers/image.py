@@ -9,7 +9,6 @@ hazards, and strip metadata without recompressing pixels whenever possible.
 
 import asyncio
 import io
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +17,7 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
-from foundation import SanitizationError, ThreatLevel, constants
+from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 
 @dataclass
@@ -39,21 +38,15 @@ class ImageScanResult:
 
 
 def _payload_to_bytes(image: Any) -> bytes:
-    """Normalize supported image inputs into bytes for Pillow."""
-    if isinstance(image, bytes):
-        return image
-    if isinstance(image, bytearray):
-        return bytes(image)
-    if isinstance(image, memoryview):
-        return image.tobytes()
-    if isinstance(image, os.PathLike):
-        return Path(image).read_bytes()
-
-    raise SanitizationError(
-        "Image sanitizer expected bytes or an image file path",
-        modality="image",
-        worker="image",
-    )
+    """Normalize supported image inputs into bytes (see foundation.coerce_to_bytes)."""
+    try:
+        return coerce_to_bytes(image)
+    except TypeError as exc:
+        raise SanitizationError(
+            "Image sanitizer expected bytes or an image file path",
+            modality="image",
+            worker="image",
+        ) from exc
 
 
 def _verify_image(payload: bytes) -> tuple[str, tuple[int, int]]:

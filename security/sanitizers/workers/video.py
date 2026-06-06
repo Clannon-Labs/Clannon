@@ -12,7 +12,6 @@ real blocking work and is offloaded to a thread.
 """
 
 import asyncio
-import os
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -20,7 +19,7 @@ from typing import Any, Callable
 
 import ffmpeg
 
-from foundation import SanitizationError, ThreatLevel, constants
+from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 
 @dataclass
@@ -57,21 +56,15 @@ VideoWorker = Callable[[Path], VideoWorkerResult]
 
 
 def _payload_to_bytes(video: Any) -> bytes:
-    """Normalize supported video inputs into bytes."""
-    if isinstance(video, bytes):
-        return video
-    if isinstance(video, bytearray):
-        return bytes(video)
-    if isinstance(video, memoryview):
-        return video.tobytes()
-    if isinstance(video, os.PathLike):
-        return Path(video).read_bytes()
-
-    raise SanitizationError(
-        "Video sanitizer expected bytes or a video file path",
-        modality="video",
-        worker="video",
-    )
+    """Normalize supported video inputs into bytes (see foundation.coerce_to_bytes)."""
+    try:
+        return coerce_to_bytes(video)
+    except TypeError as exc:
+        raise SanitizationError(
+            "Video sanitizer expected bytes or a video file path",
+            modality="video",
+            worker="video",
+        ) from exc
 
 
 def _ffmpeg_error_message(exc: ffmpeg.Error) -> str:

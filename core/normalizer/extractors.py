@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .utils import payload_to_bytes
+from foundation import coerce_to_bytes
 
 
 def extract_pdf_pages(payload: Any) -> list[dict[str, Any]]:
@@ -21,7 +21,7 @@ def extract_pdf_pages(payload: Any) -> list[dict[str, Any]]:
     """
     import fitz
 
-    pdf_bytes = payload_to_bytes(payload)
+    pdf_bytes = coerce_to_bytes(payload)
     pages: list[dict[str, Any]] = []
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         for page_index, page in enumerate(doc, start=1):

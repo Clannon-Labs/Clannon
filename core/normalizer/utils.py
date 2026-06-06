@@ -7,9 +7,7 @@ normalizer.py focused on stage decisions instead of byte/string coercion.
 
 from __future__ import annotations
 
-import os
 import unicodedata
-from pathlib import Path
 from typing import Any
 
 
@@ -35,26 +33,6 @@ def stabilize_unicode(text: str) -> str:
         for char in normalized
         if unicodedata.category(char) != "Cf" or char in _ALLOWED_FORMAT_CHARS
     )
-
-
-def payload_to_bytes(payload: Any) -> bytes:
-    """
-    Normalize bytes-like or explicit file-path payloads into bytes.
-
-    A str is never treated as a filesystem path: user content must not be
-    probed against the disk. Binary inputs reach this helper either as bytes
-    (the normal pipeline path) or as os.PathLike from a trusted caller.
-    """
-    if isinstance(payload, bytes):
-        return payload
-    if isinstance(payload, bytearray):
-        return bytes(payload)
-    if isinstance(payload, memoryview):
-        return payload.tobytes()
-    if isinstance(payload, os.PathLike):
-        return Path(payload).read_bytes()
-
-    raise TypeError("payload cannot be read as bytes")
 
 
 def payload_to_text(payload: Any) -> str:

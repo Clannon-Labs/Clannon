@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from foundation import SanitizationError, ThreatLevel
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 from security.sanitizers import pre_sanitization
 
 
@@ -89,10 +89,17 @@ rule FakeRule
         ("hello", b"hello"),
         (b"already bytes", b"already bytes"),
         (bytearray(b"byte array"), b"byte array"),
+        (memoryview(b"mem view"), b"mem view"),
     ],
 )
-def test_payload_to_bytes(raw, expected_bytes):
-    result = pre_sanitization._payload_to_bytes(raw)
+def test_coerce_to_bytes(raw, expected_bytes):
+    result = coerce_to_bytes(raw)
     print("\npayload bytes result:", result)
 
     assert result == expected_bytes
+
+
+def test_coerce_to_bytes_rejects_unknown_type():
+    # A str is encoded as text, never read as a path; unsupported types raise.
+    with pytest.raises(TypeError):
+        coerce_to_bytes(12345)

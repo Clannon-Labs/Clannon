@@ -27,7 +27,7 @@ from typing import Any
 import clamd
 import yara
 
-from foundation import SanitizationError, ThreatLevel
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 
 CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
@@ -58,28 +58,6 @@ class PreSanitizationResult:
     engine_results: list[EngineScanResult] = field(default_factory=list)
 
 
-def _payload_to_bytes(raw: Any) -> bytes:
-    """
-    Convert raw pipeline payloads into bytes for binary scanners.
-
-    A str payload is always literal user text and is encoded as UTF-8 — it is
-    never interpreted as a filesystem path, so user content cannot be probed
-    against the disk. File inputs reach the pipeline as os.PathLike from a
-    trusted caller.
-    """
-    if isinstance(raw, bytes):
-        return raw
-    if isinstance(raw, bytearray):
-        return bytes(raw)
-    if isinstance(raw, memoryview):
-        return raw.tobytes()
-    if isinstance(raw, str):
-        return raw.encode("utf-8", errors="replace")
-    if isinstance(raw, os.PathLike):
-        return Path(raw).read_bytes()
-    return repr(raw).encode("utf-8", errors="replace")
-
-
 class ClamScanner:
     """ClamAV scanner using clamd's TCP INSTREAM protocol."""
     def __init__(
@@ -94,7 +72,7 @@ class ClamScanner:
 
     async def scan(self, raw: Any) -> EngineScanResult:
         """Normalize the payload and run the blocking clamd scan in a thread."""
-        payload = _payload_to_bytes(raw)
+        payload = coerce_to_bytes(raw)
         return await asyncio.to_thread(self._scan_sync, payload)
 
     def _scan_sync(self, payload: bytes) -> EngineScanResult:
@@ -145,7 +123,7 @@ class YaraScanner:
 
     async def scan(self, raw: Any) -> EngineScanResult:
         """Normalize the payload and run the blocking YARA scan in a thread."""
-        payload = _payload_to_bytes(raw)
+        payload = coerce_to_bytes(raw)
         return await asyncio.to_thread(self._scan_sync, payload)
 
     def _scan_sync(self, payload: bytes) -> EngineScanResult:

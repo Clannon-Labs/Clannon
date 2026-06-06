@@ -19,12 +19,10 @@ and both scripts are CLI-oriented.
 
 import asyncio
 import io
-import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable
 
-from foundation import SanitizationError, ThreatLevel, constants
+from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 
 DANGEROUS_PDF_KEYS = {
@@ -69,21 +67,15 @@ PdfWorker = Callable[[bytes], PdfWorkerResult]
 
 
 def _payload_to_bytes(pdf: Any) -> bytes:
-    """Normalize supported PDF inputs into bytes."""
-    if isinstance(pdf, bytes):
-        return pdf
-    if isinstance(pdf, bytearray):
-        return bytes(pdf)
-    if isinstance(pdf, memoryview):
-        return pdf.tobytes()
-    if isinstance(pdf, os.PathLike):
-        return Path(pdf).read_bytes()
-
-    raise SanitizationError(
-        "PDF sanitizer expected bytes or a PDF file path",
-        modality="pdf",
-        worker="pdf",
-    )
+    """Normalize supported PDF inputs into bytes (see foundation.coerce_to_bytes)."""
+    try:
+        return coerce_to_bytes(pdf)
+    except TypeError as exc:
+        raise SanitizationError(
+            "PDF sanitizer expected bytes or a PDF file path",
+            modality="pdf",
+            worker="pdf",
+        ) from exc
 
 
 def _has_pdf_header(payload: bytes) -> bool:

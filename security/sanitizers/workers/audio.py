@@ -16,7 +16,6 @@ work and is offloaded to a thread by scan().
 """
 
 import asyncio
-import os
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -25,7 +24,7 @@ from typing import Any, Callable
 import ffmpeg
 from mutagen import File as MutagenFile
 
-from foundation import SanitizationError, ThreatLevel, constants
+from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 
 @dataclass
@@ -60,21 +59,15 @@ AudioWorker = Callable[[Path], AudioWorkerResult]
 
 
 def _payload_to_bytes(audio: Any) -> bytes:
-    """Normalize supported audio inputs into bytes."""
-    if isinstance(audio, bytes):
-        return audio
-    if isinstance(audio, bytearray):
-        return bytes(audio)
-    if isinstance(audio, memoryview):
-        return audio.tobytes()
-    if isinstance(audio, os.PathLike):
-        return Path(audio).read_bytes()
-
-    raise SanitizationError(
-        "Audio sanitizer expected bytes or an audio file path",
-        modality="audio",
-        worker="audio",
-    )
+    """Normalize supported audio inputs into bytes (see foundation.coerce_to_bytes)."""
+    try:
+        return coerce_to_bytes(audio)
+    except TypeError as exc:
+        raise SanitizationError(
+            "Audio sanitizer expected bytes or an audio file path",
+            modality="audio",
+            worker="audio",
+        ) from exc
 
 
 def _ffmpeg_error_message(exc: ffmpeg.Error) -> str:
