@@ -22,6 +22,33 @@ from . import pre_sanitization
 from .workers import text, pdf, image, video, audio
 
 
+# One concurrency limiter per event loop, shared across requests on that loop.
+# Bounds how many modality workers run at once to constants.SANITIZER_MAX_WORKERS
+# (keyed by loop so tests that spin up fresh loops don't reuse a bound semaphore).
+_worker_semaphores: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+
+
+def _worker_semaphore() -> asyncio.Semaphore:
+    """Return the modality-worker concurrency limiter for the running loop."""
+    loop = asyncio.get_running_loop()
+    semaphore = _worker_semaphores.get(loop)
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(constants.SANITIZER_MAX_WORKERS)
+        _worker_semaphores[loop] = semaphore
+    return semaphore
+
+
+async def _run_worker(scan_coro):
+    """
+    Run one modality worker under the global concurrency limit and a per-worker
+    timeout. A worker that exceeds SANITIZER_TIMEOUT_WORKER_S raises TimeoutError,
+    which the runner turns into a fail (distinct from the overall total timeout).
+    """
+    async with _worker_semaphore():
+        async with asyncio.timeout(constants.SANITIZER_TIMEOUT_WORKER_S):
+            return await scan_coro
+
+
 async def run(flow: Flow) -> Flow:
     """
     Run pre-sanitization, then all modality workers for this input.
@@ -54,13 +81,14 @@ async def run(flow: Flow) -> Flow:
 
         tasks = []
 
-        # Workers are scheduled based on intake's modality detection. They run
+        # Workers are scheduled based on intake's modality detection. Each runs
+        # under the global concurrency limit + a per-worker timeout, and all run
         # concurrently under the total sanitizer timeout below.
-        if "text" in modalities: tasks.append(text.scan(raw))
-        if "image" in modalities: tasks.append(image.scan(raw))
-        if "pdf" in modalities: tasks.append(pdf.scan(raw))
-        if "video" in modalities: tasks.append(video.scan(raw))
-        if "audio" in modalities: tasks.append(audio.scan(raw))
+        if "text" in modalities: tasks.append(_run_worker(text.scan(raw)))
+        if "image" in modalities: tasks.append(_run_worker(image.scan(raw)))
+        if "pdf" in modalities: tasks.append(_run_worker(pdf.scan(raw)))
+        if "video" in modalities: tasks.append(_run_worker(video.scan(raw)))
+        if "audio" in modalities: tasks.append(_run_worker(audio.scan(raw)))
         if not tasks:
             return flow.block(
                 BlockReason.UNSUPPORTED_MODALITY,
@@ -107,6 +135,13 @@ async def run(flow: Flow) -> Flow:
                 sanitized_outputs["video"] = result_sanitized_video
 
             if result.threat_level.should_block:
+                # Persist the report on the same block path as pre-sanitization
+                # so dead-letter inspection keeps the worker findings.
+                flow.ctx.sanitization = {
+                    "pre_sanitization": pre_result,
+                    "workers": results,
+                    "sanitized_outputs": sanitized_outputs,
+                }
                 flow.ctx.sanitization_blocked = True
                 flow.ctx.sanitization_block_reason = result.reason
 

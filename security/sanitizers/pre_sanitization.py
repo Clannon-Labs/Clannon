@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,13 @@ from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
 CLAMAV_PORT = int(os.getenv("CLAMAV_PORT", "3310"))
 YARA_RULES_DIR = os.getenv("AGENT_YARA_DIR", "rules")
+
+# When YARA rules are required, a missing/empty rules dir is a hard config fault
+# (fail-closed) rather than a silent skip. Enabled in production or explicitly.
+YARA_REQUIRED = (
+    os.getenv("VRAKSHA_ENV", "").strip().lower() in {"prod", "production"}
+    or os.getenv("AGENT_REQUIRE_YARA", "").strip().lower() in {"1", "true", "yes"}
+)
 
 
 @dataclass(slots=True)
@@ -116,25 +124,59 @@ class ClamScanner:
 
 
 class YaraScanner:
-    """YARA scanner that compiles .yar/.yara files from a rules directory."""
+    """
+    YARA scanner that compiles .yar/.yara files from a rules directory.
+
+    Compiled rules are cached and only recompiled when the rule files change
+    (path or mtime), so the expensive yara.compile() does not run on every
+    request. A module-level singleton (_yara_scanner) shares this cache.
+    """
     def __init__(self, rules_dir: str | Path = YARA_RULES_DIR) -> None:
         self.rules_dir = Path(rules_dir)
         self.rules_dir.mkdir(parents=True, exist_ok=True)
+        self._compiled: yara.Rules | None = None
+        self._compiled_signature: tuple | None = None
+        self._compile_lock = threading.Lock()
 
     async def scan(self, raw: Any) -> EngineScanResult:
         """Normalize the payload and run the blocking YARA scan in a thread."""
         payload = coerce_to_bytes(raw)
         return await asyncio.to_thread(self._scan_sync, payload)
 
+    def _rules_signature(self, rule_files: list[Path]) -> tuple:
+        """Identity of the current rule set: (path, mtime) per file."""
+        return tuple((str(path), path.stat().st_mtime) for path in rule_files)
+
+    def _load_rules(self, rule_files: list[Path]) -> yara.Rules:
+        """Compile rules once and reuse until the rule files change."""
+        signature = self._rules_signature(rule_files)
+        with self._compile_lock:
+            if self._compiled is not None and signature == self._compiled_signature:
+                return self._compiled
+            compiled = yara.compile(
+                filepaths={str(index): str(path) for index, path in enumerate(rule_files)}
+            )
+            self._compiled = compiled
+            self._compiled_signature = signature
+            return compiled
+
     def _scan_sync(self, payload: bytes) -> EngineScanResult:
         """
-        Compile available YARA rules and match them against the payload.
+        Match cached/compiled YARA rules against the payload.
 
-        Missing rules are reported as skipped/clean so local development can run
-        before rules are added. Invalid rules raise SanitizationError.
+        Missing rules are reported as skipped/clean in development so the
+        pipeline runs before rules are added; when YARA_REQUIRED (production),
+        a missing rule set is a hard SanitizationError (fail-closed). Invalid
+        rules always raise SanitizationError.
         """
         rule_files = self._rule_files()
         if not rule_files:
+            if YARA_REQUIRED:
+                raise SanitizationError(
+                    f"YARA rules required but none found in {self.rules_dir}",
+                    modality="all",
+                    worker="yara",
+                )
             return EngineScanResult(
                 engine="yara",
                 threat_level=ThreatLevel.NONE,
@@ -143,10 +185,10 @@ class YaraScanner:
             )
 
         try:
-            rules = yara.compile(
-                filepaths={str(index): str(path) for index, path in enumerate(rule_files)}
-            )
+            rules = self._load_rules(rule_files)
             matches = rules.match(data=payload)
+        except SanitizationError:
+            raise
         except Exception as exc:
             raise SanitizationError(
                 f"YARA scan failed: {exc}",
@@ -176,18 +218,28 @@ class YaraScanner:
         )
 
 
+# Shared singletons: reused across requests so the YARA rule cache persists and
+# scanner objects are not rebuilt per request.
+_clam_scanner = ClamScanner()
+_yara_scanner = YaraScanner()
+
+
 async def scan(raw: Any) -> PreSanitizationResult:
     """
-    Run all universal pre-sanitization engines in order.
+    Run the universal pre-sanitization engines concurrently.
 
-    ClamAV runs before YARA because antivirus signatures are a cheap and broad
-    malware gate. The function returns the first blocking engine result while
-    preserving engine details collected up to that point.
+    ClamAV (broad signature AV) and YARA (custom rules) are independent, so they
+    run in parallel on the same bytes. The payload is coerced once and shared.
+    Any blocking engine result fails the gate; an engine fault propagates as a
+    SanitizationError (fail-closed).
     """
-    engine_results = [
-        await ClamScanner().scan(raw),
-        await YaraScanner().scan(raw),
-    ]
+    payload = coerce_to_bytes(raw)
+    engine_results = list(
+        await asyncio.gather(
+            asyncio.to_thread(_clam_scanner._scan_sync, payload),
+            asyncio.to_thread(_yara_scanner._scan_sync, payload),
+        )
+    )
 
     for result in engine_results:
         if result.threat_level.should_block:

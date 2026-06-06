@@ -16,6 +16,7 @@ work and is offloaded to a thread by scan().
 """
 
 import asyncio
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -78,6 +79,26 @@ def _ffmpeg_error_message(exc: ffmpeg.Error) -> str:
     if stderr:
         return str(stderr)
     return str(exc)
+
+
+def _run_ffmpeg(stream) -> None:
+    """
+    Run a built ffmpeg pipeline with a hard timeout.
+
+    ffmpeg-python's .run() has no timeout, so a crafted file could make ffmpeg
+    hang past the worker deadline. run_async + communicate(timeout) lets us kill
+    it; a timeout or non-zero exit is surfaced as ffmpeg.Error so callers handle
+    it like any other remux failure (validated original is preserved).
+    """
+    process = stream.run_async(pipe_stdout=True, pipe_stderr=True, quiet=True)
+    try:
+        out, err = process.communicate(timeout=constants.SANITIZER_TIMEOUT_WORKER_S)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        raise ffmpeg.Error("ffmpeg", b"", b"ffmpeg remux timed out")
+    if process.returncode:
+        raise ffmpeg.Error("ffmpeg", out, err)
 
 
 def _probe_worker(path: Path) -> AudioWorkerResult:
@@ -185,7 +206,7 @@ def _sanitize_worker(path: Path) -> AudioWorkerResult:
     output_format, output_suffix = _audio_output_container(path)
     output_path = path.with_suffix(f".sanitized{output_suffix}")
     try:
-        (
+        _run_ffmpeg(
             ffmpeg
             .input(str(path))
             .output(
@@ -195,7 +216,6 @@ def _sanitize_worker(path: Path) -> AudioWorkerResult:
                 **{"map_metadata": "-1", "vn": None},
             )
             .overwrite_output()
-            .run(capture_stdout=True, capture_stderr=True, quiet=True)
         )
     except ffmpeg.Error as exc:
         return AudioWorkerResult(

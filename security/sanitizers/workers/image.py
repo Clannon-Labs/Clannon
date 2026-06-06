@@ -119,12 +119,18 @@ def _sanitize_image(payload: bytes, image_format: str) -> bytes:
         path = Path(tmp_dir) / f"input{_suffix_for_format(image_format)}"
         path.write_bytes(payload)
 
-        result = subprocess.run(
-            ["exiftool", "-all=", "-overwrite_original", "-q", "-q", str(path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["exiftool", "-all=", "-overwrite_original", "-q", "-q", str(path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=constants.SANITIZER_TIMEOUT_WORKER_S,
+            )
+        except subprocess.TimeoutExpired:
+            # A crafted image must not let exiftool hang a worker thread.
+            # Preserve the validated original rather than degrading the media.
+            return payload
         if result.returncode != 0:
             return payload
 
