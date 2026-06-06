@@ -1,24 +1,25 @@
 """
 foundation/pillars/transport.py
 
-The low-level internal message envelope for Vraksha.
+Low-level transport primitives for Vraksha: Status, Meta, and Envelope.
 
-Note: Origin was moved to foundation/pillars/types.py.
-      Import it from there or via foundation directly:
-          from foundation import Origin
+What the pipeline uses today:
+  Flow (foundation/flow.py) is the transport every stage uses, and it is built
+  on the Status and Meta primitives defined here.
 
-Note on usage:
-  Most stage code should use Flow (foundation/flow.py), not Envelope directly.
-  Envelope is the low-level primitive that Flow is built on.
-  Use Envelope directly only when you need fine-grained control
-  outside the standard pipeline (e.g. internal worker communication).
+Envelope:
+  Envelope is a standalone message primitive retained for future use — e.g.
+  fine-grained internal worker communication or parallel-worker fan-out/join
+  outside the standard Flow pipeline. It is NOT currently what Flow is built on.
+  Prefer Flow for all stage-to-stage work.
 
 Rules:
   1. Never unwrap without checking status first.
   2. Never mutate — always return a new Envelope.
   3. trace_id never changes. span_id always does.
-  4. This file has zero imports from the rest of Vraksha.
-     Everything imports from here, never the reverse.
+  4. This file has zero runtime imports from the rest of Vraksha (the Origin
+     import below is type-checking only). Everything imports from here, never
+     the reverse.
 """
 
 from __future__ import annotations
@@ -26,8 +27,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from .types import Origin
 
 T = TypeVar("T")
 
@@ -70,20 +74,18 @@ class Meta:
                   use this to correlate all log lines for one user turn.
     span_id     — generated fresh at each stage hop.
                   use this to identify exactly which stage produced this envelope.
-    origin      — which stage produced this envelope.
-                  type is Any to avoid circular import with types.py.
-                  in practice always an Origin enum value.
+    origin      — which stage produced this envelope (an Origin enum value).
     timestamp   — monotonic clock at creation. use for relative timing only.
     duration_ms — filled in by the stage when it finishes work.
                   left as None if the stage didn't measure itself.
     """
-    trace_id:     str        = field(default_factory=lambda: uuid4().hex)
-    span_id:      str        = field(default_factory=lambda: uuid4().hex[:8])
-    origin:       Any | None = None
-    timestamp:    float      = field(default_factory=time.monotonic)
-    duration_ms:  float | None = None
+    trace_id:     str             = field(default_factory=lambda: uuid4().hex)
+    span_id:      str             = field(default_factory=lambda: uuid4().hex[:8])
+    origin:       "Origin | None" = None
+    timestamp:    float           = field(default_factory=time.monotonic)
+    duration_ms:  float | None    = None
 
-    def next_span(self, origin: Any) -> "Meta":
+    def next_span(self, origin: "Origin") -> "Meta":
         """
         Produce a new Meta for the next stage.
         trace_id is preserved. span_id is fresh. origin is updated.
@@ -102,10 +104,11 @@ class Meta:
 @dataclass
 class Envelope(Generic[T]):
     """
-    The low-level internal transport primitive for Vraksha.
+    A standalone low-level transport primitive, retained for future use.
 
-    Most stage code uses Flow (foundation/flow.py) which is built on top
-    of this. Use Envelope directly only when you need low-level control.
+    Stage code uses Flow (foundation/flow.py) for all pipeline work; Flow is not
+    built on Envelope. Reach for Envelope only for future low-level needs such
+    as internal worker communication or parallel fan-out/join.
 
     Every function that crosses a stage boundary:
       - takes  an Envelope[SomeInputType]
