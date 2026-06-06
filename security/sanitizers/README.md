@@ -83,7 +83,7 @@ It uses:
 - `detect-secrets` to detect API keys, tokens, and credentials.
 - `presidio-analyzer` to detect PII.
 - `presidio-anonymizer` to anonymize detected PII.
-- `bleach` to strip HTML tags and attributes.
+- `nh3` to strip HTML tags and attributes.
 
 Secrets are treated as high risk and can block the pipeline. PII and HTML are
 sanitized into `sanitized_text` when possible.

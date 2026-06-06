@@ -35,7 +35,7 @@ def test_text_scan_returns_highest_threat_and_combined_reasons(monkeypatch, mali
         )
 
     def fake_html_worker(text: str) -> text_worker.TextWorkerResult:
-        return text_worker.TextWorkerResult(name="bleach")
+        return text_worker.TextWorkerResult(name="nh3")
 
     monkeypatch.setattr(text_worker, "_secrets_worker", fake_secrets_worker)
     monkeypatch.setattr(text_worker, "_pii_worker", fake_pii_worker)
@@ -51,13 +51,13 @@ def test_text_scan_returns_highest_threat_and_combined_reasons(monkeypatch, mali
 
 @pytest.mark.parametrize(
     ("html_text", "expected_sanitized_text"),
-    [(MALICIOUS_HTML_TEXT, "alert(1)Hello")],
+    [(MALICIOUS_HTML_TEXT, "Hello")],
 )
 def test_html_worker_flags_and_sanitizes_markup(html_text, expected_sanitized_text):
     result = text_worker._html_worker(html_text)
     print("html worker result:", result)
 
-    assert result.name == "bleach"
+    assert result.name == "nh3"
     assert result.threat_level == ThreatLevel.LOW
     assert result.reason == "HTML content sanitized"
     assert result.sanitized_text == expected_sanitized_text

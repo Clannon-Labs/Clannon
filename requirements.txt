@@ -3,10 +3,10 @@
 # ============================================================
 
 PyYAML
-requests
+httpx                        # async HTTP client (replaces requests for pipeline use)
+requests                     # sync HTTP, keep only for one-off scripts/tooling
 python-dotenv
 rich
-prompt-toolkit
 python-magic
 
 # ============================================================
@@ -21,7 +21,7 @@ jsonschema                   # secondary JSON validation before pydantic validat
 # MODEL PROVIDERS & PROTOCOLS
 # ============================================================
 
-# google-genai                 # Gemini API
+google-genai                 # Gemini API (required for XPRIZE)
 mcp                          # Model Context Protocol
 
 # ============================================================
@@ -30,9 +30,9 @@ mcp                          # Model Context Protocol
 
 fastembed                    # local embeddings
 qdrant-client                # vector database
-kuzu                         # graph database
 
 cryptography                 # memory encryption at rest
+tiktoken                     # token counting for budget tracking and context pressure
 
 # ============================================================
 # LAYER 1 — INPUT SANITIZATION & SECURITY
@@ -42,11 +42,7 @@ cryptography                 # memory encryption at rest
 presidio-analyzer            # PII detection
 presidio-anonymizer          # PII anonymization/redaction
 detect-secrets               # API keys, tokens, credentials detection
-bleach                       # HTML sanitization
-
-# These are too heavy :)
-# llm-guard                    # prompt injection, toxicity, secrets scanning
-# rebuff                       # secondary prompt injection detection
+nh3                          # HTML sanitization (replaces archived bleach)
 
 # --- PDF Security ---
 pymupdf                      # PDF text/image extraction
@@ -75,8 +71,8 @@ clamd                        # ClamAV binding
 # LAYER 2 — STRUCTURED VERIFICATION
 # ============================================================
 
-outlines                     # constrained generation
-# guardrails-ai                # schema validation and guardrails
+# PydanticAI handles structured outputs natively.
+# No additional constrained generation library needed for hosted model calls.
 
 # ============================================================
 # LAYER 3 — TOOL SANDBOXING
@@ -93,8 +89,7 @@ restrictedpython             # sandboxed Python execution
 # ASYNC & CONCURRENCY
 # ============================================================
 
-anyio                        # async primitives
-asyncio-pool                 # worker pool management
+anyio                        # async primitives and task groups
 
 # ============================================================
 # OBSERVABILITY & TRACING

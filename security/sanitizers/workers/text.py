@@ -7,7 +7,7 @@ three independent checks in parallel:
 
 * detect-secrets flags credentials/tokens and blocks high-risk input.
 * Presidio detects PII and produces anonymized text.
-* bleach strips HTML markup from the text representation.
+* nh3 strips HTML markup from the text representation.
 
 scan() returns a TextScanResult for the runner. The original raw input remains
 available through flow.ctx.raw_input; sanitized_text is only the text worker's
@@ -23,7 +23,7 @@ import asyncio
 
 from foundation import SanitizationError, ThreatLevel
 
-import bleach
+import nh3
 
 
 @dataclass
@@ -143,12 +143,12 @@ def _html_worker(text: str) -> TextWorkerResult:
     This is LOW severity because ordinary pasted text may contain markup. The
     important part is the sanitized_text payload, not blocking by default.
     """
-    cleaned = bleach.clean(text, tags=[], attributes={}, strip=True)
+    cleaned = nh3.clean(text, tags=set(), attributes={})
     if cleaned == text:
-        return TextWorkerResult(name="bleach")
+        return TextWorkerResult(name="nh3")
 
     return TextWorkerResult(
-        name="bleach",
+        name="nh3",
         threat_level=ThreatLevel.LOW,
         reason="HTML content sanitized",
         sanitized_text=cleaned,
@@ -191,7 +191,7 @@ def _scan_sync(text: str) -> TextScanResult:
     only the async entry point that moves this blocking work to a thread. The
     sub-workers inspect the same original text independently. Sanitized text is
     built deterministically afterwards: Presidio anonymization is applied first
-    when present, then bleach strips markup from that result.
+    when present, then nh3 strips markup from that result.
     """
     normalized_text = _normalize_text(text)
     results = [
@@ -207,7 +207,7 @@ def _scan_sync(text: str) -> TextScanResult:
     if pii_result and pii_result.sanitized_text:
         sanitized_text = pii_result.sanitized_text
 
-    sanitized_text = bleach.clean(sanitized_text, tags=[], attributes={}, strip=True)
+    sanitized_text = nh3.clean(sanitized_text, tags=set(), attributes={})
     if sanitized_text == normalized_text:
         sanitized_text = None
 
