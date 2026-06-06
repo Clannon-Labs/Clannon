@@ -54,7 +54,13 @@ def verify_handoff(normalized: Any) -> VerificationResult | None:
             "NormalizedInput cannot both preserve native media and require an expert"
         )
 
-    if normalized.modality in TEXT_MODALITIES and not normalized.content:
+    if (
+        normalized.modality in TEXT_MODALITIES
+        and not normalized.content
+        and not normalized.requires_expert
+    ):
+        # A text-less PDF marked requires_expert (scanned/image-only) is a valid
+        # handoff: it carries native_payload for OCR, not text content.
         raise VerifierError(f"{normalized.modality} input reached verifier without content")
 
     if normalized.modality in NATIVE_MODALITIES and normalized.native_payload is None:
@@ -132,9 +138,11 @@ def verify_deterministic(flow: Flow[Any], normalized: Any) -> VerificationResult
     if routing_result:
         return routing_result
 
-    if normalized.modality in TEXT_MODALITIES:
+    if normalized.modality in TEXT_MODALITIES and not normalized.requires_expert:
         result = scan_text_risk(normalized)
     else:
+        # Native media, and text-less PDFs routed to an OCR expert, take the
+        # routing path: expert when an expert is required, otherwise direct.
         routing_action = ROUTING_EXPERT if normalized.requires_expert else ROUTING_DIRECT
         result = verification_result(
             proceed=True,

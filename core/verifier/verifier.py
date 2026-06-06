@@ -62,6 +62,7 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         if (
             isinstance(normalized, NormalizedInput)
             and normalized.modality in TEXT_MODALITIES
+            and normalized.content
             and result.proceed
         ):
             result = await verify_with_llm(normalized, result)

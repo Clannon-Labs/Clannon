@@ -98,13 +98,21 @@ def _requires_expert(
     target_layer: str,
     target_provider: str | None,
     target_model: str | None,
+    required_capability: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> NormalizedInput:
     """
     Mark media that code-only normalization cannot faithfully convert.
 
     The next layer can route this to the configured media_expert instead of
-    forcing lossy OCR/caption/transcription here.
+    forcing lossy OCR/caption/transcription here. required_capability defaults
+    to the modality, but callers can override it (e.g. a scanned PDF needs an
+    image/vision-capable model for OCR, not a "pdf" capability).
     """
+    handoff_metadata = {"handoff": "media_expert_required"}
+    if metadata:
+        handoff_metadata.update(metadata)
+
     return NormalizedInput(
         modality=modality,
         content_type=f"{modality}/native",
@@ -114,10 +122,8 @@ def _requires_expert(
         target_model=target_model,
         preserved_native=False,
         requires_expert=True,
-        required_capability=modality,
-        metadata={
-            "handoff": "media_expert_required",
-        },
+        required_capability=required_capability or modality,
+        metadata=handoff_metadata,
     )
 
 
@@ -147,6 +153,22 @@ def normalize_payload(
         normalized = _normalize_text(payload)
     elif modality == Modality.PDF.value:
         normalized = _normalize_pdf(payload)
+        if not normalized.content:
+            # Image-only / scanned PDF: no text layer to extract. Route to an
+            # OCR-capable expert instead of forwarding empty content (which the
+            # verifier would otherwise reject as a broken handoff).
+            normalized = _requires_expert(
+                payload,
+                Modality.PDF.value,
+                target_layer,
+                target_model.provider,
+                target_model.model,
+                required_capability="image",
+                metadata={
+                    "reason": "pdf has no extractable text layer (scanned/image-only)",
+                    "pages": normalized.metadata.get("pages"),
+                },
+            )
     elif target_model.supports(modality):
         normalized = _preserve_native(
             payload,
