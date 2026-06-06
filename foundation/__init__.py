@@ -31,7 +31,7 @@ from .pillars.errors import (
     # 4xx
     InfrastructureError,
     ModelUnavailableError,
-    MemoryError,
+    MemoryStoreError,
     CircuitOpenError,
     SandboxError,
     ConfigError,
@@ -91,7 +91,7 @@ __all__ = [
     # errors — 4xx
     "InfrastructureError",
     "ModelUnavailableError",
-    "MemoryError",
+    "MemoryStoreError",
     "CircuitOpenError",
     "SandboxError",
     "ConfigError",

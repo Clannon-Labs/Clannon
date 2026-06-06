@@ -15,14 +15,14 @@ Reading a traceback tells you immediately which layer failed
 without reading the exception message.
 
 Usage:
-    from utils import VrakshaError, SanitizationError, VerifierError ...
+    from foundation import VrakshaError, SanitizationError, VerifierError ...
 
-    raise SanitizationError("malicious macro in pdf", trace_id=env.meta.trace_id)
+    raise SanitizationError("malicious macro in pdf", trace_id=flow.meta.trace_id)
 
     try:
         ...
     except ModelUnavailableError as e:
-        return Envelope.error_(str(e), payload, Origin.VERIFIER, meta=env.meta)
+        return flow.fail(e, Origin.VERIFIER)
 """
 
 from __future__ import annotations
@@ -272,11 +272,14 @@ class ModelUnavailableError(InfrastructureError):
         return f"{base} | model={self.model}" if self.model else base
 
 
-class MemoryError(InfrastructureError):
+class MemoryStoreError(InfrastructureError):
     """
     Qdrant or memory manager failed to read, write, or retrieve.
     Non-fatal for read paths if you degrade gracefully.
     Fatal for write paths — data would be lost.
+
+    Named MemoryStoreError (not MemoryError) so it never shadows the Python
+    builtin MemoryError — a real out-of-memory condition must stay catchable.
     """
 
 

@@ -79,6 +79,7 @@ from .pillars.context import VrakshaContext, PipelineStage
 from .pillars.errors import VrakshaError
 from .pillars.types import BlockReason, ThreatLevel, Origin
 from .pillars.transport import Status, Meta
+from . import constants
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -397,7 +398,7 @@ class Flow(Generic[T]):
             except ModelUnavailableError as e:
                 return flow.fail(e, Origin.VERIFIER)
         """
-        error_str = str(error)
+        error_str = _truncate(str(error), constants.MAX_ERROR_LENGTH)
         duration = _duration(started_at)
         new_meta = self.meta.next_span(origin)
         if duration:
@@ -443,6 +444,7 @@ class Flow(Generic[T]):
         Usage:
             return flow.warn("low confidence score", ThreatLevel.LOW, Origin.VERIFIER)
         """
+        reason = _truncate(reason, constants.MAX_REASON_LENGTH)
         duration = _duration(started_at)
         new_meta = self.meta.next_span(origin)
         if duration:
@@ -645,3 +647,16 @@ def _duration(started_at: float | None) -> float | None:
     if started_at is None:
         return None
     return round((time.monotonic() - started_at) * 1000, 2)
+
+
+def _truncate(text: str, limit: int) -> str:
+    """
+    Cap an observability string to `limit` chars.
+
+    reason/error fields can embed free-form text (verifier reasons, wrapped
+    exception messages that may contain user content). Truncating here keeps
+    summary()/journal output bounded so "safe to log" holds in practice.
+    """
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "…"

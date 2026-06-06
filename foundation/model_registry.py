@@ -17,6 +17,8 @@ from typing import Any
 
 import yaml
 
+from .pillars.errors import ConfigError
+
 
 DEFAULT_MODELS_PATH = Path(__file__).resolve().parents[1] / "models.yaml"
 DEFAULT_PROVIDER_ENV = "VRAKSHA_MODEL_PROVIDER"
@@ -65,8 +67,13 @@ class ModelRegistry:
     def from_file(cls, path: str | Path = DEFAULT_MODELS_PATH) -> "ModelRegistry":
         """Load a registry from a YAML config file."""
         config_path = Path(path)
-        with config_path.open("r", encoding="utf-8") as file:
-            config = yaml.safe_load(file) or {}
+        try:
+            with config_path.open("r", encoding="utf-8") as file:
+                config = yaml.safe_load(file) or {}
+        except FileNotFoundError as exc:
+            raise ConfigError(f"models config not found: {config_path}", cause=exc) from exc
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"models config is not valid YAML: {config_path}", cause=exc) from exc
         return cls(config)
 
     def for_role(self, role: str, provider: str | None = None) -> ModelProfile:
@@ -74,15 +81,15 @@ class ModelRegistry:
         selected_provider = provider or self.routes.get(role) or self.default_provider
         provider_config = self.config.get(selected_provider)
         if not isinstance(provider_config, dict):
-            raise KeyError(f"Unknown model provider: {selected_provider}")
+            raise ConfigError(f"Unknown model provider: {selected_provider}")
 
         role_config = provider_config.get(role)
         if not isinstance(role_config, dict):
-            raise KeyError(f"Provider {selected_provider!r} has no role {role!r}")
+            raise ConfigError(f"Provider {selected_provider!r} has no role {role!r}")
 
         model = role_config.get("model")
         if not model:
-            raise KeyError(f"Provider {selected_provider!r} role {role!r} has no model")
+            raise ConfigError(f"Provider {selected_provider!r} role {role!r} has no model")
 
         capabilities = role_config.get("capabilities") or ["text", "json"]
         settings = role_config.get("settings") or {}
@@ -121,7 +128,7 @@ class ModelRegistry:
 
                 try:
                     profile = self.for_role(str(candidate_role), provider=str(provider))
-                except KeyError:
+                except ConfigError:
                     continue
                 if profile.supports(capability):
                     profiles.append(profile)
@@ -137,7 +144,7 @@ class ModelRegistry:
         profiles = self.capable_profiles(capability, role=role)
         if not profiles:
             role_hint = f" for role {role!r}" if role else ""
-            raise KeyError(f"No model declares capability {capability!r}{role_hint}")
+            raise ConfigError(f"No model declares capability {capability!r}{role_hint}")
         return profiles[0]
 
     def _default_provider(self) -> str:
@@ -153,9 +160,15 @@ class ModelRegistry:
         return "openai"
 
     def _routes(self) -> dict[str, str]:
-        """Read optional role/layer to provider routes from config."""
+        """
+        Read optional role/layer -> provider routes from config.
+
+        Sections are applied in increasing precedence: `defaults` is the base,
+        then `routing`, then `routes` — so an explicit `routes` entry overrides
+        a baked-in `defaults` entry for the same role (later wins).
+        """
         routes: dict[str, str] = {}
-        for section_name in ("routes", "routing", "defaults"):
+        for section_name in ("defaults", "routing", "routes"):
             section = self.config.get(section_name)
             if not isinstance(section, dict):
                 continue

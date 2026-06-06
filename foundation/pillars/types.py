@@ -161,13 +161,20 @@ class MemoryStore(str, Enum):
     Which memory store a read or write targets.
     Maps to concrete store implementations in memory/stores/.
 
-    WORKING   — short term, current session only, lost on session end
-    EPISODIC  — conversation history, persisted across sessions
-    SEMANTIC  — facts and knowledge, stored in qdrant, semantic search
+    WORKING    — short term, current session only, lost on session end
+    EPISODIC   — conversation history, persisted across sessions
+    SEMANTIC   — facts and knowledge, stored in qdrant, semantic search
+    WIKI       — highest-trust, user-authored .md knowledge; overrides inferred
+    PROCEDURAL — skills, habits, repeatable workflows and preferences
+
+    The four durable tiers (wiki, semantic, episodic, procedural) mirror the
+    architecture's memory model; WORKING is the ephemeral session cache.
     """
-    WORKING  = "working"
-    EPISODIC = "episodic"
-    SEMANTIC = "semantic"
+    WORKING    = "working"
+    EPISODIC   = "episodic"
+    SEMANTIC   = "semantic"
+    WIKI       = "wiki"
+    PROCEDURAL = "procedural"
 
 
 # ---------------------------------------------------------------------------
