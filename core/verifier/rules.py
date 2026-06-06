@@ -1,9 +1,11 @@
 """
 Fast deterministic text-risk rules for the verifier.
 
-These rules are only an early security filter and LLM-verifier hint source. They
-are intentionally narrow: regex should catch obvious attacks quickly, not claim
-to solve semantic prompt-injection detection by itself.
+These rules are a hint source for the LLM verifier, not a content blocker. They
+run before the LLM call (cheap, regex-only) and record a score/categories so the
+LLM has a strong prior, but they never decide block/warn on their own — the LLM
+verifier is the sole content judge for text (see verifier.run). This keeps the
+fast path fast without turning a single regex match into a false-positive wall.
 """
 
 from __future__ import annotations
@@ -13,13 +15,12 @@ import re
 
 from foundation import NormalizedInput, ThreatLevel, VerificationResult
 
-from .constants import ROUTING_BLOCK
 from .utils import content_excerpt, verification_result
 
 
 @dataclass(frozen=True, slots=True)
 class InjectionRule:
-    """One deterministic text rule used before the future LLM verifier."""
+    """One deterministic text rule feeding the LLM verifier a risk hint."""
     name: str
     pattern: re.Pattern[str]
     category: str
@@ -106,17 +107,25 @@ INJECTION_RULES = [
 
 
 def scan_text_risk(normalized: NormalizedInput) -> VerificationResult:
-    """Run fast deterministic injection/malicious-intent screening."""
+    """
+    Produce a deterministic risk *hint*, never a block.
+
+    Regex matches are recorded as deterministic_score / matched_rules /
+    categories in metadata for the LLM verifier to weigh; this function always
+    returns proceed=True with ThreatLevel.NONE. The LLM verifier makes the
+    actual content decision (see verifier.run). Structural problems
+    (unsupported modality, missing capability) are still hard-blocked upstream
+    in verify_handoff / verify_routing — those are correctness, not content
+    judgment.
+    """
     excerpt, truncated = content_excerpt(normalized.content)
-    if not excerpt:
-        return verification_result(proceed=True, normalized=normalized)
 
     matches = []
     score = 0
     categories = set()
 
     for rule in INJECTION_RULES:
-        if rule.pattern.search(excerpt):
+        if excerpt and rule.pattern.search(excerpt):
             score += rule.weight
             categories.add(rule.category)
             matches.append(rule.name)
@@ -126,34 +135,13 @@ def scan_text_risk(normalized: NormalizedInput) -> VerificationResult:
         "matched_rules": matches,
         "excerpt_chars": len(excerpt),
         "excerpt_truncated": truncated,
+        "suspected": bool(matches),
     }
-
-    if score >= 4 or "prompt_exfiltration" in categories or "credential_theft" in categories:
-        return verification_result(
-            proceed=False,
-            dangerous=True,
-            threat_level=ThreatLevel.HIGH,
-            reason="Verifier detected high-confidence injection or malicious intent",
-            categories=sorted(categories),
-            routing_action=ROUTING_BLOCK,
-            normalized=normalized,
-            metadata=metadata,
-        )
-
-    if score >= 3:
-        return verification_result(
-            proceed=True,
-            warn=True,
-            threat_level=ThreatLevel.MEDIUM,
-            reason="Verifier detected suspicious instruction-like content",
-            categories=sorted(categories),
-            normalized=normalized,
-            metadata=metadata,
-        )
 
     return verification_result(
         proceed=True,
         threat_level=ThreatLevel.NONE,
+        categories=sorted(categories),
         normalized=normalized,
         metadata=metadata,
     )

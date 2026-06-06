@@ -40,10 +40,17 @@ def model_settings_for_layer(layer: str) -> ModelSettings:
 
 
 def usage_limits_for_layer(layer: str) -> UsageLimits:
-    """Build conservative usage limits for structured stage agents."""
+    """
+    Build conservative usage limits for structured stage agents.
+
+    request_limit must allow the configured output-validation retries: each
+    retry is a new model request, so the cap is retries + 1. A flat cap of 1
+    would make the first malformed-output retry exceed the limit and turn a
+    transient formatting hiccup into a hard failure.
+    """
     if layer == "verifier":
         return UsageLimits(
-            request_limit=1,
+            request_limit=constants.VERIFIER_MAX_RETRIES + 1,
             output_tokens_limit=constants.VERIFIER_MAX_TOKENS,
         )
 

@@ -46,9 +46,11 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     """
     Pipeline entry point for verification.
 
-    Deterministic checks run first for speed and hard handoff validation. Text
-    and PDF inputs that pass those checks are then classified by the structured
-    verifier LLM before reaching the orchestrator.
+    Deterministic checks run first for speed and hard handoff validation. The
+    regex pass is only a hint — every text/PDF input that clears the structural
+    checks is then adjudicated by the structured verifier LLM, which is the sole
+    content-blocker before the orchestrator. (result.proceed is False here only
+    when a structural gate already blocked, e.g. unsupported modality.)
     """
     started = time.monotonic()
 
@@ -61,8 +63,6 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
             isinstance(normalized, NormalizedInput)
             and normalized.modality in TEXT_MODALITIES
             and result.proceed
-            and not result.dangerous
-            and not result.threat_level.should_block
         ):
             result = await verify_with_llm(normalized, result)
 

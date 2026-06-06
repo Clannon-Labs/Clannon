@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from pydantic_ai import Agent
 
 from foundation import (
@@ -64,8 +66,12 @@ def build_verifier_view(
     )
 
 
+@lru_cache(maxsize=1)
 def _agent() -> Agent[None, VerifierLLMResult]:
-    """Create the verifier agent from the configured model registry."""
+    """
+    Build the verifier agent once and reuse it (PydanticAI agents are meant to
+    be long-lived). Tests that change model config can call _agent.cache_clear().
+    """
     return Agent(
         model_name_for_layer("verifier"),
         output_type=VerifierLLMResult,
@@ -88,6 +94,8 @@ def _coerce_consistent_llm_result(llm_result: VerifierLLMResult) -> VerifierLLMR
         dangerous = True
         warn = False
     elif threat_level.should_warn:
+        proceed = True
+        dangerous = False
         warn = True
     elif dangerous or not proceed:
         threat_level = ThreatLevel.HIGH
