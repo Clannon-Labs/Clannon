@@ -86,7 +86,7 @@ class InMemorySlidingWindowRateLimiter:
                 del self._requests[key]
 
 
-_session_rate_limiter = InMemorySlidingWindowRateLimiter(
+_identity_rate_limiter = InMemorySlidingWindowRateLimiter(
     max_requests=constants.RATE_LIMIT_MAX_REQUESTS,
     window_s=constants.RATE_LIMIT_WINDOW_S,
 )
@@ -96,19 +96,27 @@ _global_rate_limiter = InMemorySlidingWindowRateLimiter(
 )
 
 
-def check_request_rate(session_id: str) -> RateLimitResult:
+def check_request_rate(identity: str) -> RateLimitResult:
     """
-    Check per-session and global intake request limits.
+    Check per-identity and global intake request limits.
 
-    Per-session is checked first so one noisy session does not consume global
+    `identity` should be the strongest caller identity available. Intake passes
+    the session id today; this is the seam where auth plugs in.
+
+    Per-identity is checked first so one noisy caller does not consume global
     burst capacity after it is already over its own limit.
-    """
-    key = session_id or "anonymous"
 
-    if not _session_rate_limiter.allow(key):
+    TODO(auth/Redis): once auth exists, pass user_id (and/or client IP) as
+    `identity` so a client cannot bypass the per-identity limit by rotating
+    session ids; and swap the in-process backend for Redis so the limit is
+    shared across app replicas (the allow(key) contract stays the same).
+    """
+    key = identity or "anonymous"
+
+    if not _identity_rate_limiter.allow(key):
         return RateLimitResult(
             allowed=False,
-            reason="Session request rate limit exceeded",
+            reason="Request rate limit exceeded for identity",
         )
 
     if not _global_rate_limiter.allow("global"):

@@ -49,6 +49,19 @@ GLOBAL_RATE_LIMIT_WINDOW_S  = 1.0     # rolling global burst window
 GLOBAL_RATE_LIMIT_MAX_REQUESTS = 10   # max total requests in the burst window
 MAX_INPUT_SIZE_BYTES        = 50 * 1024 * 1024   # 50 MB hard cap on raw input
 
+# Textual MIME types that intake accepts as Modality.TEXT in addition to the
+# "text/*" family. libmagic reports structured text (JSON/XML/CSV/YAML) and
+# empty input under "application/*", which are still plain text to an LLM.
+TEXTUAL_MIME_TYPES = frozenset({
+    "application/json",
+    "application/xml",
+    "application/x-ndjson",
+    "application/csv",
+    "application/yaml",
+    "application/x-yaml",
+    "application/x-empty",
+})
+
 
 # ---------------------------------------------------------------------------
 # SANITIZERS
