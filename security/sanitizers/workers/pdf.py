@@ -19,6 +19,7 @@ and both scripts are CLI-oriented.
 
 import asyncio
 import io
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -75,10 +76,8 @@ def _payload_to_bytes(pdf: Any) -> bytes:
         return bytes(pdf)
     if isinstance(pdf, memoryview):
         return pdf.tobytes()
-    if isinstance(pdf, (str, Path)):
-        path = Path(pdf)
-        if path.exists() and path.is_file():
-            return path.read_bytes()
+    if isinstance(pdf, os.PathLike):
+        return Path(pdf).read_bytes()
 
     raise SanitizationError(
         "PDF sanitizer expected bytes or a PDF file path",

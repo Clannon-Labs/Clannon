@@ -12,6 +12,7 @@ real blocking work and is offloaded to a thread.
 """
 
 import asyncio
+import os
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -63,10 +64,8 @@ def _payload_to_bytes(video: Any) -> bytes:
         return bytes(video)
     if isinstance(video, memoryview):
         return video.tobytes()
-    if isinstance(video, (str, Path)):
-        path = Path(video)
-        if path.exists() and path.is_file():
-            return path.read_bytes()
+    if isinstance(video, os.PathLike):
+        return Path(video).read_bytes()
 
     raise SanitizationError(
         "Video sanitizer expected bytes or a video file path",

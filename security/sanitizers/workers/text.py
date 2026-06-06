@@ -3,11 +3,16 @@ Text sanitizer worker.
 
 This module runs the text-specific sanitizer checks after the universal
 pre-sanitization gate has already scanned the raw payload. The worker performs
-three independent checks in parallel:
+two independent checks:
 
 * detect-secrets flags credentials/tokens and blocks high-risk input.
 * Presidio detects PII and produces anonymized text.
-* nh3 strips HTML markup from the text representation.
+
+HTML/markup is intentionally NOT stripped or escaped here. The text sink is an
+LLM, not a browser DOM, so HTML carries no injection risk at this stage, while
+escaping bare ``<``/``>``/``&`` would silently corrupt ordinary text and code
+(e.g. ``vector<int>`` or ``a < b``). XSS protection belongs to the output
+filter when content is rendered in the dashboard, not to input sanitization.
 
 scan() returns a TextScanResult for the runner. The original raw input remains
 available through flow.ctx.raw_input; sanitized_text is only the text worker's
@@ -22,8 +27,6 @@ from typing import Callable
 import asyncio
 
 from foundation import SanitizationError, ThreatLevel
-
-import nh3
 
 
 @dataclass
@@ -136,25 +139,6 @@ def _secrets_worker(text: str) -> TextWorkerResult:
     )
 
 
-def _html_worker(text: str) -> TextWorkerResult:
-    """
-    Strip HTML tags and attributes from text.
-
-    This is LOW severity because ordinary pasted text may contain markup. The
-    important part is the sanitized_text payload, not blocking by default.
-    """
-    cleaned = nh3.clean(text, tags=set(), attributes={})
-    if cleaned == text:
-        return TextWorkerResult(name="nh3")
-
-    return TextWorkerResult(
-        name="nh3",
-        threat_level=ThreatLevel.LOW,
-        reason="HTML content sanitized",
-        sanitized_text=cleaned,
-    )
-
-
 def _highest_threat(results: list[TextWorkerResult]) -> ThreatLevel:
     """Return the most severe threat level reported by sub-workers."""
     if not results:
@@ -190,26 +174,21 @@ def _scan_sync(text: str) -> TextScanResult:
     This function contains the real sanitizer logic. scan() is intentionally
     only the async entry point that moves this blocking work to a thread. The
     sub-workers inspect the same original text independently. Sanitized text is
-    built deterministically afterwards: Presidio anonymization is applied first
-    when present, then nh3 strips markup from that result.
+    the Presidio-anonymized result when PII was found, otherwise None (no
+    safe-replacement payload is needed).
     """
     normalized_text = _normalize_text(text)
     results = [
         _run_worker(_secrets_worker, normalized_text),
         _run_worker(_pii_worker, normalized_text),
-        _run_worker(_html_worker, normalized_text),
     ]
     threat_level = _highest_threat(results)
     reasons = [result.reason for result in results if result.reason]
-    sanitized_text = normalized_text
+    sanitized_text = None
 
     pii_result = next((result for result in results if result.name == "presidio"), None)
     if pii_result and pii_result.sanitized_text:
         sanitized_text = pii_result.sanitized_text
-
-    sanitized_text = nh3.clean(sanitized_text, tags=set(), attributes={})
-    if sanitized_text == normalized_text:
-        sanitized_text = None
 
     return TextScanResult(
         threat_level=threat_level,

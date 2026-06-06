@@ -1,10 +1,11 @@
 defaults:
-  provider: openai
-  verifier: openai
-  normalizer: openai
-  orchestrator: openai
-  filter: openai
+  provider: google
+  verifier: google
+  normalizer: google
+  orchestrator: google
+  filter: google
   media_expert: google
+  research: google
 
 anthropic:
   orchestrator:
@@ -77,6 +78,18 @@ google:
     model: gemini-2.5-pro
     capabilities: [text, json, tools, image, audio, video]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
+  verifier:
+    model: gemini-2.5-flash
+    capabilities: [text, json, tools]
+    task: "Input verification with structured output and optional tools"
+  normalizer:
+    model: gemini-2.5-flash
+    capabilities: [text, json]
+    task: "Target model profile for code-only normalizer decisions"
+  filter:
+    model: gemini-2.5-flash
+    capabilities: [text, json]
+    task: "Output safety filtering with structured output"
   media_expert:
     model: gemini-2.5-flash
     capabilities: [text, json, image, audio, video]

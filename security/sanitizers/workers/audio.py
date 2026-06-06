@@ -16,6 +16,7 @@ work and is offloaded to a thread by scan().
 """
 
 import asyncio
+import os
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -66,10 +67,8 @@ def _payload_to_bytes(audio: Any) -> bytes:
         return bytes(audio)
     if isinstance(audio, memoryview):
         return audio.tobytes()
-    if isinstance(audio, (str, Path)):
-        path = Path(audio)
-        if path.exists() and path.is_file():
-            return path.read_bytes()
+    if isinstance(audio, os.PathLike):
+        return Path(audio).read_bytes()
 
     raise SanitizationError(
         "Audio sanitizer expected bytes or an audio file path",

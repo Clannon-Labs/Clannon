@@ -62,9 +62,10 @@ def _payload_to_bytes(raw: Any) -> bytes:
     """
     Convert raw pipeline payloads into bytes for binary scanners.
 
-    Strings are treated as file paths only when they point to an existing file;
-    otherwise they are encoded as plain text. This keeps normal user messages
-    from being accidentally interpreted as missing paths.
+    A str payload is always literal user text and is encoded as UTF-8 — it is
+    never interpreted as a filesystem path, so user content cannot be probed
+    against the disk. File inputs reach the pipeline as os.PathLike from a
+    trusted caller.
     """
     if isinstance(raw, bytes):
         return raw
@@ -73,14 +74,9 @@ def _payload_to_bytes(raw: Any) -> bytes:
     if isinstance(raw, memoryview):
         return raw.tobytes()
     if isinstance(raw, str):
-        possible_path = Path(raw)
-        try:
-            is_file_path = "\n" not in raw and possible_path.exists() and possible_path.is_file()
-        except OSError:
-            is_file_path = False
-        if is_file_path:
-            return possible_path.read_bytes()
         return raw.encode("utf-8", errors="replace")
+    if isinstance(raw, os.PathLike):
+        return Path(raw).read_bytes()
     return repr(raw).encode("utf-8", errors="replace")
 
 

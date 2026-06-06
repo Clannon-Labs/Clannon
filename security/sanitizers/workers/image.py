@@ -9,6 +9,7 @@ hazards, and strip metadata without recompressing pixels whenever possible.
 
 import asyncio
 import io
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,10 +46,8 @@ def _payload_to_bytes(image: Any) -> bytes:
         return bytes(image)
     if isinstance(image, memoryview):
         return image.tobytes()
-    if isinstance(image, (str, Path)):
-        path = Path(image)
-        if path.exists() and path.is_file():
-            return path.read_bytes()
+    if isinstance(image, os.PathLike):
+        return Path(image).read_bytes()
 
     raise SanitizationError(
         "Image sanitizer expected bytes or an image file path",

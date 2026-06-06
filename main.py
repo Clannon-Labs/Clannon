@@ -1,4 +1,24 @@
-import sys
-import logging
+"""
+Local CLI entry point for the active Vraksha pipeline.
 
-from core.pipelines import Pipeline
+There is no HTTP/FastAPI surface yet, so this module exercises the current
+runnable path (intake -> sanitizers -> normalizer -> verifier). It reads one
+input from the first CLI argument (or stdin) and prints the resulting Flow
+summary. Process exit code is non-zero when the flow was blocked or failed.
+"""
+
+import asyncio
+import sys
+
+from core import pipeline
+
+
+async def _main() -> int:
+    raw_input = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read()
+    flow = await pipeline.run(raw_input, session_id="cli")
+    print(flow.summary())
+    return 1 if flow.should_stop else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(_main()))

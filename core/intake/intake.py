@@ -19,14 +19,9 @@ def _is_too_large(file) -> bool:
             return Path(file).stat().st_size > constants.MAX_INPUT_SIZE_BYTES
 
         elif isinstance(file, str):
-            possible_path = Path(file)
-            try:
-                is_file_path = "\n" not in file and possible_path.exists() and possible_path.is_file()
-            except OSError:
-                is_file_path = False
-
-            if is_file_path:
-                return possible_path.stat().st_size > constants.MAX_INPUT_SIZE_BYTES
+            # A str payload is always literal user text, never a filesystem
+            # path. File inputs must arrive as os.PathLike from a trusted
+            # caller, so user content can never be probed against the disk.
             return len(file.encode("utf-8", errors="replace")) > constants.MAX_INPUT_SIZE_BYTES
 
         elif isinstance(file, (bytes, bytearray, memoryview)):
@@ -67,16 +62,10 @@ def _detect_modalities(file) -> list[Modality]:
             return modalities
 
         elif isinstance(file, str):
-            possible_path = Path(file)
-            try:
-                is_file_path = "\n" not in file and possible_path.exists() and possible_path.is_file()
-            except OSError:
-                is_file_path = False
-
-            if is_file_path:
-                mime = magic.from_file(str(possible_path), mime=True)
-            else:
-                mime = magic.from_buffer(file.encode("utf-8", errors="replace"), mime=True)
+            # A str payload is always literal user text, never a filesystem
+            # path. Sniff the encoded buffer only — never open a file from
+            # user-controlled content.
+            mime = magic.from_buffer(file.encode("utf-8", errors="replace"), mime=True)
 
             if mime.startswith("text/"):
                 modalities.append(Modality.TEXT)

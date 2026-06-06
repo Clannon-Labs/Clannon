@@ -34,12 +34,8 @@ def test_text_scan_returns_highest_threat_and_combined_reasons(monkeypatch, mali
             sanitized_text="email: <EMAIL_ADDRESS>",
         )
 
-    def fake_html_worker(text: str) -> text_worker.TextWorkerResult:
-        return text_worker.TextWorkerResult(name="nh3")
-
     monkeypatch.setattr(text_worker, "_secrets_worker", fake_secrets_worker)
     monkeypatch.setattr(text_worker, "_pii_worker", fake_pii_worker)
-    monkeypatch.setattr(text_worker, "_html_worker", fake_html_worker)
 
     result = asyncio.run(text_worker.scan(malicious_text))
     print("scan result:", result)
@@ -50,18 +46,32 @@ def test_text_scan_returns_highest_threat_and_combined_reasons(monkeypatch, mali
 
 
 @pytest.mark.parametrize(
-    ("html_text", "expected_sanitized_text"),
-    [(MALICIOUS_HTML_TEXT, "Hello")],
+    "code_text",
+    ["<div>x</div> std::vector<int> v; if (a < b && c > d) return;"],
 )
-def test_html_worker_flags_and_sanitizes_markup(html_text, expected_sanitized_text):
-    result = text_worker._html_worker(html_text)
-    print("html worker result:", result)
+def test_text_scan_does_not_strip_or_escape_html_or_code(monkeypatch, code_text):
+    # HTML is no longer stripped/escaped: markup, generics, and comparison
+    # operators must survive text sanitization byte-for-byte (no nh3 corruption).
+    # Secrets/PII workers are stubbed clean so this isolates the markup behavior.
+    monkeypatch.setattr(
+        text_worker,
+        "_secrets_worker",
+        lambda text: text_worker.TextWorkerResult(name="detect-secrets"),
+    )
+    monkeypatch.setattr(
+        text_worker,
+        "_pii_worker",
+        lambda text: text_worker.TextWorkerResult(name="presidio"),
+    )
 
-    assert result.name == "nh3"
-    assert result.threat_level == ThreatLevel.LOW
-    assert result.reason == "HTML content sanitized"
-    assert result.sanitized_text == expected_sanitized_text
+    result = asyncio.run(text_worker.scan(code_text))
+    print("code scan result:", result)
+
+    assert result.threat_level == ThreatLevel.NONE
     assert result.passed is True
+    # No safe-replacement payload is produced, so the original text is forwarded
+    # verbatim by the runner (no escaping of <, >, & and no tag deletion).
+    assert result.sanitized_text is None
 
 
 @pytest.mark.parametrize("secret_text", [MALICIOUS_SECRET_TEXT])

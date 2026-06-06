@@ -83,10 +83,12 @@ It uses:
 - `detect-secrets` to detect API keys, tokens, and credentials.
 - `presidio-analyzer` to detect PII.
 - `presidio-anonymizer` to anonymize detected PII.
-- `nh3` to strip HTML tags and attributes.
 
-Secrets are treated as high risk and can block the pipeline. PII and HTML are
-sanitized into `sanitized_text` when possible.
+Secrets are treated as high risk and can block the pipeline. PII is anonymized
+into `sanitized_text` when found. HTML is intentionally not stripped or escaped:
+the text sink is an LLM (not a browser), so markup carries no injection risk
+here, and escaping `<`/`>`/`&` would corrupt ordinary text and code. XSS
+protection belongs to the output filter at render time.
 
 The async `scan()` function is only the entry point. The actual blocking work is
 done in `_scan_sync()` and moved to a worker thread so the runner can keep other
