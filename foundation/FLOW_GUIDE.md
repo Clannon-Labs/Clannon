@@ -25,13 +25,12 @@ async def run_pipeline(raw_input: object, session_id: str) -> Flow:
         Flow.new(raw_input, session_id=session_id),
         [
             intake.process,
-            sanitizer.run_parallel,
+            sanitizer.run,
             normalizer.run,
             verifier.run,
             orchestrator.run,
-            output_handler.run,
             output_filter.run,
-            output_buffer.run,
+            output.run,
         ],
     )
 ```
@@ -57,9 +56,10 @@ use an explicit loop in `core/pipeline.py`.
 Use the payload for what the next stage should process.
 
 Use `flow.ctx` for request-scoped state that later stages may inspect.
-Use `Flow.meta.origin` and `flow.audit()` for the transition history. The
-current implementation does not advance `flow.ctx.current_stage` on every
-`flow.next()` or `flow.warn()` call.
+Use `Flow.meta.origin` and `flow.audit()` for the transition history. `Flow`
+does not advance `flow.ctx.current_stage` on every `flow.next()` or
+`flow.warn()` call, so stages that care about live stage accuracy should call
+`flow.ctx.advance(...)` explicitly.
 
 Example:
 
@@ -80,18 +80,31 @@ modalities stay on the context for observability and later decisions.
 Intake receives the raw user input and records basic request state. It should
 not do deep security analysis. That belongs to the sanitizer workers.
 
+Current intake also performs cheap admission checks before expensive work:
+
+- per-session and global request rate limiting
+- raw input size limits
+- MIME/modality detection
+
 ```python
-from foundation import Flow, Origin
+from foundation import BlockReason, Flow, Origin, PipelineStage, ThreatLevel
 
 
 async def process(flow: Flow) -> Flow:
     started = time.monotonic()
     raw_input = await flow.load()
 
+    if not check_request_rate(flow.ctx.session_id).allowed:
+        return flow.block(BlockReason.RATE_LIMITED, ThreatLevel.NONE, Origin.INTAKE, started)
+
+    if input_is_too_large(raw_input):
+        return flow.block(BlockReason.INPUT_TOO_LARGE, ThreatLevel.NONE, Origin.INTAKE, started)
+
     detected = detect_modalities(raw_input)
 
     flow.ctx.raw_input = raw_input
     flow.ctx.detected_modalities = [m.value for m in detected]
+    flow.ctx.advance(PipelineStage.INTAKE)
 
     return flow.next(raw_input, Origin.INTAKE, started)
 ```
@@ -110,20 +123,27 @@ from foundation import (
     BlockReason,
     Flow,
     Origin,
+    PipelineStage,
     SanitizationError,
     ThreatLevel,
 )
 
 
-async def run_parallel(flow: Flow) -> Flow:
+async def run(flow: Flow) -> Flow:
     started = time.monotonic()
 
     try:
         raw_input = await flow.load()
-        results = await run_workers_for_modalities(
-            raw_input,
-            modalities=flow.ctx.detected_modalities,
-        )
+        flow.ctx.advance(PipelineStage.SANITIZING)
+
+        pre_result = await pre_sanitization.run(raw_input)
+        if pre_result.threat_level.should_block:
+            flow.ctx.sanitization = pre_result
+            flow.ctx.sanitization_blocked = True
+            flow.ctx.sanitization_block_reason = pre_result.reason
+            return flow.block(BlockReason.MALICIOUS_CONTENT, pre_result.threat_level, Origin.SANITIZER, started)
+
+        results = await run_workers_for_modalities(raw_input, flow.ctx.detected_modalities)
 
         flow.ctx.sanitization = results.report
 
@@ -150,37 +170,38 @@ not in the user-facing message.
 
 ## Normalization
 
-Normalization should convert sanitized input into a structured form. It should
-not blindly flatten everything into plain text.
+Normalization should convert sanitized input into a structured form. It is
+code-only in the current implementation: it does not call an LLM.
 
-A good normalized object can contain:
+The current `NormalizedInput` is a dataclass with:
 
-```python
-from pydantic import BaseModel
-
-
-class NormalizedInput(BaseModel):
-    primary_text: str | None
-    modalities: list[str]
-    attachments: list[SafeAttachmentRef]
-    extracted_facts: dict[str, object]
-    user_intent_hint: str | None
-    safety_summary: dict[str, object]
-```
+- `modality`
+- `content_type`
+- `content`
+- `native_payload`
+- `target_layer`
+- `target_provider`
+- `target_model`
+- `preserved_native`
+- `requires_expert`
+- `required_capability`
+- `metadata`
 
 Then the stage writes it to context and passes it forward:
 
 ```python
-from foundation import Flow, Origin
+from foundation import Flow, Origin, PipelineStage
 
 
 async def run(flow: Flow) -> Flow:
     started = time.monotonic()
     sanitized_content = await flow.load()
 
-    normalized = normalize(sanitized_content, flow.ctx.sanitization)
+    modality = flow.ctx.detected_modalities[0] if flow.ctx.detected_modalities else "text"
+    normalized = normalize_payload(sanitized_content, modality=modality)
 
     flow.ctx.normalized_input = normalized
+    flow.ctx.advance(PipelineStage.NORMALIZING)
     return flow.next(normalized, Origin.NORMALIZER, started)
 ```
 
@@ -203,9 +224,11 @@ The verifier probably does not need full native files. It should usually see a
 compact structured view with extracted text, modality metadata, sanitizer
 findings, and attachment descriptors.
 
-The orchestrator can receive richer structured data after verification. If it
-needs native content, pass a safe attachment reference or tool-accessible handle,
-not arbitrary raw bytes in the prompt.
+The orchestrator can receive richer structured data after verification. If the
+target model supports the native modality, the normalizer can preserve the
+sanitized native payload. If it does not, the normalized object marks
+`requires_expert=True` and records the required media capability for later
+routing to a capable expert/model.
 
 ## Verification
 
@@ -490,7 +513,7 @@ async def run_pipeline(raw_input: object, session_id: str) -> Flow:
 
     for stage in [
         intake.process,
-        sanitizer.run_parallel,
+        sanitizer.run,
         normalizer.run,
         verifier.run,
     ]:
@@ -502,10 +525,6 @@ async def run_pipeline(raw_input: object, session_id: str) -> Flow:
 
     for _ in range(constants.MAX_OUTPUT_RETRIES + 1):
         flow = await orchestrator.run(flow)
-        if flow.should_stop:
-            return flow
-
-        flow = await output_handler.run(flow)
         if flow.should_stop:
             return flow
 
@@ -524,7 +543,7 @@ async def run_pipeline(raw_input: object, session_id: str) -> Flow:
             Origin.FILTER,
         )
 
-    flow = await output_buffer.run(flow)
+    flow = await output.run(flow)
     if flow.should_stop:
         return flow
 
@@ -537,9 +556,9 @@ call still takes a `Flow` and returns a `Flow`.
 
 `background_tasks` is a placeholder for your runtime's task scheduler.
 
-## Output Buffer and Memory Writes
+## Output and Memory Writes
 
-The output buffer performs final cheap checks and prepares the final response.
+The output stage performs final cheap formatting and prepares the final response.
 It should not call the main LLM.
 
 ```python
@@ -547,7 +566,7 @@ async def run(flow: Flow) -> Flow:
     started = time.monotonic()
     final_response = await flow.load()
 
-    checked = output_buffer_checks(final_response)
+    checked = output_checks(final_response)
 
     flow.ctx.final_response = checked
     return flow.next(checked, Origin.OUTPUT, started)
@@ -555,7 +574,7 @@ async def run(flow: Flow) -> Flow:
 
 Memory writes can run after the response is ready. If the user does not need to
 wait for persistence, schedule the memory writer as a background task after
-`output_buffer.run()` succeeds.
+`output.run()` succeeds.
 
 Memory writers should use `flow.ctx.memory_writes_requested`, not re-derive
 memory from raw input.

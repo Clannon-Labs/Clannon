@@ -1,157 +1,56 @@
 """
-    pipeline.py
+Core pipeline entry point.
 
-    The pipeline is the spine of Vraksha. It defines the exact order
-    every request travels through, from raw input to final response.
+The pipeline is the spine of Vraksha. It declares the order a request travels
+through and delegates all decisions to the stages themselves.
 
-    This file has one job: declare the stage order and run them.
-    No logic lives here. No decisions are made here.
-    If you find yourself writing an if-statement here that isn't
-    a should_stop check, it belongs in a stage instead.
+Current active flow:
 
-    How a request flows:
-        raw input
-            → intake        detects modalities, checks size, rejects unknowns
-            → sanitizer     parallel workers inspect each modality for threats
-            → normalizer    converts sanitized output into structured form
-            → verifier      light LLM classifies the input (dangerous/warn/proceed)
-            → orchestrator  main LLM reasons, invokes tools and experts
-            → filter        light LLM manages this layer to check the output before user sees it
-            → output        formats and delivers the final response
+    raw input
+        -> intake      rate limit, size check, modality detection
+        -> sanitizer   ClamAV/YARA pre-gate + modality sanitizer workers
+        -> normalizer  code-only NormalizedInput construction
+        -> verifier    structured safety/routing verification
 
-    What Flow.chain() does:
-        Runs each stage in order, passing the flow from one to the next.
-        If any stage returns a blocked or errored flow, all remaining
-        stages are skipped automatically. You never check should_stop here.
-        See foundation/flow.py for the full chain implementation.
+Planned later stages:
 
-    What the Flow object carries:
-        flow.handle     the current payload (changes every stage via flow.next())
-        flow.ctx        the shared request context (never replaced, always same object)
-        flow.status     current status: OK, BLOCKED, WARN, ERROR
-        flow.journal    automatic record of every state transition
-        flow.meta       trace_id, span_id, duration, for logging and tracing
+    orchestrator  main agent reasoning, tools, experts, memory decisions
+    output filter LLM + code output safety check
+    output        final response formatting
 
-        The key distinction:
-            flow.load()  → gives you what the PREVIOUS stage produced (direct handoff)
-            flow.ctx.*   → gives you what ANY previous stage wrote (shared notebook)
-
-        Example: orchestrator calls flow.load() to get the verifier's result.
-                 orchestrator reads flow.ctx.sanitization to see what the sanitizer found.
-                 Both are available. They serve different purposes.
-
-    Reading a blocked result:
-        If the pipeline returns a blocked flow, the user gets a system-generated
-        message, no LLM output, no orchestrator involved.
-        Inspect flow.ctx.block_reason and flow.audit() for the full picture.
-        Never show flow.reason or flow.ctx.block_reason directly to the user.
-
-    Reading a failed result:
-        If the pipeline returns an errored flow, something in the infrastructure
-        broke (timeout, model unavailable, sandbox crash).
-        The user gets a generic error message.
-        Inspect flow.ctx.failure_error and flow.audit() for debugging.
-
-    Logging:
-        Always use flow.summary() for structured log lines.
-        Always use flow.ctx.snapshot() for full request context.
-        Never log the flow object directly, it may contain sensitive data.
-
-        Example:
-            result = await run(raw_input, session_id)
-            if result.should_stop:
-                logger.warning("request did not complete", **result.summary())
+Those planned stages are not imported here until their modules exist. Keeping
+pipeline.py limited to active stages prevents import-time failures and makes the
+current runnable path honest.
 """
 
+from typing import Any
+
 from foundation import Flow
-from core import intake, normalizer, orchestrator, verifier, output # only intake is available till now
+from core import intake, normalizer, verifier
 from security.sanitizers import runner as sanitizer
-from security.filter import filter as output_filter
 
 
-async def run(raw_input: any, session_id: str) -> Flow:
+ACTIVE_STAGES = [
+    intake.process,
+    sanitizer.run,
+    normalizer.run,
+    verifier.run
+]
+
+
+async def run(raw_input: Any, session_id: str) -> Flow:
     """
-        Run a single user turn through the full Vraksha pipeline.
+    Run one user turn through the active Vraksha pipeline.
 
-        This is the only entry point for processing user input.
-        Call this once per user turn. Never call stages directly
-        from outside the pipeline.
+    Args:
+        raw_input: Raw input exactly as received from the user. Intake owns
+            size checks and modality detection, so callers should not normalize
+            or sanitize before creating the pipeline.
+        session_id: Session identifier used by Flow context and intake rate
+            limiting.
 
-        Args:
-            raw_input:  the raw input exactly as received from the user.
-                        can be a string, file path, bytes, or a dict
-                        containing multiple modalities. intake.py handles
-                        detection, do not pre-process before passing here.
-
-            session_id: the session this turn belongs to.
-                        used to scope memory reads/writes and carry
-                        conversation history. generated by session.py.
-
-        Returns:
-            A Flow object representing the completed (or terminated) request.
-
-            Check the result before sending anything to the user:
-
-                result = await pipeline.run(raw_input, session_id)
-
-                if result.blocked:
-                    # input or output was rejected by a security layer
-                    # user gets a generic block message
-                    # never use result.reason as the user-facing message
-                    send_block_message(user)
-
-                elif result.errored:
-                    # something in the infrastructure failed
-                    # user gets a generic error message
-                    send_error_message(user)
-
-                else:
-                    # pipeline completed cleanly
-                    # final response is in result.ctx.final_response
-                    send_response(result.ctx.final_response, user)
-
-        What Flow.new() does:
-            Creates the initial Flow for this request:
-            - generates a trace_id that stays fixed for the entire request
-            - creates a fresh VrakshaContext attached to this session
-            - wraps raw_input in a PayloadHandle (lazy, not loaded yet)
-            - writes the first journal entry marking the request as born
-            - sets status to OK
-
-        What Flow.chain() does:
-            Runs each stage function in the list, in order.
-            Each stage receives the Flow the previous stage returned.
-            If any stage returns a blocked or errored Flow, all remaining
-            stages are skipped, they never execute.
-            The final Flow (whatever status) is returned here.
-
-        Stage contract:
-            Every stage function must have this exact signature
-            (internal workers don't have to but the main part of each layer MUST):
-                async def stage_name(flow: Flow) -> Flow
-
-            Every stage must:
-                - call await flow.load() to access the current payload
-                - write its results to flow.ctx before calling flow.next()
-                - return flow.next(), flow.block(), flow.warn(), or flow.fail()
-                - never raise exceptions across the stage boundary
-                  (catch them and convert to flow.fail())
-
-        Debugging a failed request:
-            result = await pipeline.run(raw_input, session_id)
-            print(result.replay())          # human-readable stage journey
-            print(result.audit())           # full journal as list of dicts
-            print(result.ctx.snapshot())    # full context state
+    Returns:
+        The final Flow from the active stage chain. If any stage blocks or
+        fails, Flow.chain() skips the remaining stages automatically.
     """
-    return await Flow.chain(
-        Flow.new(raw_input, session_id),
-        [
-            intake.process,       # detect modalities, size check, reject unknowns
-            sanitizer.run,        # parallel threat detection across all modalities
-            normalizer.run,       # convert to structured NormalizedInput
-            verifier.verify,      # light LLM: dangerous / warn / proceed
-            orchestrator.run,     # main LLM: reason, invoke tools and experts
-            output_filter.run,    # light LLM: manage a layer to check output before user sees it
-            output.send,          # format and deliver final response
-        ]
-    )
+    return await Flow.chain(Flow.new(raw_input, session_id), ACTIVE_STAGES)

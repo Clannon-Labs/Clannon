@@ -1,4 +1,5 @@
 from .flow import Flow, PayloadHandle, JournalEntry
+from .contracts import NormalizedInput, VerificationResult
 from .model_registry import ModelProfile, ModelRegistry, load_model_registry
 from .pillars.transport import Envelope, Status, Meta
 
@@ -52,6 +53,8 @@ __all__ = [
     "Flow",
     "PayloadHandle",
     "JournalEntry",
+    "NormalizedInput",
+    "VerificationResult",
     "ModelProfile",
     "ModelRegistry",
     "load_model_registry",

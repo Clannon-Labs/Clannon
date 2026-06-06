@@ -21,6 +21,9 @@ foundation/
   flow.py
     Flow, the primary transport for stage handoffs.
 
+  model_registry.py
+    Root models.yaml loader and cached model profile resolver.
+
   pillars/
     __init__.py
       Public import surface for foundation primitives.
@@ -55,7 +58,7 @@ from foundation.flow import Flow
 from foundation.context import VrakshaContext
 ```
 
-Constants are the only exception. Import the module so the call site clearly
+Constants are the main exception. Import the module so the call site clearly
 shows where the value comes from:
 
 ```python
@@ -65,6 +68,14 @@ timeout = constants.VERIFIER_TIMEOUT_S
 
 # wrong: bare name with no context
 from foundation.constants import VERIFIER_TIMEOUT_S
+```
+
+Model routing is also exposed through the package:
+
+```python
+from foundation import load_model_registry
+
+model = load_model_registry().for_layer("orchestrator")
 ```
 
 ## flow.py: Flow
@@ -259,7 +270,7 @@ raise SanitizationError(
     "embedded JS in PDF stream",
     trace_id=flow.meta.trace_id,
     modality="pdf",
-    worker="pdfid",
+    worker="pikepdf",
 )
 
 # wrap the original exception, never swallow it
@@ -306,6 +317,37 @@ except ToolError as e:
     logger.error("tool failed", tool=e.tool)
 ```
 
+## model_registry.py: Model Routing
+
+`model_registry.py` is the single foundation-level bridge to root model
+configuration. LLM-using layers should resolve providers and model names through
+this registry instead of hardcoding them.
+
+It reads `models.yaml`, caches the parsed registry, and supports optional
+role/layer routes such as `orchestrator`, `verifier`, `normalizer`, `filter`,
+and `media_expert`.
+
+```python
+from foundation import load_model_registry
+
+registry = load_model_registry()
+profile = registry.for_layer("orchestrator")
+
+if profile.supports("image"):
+    ...
+```
+
+`load_model_registry()` is cached for hot-path performance. Test or config
+reload code can call:
+
+```python
+load_model_registry.cache_clear()
+```
+
+The optional `VRAKSHA_MODEL_PROVIDER` environment variable can override the
+default provider. That override belongs here because model routing is owned by
+the registry.
+
 ## constants.py: Hardcoded Values
 
 No magic number or magic string should live elsewhere in the codebase. If you
@@ -331,7 +373,7 @@ if failure_count >= constants.CB_FAILURE_THRESHOLD:
 
 **Add a new constant this way:**
 
-1. Find the right section, such as PIPELINE, SANITIZERS, or VERIFIER.
+1. Find the right section, such as PIPELINE, INTAKE, SANITIZERS, or VERIFIER.
 2. Add it with a type-appropriate name in `SCREAMING_SNAKE_CASE`.
 3. Add an inline comment explaining what triggers or uses it.
 4. For timeouts, suffix the name with `_S` for seconds or `_MS` for milliseconds.
@@ -371,7 +413,8 @@ flow.ctx.orchestrator_response = result  # written by orchestrator
 # Flow.fail()  calls ctx.mark_failed()  automatically
 # Flow.new()   sets the initial INTAKE stage
 #
-# Flow.next() and Flow.warn() do not currently advance ctx.current_stage.
+# Flow.next() and Flow.warn() do not advance ctx.current_stage.
+# Stages that want current_stage accuracy should call ctx.advance().
 # Use Flow.meta.origin and flow.audit() for transition history.
 ```
 
@@ -452,9 +495,12 @@ enum belongs to one layer, such as `security/`, define it in that layer's own
 
 **Do not:**
 - Import from anywhere else in Vraksha inside this package.
-- Add business logic, I/O, or LLM calls to any file here.
+- Add business logic or LLM calls to any file here.
+- Add I/O here except for foundation-owned configuration loading such as
+  `model_registry.py`.
 - Define layer-specific types here; they belong in that layer's `schema.py`.
-- Read environment variables here; that belongs in `config/settings.py`.
+- Read environment variables here, except for foundation-owned routing overrides
+  such as `VRAKSHA_MODEL_PROVIDER` in `model_registry.py`.
 - Call `ctx.mark_blocked()` or `ctx.mark_failed()` directly in stage code. Use
   `flow.block()` or `flow.fail()` instead.
 

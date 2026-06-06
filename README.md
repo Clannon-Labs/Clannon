@@ -6,7 +6,11 @@
 
 > **"Vraksha remembers, so you can focus on creating."**
 
-Most AI assistants start from scratch every time you talk to them. They forget who you are and what you're working on the second the session ends. **Vraksha** is different. It’s built with a local-first, persistent memory that actually sticks around. It reads and writes to structured files before and after every session, so your context, project state, and hardcoded rules are never lost.
+Most AI assistants start from scratch every time you talk to them. They forget
+who you are, what you care about, and what you were building the moment the
+session ends. **Vraksha** is being built for the opposite experience: a secure,
+local-first agent runtime that can preserve context, understand multimodal
+inputs, and grow with you over time.
 
 No more re-explaining. No more context drift. Just get straight to work.
 
@@ -14,53 +18,125 @@ No more re-explaining. No more context drift. Just get straight to work.
 
 ## Why Vraksha?
 
-Vraksha isn't just another agent wrapper. We built it on three core ideas that change how it interacts with you and your machine:
+Vraksha is not just another agent wrapper. It is being designed around three
+core ideas:
 
-1.  **Security that Actually Works**: We believe agents should be powerful without being dangerous. Vraksha uses a multi-gate security architecture (Gate 1 for input sanitization and Gate 2 for action verification) to make sure no command runs without a solid trust score.
-2.  **Memory that Lasts**: Your data stays where it belongs: on your machine. Vraksha keeps a relational knowledge graph, a semantic vector store, and a procedural wiki. It doesn't just "chat"; it builds a real understanding of your projects over time.
-3.  **Personalities with a Soul**: Every Vraksha instance is unique. You can define a "Soul" for your agent, giving it a distinct voice, its own ethical boundaries, and a specific technical focus.
+1. **Security that Actually Works**: Powerful agents need strong boundaries.
+   Vraksha is built as a layered pipeline where raw input is inspected,
+   sanitized, normalized, verified, orchestrated, filtered, and only then shown
+   back to the user.
+2. **Memory that Lasts**: The long-term vision is a local-first memory system
+   that keeps project context, durable facts, and user preferences available
+   across sessions without handing everything to a remote black box.
+3. **A Personal Agent With Taste**: Vraksha is meant to feel less like a
+   disposable chat window and more like a steady collaborator with a consistent
+   working style, tool access, and memory.
 
 ---
 
 ## What it can do right now
 
--   **Tri-Store Infinite Memory (FTS-Relational Foundation)**: Vraksha utilizes a high-performance local store (SQLite FTS5 + WAL mode) to manage three distinct memory layers. While the dedicated Kùzu graph store is in development, the current foundation supports:
-    -   **Wiki (Procedural)**: Durable rules, identities, and project-wide truths.
-    -   **Semantic (Episodic)**: Contextual recall of past interactions and decisions.
-    -   **Relational Metadata**: Entity tagging and trust-based resolution.
--   **Async I/O Pipeline**: A dedicated `AsyncJournalWriter` factually ensures that logging and memory consolidation never block the agent's reasoning loop.
--   **Modular Skill Registry**: A "drop-in" folder system where new skills/experts (`skill.py` + `SKILL.md`) are automatically discovered and registered at runtime.
--   **Forensic Slop Detection**: A specialized skill (`src/skills/slop_detector`) that differentiates between human-written and AI-generated code.
--   **Security Architecture Baseline**: The technical specifications for the **Multi-Gate Security Stack** are finalized, with the Docker sandbox already serving as the primary execution isolation layer.
+- **Flow-Based Pipeline Foundation**: Every stage receives and returns a
+  `Flow`, carrying payloads, context, trace metadata, status, and a journal of
+  stage transitions.
+- **Input Intake Layer**: Vraksha can rate-limit requests, enforce raw input
+  size limits, detect modalities, and preserve the original input in request
+  context.
+- **Security Sanitization Layer**: ClamAV and YARA run before modality workers.
+  Text, PDF, image, audio, and video workers validate and sanitize inputs while
+  preserving quality wherever possible.
+- **Code-Only Normalization Layer**: Sanitized input is converted into a
+  structured `NormalizedInput`. Text and PDFs become clean structured text;
+  image/audio/video can stay native when the target model supports them.
+- **Root Model Routing**: Model choices live in `models.yaml`, so future
+  verifier, orchestrator, expert, and filter layers can change providers from
+  one place.
+
+The active path today is:
+
+```text
+raw input -> intake -> sanitizer -> normalizer
+```
 
 ---
 
-## Coming Soon (v1.0 Roadmap)
+## Coming Soon
 
-We're actively working on these features and plan to roll them out in the next few weeks:
+These are the next major layers being built on top of the current foundation:
 
--   **Multi-Gate Implementation**: Deploying the Gate 1 (Sanitization) and Gate 2 (Intent Verification) logic directly into the agent reasoning loop.
--   **Kùzu Graph Integration**: Moving the relational layer to a dedicated graph database for deep temporal reasoning.
--   **MCP (Model Context Protocol)**: Full support for standardized machine operations (read/write/shell) with automated violation gating.
--   **Composio Integration**: Instant access to 500+ apps like GitHub, Slack, and Notion without any manual setup.
--   **Telegram Interface**: Move your chats from the terminal to a private, secure Telegram bot.
+- **Verifier Layer**: A fast LLM + code/tool security layer that decides whether
+  normalized input is safe to send to the orchestrator.
+- **Pydantic AI Orchestrator**: The main reasoning agent that can call tools,
+  delegate to experts, and decide what should be remembered.
+- **Experts and Tool Handlers**: Controlled execution boundaries for tools,
+  specialist models, media understanding, code work, research, and automation.
+- **Output Filter**: A final LLM + code safety layer that checks candidate
+  responses before the user sees them.
+- **Memory Layer**: Persistent local memory for facts, sessions, preferences,
+  and project state.
 
 ---
 
 ## On the Horizon
 
-Here’s where we’re heading in the long run:
+Here is where Vraksha is heading in the long run:
 
--   **Agents Talking to Agents (A2A)**: We want multiple Vraksha instances (like "Luna" for design and "Rex" for dev) to be able to collaborate securely over a local protocol.
--   **Autonomous Heartbeat**: A scheduler that lets Vraksha wake up, do some maintenance, or check on tasks while you're away.
--   **The Guardian Service**: A dedicated service that watches over Vraksha's integrity and keeps it "invisible" when it's not active, making it one of the most secure agents out there.
--   **Sandboxed Execution**: Moving all code execution into gVisor or Firecracker for absolute isolation.
+- **Multimodal Native Reasoning**: Use image/audio/video-capable models when
+  available, and route unsupported media to capable experts when needed.
+- **Local-First Memory Graph**: A durable memory system combining structured
+  records, semantic search, and project-aware context.
+- **Agents Talking to Agents**: Multiple Vraksha experts collaborating through
+  controlled, auditable boundaries.
+- **Sandboxed Execution**: Stronger isolation for tools and code execution
+  using Docker today and stricter sandboxes later.
+- **Guardian-Style Runtime Checks**: Background integrity checks, health
+  monitoring, and safer autonomous behavior.
 
 ---
 
-## Quick Start
+## Architecture Snapshot
 
-### 1. Get it installed
+```text
+foundation/
+  Flow, context, constants, shared types, model registry
+
+core/
+  intake, pipeline, normalizer
+
+security/
+  sanitizers today
+  verifier and output filter planned
+
+models.yaml
+  one place to route model providers and capabilities
+```
+
+Active pipeline:
+
+```text
+intake -> sanitizer -> normalizer
+```
+
+Planned full pipeline:
+
+```text
+intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -> output
+```
+
+Useful docs:
+
+- [foundation/README.md](foundation/README.md)
+- [foundation/FLOW_GUIDE.md](foundation/FLOW_GUIDE.md)
+- [core/README.md](core/README.md)
+- [security/sanitizers/README.md](security/sanitizers/README.md)
+
+---
+
+## Installation
+
+There are two ways to set up Vraksha right now.
+
+### The Fast Path
 
 Linux:
 
@@ -81,62 +157,98 @@ curl -fsSL https://raw.githubusercontent.com/vraksha/vraksha/main/install-macos.
 ```
 > After that, just run `vraksha` to start your first session.
 
-### 2. Set up your keys
-Put your API keys in `.env.local`. Vraksha supports all 12 of your favourite providers, including local models.
+The installer path is meant for the future full runtime. If you are hacking on
+the current pipeline layers, the developer path below is the clearest way to
+see what is working today.
+
+### The Developer Path
+
+Clone the repo, create a virtual environment, and install dependencies:
 
 ```bash
+git clone https://github.com/vraksha/vraksha
+cd vraksha
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+Create local env files:
+
+```bash
+cp .env.example .env.local
+```
+
+Add model keys only for the providers you plan to use:
+
+```env
 ANTHROPIC_API_KEY=your_key_here
-
 OPENAI_API_KEY=your_key_here
-
 GOOGLE_API_KEY=your_key_here
-
-XAI_API_KEY=your_key_here
-
 OPENROUTER_API_KEY=your_key_here
-
 MISTRAL_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+HF_TOKEN=your_hugging_face_key_here
+```
 
-AWS_BEARER_TOKEN_BEDROCK='your-api-key'
-# or:
-AWS_ACCESS_KEY_ID='your-access-key'
-AWS_SECRET_ACCESS_KEY='your-secret-key'
+Model choices and layer routing live in:
 
-CEREBRAS_API_KEY='your-api-key'
+```text
+models.yaml
+```
 
-# Cohere
-CO_API_KEY='your-api-key'
+### Security Services
 
-GROQ_API_KEY='your-api-key'
+ClamAV runs as a daemon. With Docker Compose:
 
-OLLAMA_BASE_URL='http://localhost:11434/v1'
-OLLAMA_API_KEY='your-api-key'  # required for Ollama Cloud
+```bash
+docker compose up -d clamav
+```
 
-# To use hugging face models' api
-HF_TOKEN=your_hugging_face_key_here #Also for downloading a very small model for memory management (if not already in the repo)
+Common local settings:
 
-GITHUB_TOKEN=your_key_here #for slop detector expert/skill
+```env
+CLAMAV_HOST=127.0.0.1
+CLAMAV_PORT=3310
+AGENT_YARA_DIR=rules
+```
 
-# add any other keys your app needs
+For local media/PDF sanitization, make sure these system packages are present:
 
+```bash
+sudo apt-get install -y ffmpeg libimage-exiftool-perl libmagic1
+```
+
+On macOS, install equivalent packages with Homebrew:
+
+```bash
+brew install ffmpeg exiftool libmagic
 ```
 
 ---
 
-## Project Structure
+## Verification
 
-```text
-.
-├── main.py                # Agent Entry Point
-├── memory/                # Where the memory lives (Wiki, Qdrant, Kuzu)
-├── src/
-│   ├── agent/             # Core LLM logic and prompts
-│   ├── memory/            # The memory architecture logic
-│   ├── skills/            # Where the skills are stored
-│   ├── slop_detector/     # Forensic Code Analysis
-│   └── utils/             # GitHub and other utilities
-└── assets/                # Logos and documentation images
+Useful checks for the current active layers:
+
+```bash
+python -m py_compile \
+  foundation/flow.py \
+  foundation/constants.py \
+  foundation/model_registry.py \
+  core/intake/intake.py \
+  core/intake/rate_limiter.py \
+  security/sanitizers/runner.py \
+  security/sanitizers/pre_sanitization.py \
+  core/normalizer/normalizer.py
 ```
+
+```bash
+python -m pytest -s tests/text_sanitization.py tests/pre_sanitization.py
+```
+
+The ClamAV EICAR test requires a running `clamd` daemon. If the daemon is not
+available, that test is skipped.
 
 ---
 
@@ -168,8 +280,5 @@ GITHUB_TOKEN=your_key_here #for slop detector expert/skill
     </tr>
   </table>
   
-  <p><i>Vraksha v0.0.10: Previews</i></p>
-  <br>
-  <p><i>Note: The current version has the local-first memory and security foundations ready to go. We're rolling out the rest of the roadmap features one by one.</i></p>
+  <p><i>Vraksha: security-first memory agent runtime, built layer by layer.</i></p>
 </div>
-

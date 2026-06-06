@@ -197,7 +197,7 @@ class VrakshaContext:
     # Written by: core/normalizer.py
     # ------------------------------------------------------------------
 
-    normalized_input: Any | None = None  # PLACEHOLDER: will be normalizer.NormalizedInput
+    normalized_input: Any | None = None  # PLACEHOLDER: will be foundation.NormalizedInput
                                          # structured form of the sanitized input
                                          # this is what the verifier and orchestrator see
 
@@ -206,7 +206,7 @@ class VrakshaContext:
     # Written by: security/verifier/verifier.py
     # ------------------------------------------------------------------
 
-    verifier_result: Any | None = None   # PLACEHOLDER: will be verifier.VerifierResult
+    verifier_result: Any | None = None   # PLACEHOLDER: will be foundation.VerificationResult
                                          # structured JSON from the verifier LLM:
                                          # {dangerous, warn, proceed, ...}
 

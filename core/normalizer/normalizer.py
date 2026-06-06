@@ -9,12 +9,12 @@ model can receive native media or whether a later expert/model needs to help.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
 from typing import Any
 
 from foundation import (
     Flow,
+    NormalizedInput,
     Origin,
     Modality,
     PipelineStage,
@@ -23,29 +23,6 @@ from foundation import (
 )
 from .extractors import extract_pdf_pages
 from .utils import payload_to_text, truncate_text
-
-
-@dataclass(slots=True)
-class NormalizedInput:
-    """
-    Structured payload passed from normalizer to verifier/orchestrator.
-
-    content is text when code-only normalization can produce text. native_payload
-    is preserved when the target model supports that modality directly.
-    requires_expert marks media that needs a capable model/tool later because
-    normalizer itself stays code-only.
-    """
-    modality: str
-    content_type: str
-    content: str | None = None
-    native_payload: Any | None = None
-    target_layer: str = "orchestrator"
-    target_provider: str | None = None
-    target_model: str | None = None
-    preserved_native: bool = False
-    requires_expert: bool = False
-    required_capability: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _normalize_text(payload: Any) -> NormalizedInput:

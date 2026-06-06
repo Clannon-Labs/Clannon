@@ -18,16 +18,27 @@ The active path is:
 It:
 
 - Loads the payload from the current `Flow`.
+- Advances `flow.ctx.current_stage` to `SANITIZING`.
 - Runs universal pre-sanitization first.
 - Runs modality-specific sanitizer workers only after pre-sanitization passes.
 - Runs matching modality workers concurrently.
 - Blocks the flow when a worker reports a blocking threat level.
+- Blocks if intake somehow reports no modality with a matching worker.
 - Stores sanitizer results in `flow.ctx.sanitization`.
 - Passes the sanitized payload to the next stage when a worker produced one.
 
 The original input is not destroyed by this stage. The default downstream
 payload becomes the sanitized output, but sanitizer reports and context keep the
 stage-level details available for inspection.
+
+On success, `flow.ctx.sanitization` is a dictionary with:
+
+- `pre_sanitization`: the ClamAV/YARA aggregate result.
+- `workers`: modality worker results.
+- `sanitized_outputs`: sanitized payloads keyed by modality.
+
+On sanitizer block, `flow.ctx.sanitization_blocked` is set to `True` and
+`flow.ctx.sanitization_block_reason` stores the internal reason.
 
 ## Pre-Sanitization
 
@@ -39,9 +50,10 @@ It currently uses:
 - ClamAV through the `clamd` Python client.
 - YARA through `yara-python`.
 
-ClamAV scans the raw payload through the clamd TCP `INSTREAM` API. YARA compiles
-local `.yar` and `.yara` files from the configured rules directory and matches
-them against the same raw payload.
+ClamAV scans the raw payload through the clamd TCP `INSTREAM` API. The Python
+code does not start the daemon; it connects to an already running clamd service.
+YARA compiles local `.yar` and `.yara` files from the configured rules directory
+and matches them against the same raw payload.
 
 If the YARA rules directory is missing, it is created automatically. If no rules
 exist yet, YARA reports a skipped clean result so local development can continue.
@@ -91,6 +103,8 @@ It uses:
 
 The worker rejects invalid images and decompression bombs. When metadata exists,
 it strips metadata losslessly and returns `sanitized_image`.
+If metadata stripping fails after validation, the worker preserves the validated
+original image rather than degrading visual quality through a forced re-encode.
 
 ## PDF Worker
 
@@ -118,6 +132,8 @@ It uses:
 It rejects inputs without an audio stream and blocks audio that exceeds the
 configured duration limit. Metadata stripping is done through stream-copy remux
 when possible, preserving audio quality instead of re-encoding.
+If remuxing fails after validation, the worker preserves the validated original
+payload rather than lowering quality with a fallback transcode.
 
 ## Video Worker
 
@@ -130,6 +146,8 @@ It uses:
 It rejects inputs without a video stream and blocks video that exceeds the
 configured duration limit. Metadata stripping is done through stream-copy remux
 when possible, preserving video quality instead of re-encoding.
+If remuxing fails after validation, the worker preserves the validated original
+payload rather than lowering quality with a fallback transcode.
 
 ## Runtime Dependencies
 
