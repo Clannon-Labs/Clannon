@@ -49,6 +49,11 @@ core/
       (agent.py, checks.py, rules.py, schemas.py, utils.py are internals.)
 
   llm/
+    framework.py
+      The ONLY module that imports pydantic_ai. build_agent() + run_structured()
+      are the build/run entry points every LLM stage uses; swap or audit the
+      framework here. Translates SDK/provider errors to foundation errors.
+
     registry.py
       Resolves model profiles into Pydantic AI model strings/settings.
 
@@ -56,6 +61,17 @@ core/
       run_agent(): shared transient-error (429/5xx/timeout) retry with
       exponential backoff for every model-calling stage. Fails closed when the
       bounded retry budget is exhausted.
+
+  orchestrator/
+    orchestrator.py
+      Stage entry point (run). Vraksha-owned bounded reasoning loop.
+      (loop.py, advisor.py, schemas.py, ports.py at root; experts/ + tools/
+      sub-layers; utils/ holds wiring, router, decision_log, prompt.)
+
+  memory/
+    manager.py
+      MemoryManager: the single door to the memory layer (implements
+      foundation.MemoryPort). Phase-1 stub; real 4-tier system planned.
 ```
 
 Currently active core stages are:
@@ -63,6 +79,12 @@ Currently active core stages are:
 1. `core/intake/process`
 2. `core/normalizer/run`
 3. `core/verifier/run`
+4. `core/orchestrator/run`
+
+The orchestrator is a Vraksha-owned loop: the model is a structured advisor that
+emits one decision per turn; the loop executes it (experts/tools via ports,
+streaming a decision log). Experts, tools, memory, the entropy router, and the
+output filter are wired behind ports as Phase-1 stubs.
 
 `core/pipeline.py` runs only the active pipeline today. It also documents the
 intended later stages: orchestrator, filter, and output, which are not active

@@ -27,6 +27,15 @@ foundation/
   prompt_registry.py
     Root prompts/ loader and cached prompt resolver (name + version).
 
+  contracts.py
+    Cross-stage payload shapes: NormalizedInput, VerificationResult, the memory
+    boundary contracts (HydrationRequest/Package, MemoryItem, MemoryWriteProposal)
+    and OrchestratorResponse.
+
+  ports.py
+    Cross-layer port protocols (the nearest common point for two layers to agree
+    on a contract without importing each other). Holds MemoryPort today.
+
   pillars/
     __init__.py
       Public import surface for foundation primitives.

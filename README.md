@@ -52,14 +52,19 @@ core ideas:
 - **Verifier Layer**: A small, fast LLM (Google Gemini by default) makes the
   final input-safety call. The deterministic regex pass is only a hint — the LLM
   always adjudicates text and is the sole content blocker. Output is structured.
-- **Root Model Routing**: Model choices live in `models.yaml`, so the verifier
-  today and future orchestrator/expert/filter layers route providers from one
-  place. Google Gemini is the default provider.
+- **Orchestrator Spine**: A Vraksha-owned reasoning loop — the model advises with
+  one structured decision per turn and the loop executes it — that streams a
+  structured decision log. Experts, tools, memory, and the entropy router are
+  wired behind ports as Phase-1 stubs, so the heavy parts plug in without
+  reworking the spine.
+- **Root Model Routing**: Model choices live in `models.yaml`, so every LLM stage
+  routes providers from one place; the LLM framework itself is confined to
+  `core/llm`. Google Gemini is the default provider.
 
 The active path today is:
 
 ```text
-raw input -> intake -> sanitizer -> normalizer -> verifier
+raw input -> intake -> sanitizer -> normalizer -> verifier -> orchestrator
 ```
 
 ---
@@ -103,7 +108,7 @@ foundation/
   Flow, context, constants, shared types, model registry
 
 core/
-  intake, pipeline, normalizer, verifier, llm adapter
+  intake, pipeline, normalizer, verifier, orchestrator, memory, llm adapter
 
 security/
   sanitizers today
@@ -119,7 +124,7 @@ prompts/
 Active pipeline:
 
 ```text
-intake -> sanitizer -> normalizer -> verifier
+intake -> sanitizer -> normalizer -> verifier -> orchestrator
 ```
 
 Planned full pipeline:
