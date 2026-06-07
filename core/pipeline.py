@@ -53,4 +53,7 @@ async def run(raw_input: Any, session_id: str) -> Flow:
         The final Flow from the active stage chain. If any stage blocks or
         fails, Flow.chain() skips the remaining stages automatically.
     """
-    return await Flow.chain(Flow.new(raw_input, session_id), ACTIVE_STAGES)
+    return await Flow.chain(
+        Flow.new(raw_input, session_id),
+        ACTIVE_STAGES
+    )

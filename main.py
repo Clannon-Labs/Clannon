@@ -10,6 +10,14 @@ summary. Process exit code is non-zero when the flow was blocked or failed.
 import asyncio
 import sys
 
+from dotenv import load_dotenv
+
+# Load environment before anything constructs provider clients. .env carries
+# non-secret config (e.g. CLAMAV_HOST); .env.local holds secrets like the
+# provider API key and overrides .env. The provider SDK reads the key from env.
+load_dotenv(".env")
+load_dotenv(".env.local", override=True)
+
 from core import pipeline
 
 

@@ -88,7 +88,9 @@ MAX_VIDEO_DURATION_S        = 300                 # 5 minutes max video
 # Should be fast class model, tight token limits.
 # ---------------------------------------------------------------------------
 
-VERIFIER_TIMEOUT_S          = 8.0    # if verifier takes longer, treat as ERROR
+VERIFIER_TIMEOUT_S          = 12.0   # if verifier takes longer, treat as ERROR.
+                                     # Must be >= 10s: the Gemini API rejects
+                                     # request deadlines under 10s (400).
 VERIFIER_MAX_TOKENS         = 512    # verifier only outputs structured JSON
 VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
 
@@ -131,7 +133,7 @@ EXPERT_MAX_OUTPUT_TOKENS    = 4096
 # Output filter LLM. Same class as verifier — fast, structured output only.
 # ---------------------------------------------------------------------------
 
-FILTER_TIMEOUT_S            = 8.0
+FILTER_TIMEOUT_S            = 12.0   # >= 10s: Gemini rejects deadlines under 10s
 FILTER_MAX_TOKENS           = 512
 FILTER_MAX_RETRIES          = 2      # retries on malformed output before ERROR
 

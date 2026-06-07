@@ -157,7 +157,7 @@ class ModelRegistry:
         if isinstance(defaults, dict) and defaults.get("provider"):
             return str(defaults["provider"])
 
-        return "openai"
+        return "google"
 
     def _routes(self) -> dict[str, str]:
         """
