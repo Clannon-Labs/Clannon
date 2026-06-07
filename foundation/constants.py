@@ -114,10 +114,11 @@ LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
 # Main LLM. Gets the most time — it does the real reasoning.
 # ---------------------------------------------------------------------------
 
-ORCHESTRATOR_TIMEOUT_S      = 90.0   # per reasoning turn, not total
+ORCHESTRATOR_TIMEOUT_S      = 90.0   # whole-loop wall time; exceeding it fails the stage
 ORCHESTRATOR_MAX_TOKENS     = 8096
-ORCHESTRATOR_MAX_TURNS      = 20     # max back-and-forth turns in one session
-                                     # before forcing a response
+ORCHESTRATOR_MAX_TURNS      = 20     # max advisor turns in one stage run
+                                     # before forcing a final answer
+ORCHESTRATOR_MAX_RETRIES    = 2      # retries on malformed advisor output before ERROR
 
 
 # ---------------------------------------------------------------------------

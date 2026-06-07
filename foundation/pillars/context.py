@@ -221,11 +221,22 @@ class VrakshaContext:
     tool_calls:    list[ToolCallRecord]   = field(default_factory=list)
     expert_calls:  list[ExpertCallRecord] = field(default_factory=list)
 
-    orchestrator_response: Any | None = None  # PLACEHOLDER: will be orchestrator.Response
+    decision_log:  list[Any] = field(default_factory=list)
+                                              # PLACEHOLDER: will be orchestrator.DecisionLogEntry
+                                              # audit mirror of the streamed decision log; the
+                                              # live stream goes through the decision-log sink
+
+    expert_findings: list[Any] = field(default_factory=list)
+                                              # PLACEHOLDER: will be orchestrator.ExpertFindings
+                                              # FULL expert findings buffered for the output filter.
+                                              # The orchestrator never reads these — it only sees
+                                              # brief expert summaries (keeps its context lean)
+
+    orchestrator_response: Any | None = None  # PLACEHOLDER: will be foundation.OrchestratorResponse
                                               # raw response before output filtering
 
     memory_writes_requested: list[Any] = field(default_factory=list)
-                                              # PLACEHOLDER: will be memory.MemoryWriteRequest
+                                              # PLACEHOLDER: will be foundation.MemoryWriteProposal
                                               # items the orchestrator flagged for memory
 
     # ------------------------------------------------------------------
@@ -359,6 +370,8 @@ class VrakshaContext:
             "modalities":       self.detected_modalities,
             "tool_calls":       len(self.tool_calls),
             "expert_calls":     len(self.expert_calls),
+            "decision_log":     len(self.decision_log),
+            "expert_findings":  len(self.expert_findings),
             "filter_retries":   self.filter_retry_count,
             "stage_durations":  self.stage_durations,
             "total_ms":         round(self.total_duration_ms, 2),

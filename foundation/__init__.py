@@ -1,5 +1,14 @@
 from .flow import Flow, PayloadHandle, JournalEntry
-from .contracts import NormalizedInput, VerificationResult
+from .contracts import (
+    NormalizedInput,
+    VerificationResult,
+    MemoryItem,
+    HydrationRequest,
+    HydrationPackage,
+    MemoryWriteProposal,
+    OrchestratorResponse,
+)
+from .ports import MemoryPort
 from .payload import coerce_to_bytes
 from .model_registry import ModelProfile, ModelRegistry, load_model_registry
 from .prompt_registry import Prompt, PromptRegistry, get_prompt, load_prompt_registry
@@ -57,6 +66,12 @@ __all__ = [
     "JournalEntry",
     "NormalizedInput",
     "VerificationResult",
+    "MemoryItem",
+    "HydrationRequest",
+    "HydrationPackage",
+    "MemoryWriteProposal",
+    "OrchestratorResponse",
+    "MemoryPort",
     "coerce_to_bytes",
     "ModelProfile",
     "ModelRegistry",
