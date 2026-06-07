@@ -1,28 +1,18 @@
-"""Structured Pydantic AI verifier agent."""
+"""Structured verifier agent (built on the core/llm framework adapter)."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic_ai import Agent
-
 from foundation import (
-    ConfigError,
-    ModelUnavailableError,
     NormalizedInput,
     Prompt,
     ThreatLevel,
     VerificationResult,
-    VerifierError,
     constants,
     get_prompt,
 )
-from core.llm import (
-    model_name_for_layer,
-    model_settings_for_layer,
-    run_agent,
-    usage_limits_for_layer,
-)
+from core.llm import build_agent, run_structured
 
 from .schemas import VerifierInputView, VerifierLLMResult
 from .utils import content_excerpt, verification_result
@@ -57,22 +47,6 @@ def build_verifier_view(
         sanitizer_summary=dict(metadata.get("sanitizer_summary", {})),
         target_provider=normalized.target_provider,
         target_model=normalized.target_model,
-    )
-
-
-@lru_cache(maxsize=1)
-def _agent() -> Agent[None, VerifierLLMResult]:
-    """
-    Build the verifier agent once and reuse it (PydanticAI agents are meant to
-    be long-lived). Tests that change model config can call _agent.cache_clear().
-    """
-    return Agent(
-        model_name_for_layer("verifier"),
-        output_type=VerifierLLMResult,
-        system_prompt=_verifier_prompt().text,
-        model_settings=model_settings_for_layer("verifier"),
-        retries=constants.VERIFIER_MAX_RETRIES,
-        defer_model_check=True,
     )
 
 
@@ -149,22 +123,17 @@ async def verify_with_llm(
     """Run semantic verifier classification and return merged result."""
     view = build_verifier_view(normalized, deterministic_result)
     prompt = view.model_dump_json()
-    verifier_model = model_name_for_layer("verifier")
 
-    try:
-        run_result = await run_agent(
-            _agent(),
-            prompt,
-            usage_limits=usage_limits_for_layer("verifier"),
-        )
-    except (VerifierError, ConfigError):
-        # A broken/missing prompt or model config is a configuration fault, not a
-        # model outage. Let it surface accurately; verifier.run still fails closed.
-        raise
-    except Exception as exc:
-        raise ModelUnavailableError(
-            f"Verifier model call failed: {exc}",
-            model=verifier_model,
-        ) from exc
+    # The framework adapter owns the SDK call, transient retries, usage limits, and
+    # error translation. Config faults (e.g. a broken prompt) surface as VrakshaError
+    # and propagate; any other provider failure becomes ModelUnavailableError. Either
+    # way verifier.run still fails closed.
+    handle = build_agent(
+        "verifier",
+        output_type=VerifierLLMResult,
+        prompt_name="verifier",
+        retries=constants.VERIFIER_MAX_RETRIES,
+    )
+    llm_result = await run_structured(handle, prompt)
 
-    return _merge_result(normalized, deterministic_result, run_result.output)
+    return _merge_result(normalized, deterministic_result, llm_result)
