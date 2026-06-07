@@ -2,6 +2,7 @@ from .flow import Flow, PayloadHandle, JournalEntry
 from .contracts import NormalizedInput, VerificationResult
 from .payload import coerce_to_bytes
 from .model_registry import ModelProfile, ModelRegistry, load_model_registry
+from .prompt_registry import Prompt, PromptRegistry, get_prompt, load_prompt_registry
 from .pillars.transport import Envelope, Status, Meta
 
 from .pillars.errors import (
@@ -60,6 +61,10 @@ __all__ = [
     "ModelProfile",
     "ModelRegistry",
     "load_model_registry",
+    "Prompt",
+    "PromptRegistry",
+    "get_prompt",
+    "load_prompt_registry",
 
     # transport primitives (used inside flow, available if needed directly)
     "Envelope",

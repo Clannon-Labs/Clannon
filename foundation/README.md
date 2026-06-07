@@ -24,6 +24,9 @@ foundation/
   model_registry.py
     Root models.yaml loader and cached model profile resolver.
 
+  prompt_registry.py
+    Root prompts/ loader and cached prompt resolver (name + version).
+
   pillars/
     __init__.py
       Public import surface for foundation primitives.
@@ -348,6 +351,31 @@ reload code can call:
 load_model_registry.cache_clear()
 ```
 
+## prompt_registry.py: Prompt Routing
+
+`prompt_registry.py` is the prompt-side mirror of the model registry. LLM-using
+layers should resolve their system/instruction prompts through it instead of
+hardcoding prompt text inline. Prompt *content* lives as markdown files under
+root `prompts/`; `prompts/registry.yaml` is the index mapping each prompt name to
+its file, a `version`, and a `locked` flag.
+
+```python
+from foundation import get_prompt
+
+prompt = get_prompt("verifier")
+agent = Agent(model, system_prompt=prompt.text)   # prompt.name + prompt.version
+```
+
+The `version` is recorded on stage results (e.g. the verifier stamps
+`prompt_name`/`prompt_version` into `verifier_result` metadata) so any model
+verdict can be traced back to the exact prompt that produced it.
+
+**Security:** `locked: true` marks a security-boundary prompt (verifier, output
+filter). The loader exposes no override path — it only reads the on-disk,
+version-controlled prompt — so a locked prompt can never be replaced at runtime
+or by an end user. `load_prompt_registry()` is cached like the model registry;
+tests can call `load_prompt_registry.cache_clear()`.
+
 The optional `VRAKSHA_MODEL_PROVIDER` environment variable can override the
 default provider. That override belongs here because model routing is owned by
 the registry.
@@ -501,7 +529,7 @@ enum belongs to one layer, such as `security/`, define it in that layer's own
 - Import from anywhere else in Vraksha inside this package.
 - Add business logic or LLM calls to any file here.
 - Add I/O here except for foundation-owned configuration loading such as
-  `model_registry.py`.
+  `model_registry.py` and `prompt_registry.py`.
 - Define layer-specific types here; they belong in that layer's `schema.py`.
 - Read environment variables here, except for foundation-owned routing overrides
   such as `VRAKSHA_MODEL_PROVIDER` in `model_registry.py`.

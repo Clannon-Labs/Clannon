@@ -111,6 +111,9 @@ security/
 
 models.yaml
   one place to route model providers and capabilities (Gemini default)
+
+prompts/
+  versioned system/instruction prompts as markdown, indexed by registry.yaml
 ```
 
 Active pipeline:

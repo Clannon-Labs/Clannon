@@ -51,6 +51,11 @@ core/
   llm/
     registry.py
       Resolves model profiles into Pydantic AI model strings/settings.
+
+    retry.py
+      run_agent(): shared transient-error (429/5xx/timeout) retry with
+      exponential backoff for every model-calling stage. Fails closed when the
+      bounded retry budget is exhausted.
 ```
 
 Currently active core stages are:

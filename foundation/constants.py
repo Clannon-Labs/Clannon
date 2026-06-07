@@ -96,6 +96,20 @@ VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
 
 
 # ---------------------------------------------------------------------------
+# LLM TRANSIENT RETRY (shared by every model-calling stage)
+# Distinct from the *_MAX_RETRIES above: those re-run on malformed *output*
+# inside PydanticAI. These add bounded exponential backoff around transient
+# *provider* failures (HTTP 429/5xx, connection drops, timeouts) so a momentary
+# demand spike does not turn a legitimate request into a hard error. Retries are
+# bounded; on exhaustion the original error is re-raised so callers fail closed.
+# ---------------------------------------------------------------------------
+
+LLM_TRANSIENT_MAX_RETRIES   = 2      # extra attempts after the first, on transient errors
+LLM_RETRY_BASE_DELAY_S      = 0.5    # first backoff delay; doubles each retry
+LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
+
+
+# ---------------------------------------------------------------------------
 # ORCHESTRATOR
 # Main LLM. Gets the most time — it does the real reasoning.
 # ---------------------------------------------------------------------------

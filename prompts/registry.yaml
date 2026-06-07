@@ -1,0 +1,17 @@
+# Prompt registry — the single index of every system/instruction prompt.
+#
+# Each entry maps a prompt name to its on-disk markdown file and a version tag.
+# The version is stamped into stage results (e.g. flow.ctx.verifier_result
+# metadata) so any model verdict can be traced back to the exact prompt that
+# produced it.
+#
+# `locked: true` marks a security-boundary prompt (verifier, output filter).
+# Locked prompts must never be overridable at runtime or by end users — see the
+# SECURITY note in foundation/prompt_registry.py. Customizable prompts
+# (orchestrator persona, experts) will be added here as locked: false when those
+# layers land.
+
+verifier:
+  version: 2
+  file: verifier/system.md
+  locked: true
