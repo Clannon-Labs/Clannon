@@ -42,20 +42,24 @@ core ideas:
 - **Input Intake Layer**: Vraksha can rate-limit requests, enforce raw input
   size limits, detect modalities, and preserve the original input in request
   context.
-- **Security Sanitization Layer**: ClamAV and YARA run before modality workers.
-  Text, PDF, image, audio, and video workers validate and sanitize inputs while
-  preserving quality wherever possible.
+- **Security Sanitization Layer**: ClamAV and YARA run concurrently as a
+  universal pre-gate before modality workers. Text, PDF, image, audio, and video
+  workers validate and sanitize inputs while preserving quality wherever possible.
 - **Code-Only Normalization Layer**: Sanitized input is converted into a
-  structured `NormalizedInput`. Text and PDFs become clean structured text;
-  image/audio/video can stay native when the target model supports them.
-- **Root Model Routing**: Model choices live in `models.yaml`, so future
-  verifier, orchestrator, expert, and filter layers can change providers from
-  one place.
+  structured `NormalizedInput`. Text and PDFs become clean structured text
+  (Unicode-normalized; scanned PDFs route to an OCR expert); image/audio/video
+  can stay native when the target model supports them.
+- **Verifier Layer**: A small, fast LLM (Google Gemini by default) makes the
+  final input-safety call. The deterministic regex pass is only a hint — the LLM
+  always adjudicates text and is the sole content blocker. Output is structured.
+- **Root Model Routing**: Model choices live in `models.yaml`, so the verifier
+  today and future orchestrator/expert/filter layers route providers from one
+  place. Google Gemini is the default provider.
 
 The active path today is:
 
 ```text
-raw input -> intake -> sanitizer -> normalizer
+raw input -> intake -> sanitizer -> normalizer -> verifier
 ```
 
 ---
@@ -64,8 +68,6 @@ raw input -> intake -> sanitizer -> normalizer
 
 These are the next major layers being built on top of the current foundation:
 
-- **Verifier Layer**: A fast LLM + code/tool security layer that decides whether
-  normalized input is safe to send to the orchestrator.
 - **Pydantic AI Orchestrator**: The main reasoning agent that can call tools,
   delegate to experts, and decide what should be remembered.
 - **Experts and Tool Handlers**: Controlled execution boundaries for tools,
@@ -101,20 +103,20 @@ foundation/
   Flow, context, constants, shared types, model registry
 
 core/
-  intake, pipeline, normalizer
+  intake, pipeline, normalizer, verifier, llm adapter
 
 security/
   sanitizers today
-  verifier and output filter planned
+  output filter planned
 
 models.yaml
-  one place to route model providers and capabilities
+  one place to route model providers and capabilities (Gemini default)
 ```
 
 Active pipeline:
 
 ```text
-intake -> sanitizer -> normalizer
+intake -> sanitizer -> normalizer -> verifier
 ```
 
 Planned full pipeline:
@@ -179,7 +181,10 @@ Create local env files:
 cp .env.example .env.local
 ```
 
-Add model keys only for the providers you plan to use:
+Add model keys only for the providers you plan to use. Google Gemini is the
+default provider, so `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) is the one you need
+unless you change `models.yaml`. Keys go in `.env.local`, which `main.py` loads
+at startup; the provider SDK reads the key from the environment.
 
 ```env
 ANTHROPIC_API_KEY=your_key_here
@@ -244,11 +249,19 @@ python -m py_compile \
 ```
 
 ```bash
-python -m pytest -s tests/text_sanitization.py tests/pre_sanitization.py
+python -m pytest tests/
 ```
 
 The ClamAV EICAR test requires a running `clamd` daemon. If the daemon is not
 available, that test is skipped.
+
+To run the active pipeline end-to-end (intake -> sanitizer -> normalizer ->
+verifier) against real ClamAV and a live verifier LLM:
+
+```bash
+docker compose up -d clamav          # start the ClamAV daemon
+python main.py "your text here"      # prints the resulting Flow summary
+```
 
 ---
 

@@ -21,8 +21,11 @@ It:
 - Advances `flow.ctx.current_stage` to `SANITIZING`.
 - Runs universal pre-sanitization first.
 - Runs modality-specific sanitizer workers only after pre-sanitization passes.
-- Runs matching modality workers concurrently.
-- Blocks the flow when a worker reports a blocking threat level.
+- Runs matching modality workers concurrently, under a global concurrency limit
+  (`SANITIZER_MAX_WORKERS`) and a per-worker timeout (`SANITIZER_TIMEOUT_WORKER_S`),
+  within an overall total timeout.
+- Blocks the flow when a worker reports a blocking threat level (and persists the
+  worker report to `flow.ctx.sanitization` on that block path too).
 - Blocks if intake somehow reports no modality with a matching worker.
 - Stores sanitizer results in `flow.ctx.sanitization`.
 - Passes the sanitized payload to the next stage when a worker produced one.
@@ -50,13 +53,15 @@ It currently uses:
 - ClamAV through the `clamd` Python client.
 - YARA through `yara-python`.
 
-ClamAV scans the raw payload through the clamd TCP `INSTREAM` API. The Python
-code does not start the daemon; it connects to an already running clamd service.
-YARA compiles local `.yar` and `.yara` files from the configured rules directory
-and matches them against the same raw payload.
+ClamAV and YARA run concurrently on the same payload bytes. ClamAV scans through
+the clamd TCP `INSTREAM` API (the Python code connects to an already-running
+clamd service; it does not start the daemon). YARA compiles local `.yar`/`.yara`
+files from the configured rules directory once and caches the compiled rules,
+recompiling only when the rule files change.
 
 If the YARA rules directory is missing, it is created automatically. If no rules
-exist yet, YARA reports a skipped clean result so local development can continue.
+exist, YARA skips with a clean result in development; in production (env-gated by
+`VRAKSHA_ENV` / `AGENT_REQUIRE_YARA`) a missing rule set fails closed.
 
 Relevant environment variables:
 
@@ -104,9 +109,11 @@ It uses:
 - `exiftool` to strip metadata without recompressing image pixels.
 
 The worker rejects invalid images and decompression bombs. When metadata exists,
-it strips metadata losslessly and returns `sanitized_image`.
-If metadata stripping fails after validation, the worker preserves the validated
-original image rather than degrading visual quality through a forced re-encode.
+it strips metadata losslessly and returns `sanitized_image`. `exiftool` runs
+under a subprocess timeout so a crafted image cannot hang the worker.
+If metadata stripping fails (or times out) after validation, the worker preserves
+the validated original image rather than degrading visual quality through a
+forced re-encode.
 
 ## PDF Worker
 
@@ -133,9 +140,10 @@ It uses:
 
 It rejects inputs without an audio stream and blocks audio that exceeds the
 configured duration limit. Metadata stripping is done through stream-copy remux
-when possible, preserving audio quality instead of re-encoding.
-If remuxing fails after validation, the worker preserves the validated original
-payload rather than lowering quality with a fallback transcode.
+when possible, preserving audio quality instead of re-encoding. The remux runs
+under a hard timeout (run-async + kill) so a crafted file cannot hang ffmpeg.
+If remuxing fails (or times out) after validation, the worker preserves the
+validated original payload rather than lowering quality with a fallback transcode.
 
 ## Video Worker
 
@@ -147,9 +155,10 @@ It uses:
 
 It rejects inputs without a video stream and blocks video that exceeds the
 configured duration limit. Metadata stripping is done through stream-copy remux
-when possible, preserving video quality instead of re-encoding.
-If remuxing fails after validation, the worker preserves the validated original
-payload rather than lowering quality with a fallback transcode.
+when possible, preserving video quality instead of re-encoding. The remux runs
+under a hard timeout (run-async + kill) so a crafted file cannot hang ffmpeg.
+If remuxing fails (or times out) after validation, the worker preserves the
+validated original payload rather than lowering quality with a fallback transcode.
 
 ## Runtime Dependencies
 
@@ -171,11 +180,12 @@ Current sanitizer tests live in:
 
 - `tests/text_sanitization.py`
 - `tests/pre_sanitization.py`
+- `tests/sanitizer_runner.py`
 
-Run them with:
+Run the whole suite with:
 
 ```bash
-python -m pytest -s tests/text_sanitization.py tests/pre_sanitization.py
+python -m pytest tests/
 ```
 
 The ClamAV EICAR test requires a running clamd daemon. If clamd is not

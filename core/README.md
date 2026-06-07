@@ -39,16 +39,29 @@ core/
 
     extractors.py
       Format-specific code extractors, currently PDF text extraction.
+
+  verifier/
+    __init__.py
+      Exports run().
+
+    verifier.py
+      Final input gate: deterministic checks, then the verifier LLM.
+      (agent.py, checks.py, rules.py, schemas.py, utils.py are internals.)
+
+  llm/
+    registry.py
+      Resolves model profiles into Pydantic AI model strings/settings.
 ```
 
 Currently active core stages are:
 
 1. `core/intake/process`
 2. `core/normalizer/run`
+3. `core/verifier/run`
 
 `core/pipeline.py` runs only the active pipeline today. It also documents the
-intended later stages: verifier, orchestrator, filter, and output. Those later
-core/security stages are not active exports from `core/__init__.py` yet.
+intended later stages: orchestrator, filter, and output, which are not active
+exports from `core/__init__.py` yet.
 
 ## Import Rule
 
@@ -100,7 +113,9 @@ It:
 - Loads the raw payload from `Flow`.
 - Checks per-session and global request rate limits.
 - Checks the raw input size against `constants.MAX_INPUT_SIZE_BYTES`.
-- Detects the input modality with `python-magic`.
+- Detects the input modality: a `str` payload is treated as text directly (never
+  a path); byte/file uploads are content-sniffed with `python-magic`, and textual
+  `application/*` types (JSON/XML/CSV/YAML/ndjson/x-empty) map to text.
 - Writes the original input to `flow.ctx.raw_input`.
 - Writes detected modality values to `flow.ctx.detected_modalities`.
 - Advances `flow.ctx.current_stage` to `INTAKE`.
@@ -139,9 +154,11 @@ GLOBAL_RATE_LIMIT_WINDOW_S
 GLOBAL_RATE_LIMIT_MAX_REQUESTS
 ```
 
-This implementation is fast and appropriate for one process/container. When the
-app runs multiple replicas, replace the backend with Redis while keeping
-`check_request_rate(session_id)` as the intake-facing contract.
+This implementation is fast and appropriate for one process/container. The
+limiter is keyed by an `identity` argument (intake passes the session id today;
+auth can later pass user_id/IP). When the app runs multiple replicas, replace
+the backend with Redis while keeping `check_request_rate(identity)` as the
+intake-facing contract.
 
 ## Normalizer
 
@@ -159,8 +176,11 @@ The normalizer is code-only:
 
 Current behavior:
 
-- Text becomes normalized Unicode text.
-- PDF becomes extracted page-aware text using PyMuPDF.
+- Text becomes stable Unicode text (NFKC-normalized; invisible/bidi format
+  characters stripped, with ZWJ/ZWNJ preserved for emoji and complex scripts).
+- PDF becomes extracted page-aware text using PyMuPDF. A scanned/text-less PDF
+  (no extractable text layer) is marked `requires_expert=True` with
+  `required_capability="image"` so a later OCR-capable expert handles it.
 - Image/audio/video are preserved natively when the target model supports the
   modality.
 - Image/audio/video are marked with `requires_expert=True` when the target model
@@ -187,9 +207,12 @@ reads and caches root `models.yaml`.
 
 `core/normalizer/utils.py` contains tiny, dependency-light helpers:
 
-- `payload_to_bytes()`
-- `payload_to_text()`
+- `payload_to_text()` (decode + `stabilize_unicode()`)
+- `stabilize_unicode()`
 - `truncate_text()`
+
+Byte coercion is centralized in `foundation.coerce_to_bytes()` (the single
+auditable "str is text, never a path" boundary), not duplicated per stage.
 
 `core/normalizer/extractors.py` contains heavier format-specific helpers:
 
@@ -233,16 +256,17 @@ Foundation must not import from `core`.
 
 ## Current Caveats
 
-`core/__init__.py` currently exports only:
+`core/__init__.py` currently exports:
 
 ```python
 intake
 normalizer
+verifier
 ```
 
-`core/pipeline.py` documents future modules such as verifier, orchestrator,
-filter, and output, but it does not import them until they exist. Those stages
-are part of the intended architecture but are not all implemented/exported yet.
+`core/pipeline.py` documents future modules such as orchestrator, filter, and
+output, but it does not import them until they exist. Those stages are part of
+the intended architecture but are not all implemented/exported yet.
 
-Until those stages exist, test the active path with intake, sanitizers, and
-normalizer directly.
+Until those stages exist, test the active path with intake, sanitizers,
+normalizer, and verifier directly.

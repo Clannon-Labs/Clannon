@@ -6,4 +6,4 @@ __all__ = [
     "verifier"
 ]
 
-# Orchestrator, verifier, output are yet to be imported & exported here
+# Orchestrator and output stages are yet to be imported & exported here

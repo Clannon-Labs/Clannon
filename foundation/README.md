@@ -35,7 +35,8 @@ foundation/
       Exception classes, organized by layer.
 
     transport.py
-      Envelope and Meta, the low-level primitives Flow uses.
+      Status and Meta (the primitives Flow uses); Envelope is a standalone
+      primitive retained for future use.
 
     types.py
       Shared primitive enums such as Modality, ThreatLevel, and Origin.
@@ -232,14 +233,15 @@ verification, the Pydantic AI orchestrator, tool and expert handlers, output
 filtering, output delivery, and memory writes. It also covers how to add a new
 layer without breaking the Flow contract.
 
-## transport.py: Envelope and Meta
+## transport.py: Status, Meta, and Envelope
 
-`Envelope` and `Meta` are the low-level primitives that `Flow` uses.
+`Status` and `Meta` are the low-level primitives that `Flow` is built on.
+`Envelope` is a standalone transport primitive retained for future use — `Flow`
+is not built on it.
 
 Most stage code should use `Flow` instead. Use `Envelope` directly only when
 you need low-level control outside the standard pipeline, such as internal
-worker-to-worker communication inside the sanitizer runner before results are
-joined.
+worker-to-worker communication before results are joined.
 
 `Origin` used to live in `transport.py`. It now lives in `types.py`. Import it
 with:
@@ -278,7 +280,7 @@ try:
     response = await llm_client.complete(...)
 except httpx.TimeoutException as e:
     raise ModelUnavailableError(
-        "verifier timed out after 8s",
+        "verifier timed out after 12s",
         trace_id=flow.meta.trace_id,
         cause=e,
         model="verifier",
@@ -325,7 +327,9 @@ this registry instead of hardcoding them.
 
 It reads `models.yaml`, caches the parsed registry, and supports optional
 role/layer routes such as `orchestrator`, `verifier`, `normalizer`, `filter`,
-and `media_expert`.
+and `media_expert`. Google Gemini is the default provider; an explicit `routes`
+entry overrides a `defaults` entry for the same role, and missing/invalid
+configuration raises `ConfigError`.
 
 ```python
 from foundation import load_model_registry
