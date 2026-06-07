@@ -15,3 +15,9 @@ verifier:
   version: 2
   file: verifier/system.md
   locked: true
+
+orchestrator:
+  version: 1
+  file: orchestrator/system.md
+  locked: false   # persona/behavior is customizable later; not a security boundary
+

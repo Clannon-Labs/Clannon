@@ -26,7 +26,7 @@ current runnable path honest.
 from typing import Any
 
 from foundation import Flow
-from core import intake, normalizer, verifier
+from core import intake, normalizer, verifier, orchestrator
 from security.sanitizers import runner as sanitizer
 
 
@@ -34,7 +34,8 @@ ACTIVE_STAGES = [
     intake.process,
     sanitizer.run,
     normalizer.run,
-    verifier.run
+    verifier.run,
+    orchestrator.run
 ]
 
 
