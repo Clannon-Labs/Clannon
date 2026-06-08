@@ -159,6 +159,8 @@ class VrakshaContext:
     trace_id:    str    # matches Flow.meta.trace_id for this request
     created_at:  float  # monotonic clock, for total duration calculation
     session_id:  str    # which session this turn belongs to
+    user_id:     str    # set once at the authenticated entry; the sole identity for
+                        # downstream memory/tool scoping, never re-derived from content
 
     # ------------------------------------------------------------------
     # Stage tracking
@@ -285,10 +287,17 @@ class VrakshaContext:
     # ------------------------------------------------------------------
 
     @classmethod
-    def new(cls, session_id: str, trace_id: str | None = None) -> "VrakshaContext":
+    def new(
+        cls,
+        session_id: str,
+        user_id: str = "local-user",
+        trace_id: str | None = None,
+    ) -> "VrakshaContext":
         """
         Create a fresh context for a new user turn.
         trace_id is generated here and stays fixed for the request lifetime.
+        user_id defaults to the local single-user id; the authenticated entry
+        point passes the real one.
 
         In normal pipeline code, you never call this directly —
         Flow.new() calls it and attaches the result to flow.ctx.
@@ -300,6 +309,7 @@ class VrakshaContext:
             trace_id=trace_id or uuid4().hex,
             created_at=time.monotonic(),
             session_id=session_id,
+            user_id=user_id,
         )
 
     # ------------------------------------------------------------------
@@ -362,6 +372,7 @@ class VrakshaContext:
         return {
             "trace_id":         self.trace_id,
             "session_id":       self.session_id,
+            "user_id":          self.user_id,
             "stage":            self.current_stage.value,
             "blocked":          self.blocked,
             "block_reason":     self.block_reason,

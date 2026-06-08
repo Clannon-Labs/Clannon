@@ -2,41 +2,54 @@
 Memory Manager — the single door to the memory layer.
 
 Everything that wants memory goes through this manager (it implements
-`foundation.MemoryPort`). Nothing outside imports memory internals; the
-orchestrator holds only the port. This keeps memory a self-contained layer that
-can grow its own machinery (stores, trust/policy, the four tiers, Qdrant) behind
-this interface without touching callers.
+`foundation.MemoryPort`); nothing outside imports memory internals. Memory is a
+layer of its own and Vraksha's future moat, so this checkpoint keeps it
+deliberately tiny and the real build (Qdrant + fastembed, the four tiers,
+ranking/budget, a background memory-agent) is a dedicated next session.
 
-Phase 1 is a stub: hydration returns empty and write proposals are accepted but
-not persisted. The shape is real so the orchestrator integrates against the final
-contract today.
-
-TODO (real memory layer, built entirely inside core/memory/):
-- proactive hydration across wiki/semantic/episodic/procedural tiers,
-- Lagrangian token-budget allocation across tiers,
-- Qdrant-backed retrieval (single instance, user_id payload filter),
-- trust/recency ranking; wiki overrides inferred memory,
-- a BACKGROUND memory-agent with its own LLM call (consolidation/compaction),
-- write policy that decides whether/where each proposal is persisted.
+Phase-1 behaviour: an in-process episodic store keyed by session_id. hydrate()
+returns the most recent K entries; record_write_proposals() appends. State lives
+only for the process lifetime (lost on restart) — enough for within-session
+recall and to prove the port end to end.
 """
 
 from __future__ import annotations
 
-from foundation import HydrationPackage, HydrationRequest, MemoryWriteProposal
+from foundation import (
+    HydrationPackage,
+    HydrationRequest,
+    MemoryItem,
+    MemoryWriteProposal,
+)
+
+_RECALL_K = 5
 
 
 class MemoryManager:
-    """Phase-1 stub implementation of `foundation.MemoryPort`."""
+    """Phase-1 in-memory episodic implementation of `foundation.MemoryPort`."""
 
-    def __init__(self) -> None:
-        # Stub visibility only: proposals seen this run, so tests/callers can
-        # confirm they reached the door. The real manager persists via policy.
-        self.recorded_proposals: list[MemoryWriteProposal] = []
+    def __init__(self, recall_k: int = _RECALL_K) -> None:
+        self._episodic: dict[str, list[MemoryItem]] = {}   # session_id -> items
+        self._recall_k = recall_k
 
     async def hydrate(self, request: HydrationRequest) -> HydrationPackage:
-        """Return an empty package for now (no retrieval wired yet)."""
-        return HydrationPackage(notes="memory stub: no hydration")
+        recent = self._episodic.get(request.session_id, [])[-self._recall_k:]
+        return HydrationPackage(
+            items=list(recent),
+            notes=None if recent else "no prior episodic memory",
+        )
 
-    async def record_write_proposals(self, proposals: list[MemoryWriteProposal]) -> None:
-        """Accept proposals without persisting them (stub)."""
-        self.recorded_proposals.extend(proposals)
+    async def record_write_proposals(
+        self, session_id: str, proposals: list[MemoryWriteProposal]
+    ) -> None:
+        if not proposals:
+            return
+        bucket = self._episodic.setdefault(session_id, [])
+        for proposal in proposals:
+            bucket.append(
+                MemoryItem(store=proposal.store, content=proposal.content, score=proposal.confidence)
+            )
+
+
+# Process-level singleton so within-session recall survives across turns in one run.
+manager = MemoryManager()

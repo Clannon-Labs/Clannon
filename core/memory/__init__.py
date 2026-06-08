@@ -1,5 +1,9 @@
-"""Memory layer. The MemoryManager is the only public entry point."""
+"""Memory layer. The MemoryManager is the only public entry point.
 
-from .manager import MemoryManager
+`manager` is the process-level singleton used by the app; construct a fresh
+MemoryManager() in tests for isolation.
+"""
 
-__all__ = ["MemoryManager"]
+from .manager import MemoryManager, manager
+
+__all__ = ["MemoryManager", "manager"]

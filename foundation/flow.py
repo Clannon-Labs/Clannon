@@ -219,6 +219,7 @@ class Flow(Generic[T]):
         cls,
         payload: T,
         session_id: str,
+        user_id: str = "local-user",
         origin: Origin = Origin.INTAKE,
         trace_id: str | None = None,
     ) -> "Flow[T]":
@@ -249,7 +250,7 @@ class Flow(Generic[T]):
             span_id=uuid4().hex[:8],
             origin=origin,
         )
-        ctx = VrakshaContext.new(session_id=session_id, trace_id=meta.trace_id)
+        ctx = VrakshaContext.new(session_id=session_id, user_id=user_id, trace_id=meta.trace_id)
         ctx.advance(PipelineStage.INTAKE)
 
         initial_entry = JournalEntry(

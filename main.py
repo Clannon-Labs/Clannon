@@ -8,6 +8,7 @@ summary. Process exit code is non-zero when the flow was blocked or failed.
 """
 
 import asyncio
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -23,7 +24,9 @@ from core import pipeline
 
 async def _main() -> int:
     raw_input = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read()
-    flow = await pipeline.run(raw_input, session_id="cli")
+    # Identity is set once here, at the entry point, and travels in Flow context.
+    user_id = os.getenv("VRAKSHA_USER_ID", "local-user")
+    flow = await pipeline.run(raw_input, session_id="cli", user_id=user_id)
     print(flow.summary())
     return 1 if flow.should_stop else 0
 

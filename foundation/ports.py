@@ -32,6 +32,9 @@ class MemoryPort(Protocol):
         """Return ranked, budget-bounded context to inject before planning."""
         ...
 
-    async def record_write_proposals(self, proposals: list[MemoryWriteProposal]) -> None:
-        """Hand proposed writes to the manager; it decides whether/where to persist."""
+    async def record_write_proposals(
+        self, session_id: str, proposals: list[MemoryWriteProposal]
+    ) -> None:
+        """Hand proposed writes (scoped to a session) to the manager; it decides
+        whether/where to persist."""
         ...
