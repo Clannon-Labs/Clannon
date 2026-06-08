@@ -19,6 +19,7 @@ def build_turn_prompt(
     observations: list[Any],
     turn: int,
     *,
+    catalog: dict[str, list[dict]] | None = None,
     force_answer: bool = False,
 ) -> str:
     """Render the advisor prompt for one turn from the current loop state."""
@@ -26,6 +27,16 @@ def build_turn_prompt(
         f"User request (modality={normalized.modality}):",
         normalized.content or "[non-text payload]",
     ]
+
+    if catalog:
+        experts = catalog.get("experts", [])
+        tools = catalog.get("tools", [])
+        if experts:
+            parts.append("\nAvailable experts (spawn by key):")
+            parts.extend(f"- {c['key']} — {c['description']}" for c in experts)
+        if tools:
+            parts.append("\nAvailable tools (call by key):")
+            parts.extend(f"- {c['key']} — {c['description']}" for c in tools)
 
     if getattr(hydration, "items", None):
         parts.append("\nRelevant memory:")

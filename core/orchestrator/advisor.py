@@ -14,6 +14,7 @@ from typing import Any
 from foundation import HydrationPackage, NormalizedInput, constants
 from core.llm import build_agent, run_structured
 
+from .registry import CapabilityKind, registry
 from .schemas import OrchestratorDecision
 from .utils.prompt import build_turn_prompt
 
@@ -27,7 +28,13 @@ async def decide(
     force_answer: bool = False,
 ) -> OrchestratorDecision:
     """Ask the advisor for the next structured decision given the current state."""
-    prompt = build_turn_prompt(normalized, hydration, observations, turn, force_answer=force_answer)
+    catalog = {
+        "experts": registry.catalog(CapabilityKind.EXPERT),
+        "tools": registry.catalog(CapabilityKind.TOOL),
+    }
+    prompt = build_turn_prompt(
+        normalized, hydration, observations, turn, catalog=catalog, force_answer=force_answer
+    )
     handle = build_agent(
         "orchestrator",
         output_type=OrchestratorDecision,

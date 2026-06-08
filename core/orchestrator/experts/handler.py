@@ -1,17 +1,13 @@
 """
-Expert handler — the orchestrator's door to experts.
+Generic expert handler — registry-driven, zero per-expert wiring.
 
-Phase 1 is a stub, but it already enforces the two real contracts:
-- the two-output split: a brief ExpertSummary goes back to the orchestrator while
-  the full ExpertFindings is buffered in ctx.expert_findings for the output filter
-  (the orchestrator never sees raw findings),
-- bounded concurrency via EXPERT_MAX_CONCURRENT.
-
-Each invocation is also recorded on ctx.expert_calls for audit.
-
-TODO: real experts (research, code, media, citation, ...), each its own module
-under experts/, selected by the router and run under least-privilege with their
-own scoped tools.
+Looks an expert up by key, assembles its mini-environment (skills + a scoped tool
+box), runs it under concurrency + timeout bounds, and enforces the two-output
+contract: a brief ExpertSummary goes back to the orchestrator while the full
+ExpertFindings is buffered on the context for the output filter. Each result is
+*marked* (success, confidence, a small quality signal) on the ExpertCallRecord for
+future performance-based routing. Unknown/broken/failed experts return a failed
+summary, never silence.
 """
 
 from __future__ import annotations
@@ -20,15 +16,19 @@ import asyncio
 import time
 from uuid import uuid4
 
-from foundation import ExpertCallRecord, VrakshaContext, constants
+from foundation import ExpertCallRecord, PermissionLevel, VrakshaContext, constants
 
-from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
+from ..registry import CapabilityKind, registry as default_registry
+from ..schemas import ExpertFindings, ExpertOutput, ExpertRequest, ExpertSummary
+from .support import ExpertEnv, ScopedToolbox, load_skills
 
 
-class StubExpertHandler:
-    """Phase-1 ExpertHandlerPort implementation."""
+class ExpertHandler:
+    """Implements ExpertHandlerPort over the capability registry."""
 
-    def __init__(self) -> None:
+    def __init__(self, registry=default_registry, tools=None) -> None:
+        self._registry = registry
+        self._tools = tools                          # a ToolHandler, for scoping
         self._semaphore = asyncio.Semaphore(constants.EXPERT_MAX_CONCURRENT)
 
     async def run_experts(
@@ -41,35 +41,75 @@ class StubExpertHandler:
     async def _run_one(self, request: ExpertRequest, ctx: VrakshaContext) -> ExpertSummary:
         async with self._semaphore:
             started = time.monotonic()
-            ref = uuid4().hex[:8]
+            spec = self._registry.get_expert(request.key)
+            if spec is None:
+                reason = self._registry.describe_missing(CapabilityKind.EXPERT, request.key)
+                return self._fail(request, ctx, started, reason)
 
-            # Full findings -> ctx (for the output filter); orchestrator never reads these.
+            env = ExpertEnv(
+                prompt_name=spec.prompt_name,
+                model_role=spec.model_role,
+                skills=load_skills(spec.impl, spec.skills),
+                tools=self._toolbox_for(spec, ctx),
+            )
+            try:
+                output: ExpertOutput = await asyncio.wait_for(
+                    spec.impl().run(request.task, env), timeout=constants.EXPERT_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                return self._fail(request, ctx, started, "expert timed out")
+            except Exception as exc:
+                return self._fail(request, ctx, started, f"expert error: {exc}")
+
+            ref = uuid4().hex[:8]
             ctx.expert_findings.append(
                 ExpertFindings(
-                    expert=request.name,
-                    ref=ref,
-                    full_content=(
-                        f"[stub] expert '{request.name}' is not implemented yet; "
-                        f"task was: {request.task}"
-                    ),
-                    metadata={"stub": True},
+                    expert=spec.key, ref=ref, full_content=output.full_content,
+                    citations=list(output.citations), metadata={"confidence": output.confidence},
                 )
             )
-
             ctx.expert_calls.append(
                 ExpertCallRecord(
-                    expert_name=request.name,
+                    expert_name=spec.key,
                     arguments={"task": request.task},
-                    result={"finding_ref": ref},
+                    result={"finding_ref": ref, "mark": _mark(output)},
                     success=True,
                     duration_ms=round((time.monotonic() - started) * 1000, 2),
                 )
             )
-
-            # Brief summary -> orchestrator.
             return ExpertSummary(
-                expert=request.name,
-                summary=f"[stub] {request.name} produced no real findings yet",
-                confidence=0.0,
-                finding_ref=ref,
+                expert=spec.key, summary=output.summary,
+                confidence=output.confidence, finding_ref=ref,
             )
+
+    def _toolbox_for(self, spec, ctx: VrakshaContext) -> ScopedToolbox | None:
+        """A tool box scoped to the expert's granted tool keys, or None if it has none."""
+        if self._tools is None or not spec.tool_grants:
+            return None
+        grants = {PermissionLevel.READ}
+        for key in spec.tool_grants:
+            tool_spec = self._registry.get_tool(key)
+            if tool_spec is not None:
+                grants.add(tool_spec.permission)
+        scoped = self._tools.scoped(allowed_keys=set(spec.tool_grants), grants=frozenset(grants))
+        return ScopedToolbox(scoped, ctx)
+
+    def _fail(self, request, ctx, started, reason) -> ExpertSummary:
+        ctx.expert_calls.append(
+            ExpertCallRecord(
+                expert_name=request.key, arguments={"task": request.task},
+                result=None, success=False,
+                duration_ms=round((time.monotonic() - started) * 1000, 2),
+                error=reason,
+            )
+        )
+        return ExpertSummary(expert=request.key, summary=f"[unavailable] {reason}", confidence=0.0, finding_ref="")
+
+
+def _mark(output: ExpertOutput) -> dict:
+    """A small quality signal recorded per result for future routing/diagnosis."""
+    return {
+        "confidence": output.confidence,
+        "has_citations": bool(output.citations),
+        "length": len(output.full_content or ""),
+    }

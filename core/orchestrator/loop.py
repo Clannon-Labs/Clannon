@@ -32,10 +32,6 @@ from . import advisor
 from .ports import Ports
 from .schemas import DecisionLogEntry, OrchestratorDecision
 
-# Names the router can choose from. Empty until real experts exist; the advisor
-# may still name experts explicitly (the stub handler will run them).
-EXPERT_CANDIDATES: list[str] = []
-
 
 @dataclass
 class LoopState:
@@ -80,15 +76,17 @@ async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
 
 
 async def _run_experts(decision, ports, ctx, state, turn) -> None:
-    chosen = decision.experts or ports.router.route(state.request, EXPERT_CANDIDATES)
+    # TODO(entropy-router): an embeddings router could choose/expand the expert set
+    # here; today the advisor names experts directly.
+    chosen = decision.experts
     if not chosen:
-        state.observations.append("no experts available; answer directly")
+        state.observations.append("no experts named; answer directly")
         return
     await ports.log.emit(DecisionLogEntry(
         kind="expert_spawn",
         message=f"spawning {len(chosen)} expert(s)",
         turn=turn,
-        detail={"experts": [e.name for e in chosen]},
+        detail={"experts": [e.key for e in chosen]},
     ))
     summaries = await ports.experts.run_experts(chosen, ctx)
     state.observations.extend(summaries)
@@ -103,9 +101,9 @@ async def _run_experts(decision, ports, ctx, state, turn) -> None:
 async def _run_tool(decision, ports, ctx, state, turn) -> None:
     await ports.log.emit(DecisionLogEntry(
         kind="tool_call",
-        message=f"calling tool {decision.tool.name}",
+        message=f"calling tool {decision.tool.key}",
         turn=turn,
-        detail={"tool": decision.tool.name},
+        detail={"tool": decision.tool.key},
     ))
     record = await ports.tools.call_tool(decision.tool, ctx)
     outcome = "ok" if record.success else (record.error or "failed")

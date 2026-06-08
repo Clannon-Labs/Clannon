@@ -20,15 +20,14 @@ from pydantic import BaseModel, Field
 # --- advisor input/output ---------------------------------------------------
 
 class ExpertRequest(BaseModel):
-    """A request to run one expert (named by the advisor or the router)."""
-    name: str
+    """A request to run one expert, addressed by its domain-qualified key."""
+    key: str
     task: str
-    required_capability: str | None = None
 
 
 class ToolRequest(BaseModel):
-    """A request to invoke one tool."""
-    name: str
+    """A request to invoke one tool, addressed by its domain-qualified key."""
+    key: str
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -70,6 +69,17 @@ class ExpertFindings(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ExpertOutput(BaseModel):
+    """
+    What an expert agent returns. The handler splits it into the brief
+    ExpertSummary (to the orchestrator) and the full ExpertFindings (to ctx).
+    """
+    summary: str
+    full_content: str
+    citations: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+
 # --- decision log -----------------------------------------------------------
 
 DecisionLogKind = Literal[
@@ -87,4 +97,3 @@ class DecisionLogEntry(BaseModel):
     message: str
     turn: int = 0
     detail: dict[str, Any] = Field(default_factory=dict)
-    seq: int = 0                # set by the sink for monotonic ordering

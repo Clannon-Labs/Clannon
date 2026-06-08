@@ -14,7 +14,15 @@ import asyncio
 import time
 from typing import Any
 
-from foundation import Flow, OrchestratorError, Origin, PipelineStage, constants
+from foundation import (
+    Flow,
+    MemoryStore,
+    MemoryWriteProposal,
+    OrchestratorError,
+    Origin,
+    PipelineStage,
+    constants,
+)
 
 from .loop import run_loop
 from .utils.wiring import build_default_ports
@@ -28,17 +36,24 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         flow.ctx.advance(PipelineStage.ORCHESTRATING)
         ports = build_default_ports(flow.ctx)
 
-        try:
-            response = await asyncio.wait_for(
-                run_loop(normalized, ports, flow.ctx),
-                timeout=constants.ORCHESTRATOR_TIMEOUT_S,
-            )
-        finally:
-            await ports.log.close()
+        response = await asyncio.wait_for(
+            run_loop(normalized, ports, flow.ctx),
+            timeout=constants.ORCHESTRATOR_TIMEOUT_S,
+        )
 
         flow.ctx.orchestrator_response = response
-        # Experts/orchestrator only PROPOSE memory writes; the manager owns persistence.
-        await ports.memory.record_write_proposals(flow.ctx.memory_writes_requested)
+
+        # Propose an episodic memory of this turn (experts/orchestrator only PROPOSE;
+        # the manager owns persistence). Minimal: remember the request and answer.
+        flow.ctx.memory_writes_requested.append(
+            MemoryWriteProposal(
+                store=MemoryStore.EPISODIC,
+                content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
+                rationale="turn outcome",
+                confidence=response.confidence,
+            )
+        )
+        await ports.memory.record_write_proposals(flow.ctx.session_id, flow.ctx.memory_writes_requested)
 
         return flow.next(response, Origin.ORCHESTRATOR, started)
 
