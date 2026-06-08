@@ -1,11 +1,48 @@
-"""Tests for the Vraksha-owned orchestrator reasoning loop."""
+"""Tests for the Vraksha-owned orchestrator reasoning loop (model-free, fake ports)."""
 
 import asyncio
 
-from foundation import MaxRetriesExceededError, NormalizedInput, VrakshaContext, constants
+from foundation import (
+    MaxRetriesExceededError,
+    NormalizedInput,
+    ToolCallRecord,
+    VrakshaContext,
+    constants,
+)
+from core.memory import MemoryManager
 from core.orchestrator import loop as loop_mod
-from core.orchestrator.schemas import ExpertRequest, OrchestratorDecision, ToolRequest
-from core.orchestrator.utils.wiring import build_default_ports
+from core.orchestrator.ports import Ports
+from core.orchestrator.schemas import (
+    ExpertFindings,
+    ExpertRequest,
+    ExpertSummary,
+    OrchestratorDecision,
+    ToolRequest,
+)
+from core.orchestrator.utils.decision_log import CtxDecisionLog
+
+
+class _FakeExperts:
+    async def run_experts(self, requests, ctx):
+        summaries = []
+        for req in requests:
+            ctx.expert_findings.append(ExpertFindings(expert=req.key, ref="ref1", full_content="full"))
+            summaries.append(ExpertSummary(expert=req.key, summary="did " + req.task,
+                                           confidence=0.8, finding_ref="ref1"))
+        return summaries
+
+
+class _FakeTools:
+    async def call_tool(self, request, ctx):
+        record = ToolCallRecord(tool_name=request.key, arguments=request.arguments,
+                                result={"ok": True}, success=True, duration_ms=1.0)
+        ctx.tool_calls.append(record)
+        return record
+
+
+def _ports(ctx):
+    return Ports(memory=MemoryManager(), experts=_FakeExperts(), tools=_FakeTools(),
+                 log=CtxDecisionLog(ctx))
 
 
 def _norm():
@@ -14,8 +51,7 @@ def _norm():
 
 def _run():
     ctx = VrakshaContext.new("s")
-    ports = build_default_ports(ctx)
-    resp = asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
+    resp = asyncio.run(loop_mod.run_loop(_norm(), _ports(ctx), ctx))
     return resp, ctx
 
 
@@ -35,26 +71,23 @@ def test_tool_then_answer(monkeypatch):
     async def decide(normalized, hydration, obs, turn, *, force_answer=False):
         calls["n"] += 1
         if calls["n"] == 1:
-            return OrchestratorDecision(kind="call_tool", tool=ToolRequest(name="search"))
+            return OrchestratorDecision(kind="call_tool", tool=ToolRequest(key="math.calculator"))
         return OrchestratorDecision(kind="answer", answer_text="ok")
     monkeypatch.setattr(loop_mod.advisor, "decide", decide)
 
     resp, ctx = _run()
     assert resp.text == "ok"
-    assert len(ctx.tool_calls) == 1 and ctx.tool_calls[0].tool_name == "search"
+    assert len(ctx.tool_calls) == 1 and ctx.tool_calls[0].tool_name == "math.calculator"
 
 
-def test_experts_then_answer_orchestrator_sees_only_summaries(monkeypatch):
+def test_experts_then_answer_only_summaries_fed_back(monkeypatch):
     calls = {"n": 0}
 
     async def decide(normalized, hydration, obs, turn, *, force_answer=False):
         calls["n"] += 1
         if calls["n"] == 1:
-            return OrchestratorDecision(
-                kind="spawn_experts",
-                experts=[ExpertRequest(name="research", task="t")],
-            )
-        # On the next turn the loop must have fed back summaries, not raw findings.
+            return OrchestratorDecision(kind="spawn_experts",
+                                        experts=[ExpertRequest(key="research.web_research", task="t")])
         assert any(getattr(o, "summary", None) for o in obs)
         return OrchestratorDecision(kind="answer", answer_text="synthesized")
     monkeypatch.setattr(loop_mod.advisor, "decide", decide)

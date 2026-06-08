@@ -12,7 +12,7 @@ def _flow():
     return Flow.new(NormalizedInput(modality="text", content_type="text/plain", content="hi"), "s")
 
 
-def test_stage_happy_path_sets_response_and_journals_origin(monkeypatch):
+def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
     async def decide(normalized, hydration, obs, turn, *, force_answer=False):
         return OrchestratorDecision(kind="answer", answer_text="hi there", confidence=0.8)
     monkeypatch.setattr(loop_mod.advisor, "decide", decide)
@@ -21,6 +21,7 @@ def test_stage_happy_path_sets_response_and_journals_origin(monkeypatch):
     assert out.status.value == "ok"
     assert out.ctx.orchestrator_response.text == "hi there"
     assert any(e.origin == Origin.ORCHESTRATOR for e in out.journal)
+    assert len(out.ctx.memory_writes_requested) == 1   # the turn was proposed for memory
 
 
 def test_stage_fails_closed_on_advisor_error(monkeypatch):

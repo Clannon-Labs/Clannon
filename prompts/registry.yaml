@@ -21,3 +21,18 @@ orchestrator:
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
 
+experts/web_research:
+  version: 1
+  file: experts/web_research/system.md
+  locked: false
+
+experts/writer:
+  version: 1
+  file: experts/writer/system.md
+  locked: false
+
+filter:
+  version: 1
+  file: filter/system.md
+  locked: true   # output safety/quality gate — a security boundary
+

@@ -52,11 +52,18 @@ core ideas:
 - **Verifier Layer**: A small, fast LLM (Google Gemini by default) makes the
   final input-safety call. The deterministic regex pass is only a hint — the LLM
   always adjudicates text and is the sole content blocker. Output is structured.
-- **Orchestrator Spine**: A Vraksha-owned reasoning loop — the model advises with
-  one structured decision per turn and the loop executes it — that streams a
-  structured decision log. Experts, tools, memory, and the entropy router are
-  wired behind ports as Phase-1 stubs, so the heavy parts plug in without
-  reworking the spine.
+- **Orchestrator + Experts + Tools**: A Vraksha-owned reasoning loop — the model
+  advises with one structured decision per turn and the loop executes it — that
+  streams a structured decision log. Experts (web research, writer/synthesis) are
+  real agents with their own prompt, skills, and scoped tools; tools (web search,
+  fetch URL, sandboxed Python, calculator) run through a permissioned handler.
+  Both register through one **capability registry** (`@tool`/`@expert`,
+  auto-discovered), so adding a capability is just dropping a decorated file.
+- **Output Filter + Delivery**: A final structured safety/groundedness gate checks
+  the draft before a delivery stage sends it to the user (CLI today).
+- **Memory via a single door**: All memory goes through the `MemoryManager`
+  (`MemoryPort`); today a minimal in-process episodic store, with the real
+  Qdrant + fastembed tiers as a dedicated next step.
 - **Root Model Routing**: Model choices live in `models.yaml`, so every LLM stage
   routes providers from one place; the LLM framework itself is confined to
   `core/llm`. Google Gemini is the default provider.
@@ -64,7 +71,7 @@ core ideas:
 The active path today is:
 
 ```text
-raw input -> intake -> sanitizer -> normalizer -> verifier -> orchestrator
+raw input -> intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -> delivery
 ```
 
 ---
@@ -111,8 +118,10 @@ core/
   intake, pipeline, normalizer, verifier, orchestrator, memory, llm adapter
 
 security/
-  sanitizers today
-  output filter planned
+  sanitizers + output filter
+
+delivery/
+  terminal stage (CLI today)
 
 models.yaml
   one place to route model providers and capabilities (Gemini default)
@@ -124,13 +133,7 @@ prompts/
 Active pipeline:
 
 ```text
-intake -> sanitizer -> normalizer -> verifier -> orchestrator
-```
-
-Planned full pipeline:
-
-```text
-intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -> output
+intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -> delivery
 ```
 
 Useful docs:

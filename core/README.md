@@ -65,13 +65,28 @@ core/
   orchestrator/
     orchestrator.py
       Stage entry point (run). Vraksha-owned bounded reasoning loop.
-      (loop.py, advisor.py, schemas.py, ports.py at root; experts/ + tools/
-      sub-layers; utils/ holds wiring, router, decision_log, prompt.)
+      (loop.py, advisor.py, schemas.py, ports.py at root.)
+
+    registry/
+      Unified capability registry: @tool / @expert decorators, validation,
+      store, and auto-discovery. Drop a decorated file and it self-registers.
+
+    experts/
+      Expert agents (web_research, writer) — each a package with its own prompt,
+      skills/, and scoped tools — behind a generic ExpertHandler door.
+
+    tools/
+      Tools (web_search, fetch_url, python_exec, calculator) behind a generic,
+      permissioned ToolHandler door.
+
+    utils/
+      Internal-only: wiring (registry-driven), decision_log sink, prompt builder.
 
   memory/
     manager.py
       MemoryManager: the single door to the memory layer (implements
-      foundation.MemoryPort). Phase-1 stub; real 4-tier system planned.
+      foundation.MemoryPort). Minimal in-memory episodic store for now; real
+      Qdrant + fastembed tiers are a dedicated next step.
 ```
 
 Currently active core stages are:
@@ -83,8 +98,12 @@ Currently active core stages are:
 
 The orchestrator is a Vraksha-owned loop: the model is a structured advisor that
 emits one decision per turn; the loop executes it (experts/tools via ports,
-streaming a decision log). Experts, tools, memory, the entropy router, and the
-output filter are wired behind ports as Phase-1 stubs.
+streaming a decision log). Experts and tools are real and register themselves
+through the capability registry; memory is a minimal in-memory episodic store
+behind the MemoryPort. The output filter (`security/filter`) and delivery
+(`delivery/`) run after the orchestrator. The advisor names experts directly; an
+entropy-based expert router is a deferred future addition (marked with a TODO in
+the loop).
 
 `core/pipeline.py` runs only the active pipeline today. It also documents the
 intended later stages: orchestrator, filter, and output, which are not active
