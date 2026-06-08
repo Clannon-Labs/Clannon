@@ -1,5 +1,6 @@
-"""Tool sub-layer. The handler is the orchestrator's single door to tools."""
+"""Tool sub-layer. The handler is the orchestrator's single door to tools; the
+individual tool modules self-register with the capability registry on import."""
 
-from .handler import StubToolHandler
+from .handler import ToolHandler
 
-__all__ = ["StubToolHandler"]
+__all__ = ["ToolHandler"]
