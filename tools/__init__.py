@@ -1,6 +1,3 @@
-"""Tool sub-layer. The handler is the orchestrator's single door to tools; the
-individual tool modules self-register with the capability registry on import."""
-
-from .handler import ToolHandler
-
-__all__ = ["ToolHandler"]
+"""Tool implementations. Each module self-registers with the capability registry
+(`@tool` from `registry`) on import; the calling door lives in
+`registry.capabilities.handler` (Capabilities)."""

@@ -1,125 +1,103 @@
-"""Tests for the Vraksha-owned orchestrator reasoning loop (model-free, fake ports)."""
+"""
+Orchestrator turn tests, two layers:
+  1. run_loop — hydrate, stream the decision log, map the answer + link findings
+     (driven by a fake capability door; no model).
+  2. the native gateway `Capabilities.run_turn` — real registry, offline via
+     TestModel / FunctionModel: tools route through the guards, and the turn cap
+     gracefully forces a final answer.
+"""
 
 import asyncio
 
-from foundation import (
-    MaxRetriesExceededError,
-    NormalizedInput,
-    ToolCallRecord,
-    VrakshaContext,
-    constants,
-)
+from foundation import NormalizedInput, OrchestratorResponse, VrakshaContext
 from core.memory import MemoryManager
 from core.orchestrator import loop as loop_mod
 from core.orchestrator.ports import Ports
-from core.orchestrator.schemas import (
-    ExpertFindings,
-    ExpertRequest,
-    ExpertSummary,
-    OrchestratorDecision,
-    ToolRequest,
-)
+from core.orchestrator.schemas import OrchestratorAnswer
 from core.orchestrator.utils.decision_log import CtxDecisionLog
-
-
-class _FakeExperts:
-    async def run_experts(self, requests, ctx):
-        summaries = []
-        for req in requests:
-            ctx.expert_findings.append(ExpertFindings(expert=req.key, ref="ref1", full_content="full"))
-            summaries.append(ExpertSummary(expert=req.key, summary="did " + req.task,
-                                           confidence=0.8, finding_ref="ref1"))
-        return summaries
-
-
-class _FakeTools:
-    async def call_tool(self, request, ctx):
-        record = ToolCallRecord(tool_name=request.key, arguments=request.arguments,
-                                result={"ok": True}, success=True, duration_ms=1.0)
-        ctx.tool_calls.append(record)
-        return record
-
-
-def _ports(ctx):
-    return Ports(memory=MemoryManager(), experts=_FakeExperts(), tools=_FakeTools(),
-                 log=CtxDecisionLog(ctx))
+from registry.capabilities import ExpertFindings, discover
+from registry.capabilities.handler import Capabilities
 
 
 def _norm():
     return NormalizedInput(modality="text", content_type="text/plain", content="hi")
 
 
-def _run():
+# --- 1. run_loop (fake gateway) ---------------------------------------------
+
+class _FakeCaps:
+    """A fake capability door: run_turn streams one tool call via on_event, records
+    a finding on ctx, and returns a canned OrchestratorAnswer — no model."""
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    async def run_turn(self, *, system_prompt, user_prompt, output_type, on_event=None, **kw):
+        if on_event is not None:
+            await on_event({"tool": "math.calculator", "args": {}})
+        self.ctx.expert_findings.append(
+            ExpertFindings(expert="web.research", ref="r1", full_content="full")
+        )
+        return OrchestratorAnswer(answer_text="done", confidence=0.7)
+
+
+def _ports(ctx):
+    return Ports(memory=MemoryManager(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
+
+
+def test_run_loop_maps_answer_logs_and_links_findings():
     ctx = VrakshaContext.new("s")
     resp = asyncio.run(loop_mod.run_loop(_norm(), _ports(ctx), ctx))
-    return resp, ctx
+
+    assert isinstance(resp, OrchestratorResponse)
+    assert resp.text == "done" and resp.confidence == 0.7
+    assert resp.finding_refs == ["r1"]                      # linked from ctx.expert_findings
+    kinds = [e.kind for e in ctx.decision_log]
+    assert "hydration" in kinds and "tool_call" in kinds and "answer" in kinds
 
 
-def test_direct_answer(monkeypatch):
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        return OrchestratorDecision(kind="answer", answer_text="done", confidence=0.9)
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
+# --- 2. native gateway run_turn (real registry, offline) --------------------
 
-    resp, ctx = _run()
-    assert resp.text == "done"
-    assert any(e.kind == "answer" for e in ctx.decision_log)
+def _caps():
+    discover()
+    return Capabilities.open(VrakshaContext.new("s"))
 
 
-def test_tool_then_answer(monkeypatch):
-    calls = {"n": 0}
+def test_run_turn_routes_tool_through_guard_and_answers():
+    from pydantic_ai.models.test import TestModel
 
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return OrchestratorDecision(kind="call_tool", tool=ToolRequest(key="math.calculator"))
-        return OrchestratorDecision(kind="answer", answer_text="ok")
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
-
-    resp, ctx = _run()
-    assert resp.text == "ok"
-    assert len(ctx.tool_calls) == 1 and ctx.tool_calls[0].tool_name == "math.calculator"
-
-
-def test_experts_then_answer_only_summaries_fed_back(monkeypatch):
-    calls = {"n": 0}
-
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return OrchestratorDecision(kind="spawn_experts",
-                                        experts=[ExpertRequest(key="research.web_research", task="t")])
-        assert any(getattr(o, "summary", None) for o in obs)
-        return OrchestratorDecision(kind="answer", answer_text="synthesized")
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
-
-    resp, ctx = _run()
-    assert resp.text == "synthesized"
-    assert len(ctx.expert_findings) == 1
-    assert resp.finding_refs == [ctx.expert_findings[0].ref]
+    caps = _caps()
+    ans = asyncio.run(caps.run_turn(
+        system_prompt="orchestrate",
+        user_prompt="compute 2+2",
+        output_type=OrchestratorAnswer,
+        model=TestModel(call_tools=["math_calculator"]),
+    ))
+    assert isinstance(ans, OrchestratorAnswer)
+    # the model's native tool call routed through the guarded handler + recorded
+    assert [r.tool_name for r in caps.ctx.tool_calls] == ["math.calculator"]
 
 
-def test_turn_cap_forces_a_final_answer(monkeypatch):
-    monkeypatch.setattr(constants, "ORCHESTRATOR_MAX_TURNS", 2)
+def test_run_turn_graceful_forced_answer_at_cap():
+    from pydantic_ai import ModelResponse
+    from pydantic_ai.messages import ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
 
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        if force_answer:
-            return OrchestratorDecision(kind="answer", answer_text="forced")
-        return OrchestratorDecision(kind="need_more")
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
+    def fn(messages, info):
+        # call a tool while any are offered; once tools are withheld, answer.
+        if info.function_tools:
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=info.function_tools[0].name, args={"expression": "2+2"})])
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name, args={"answer_text": "forced", "confidence": 0.4})])
 
-    resp, _ = _run()
-    assert resp.text == "forced"
-
-
-def test_turn_cap_without_answer_fails_closed(monkeypatch):
-    monkeypatch.setattr(constants, "ORCHESTRATOR_MAX_TURNS", 2)
-
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        return OrchestratorDecision(kind="need_more")
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
-
-    try:
-        _run()
-        assert False, "should fail closed at the turn cap"
-    except MaxRetriesExceededError:
-        pass
+    caps = _caps()
+    ans = asyncio.run(caps.run_turn(
+        system_prompt="orchestrate",
+        user_prompt="do it",
+        output_type=OrchestratorAnswer,
+        max_turns=0,                       # request_limit=1 -> main run caps -> forced pass
+        model=FunctionModel(fn),
+    ))
+    assert ans.answer_text == "forced"

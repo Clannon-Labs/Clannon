@@ -1,5 +1,5 @@
 """
-foundation/pillars/errors.py
+foundation/vocab/errors.py
 
 Structured exception taxonomy for Vraksha.
 Every raise in the codebase uses one of these — never a bare Exception,

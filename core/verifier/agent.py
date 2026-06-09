@@ -6,15 +6,13 @@ from functools import lru_cache
 
 from foundation import (
     NormalizedInput,
-    Prompt,
     ThreatLevel,
-    VerificationResult,
     constants,
-    get_prompt,
 )
+from registry.config import Prompt, get_prompt
 from core.llm import build_agent, run_structured
 
-from .schemas import VerifierInputView, VerifierLLMResult
+from .schemas import VerificationResult, VerifierInputView, VerifierLLMResult
 from .utils import content_excerpt, verification_result
 
 

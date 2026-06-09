@@ -1,7 +1,7 @@
 import pytest
 
 from foundation import Flow, Origin, ThreatLevel, ConfigError, constants
-from foundation.model_registry import ModelRegistry
+from registry.config import ModelRegistry
 
 
 def test_flow_truncates_long_error():

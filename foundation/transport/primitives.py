@@ -1,5 +1,5 @@
 """
-foundation/pillars/transport.py
+foundation/transport/primitives.py
 
 Low-level transport primitives for Vraksha: Status, Meta, and Envelope.
 
@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from .types import Origin
+    from ..vocab.types import Origin
 
 T = TypeVar("T")
 

@@ -7,9 +7,12 @@
 #
 # `locked: true` marks a security-boundary prompt (verifier, output filter).
 # Locked prompts must never be overridable at runtime or by end users — see the
-# SECURITY note in foundation/prompt_registry.py. Customizable prompts
-# (orchestrator persona, experts) will be added here as locked: false when those
-# layers land.
+# SECURITY note in foundation/config/prompt_registry.py.
+#
+# This registry holds the system-level / security-boundary prompts. Expert prompts
+# are NOT here: each expert co-locates its system.md beside its code under
+# core/orchestrator/experts/<name>/, loaded by the expert handler (an expert's
+# prompt is part of its self-contained, unlocked capability).
 
 verifier:
   version: 2
@@ -20,16 +23,6 @@ orchestrator:
   version: 1
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
-
-experts/web_research:
-  version: 1
-  file: experts/web_research/system.md
-  locked: false
-
-experts/writer:
-  version: 1
-  file: experts/writer/system.md
-  locked: false
 
 filter:
   version: 1

@@ -1,39 +1,41 @@
 """Web research expert (key: research.web_research) — searches the open web and
-returns findings with sources."""
+returns findings with sources. Its prompt and skills live beside this file."""
 
 from __future__ import annotations
 
+from pydantic import BaseModel, Field
+
 from foundation import PermissionLevel
 
-from ...registry import expert
-from ...schemas import ExpertOutput
-from ..support import ExpertEnv, think
+from registry import expert
+from registry.capabilities import ExpertOutput
+from registry.capabilities.handler import ExpertEnv, think
 
 
-@expert(
-    name="web_research",
-    domain="research",
-    description="Research a question on the open web and return findings with source URLs.",
-    prompt_name="experts/web_research",
-    output_schema=ExpertOutput,
-    skills=("source_eval.md",),
-    tools=("search.web", "web.fetch_url"),
-    model_role="research",
-    tags=("open-web", "sources", "citations"),
-    permission=PermissionLevel.NETWORK,
-)
+class ResearchIn(BaseModel):
+    """What the orchestrator emits to call this expert (structured, not free text)."""
+    prompt: str = Field(description="The research question or task to investigate.")
+
+
+@expert
 class WebResearchExpert:
-    async def run(self, task: str, env: ExpertEnv) -> ExpertOutput:
-        gathered = "(no web results available)"
-        if env.tools is not None:
-            record = await env.tools.call("search.web", query=task)
-            if record.success and record.result:
-                gathered = record.result.get("findings", gathered)
+    name = "research"
+    domain = "web"
+    description = "Research a question on the open web and return findings with source URLs."
+    input_schema = ResearchIn
+    output_schema = ExpertOutput
+    skills = ("skills",)                       # the skills/ folder beside this file
+    tools = ("search.web", "web.fetch_url")    # may call these (model-driven, guarded)
+    model_role = "research"
+    permission = PermissionLevel.NETWORK
+    tags = ("open-web", "sources", "citations")
 
+    async def run(self, args: ResearchIn, env: ExpertEnv) -> ExpertOutput:
         user_prompt = (
-            f"Research task: {task}\n\n"
-            f"Web findings:\n{gathered}\n\n"
-            "Return ExpertOutput: a brief 1-2 sentence summary, the full findings as "
-            "full_content with any source URLs listed in citations, and a confidence (0-1)."
+            f"Research task: {args.prompt}\n\n"
+            "Use your tools to search the web and fetch pages for sources, and load "
+            "a skill if it helps. Then return ExpertOutput: a 1-2 sentence summary, "
+            "the full findings as full_content with source URLs in citations, and a "
+            "confidence (0-1)."
         )
         return await think(env, user_prompt)

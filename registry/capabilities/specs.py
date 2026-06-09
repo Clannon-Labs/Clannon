@@ -57,11 +57,11 @@ class ToolSpec(CapabilitySpec):
 
 @dataclass(frozen=True)
 class ExpertSpec(CapabilitySpec):
-    """An expert: an agent with its own prompt, skills, model role, and scoped tools."""
+    """An expert: an agent with a co-located system prompt, skills, a model role,
+    and scoped tools. Its prompt + skills live beside its code, not in a registry."""
     model_role: str = "research"
-    prompt_name: str = ""
     tool_grants: tuple[str, ...] = ()   # tool keys this expert may call
-    skills: tuple[str, ...] = ()        # skill file names under the expert package
+    skills: tuple[str, ...] = ()        # .md files or folders beside the expert
 
 
 def _is_pydantic(schema: object) -> bool:
@@ -80,11 +80,11 @@ def validate(spec: CapabilitySpec) -> str | None:
         return "must expose an async run() method"
     if not _is_pydantic(spec.output_schema):
         return "output_schema must be a pydantic BaseModel"
-    if spec.kind == CapabilityKind.TOOL and not _is_pydantic(spec.input_schema):
-        return "tool requires an input_schema (pydantic BaseModel)"
+    # Both tools and experts are invoked with structured arguments validated
+    # against this schema — never free-form text.
+    if not _is_pydantic(spec.input_schema):
+        return "requires an input_schema (pydantic BaseModel)"
     if spec.kind == CapabilityKind.EXPERT:
-        if not getattr(spec, "prompt_name", ""):
-            return "expert requires a prompt_name"
         if not getattr(spec, "skills", ()):
-            return "expert requires at least one skill file"
+            return "expert requires at least one skill (a .md file or folder)"
     return None

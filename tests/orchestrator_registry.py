@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from core.orchestrator.registry import (
+from registry.capabilities import (
     CapabilityKind,
     CapabilityRegistry,
     ExpertSpec,
@@ -10,7 +10,7 @@ from core.orchestrator.registry import (
     discover,
     registry,
 )
-from core.orchestrator.registry import validate
+from registry.capabilities import validate
 
 
 class _In(BaseModel):
@@ -62,11 +62,20 @@ def test_non_async_run_invalid():
 
 def test_expert_requires_skill():
     class Impl:
-        async def run(self, task, env):
+        async def run(self, args, env):
             return _Out(y="x")
     spec = ExpertSpec(name="e", kind=CapabilityKind.EXPERT, description="d", domain="d",
-                      impl=Impl, output_schema=_Out, prompt_name="p", skills=())
+                      impl=Impl, input_schema=_In, output_schema=_Out, skills=())
     assert "skill" in validate(spec)
+
+
+def test_expert_requires_input_schema():
+    class Impl:
+        async def run(self, args, env):
+            return _Out(y="x")
+    spec = ExpertSpec(name="e", kind=CapabilityKind.EXPERT, description="d", domain="d",
+                      impl=Impl, output_schema=_Out, skills=("s.md",))
+    assert "input_schema" in validate(spec)
 
 
 # --- store ---
@@ -102,4 +111,4 @@ def test_discover_populates_real_capabilities():
     tools = {c["key"] for c in registry.catalog(CapabilityKind.TOOL)}
     experts = {c["key"] for c in registry.catalog(CapabilityKind.EXPERT)}
     assert {"search.web", "web.fetch_url", "code.python_exec", "math.calculator"} <= tools
-    assert {"research.web_research", "synthesis.writer"} <= experts
+    assert {"web.research", "synthesis.writer"} <= experts

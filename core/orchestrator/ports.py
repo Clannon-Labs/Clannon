@@ -1,24 +1,27 @@
 """
-Orchestrator-internal port protocols + the Ports bundle.
+Orchestrator-internal seams + the Ports bundle.
 
-These contracts are used only inside the orchestrator (the loop dispatches
-through them; wiring assembles concrete impls), so they live here rather than in
-foundation. The cross-layer MemoryPort lives in foundation.ports — the
-orchestrator consumes it but does not own it.
+The loop dispatches through these; wiring assembles concrete impls. The
+cross-layer MemoryPort lives in foundation; the capability door (Capabilities)
+lives in registry.capabilities.handler — the orchestrator holds one, it does not
+own it. Tool/expert calls all go through that single door, so there are no longer
+separate tool/expert ports here.
 
-Swapping any seam (real experts, sandboxed tools, a different decision-log
-transport) means providing a new class that satisfies the matching protocol and
-wiring it in build_default_ports — the loop never changes.
+Swapping a seam (a different decision-log transport, a different capability door)
+means wiring a new value in build_default_ports — the loop never changes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from foundation import MemoryPort, ToolCallRecord, VrakshaContext
+from foundation import MemoryPort
 
-from .schemas import DecisionLogEntry, ExpertRequest, ExpertSummary, ToolRequest
+from .schemas import DecisionLogEntry
+
+if TYPE_CHECKING:                       # type-only: keeps ports.py light (no SDK/security pull)
+    from registry.capabilities.handler import Capabilities
 
 
 @runtime_checkable
@@ -28,29 +31,9 @@ class DecisionLogSink(Protocol):
     async def emit(self, entry: DecisionLogEntry) -> None: ...
 
 
-@runtime_checkable
-class ExpertHandlerPort(Protocol):
-    """
-    Runs experts under least-privilege. Returns ONLY brief summaries to the
-    orchestrator and writes full findings to ctx.expert_findings.
-    """
-
-    async def run_experts(
-        self, requests: list[ExpertRequest], ctx: VrakshaContext
-    ) -> list[ExpertSummary]: ...
-
-
-@runtime_checkable
-class ToolHandlerPort(Protocol):
-    """Runs one tool under permission + timeout + output limits; records the call."""
-
-    async def call_tool(self, request: ToolRequest, ctx: VrakshaContext) -> ToolCallRecord: ...
-
-
 @dataclass
 class Ports:
     """The seams the orchestrator loop depends on. Assembled by build_default_ports."""
     memory: MemoryPort
-    experts: ExpertHandlerPort
-    tools: ToolHandlerPort
+    caps: "Capabilities"        # the Flow-inspired tool/expert door
     log: DecisionLogSink

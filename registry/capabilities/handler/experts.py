@@ -1,26 +1,29 @@
 """
 Generic expert handler — registry-driven, zero per-expert wiring.
 
-Looks an expert up by key, assembles its mini-environment (skills + a scoped tool
-box), runs it under concurrency + timeout bounds, and enforces the two-output
-contract: a brief ExpertSummary goes back to the orchestrator while the full
-ExpertFindings is buffered on the context for the output filter. Each result is
-*marked* (success, confidence, a small quality signal) on the ExpertCallRecord for
-future performance-based routing. Unknown/broken/failed experts return a failed
-summary, never silence.
+Looks an expert up by key, validates the structured arguments against its
+input_schema, assembles its run materials (a SkillBook + a scoped tool box +
+its granted tool specs), runs it under concurrency + timeout bounds, and enforces
+the two-output contract: a brief ExpertSummary goes back to the orchestrator while
+the full ExpertFindings is buffered on the context for the output filter. Each
+result is *marked* (success, confidence, a small quality signal) on the
+ExpertCallRecord for future performance-based routing. Unknown/broken/failed
+experts return a failed summary, never silence.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
+from pathlib import Path
 from uuid import uuid4
 
 from foundation import ExpertCallRecord, PermissionLevel, VrakshaContext, constants
 
-from ..registry import CapabilityKind, registry as default_registry
-from ..schemas import ExpertFindings, ExpertOutput, ExpertRequest, ExpertSummary
-from .support import ExpertEnv, ScopedToolbox, load_skills
+from .. import CapabilityKind, registry as default_registry
+from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
+from .support import ExpertEnv, ScopedToolbox, SkillBook
 
 
 class ExpertHandler:
@@ -46,15 +49,17 @@ class ExpertHandler:
                 reason = self._registry.describe_missing(CapabilityKind.EXPERT, request.key)
                 return self._fail(request, ctx, started, reason)
 
-            env = ExpertEnv(
-                prompt_name=spec.prompt_name,
-                model_role=spec.model_role,
-                skills=load_skills(spec.impl, spec.skills),
-                tools=self._toolbox_for(spec, ctx),
-            )
+            # Structured invocation: the arguments must satisfy the expert's
+            # input_schema — never free-form text.
             try:
-                output: ExpertOutput = await asyncio.wait_for(
-                    spec.impl().run(request.task, env), timeout=constants.EXPERT_TIMEOUT_S
+                args = spec.input_schema(**request.arguments)
+            except Exception as exc:
+                return self._fail(request, ctx, started, f"bad arguments: {exc}")
+
+            env = self._build_env(spec, ctx)
+            try:
+                output = await asyncio.wait_for(
+                    spec.impl().run(args, env), timeout=constants.EXPERT_TIMEOUT_S
                 )
             except asyncio.TimeoutError:
                 return self._fail(request, ctx, started, "expert timed out")
@@ -71,7 +76,7 @@ class ExpertHandler:
             ctx.expert_calls.append(
                 ExpertCallRecord(
                     expert_name=spec.key,
-                    arguments={"task": request.task},
+                    arguments=dict(request.arguments),
                     result={"finding_ref": ref, "mark": _mark(output)},
                     success=True,
                     duration_ms=round((time.monotonic() - started) * 1000, 2),
@@ -82,22 +87,35 @@ class ExpertHandler:
                 confidence=output.confidence, finding_ref=ref,
             )
 
-    def _toolbox_for(self, spec, ctx: VrakshaContext) -> ScopedToolbox | None:
+    def _build_env(self, spec, ctx: VrakshaContext) -> ExpertEnv:
+        """Pack the expert's run materials; the agent itself is assembled in think()."""
+        module_dir = Path(inspect.getfile(spec.impl)).parent
+        skills = SkillBook(module_dir, spec.skills)
+        granted = [s for s in (self._registry.get_tool(k) for k in spec.tool_grants) if s is not None]
+        return ExpertEnv(
+            module_dir=module_dir,
+            model_role=spec.model_role,
+            skills=skills,
+            toolbox=self._toolbox_for(granted, ctx),
+            granted=granted,
+        )
+
+    def _toolbox_for(self, granted: list, ctx: VrakshaContext) -> ScopedToolbox | None:
         """A tool box scoped to the expert's granted tool keys, or None if it has none."""
-        if self._tools is None or not spec.tool_grants:
+        if self._tools is None or not granted:
             return None
         grants = {PermissionLevel.READ}
-        for key in spec.tool_grants:
-            tool_spec = self._registry.get_tool(key)
-            if tool_spec is not None:
-                grants.add(tool_spec.permission)
-        scoped = self._tools.scoped(allowed_keys=set(spec.tool_grants), grants=frozenset(grants))
+        for spec in granted:
+            grants.add(spec.permission)
+        scoped = self._tools.scoped(
+            allowed_keys={spec.key for spec in granted}, grants=frozenset(grants)
+        )
         return ScopedToolbox(scoped, ctx)
 
     def _fail(self, request, ctx, started, reason) -> ExpertSummary:
         ctx.expert_calls.append(
             ExpertCallRecord(
-                expert_name=request.key, arguments={"task": request.task},
+                expert_name=request.key, arguments=dict(request.arguments),
                 result=None, success=False,
                 duration_ms=round((time.monotonic() - started) * 1000, 2),
                 error=reason,
@@ -106,7 +124,7 @@ class ExpertHandler:
         return ExpertSummary(expert=request.key, summary=f"[unavailable] {reason}", confidence=0.0, finding_ref="")
 
 
-def _mark(output: ExpertOutput) -> dict:
+def _mark(output) -> dict:
     """A small quality signal recorded per result for future routing/diagnosis."""
     return {
         "confidence": output.confidence,

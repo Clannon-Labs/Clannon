@@ -13,8 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from foundation import NormalizedInput, ThreatLevel, VerificationResult
+from foundation import NormalizedInput, ThreatLevel
 
+from .schemas import VerificationResult
 from .utils import content_excerpt, verification_result
 
 

@@ -1,32 +1,31 @@
 """
-Assembles the orchestrator's ports for one run, entirely from the registry.
+Assembles the orchestrator's ports for one run.
 
 Adding or removing a tool/expert never edits this file: `discover()` populates the
-registry from the tools/ and experts/ packages, and the generic handlers resolve
-capabilities by key. Swapping an implementation (real memory, a different log
-transport) is the only reason to touch this.
+capability registry from the tools/ and experts/ packages, and the Capabilities
+door resolves capabilities by key. Swapping an implementation (real memory, a
+different log transport) is the only reason to touch this.
 """
 
 from __future__ import annotations
 
 from foundation import VrakshaContext
 from core.memory import manager as memory_manager
+from registry.capabilities import discover
 
-from ..experts import ExpertHandler
 from ..ports import Ports
-from ..registry import discover
-from ..tools import ToolHandler
 from .decision_log import CtxDecisionLog
 
 
 def build_default_ports(ctx: VrakshaContext) -> Ports:
-    """Wire the Phase-1 ports: registry-backed handlers + memory door + sink."""
-    discover()                                   # import tools/ and experts/ so they self-register
-    tools = ToolHandler()                        # orchestrator-direct calls hold all grants
-    experts = ExpertHandler(tools=tools)         # experts get scoped tool boxes
+    """Wire the Phase-1 ports: the capability door + memory door + decision-log sink."""
+    # Imported lazily: the handler depends on core.llm, so importing it at module
+    # load would re-enter core/__init__ -> orchestrator -> wiring (a cycle).
+    from registry.capabilities.handler import Capabilities
+
+    discover()                              # import tools/ and experts/ so they self-register
     return Ports(
         memory=memory_manager,
-        experts=experts,
-        tools=tools,
+        caps=Capabilities.open(ctx),        # one door; tool/expert calls + guards inside
         log=CtxDecisionLog(ctx),
     )

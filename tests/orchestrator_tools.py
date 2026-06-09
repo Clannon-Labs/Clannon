@@ -5,11 +5,11 @@ import asyncio
 from pydantic import BaseModel
 
 from foundation import PermissionLevel, VrakshaContext, constants
-from core.orchestrator.registry import CapabilityKind, CapabilityRegistry, ToolSpec, discover
-from core.orchestrator.registry import validate
-from core.orchestrator.schemas import ToolRequest
-from core.orchestrator.tools import ToolHandler
-import core.orchestrator.tools.handler as handler_mod
+from registry.capabilities import CapabilityKind, CapabilityRegistry, ToolSpec, discover
+from registry.capabilities import validate
+from registry.capabilities import ToolRequest
+from registry.capabilities.handler import ToolHandler
+import registry.capabilities.handler.tools as handler_mod
 
 
 class EchoIn(BaseModel):

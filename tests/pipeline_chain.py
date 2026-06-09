@@ -7,16 +7,15 @@ live ClamAV daemon; the full live run is the credits-gated e2e.
 
 import asyncio
 
-from foundation import Flow
+from foundation import Flow, OrchestratorResponse
 from core import normalizer, orchestrator, verifier
 from core.verifier.utils import verification_result
-from core.orchestrator.schemas import OrchestratorDecision
 from security.filter import run as filter_run
 from security.filter.schemas import FilterResult
 from delivery import run as delivery_run
 
 import core.verifier.verifier as verifier_mod
-import core.orchestrator.loop as loop_mod
+import core.orchestrator.orchestrator as orch_mod
 import security.filter.filter as filter_mod
 
 
@@ -25,9 +24,9 @@ def test_reasoning_and_output_chain(monkeypatch, capsys):
         return verification_result(proceed=True, normalized=normalized)
     monkeypatch.setattr(verifier_mod, "verify_with_llm", fake_verify)
 
-    async def fake_decide(normalized, hydration, obs, turn, *, force_answer=False):
-        return OrchestratorDecision(kind="answer", answer_text="final answer", confidence=0.9)
-    monkeypatch.setattr(loop_mod.advisor, "decide", fake_decide)
+    async def fake_loop(normalized, ports, ctx):
+        return OrchestratorResponse(text="final answer", confidence=0.9)
+    monkeypatch.setattr(orch_mod, "run_loop", fake_loop)
 
     async def fake_filter(response, findings):
         return FilterResult(proceed=True)

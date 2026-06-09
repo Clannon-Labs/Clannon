@@ -1,5 +1,5 @@
 """
-types.py
+foundation/vocab/types.py
 
 Shared primitive types for Vraksha.
 

@@ -1,11 +1,11 @@
-"""Tests for the orchestrator Flow stage (entry point)."""
+"""Tests for the orchestrator Flow stage (entry point). The reasoning core
+(run_loop) is faked here — the stage's job is Flow handling: response storage,
+the memory proposal, the timeout, and failing closed."""
 
 import asyncio
 
-from foundation import Flow, NormalizedInput, Origin, constants
-from core.orchestrator import loop as loop_mod
+from foundation import Flow, NormalizedInput, Origin, OrchestratorResponse, constants
 from core.orchestrator import orchestrator as stage
-from core.orchestrator.schemas import OrchestratorDecision
 
 
 def _flow():
@@ -13,9 +13,9 @@ def _flow():
 
 
 def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
-    async def decide(normalized, hydration, obs, turn, *, force_answer=False):
-        return OrchestratorDecision(kind="answer", answer_text="hi there", confidence=0.8)
-    monkeypatch.setattr(loop_mod.advisor, "decide", decide)
+    async def fake_loop(normalized, ports, ctx):
+        return OrchestratorResponse(text="hi there", confidence=0.8)
+    monkeypatch.setattr(stage, "run_loop", fake_loop)
 
     out = asyncio.run(stage.run(_flow()))
     assert out.status.value == "ok"
@@ -24,10 +24,10 @@ def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
     assert len(out.ctx.memory_writes_requested) == 1   # the turn was proposed for memory
 
 
-def test_stage_fails_closed_on_advisor_error(monkeypatch):
-    async def boom(*args, **kwargs):
-        raise RuntimeError("advisor broke")
-    monkeypatch.setattr(loop_mod.advisor, "decide", boom)
+def test_stage_fails_closed_on_loop_error(monkeypatch):
+    async def boom(normalized, ports, ctx):
+        raise RuntimeError("loop broke")
+    monkeypatch.setattr(stage, "run_loop", boom)
 
     out = asyncio.run(stage.run(_flow()))
     assert out.status.value == "error"
@@ -36,10 +36,10 @@ def test_stage_fails_closed_on_advisor_error(monkeypatch):
 def test_stage_times_out_and_fails(monkeypatch):
     monkeypatch.setattr(constants, "ORCHESTRATOR_TIMEOUT_S", 0.01)
 
-    async def slow(*args, **kwargs):
+    async def slow(normalized, ports, ctx):
         await asyncio.sleep(0.1)
-        return OrchestratorDecision(kind="answer", answer_text="late")
-    monkeypatch.setattr(loop_mod.advisor, "decide", slow)
+        return OrchestratorResponse(text="late")
+    monkeypatch.setattr(stage, "run_loop", slow)
 
     out = asyncio.run(stage.run(_flow()))
     assert out.status.value == "error"

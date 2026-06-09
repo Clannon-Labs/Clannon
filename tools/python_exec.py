@@ -24,7 +24,7 @@ from RestrictedPython.PrintCollector import PrintCollector
 
 from foundation import PermissionLevel
 
-from ..registry import tool
+from registry import tool
 
 _OPT_IN = "VRAKSHA_ENABLE_PYTHON_EXEC"
 
@@ -42,16 +42,16 @@ class PyExecOut(BaseModel):
     output: str
 
 
-@tool(
-    name="python_exec",
-    domain="code",
-    description="Run a small snippet of restricted Python and return its printed output.",
-    input_schema=PyExecIn,
-    output_schema=PyExecOut,
-    permission=PermissionLevel.EXECUTE,
-    tags=("sandbox", "compute"),
-)
+@tool
 class PythonExecTool:
+    name = "python_exec"
+    domain = "code"
+    description = "Run a small snippet of restricted Python and return its printed output."
+    input_schema = PyExecIn
+    output_schema = PyExecOut
+    permission = PermissionLevel.EXECUTE
+    tags = ("sandbox", "compute")
+
     async def run(self, args: PyExecIn) -> PyExecOut:
         if not _enabled():
             return PyExecOut(

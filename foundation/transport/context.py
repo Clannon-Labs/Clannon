@@ -1,5 +1,5 @@
 """
-foundation/pillars/context.py
+foundation/transport/context.py
 
 The request-scoped context object for Vraksha.
 
@@ -208,7 +208,7 @@ class VrakshaContext:
     # Written by: core/verifier/verifier.py
     # ------------------------------------------------------------------
 
-    verifier_result: Any | None = None   # PLACEHOLDER: will be foundation.VerificationResult
+    verifier_result: Any | None = None   # PLACEHOLDER: will be core.verifier.schemas.VerificationResult
                                          # structured JSON from the verifier LLM:
                                          # {dangerous, warn, proceed, ...}
 

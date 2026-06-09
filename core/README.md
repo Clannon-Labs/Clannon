@@ -29,10 +29,15 @@ core/
 
   normalizer/
     __init__.py
-      Exports NormalizedInput, normalize_payload(), and run().
+      Exports normalize_payload() and run().
 
     normalizer.py
-      Code-only normalization stage.
+      Stage door: picks the modality off the context, delegates to builders,
+      stores the result, hands off the Flow. Holds no normalization logic.
+
+    builders.py
+      Normalization logic: normalize_payload() + the per-modality builders
+      (text/pdf/native/requires-expert). Flow-agnostic and code-only.
 
     utils.py
       Small payload/text helpers.
@@ -62,25 +67,27 @@ core/
       exponential backoff for every model-calling stage. Fails closed when the
       bounded retry budget is exhausted.
 
-  orchestrator/
+  orchestrator/       PURE orchestration — depends on no specific tool/expert.
     orchestrator.py
-      Stage entry point (run). Vraksha-owned bounded reasoning loop.
-      (loop.py, advisor.py, schemas.py, ports.py at root.)
-
-    registry/
-      Unified capability registry: @tool / @expert decorators, validation,
-      store, and auto-discovery. Drop a decorated file and it self-registers.
-
-    experts/
-      Expert agents (web_research, writer) — each a package with its own prompt,
-      skills/, and scoped tools — behind a generic ExpertHandler door.
-
-    tools/
-      Tools (web_search, fetch_url, python_exec, calculator) behind a generic,
-      permissioned ToolHandler door.
-
+      Stage entry point (run). Builds the ports, runs one turn under the
+      orchestrator timeout, stores the draft response + memory proposal.
+    loop.py
+      Hydrate memory, then hand the turn to the gateway (ports.caps.run_turn):
+      the orchestrator runs as a NATIVE tool-driving agent — every available
+      tool/expert is a guarded native tool. Streams a live decision log via an
+      on_event callback; maps the agent's OrchestratorAnswer to OrchestratorResponse.
+    schemas.py
+      Orchestrator's own contracts: OrchestratorAnswer (the agent's output) +
+      DecisionLogEntry. Capability contracts live in registry.capabilities.
+    ports.py
+      Holds the Capabilities door (caps), the MemoryPort, the decision-log sink.
     utils/
-      Internal-only: wiring (registry-driven), decision_log sink, prompt builder.
+      Internal-only: prompt builder (user message), decision_log sink, wiring.
+
+    The capability machinery + the Capabilities door (which builds & runs the
+    native tool-driving turn, bounded, with guards) live in the root `registry/`
+    package; the tool/expert impls live in root `tools/` and `experts/`. None of
+    it lives here — the orchestrator is given them at runtime via the gateway.
 
   memory/
     manager.py
@@ -97,10 +104,10 @@ Currently active core stages are:
 4. `core/orchestrator/run`
 
 The orchestrator is a Vraksha-owned loop: the model is a structured advisor that
-emits one decision per turn; the loop executes it (experts/tools via ports,
-streaming a decision log). Experts and tools are real and register themselves
-through the capability registry; memory is a minimal in-memory episodic store
-behind the MemoryPort. The output filter (`security/filter`) and delivery
+emits one decision per turn; the loop executes it through the Capabilities door
+(`ports.caps`), streaming a decision log. Experts and tools are real and register
+themselves through the capability registry in the root `registry/` package;
+memory is a minimal in-memory episodic store behind the MemoryPort. The output filter (`security/filter`) and delivery
 (`delivery/`) run after the orchestrator. The advisor names experts directly; an
 entropy-based expert router is a deferred future addition (marked with a TODO in
 the loop).
@@ -211,7 +218,9 @@ intake-facing contract.
 `core/normalizer/normalizer.py` is the second active core stage.
 
 It receives the sanitized payload from `security/sanitizers` and creates a
-`NormalizedInput`.
+`NormalizedInput`. The stage door delegates the actual work to
+`normalize_payload()` in `core/normalizer/builders.py`; the door itself only
+picks the modality, stores the result, and hands off the Flow.
 
 The normalizer is code-only:
 

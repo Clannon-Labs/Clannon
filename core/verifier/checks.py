@@ -8,10 +8,11 @@ from foundation import (
     Flow,
     NormalizedInput,
     ThreatLevel,
-    VerificationResult,
     VerifierError,
-    load_model_registry,
 )
+from registry.config import load_model_registry
+
+from .schemas import VerificationResult
 
 from .constants import (
     KNOWN_MODALITIES,

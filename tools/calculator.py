@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from foundation import PermissionLevel
 
-from ..registry import tool
+from registry import tool
 
 _BIN = {
     ast.Add: operator.add,
@@ -41,16 +41,16 @@ class CalcOut(BaseModel):
     result: float
 
 
-@tool(
-    name="calculator",
-    domain="math",
-    description="Evaluate a basic arithmetic expression (+ - * / // % ** and parentheses).",
-    input_schema=CalcIn,
-    output_schema=CalcOut,
-    permission=PermissionLevel.READ,
-    tags=("math",),
-)
+@tool
 class CalculatorTool:
+    name = "calculator"
+    domain = "math"
+    description = "Evaluate a basic arithmetic expression (+ - * / // % ** and parentheses)."
+    input_schema = CalcIn
+    output_schema = CalcOut
+    permission = PermissionLevel.READ
+    tags = ("math",)
+
     async def run(self, args: CalcIn) -> CalcOut:
         tree = ast.parse(args.expression, mode="eval")
         return CalcOut(result=_eval(tree.body))

@@ -1,20 +1,36 @@
-from .flow import Flow, PayloadHandle, JournalEntry
-from .contracts import (
-    NormalizedInput,
-    VerificationResult,
+"""
+Foundation public surface.
+
+This is the only import seam the rest of Vraksha uses: `from foundation import X`.
+Internals are organised into buckets (transport/, vocab/, contracts/, config/),
+but callers should never reach into those paths directly — import the name here.
+"""
+
+# transport — the fiber
+from .transport.flow import Flow, PayloadHandle, JournalEntry
+from .transport.primitives import Envelope, Status, Meta
+from .transport.context import (
+    VrakshaContext,
+    PipelineStage,
+    ToolCallRecord,
+    ExpertCallRecord,
+)
+
+# contracts — cross-layer/cross-stage shapes
+from .contracts.payloads import NormalizedInput, OrchestratorResponse
+from .contracts.memory import (
     MemoryItem,
     HydrationRequest,
     HydrationPackage,
     MemoryWriteProposal,
-    OrchestratorResponse,
+    MemoryPort,
 )
-from .ports import MemoryPort
-from .payload import coerce_to_bytes
-from .model_registry import ModelProfile, ModelRegistry, load_model_registry
-from .prompt_registry import Prompt, PromptRegistry, get_prompt, load_prompt_registry
-from .pillars.transport import Envelope, Status, Meta
 
-from .pillars.errors import (
+# payload boundary
+from .coercion import coerce_to_bytes
+
+# vocab — shared declarations
+from .vocab.errors import (
     VrakshaError,
 
     # 1xx
@@ -22,7 +38,7 @@ from .pillars.errors import (
     UnsupportedModalityError,
     InputTooLargeError,
     MalformedInputError,
-    
+
     # 2xx
     SecurityError,
     SanitizationError,
@@ -46,9 +62,7 @@ from .pillars.errors import (
     SandboxError,
     ConfigError,
 )
-
-from .pillars.context import VrakshaContext, PipelineStage, ToolCallRecord, ExpertCallRecord
-from .pillars.types import (
+from .vocab.types import (
     Modality,
     ThreatLevel,
     BlockReason,
@@ -57,7 +71,7 @@ from .pillars.types import (
     ExpertState,
     Origin,
 )
-from . import constants
+from .vocab import constants
 
 __all__ = [
     # flow — the primary transport (this is what stages import)
@@ -65,21 +79,13 @@ __all__ = [
     "PayloadHandle",
     "JournalEntry",
     "NormalizedInput",
-    "VerificationResult",
+    "OrchestratorResponse",
     "MemoryItem",
     "HydrationRequest",
     "HydrationPackage",
     "MemoryWriteProposal",
-    "OrchestratorResponse",
     "MemoryPort",
     "coerce_to_bytes",
-    "ModelProfile",
-    "ModelRegistry",
-    "load_model_registry",
-    "Prompt",
-    "PromptRegistry",
-    "get_prompt",
-    "load_prompt_registry",
 
     # transport primitives (used inside flow, available if needed directly)
     "Envelope",
@@ -92,7 +98,7 @@ __all__ = [
     "UnsupportedModalityError",
     "InputTooLargeError",
     "MalformedInputError",
-    
+
     # errors — 2xx
     "SecurityError",
     "SanitizationError",
@@ -130,7 +136,7 @@ __all__ = [
     "MemoryStore",
     "ExpertState",
     "Origin",
-    
+
     # constants (always import as module)
     "constants",
 ]

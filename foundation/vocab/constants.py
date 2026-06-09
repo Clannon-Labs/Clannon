@@ -1,5 +1,5 @@
 """
-constants.py
+foundation/vocab/constants.py
 
 Every timeout, limit, size cap, retry count, and threshold lives here.
 Nothing is hardcoded anywhere else in Vraksha.
@@ -116,9 +116,9 @@ LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
 
 ORCHESTRATOR_TIMEOUT_S      = 90.0   # whole-loop wall time; exceeding it fails the stage
 ORCHESTRATOR_MAX_TOKENS     = 8096
-ORCHESTRATOR_MAX_TURNS      = 20     # max advisor turns in one stage run
-                                     # before forcing a final answer
-ORCHESTRATOR_MAX_RETRIES    = 2      # retries on malformed advisor output before ERROR
+ORCHESTRATOR_MAX_TURNS      = 20     # max tool rounds in one orchestrator turn
+                                     # before the cap forces a final answer
+ORCHESTRATOR_MAX_RETRIES    = 2      # retries on malformed orchestrator output before ERROR
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +141,9 @@ EXPERT_TIMEOUT_S            = 120.0  # per expert invocation
 EXPERT_MAX_CONCURRENT       = 3      # max experts running in parallel
                                      # for one orchestrator turn
 EXPERT_MAX_OUTPUT_TOKENS    = 4096
+EXPERT_MAX_TURNS            = 8      # max tool rounds inside one expert's run
+                                     # (it is a tool-driving agent); bounds the
+                                     # native tool loop alongside EXPERT_TIMEOUT_S
 
 
 # ---------------------------------------------------------------------------

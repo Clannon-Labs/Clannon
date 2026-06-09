@@ -10,53 +10,57 @@ by this package.
 
 ## What Lives Here
 
+Foundation is organised into intent buckets. Each bucket holds one kind of thing,
+so the directory map itself tells you where to look. `foundation/__init__.py` is
+the only public surface — it re-exports every name below; never import from a
+bucket path directly.
+
 ```
 foundation/
   __init__.py
-    Public import surface for the foundation package.
+    The only public import surface. Re-exports every name from the buckets.
 
-  constants.py
-    Hardcoded values such as timeouts, limits, and thresholds.
+  coercion.py
+    coerce_to_bytes — the single "a str is text, never a path" bytes boundary.
 
-  flow.py
-    Flow, the primary transport for stage handoffs.
-
-  model_registry.py
-    Root models.yaml loader and cached model profile resolver.
-
-  prompt_registry.py
-    Root prompts/ loader and cached prompt resolver (name + version).
-
-  contracts.py
-    Cross-stage payload shapes: NormalizedInput, VerificationResult, the memory
-    boundary contracts (HydrationRequest/Package, MemoryItem, MemoryWriteProposal)
-    and OrchestratorResponse.
-
-  ports.py
-    Cross-layer port protocols (the nearest common point for two layers to agree
-    on a contract without importing each other). Holds MemoryPort today.
-
-  pillars/
-    __init__.py
-      Public import surface for foundation primitives.
-
-    context.py
-      VrakshaContext, the request-scoped state object.
-
-    errors.py
-      Exception classes, organized by layer.
-
-    transport.py
-      Status and Meta (the primitives Flow uses); Envelope is a standalone
+  transport/            the fiber
+    flow.py
+      Flow, the primary transport for stage handoffs (+ PayloadHandle, JournalEntry).
+    primitives.py
+      Status and Meta (the primitives Flow is built on); Envelope is a standalone
       primitive retained for future use.
+    context.py
+      VrakshaContext, the request-scoped state object (+ Tool/ExpertCallRecord,
+      PipelineStage).
 
+  vocab/                shared declarations, no logic
     types.py
       Shared primitive enums such as Modality, ThreatLevel, and Origin.
+    errors.py
+      Exception classes, organized by layer.
+    constants.py
+      Hardcoded values such as timeouts, limits, and thresholds.
+
+  contracts/            cross-layer / cross-stage shapes
+    payloads.py
+      Cross-stage payloads that ride Flow: NormalizedInput, OrchestratorResponse.
+    memory.py
+      The whole memory boundary: MemoryPort plus its contracts (MemoryItem,
+      HydrationRequest/Package, MemoryWriteProposal).
 ```
 
-The pillar modules are the primitive layer. They do not import from the rest of
-Vraksha. `flow.py` builds on those primitives, and `foundation/__init__.py`
-re-exports the public names that application code should use.
+Model and prompt config loaders used to live here under `config/`. They now live
+in the root **`registry/`** package (`registry.config`) — the single place
+anything gets registered. `foundation` imports nothing else, so it cannot depend
+on `registry`; config consumers import `from registry.config import ...` directly.
+
+`vocab/` and `transport/primitives.py`/`context.py` are the primitive layer — they
+do not import from the rest of Vraksha. `transport/flow.py` builds on those
+primitives, and `foundation/__init__.py` re-exports the public names application
+code should use.
+
+Single-stage types do NOT live here. For example `VerificationResult` (consumed
+only by the verifier) lives in `core/verifier/schemas.py`, not in foundation.
 
 ## Import Rule
 
@@ -67,8 +71,8 @@ Import public names from the package, not from individual files:
 from foundation import Flow, Origin, VrakshaContext, Modality
 
 # wrong: bypasses __init__.py and breaks if files are reorganized
-from foundation.flow import Flow
-from foundation.context import VrakshaContext
+from foundation.transport.flow import Flow
+from foundation.transport.context import VrakshaContext
 ```
 
 Constants are the main exception. Import the module so the call site clearly
@@ -83,15 +87,15 @@ timeout = constants.VERIFIER_TIMEOUT_S
 from foundation.constants import VERIFIER_TIMEOUT_S
 ```
 
-Model routing is also exposed through the package:
+Model and prompt routing are NOT in foundation — they live in `registry.config`:
 
 ```python
-from foundation import load_model_registry
+from registry.config import load_model_registry, get_prompt
 
 model = load_model_registry().for_layer("orchestrator")
 ```
 
-## flow.py: Flow
+## transport/flow.py: Flow
 
 Start here. `Flow` is the primary transport. Every stage takes a `Flow` and
 returns a `Flow`. It carries the payload, context, trace metadata, journal, and
@@ -245,7 +249,7 @@ verification, the Pydantic AI orchestrator, tool and expert handlers, output
 filtering, output delivery, and memory writes. It also covers how to add a new
 layer without breaking the Flow contract.
 
-## transport.py: Status, Meta, and Envelope
+## transport/primitives.py: Status, Meta, and Envelope
 
 `Status` and `Meta` are the low-level primitives that `Flow` is built on.
 `Envelope` is a standalone transport primitive retained for future use — `Flow`
@@ -255,14 +259,14 @@ Most stage code should use `Flow` instead. Use `Envelope` directly only when
 you need low-level control outside the standard pipeline, such as internal
 worker-to-worker communication before results are joined.
 
-`Origin` used to live in `transport.py`. It now lives in `types.py`. Import it
+`Origin` used to live here. It now lives in `vocab/types.py`. Import it
 with:
 
 ```python
 from foundation import Origin
 ```
 
-## errors.py: Error Taxonomy
+## vocab/errors.py: Error Taxonomy
 
 Exceptions are organized by layer. A traceback should tell you which layer
 failed before you read the detailed message.
@@ -331,65 +335,20 @@ except ToolError as e:
     logger.error("tool failed", tool=e.tool)
 ```
 
-## model_registry.py: Model Routing
+## Model & prompt routing (moved to `registry.config`)
 
-`model_registry.py` is the single foundation-level bridge to root model
-configuration. LLM-using layers should resolve providers and model names through
-this registry instead of hardcoding them.
-
-It reads `models.yaml`, caches the parsed registry, and supports optional
-role/layer routes such as `orchestrator`, `verifier`, `normalizer`, `filter`,
-and `media_expert`. Google Gemini is the default provider; an explicit `routes`
-entry overrides a `defaults` entry for the same role, and missing/invalid
-configuration raises `ConfigError`.
+Model routing (`models.yaml`) and prompt routing (`prompts/` + `registry.yaml`,
+with the `locked` security flag) used to live in `foundation/config`. They now
+live in the root `registry/` package and are documented there. Resolve them via:
 
 ```python
-from foundation import load_model_registry
-
-registry = load_model_registry()
-profile = registry.for_layer("orchestrator")
-
-if profile.supports("image"):
-    ...
+from registry.config import load_model_registry, get_prompt
 ```
 
-`load_model_registry()` is cached for hot-path performance. Test or config
-reload code can call:
+They moved out of foundation because `foundation` imports nothing else, so it
+cannot depend on `registry` (where capability registration also lives).
 
-```python
-load_model_registry.cache_clear()
-```
-
-## prompt_registry.py: Prompt Routing
-
-`prompt_registry.py` is the prompt-side mirror of the model registry. LLM-using
-layers should resolve their system/instruction prompts through it instead of
-hardcoding prompt text inline. Prompt *content* lives as markdown files under
-root `prompts/`; `prompts/registry.yaml` is the index mapping each prompt name to
-its file, a `version`, and a `locked` flag.
-
-```python
-from foundation import get_prompt
-
-prompt = get_prompt("verifier")
-agent = Agent(model, system_prompt=prompt.text)   # prompt.name + prompt.version
-```
-
-The `version` is recorded on stage results (e.g. the verifier stamps
-`prompt_name`/`prompt_version` into `verifier_result` metadata) so any model
-verdict can be traced back to the exact prompt that produced it.
-
-**Security:** `locked: true` marks a security-boundary prompt (verifier, output
-filter). The loader exposes no override path — it only reads the on-disk,
-version-controlled prompt — so a locked prompt can never be replaced at runtime
-or by an end user. `load_prompt_registry()` is cached like the model registry;
-tests can call `load_prompt_registry.cache_clear()`.
-
-The optional `VRAKSHA_MODEL_PROVIDER` environment variable can override the
-default provider. That override belongs here because model routing is owned by
-the registry.
-
-## constants.py: Hardcoded Values
+## vocab/constants.py: Hardcoded Values
 
 No magic number or magic string should live elsewhere in the codebase. If you
 find one, move it here.
@@ -425,7 +384,7 @@ if failure_count >= constants.CB_FAILURE_THRESHOLD:
 - Set constants from environment variables here. That belongs in `config/settings.py`.
 - Add business logic here. This file is for values only.
 
-## context.py: VrakshaContext
+## transport/context.py: VrakshaContext
 
 `VrakshaContext` is the single source of truth for one user turn. `Flow.new()`
 creates it automatically and stores it on `flow.ctx`. Stage code should not
@@ -485,13 +444,13 @@ sanitization: SanitizationResult | None = None
 
 Do not remove the comment. Update it to say what replaced the placeholder.
 
-## types.py: Shared Primitives
+## vocab/types.py: Shared Primitives
 
 This file contains enums that multiple layers use independently. If you would
 otherwise define the same enum in two different layers, it belongs here.
 
 `Origin`, which identifies the stage that produced a `Flow` or `Envelope`, lives
-in `types.py`, not in `transport.py`.
+in `vocab/types.py`, not in `transport/primitives.py`.
 
 ```python
 from foundation import Modality, ThreatLevel, BlockReason, Origin, PermissionLevel
@@ -535,13 +494,13 @@ enum belongs to one layer, such as `security/`, define it in that layer's own
 - Change `VrakshaContext` field names; stages reference them through `flow.ctx`.
 
 **Do not:**
-- Import from anywhere else in Vraksha inside this package.
+- Import from anywhere else in Vraksha inside this package — `foundation` is the
+  base and depends on nothing (this is why config moved out to `registry`).
 - Add business logic or LLM calls to any file here.
-- Add I/O here except for foundation-owned configuration loading such as
-  `model_registry.py` and `prompt_registry.py`.
+- Add config/file I/O here — model & prompt loading live in `registry.config`.
 - Define layer-specific types here; they belong in that layer's `schema.py`.
-- Read environment variables here, except for foundation-owned routing overrides
-  such as `VRAKSHA_MODEL_PROVIDER` in `model_registry.py`.
+- Read environment variables here (routing overrides like `VRAKSHA_MODEL_PROVIDER`
+  live with the model loader in `registry.config`).
 - Call `ctx.mark_blocked()` or `ctx.mark_failed()` directly in stage code. Use
   `flow.block()` or `flow.fail()` instead.
 

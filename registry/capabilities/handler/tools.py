@@ -17,7 +17,7 @@ import time
 from foundation import PermissionLevel, ToolCallRecord, VrakshaContext, constants
 from security.sanitizers.workers.text import scan as scan_text
 
-from ..registry import CapabilityKind, registry as default_registry
+from .. import CapabilityKind, registry as default_registry
 from ..schemas import ToolRequest
 
 _ALL_PERMISSIONS = frozenset(PermissionLevel)

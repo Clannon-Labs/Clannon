@@ -35,10 +35,10 @@ from typing import Any
 
 import yaml
 
-from .pillars.errors import ConfigError
+from foundation import ConfigError
 
 
-DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
+DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 MANIFEST_NAME = "registry.yaml"
 
 

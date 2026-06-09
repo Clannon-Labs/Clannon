@@ -17,10 +17,10 @@ from typing import Any
 
 import yaml
 
-from .pillars.errors import ConfigError
+from foundation import ConfigError
 
 
-DEFAULT_MODELS_PATH = Path(__file__).resolve().parents[1] / "models.yaml"
+DEFAULT_MODELS_PATH = Path(__file__).resolve().parents[2] / "models.yaml"
 DEFAULT_PROVIDER_ENV = "VRAKSHA_MODEL_PROVIDER"
 
 

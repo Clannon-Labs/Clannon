@@ -1,5 +1,5 @@
 """
-foundation/flow.py
+foundation/transport/flow.py
 
 The Flow object — the single transport type for Vraksha.
 
@@ -75,11 +75,11 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Generic, TypeVar
 from uuid import uuid4
 
-from .pillars.context import VrakshaContext, PipelineStage
-from .pillars.errors import VrakshaError
-from .pillars.types import BlockReason, ThreatLevel, Origin
-from .pillars.transport import Status, Meta
-from . import constants
+from .context import VrakshaContext, PipelineStage
+from ..vocab.errors import VrakshaError
+from ..vocab.types import BlockReason, ThreatLevel, Origin
+from .primitives import Status, Meta
+from ..vocab import constants
 
 T = TypeVar("T")
 U = TypeVar("U")

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from foundation import Flow, NormalizedInput, ThreatLevel, VerificationResult
+from foundation import Flow, NormalizedInput, ThreatLevel
 
 from .constants import ROUTING_DIRECT, VERIFIER_EXCERPT_CHARS
+from .schemas import VerificationResult
 
 
 def verification_result(

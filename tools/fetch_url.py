@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from foundation import PermissionLevel, constants
 
-from ..registry import tool
+from registry import tool
 
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
@@ -71,16 +71,16 @@ class FetchOut(BaseModel):
     text: str
 
 
-@tool(
-    name="fetch_url",
-    domain="web",
-    description="Fetch a web page over HTTP(S) and return its readable text.",
-    input_schema=FetchIn,
-    output_schema=FetchOut,
-    permission=PermissionLevel.NETWORK,
-    tags=("http", "read"),
-)
+@tool
 class FetchUrlTool:
+    name = "fetch_url"
+    domain = "web"
+    description = "Fetch a web page over HTTP(S) and return its readable text."
+    input_schema = FetchIn
+    output_schema = FetchOut
+    permission = PermissionLevel.NETWORK
+    tags = ("http", "read")
+
     async def run(self, args: FetchIn) -> FetchOut:
         url = args.url
         async with httpx.AsyncClient(timeout=constants.TOOL_TIMEOUT_S, follow_redirects=False) as client:
