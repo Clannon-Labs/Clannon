@@ -47,6 +47,8 @@ stress_test_agent.md
 handoff.md
 src_sample_tree_structure.md
 
+experiments/
+
 # LLM Views
 llm_view_snapshot.json
 
