@@ -75,7 +75,7 @@ openai:
 
 google:
   orchestrator:
-    model: gemini-2.5-pro
+    model: gemini-2.5-flash
     capabilities: [text, json, tools, image, audio, video]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
   verifier:

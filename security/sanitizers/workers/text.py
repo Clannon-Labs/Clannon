@@ -53,6 +53,27 @@ class TextScanResult:
 
 TextWorker = Callable[[str], TextWorkerResult]
 
+# Entities Presidio is allowed to redact. Hard identifiers only: contact,
+# financial, government-ID, and network identifiers. Deliberately excludes
+# PERSON / LOCATION / DATE_TIME / NRP / URL, those are the subject matter of
+# research queries ("the capital of France", "papers by Hinton since 2020"),
+# and redacting them destroys the request before the orchestrator sees it.
+PII_REDACTED_ENTITIES = [
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "CREDIT_CARD",
+    "IBAN_CODE",
+    "US_BANK_NUMBER",
+    "US_SSN",
+    "US_ITIN",
+    "US_PASSPORT",
+    "US_DRIVER_LICENSE",
+    "UK_NHS",
+    "MEDICAL_LICENSE",
+    "CRYPTO",
+    "IP_ADDRESS",
+]
+
 
 @lru_cache(maxsize=1)
 def _analyzer():
@@ -90,7 +111,9 @@ def _pii_worker(text: str) -> TextWorkerResult:
     PII is marked MEDIUM because it is sensitive but not always malicious; the
     pipeline can continue with sanitized_text when no higher-risk worker blocks.
     """
-    results = _analyzer().analyze(text=text, language="en")
+    results = _analyzer().analyze(
+        text=text, language="en", entities=PII_REDACTED_ENTITIES
+    )
     if not results:
         return TextWorkerResult(name="presidio")
 
