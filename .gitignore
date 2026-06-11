@@ -56,3 +56,6 @@ llm_view_snapshot.json
 .codex/
 .claude
 .agents/
+
+# Web delivery adapter — not part of the Macondo submission yet
+server/

@@ -9,85 +9,85 @@ defaults:
 
 anthropic:
   orchestrator:
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4-6
     capabilities: [text, json, tools]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
   code:
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4-6
     capabilities: [text, json, tools]
     task: "Code generation, refactoring, debugging"
   slop_detector:
-    model: claude-3-5-haiku-latest
+    model: claude-haiku-4-5
     capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4-6
     capabilities: [text, json]
     task: "Web research, summarization"
   planner:
-    model: claude-3-7-sonnet-latest # Maximize thinking tokens for deep architectural planning
+    model: claude-opus-4-8 # Most capable Opus tier for deep architectural planning
     capabilities: [text, json]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
-    model: claude-3-5-haiku-latest
+    model: claude-haiku-4-5
     capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
 
 openai:
   orchestrator:
-    model: gpt-5.2
+    model: gpt-5.4
     capabilities: [text, json, tools]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
   verifier:
-    model: gpt-5.2-mini
+    model: gpt-5.4-mini
     capabilities: [text, json, tools]
     task: "Input verification with structured output and optional tools"
   normalizer:
-    model: gpt-5.2-mini
+    model: gpt-5.4-mini
     capabilities: [text, json]
     task: "Target model profile for code-only normalizer decisions"
   filter:
-    model: gpt-5.2-mini
+    model: gpt-5.4-mini
     capabilities: [text, json]
     task: "Output safety filtering with structured output"
   code:
-    model: gpt-5.2
+    model: gpt-5.4
     capabilities: [text, json, tools]
     task: "Code generation, refactoring, debugging"
   slop_detector:
-    model: gpt-5.2-mini
+    model: gpt-5.4-mini
     capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
-    model: gpt-5.2
+    model: gpt-5.4
     capabilities: [text, json]
     task: "Web research, summarization"
   planner:
-    model: gpt-5.2 # Configured with reasoning_effort="high" inside ModelSettings
+    model: gpt-5.4 # Configured with reasoning_effort="high" inside ModelSettings
     capabilities: [text, json]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
-    model: gpt-5.2-mini
+    model: gpt-5.4-mini
     capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
 
 google:
   orchestrator:
-    model: gemini-2.5-flash
+    model: gemini-3.1-flash-lite # GA frontier-class; 3.5-flash is 503-congested at launch (June 2026) — swap back when it stabilizes
     capabilities: [text, json, tools, image, audio, video]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
   verifier:
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite # separate per-model quota from the orchestrator
     capabilities: [text, json, tools]
     task: "Input verification with structured output and optional tools"
   normalizer:
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite
     capabilities: [text, json]
     task: "Target model profile for code-only normalizer decisions"
   filter:
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite # small fast gate; flash-lite has the most generous free-tier quota
     capabilities: [text, json]
     task: "Output safety filtering with structured output"
   media_expert:
@@ -99,11 +99,11 @@ google:
     capabilities: [text, json, tools, image]
     task: "Code generation, refactoring, debugging"
   slop_detector:
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite
     capabilities: [text, json]
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
-    model: gemini-2.5-flash
+    model: gemini-3.5-flash # supports search grounding
     capabilities: [text, json, image]
     task: "Web research, summarization"
   planner:
@@ -111,7 +111,7 @@ google:
     capabilities: [text, json, image, audio, video]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite
     capabilities: [text, json]
     task: "Memory compression, pruning, summarizing old entries"
 
@@ -288,3 +288,36 @@ huggingface:
   memory:
     model: meta-llama/Llama-3.1-8B-Instruct
     task: "Memory compression, pruning, summarizing old entries"
+
+# ---------------------------------------------------------------------------
+# Quota-resilience fallback chains (provider-qualified "provider:model").
+# When a layer's primary model fails with ANY model API error (429 quota,
+# 503 overload, 404 retired id), the run moves down its chain instead of
+# failing. Chains deliberately cross models AND providers so no single
+# quota or outage can take a run down. Keys here are roles/layers.
+# ---------------------------------------------------------------------------
+
+fallbacks:
+  verifier:
+    - google:gemini-3.1-flash-lite
+    - anthropic:claude-haiku-4-5
+    - openai:gpt-5.4-mini
+  normalizer:
+    - google:gemini-3.1-flash-lite
+    - anthropic:claude-haiku-4-5
+  orchestrator:
+    - google:gemini-3.5-flash
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+  research:
+    - google:gemini-2.5-flash
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+  planner:
+    - google:gemini-2.5-pro
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+  filter:
+    - google:gemini-3.1-flash-lite
+    - anthropic:claude-haiku-4-5
+    - openai:gpt-5.4-mini

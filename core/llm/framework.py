@@ -31,7 +31,7 @@ from pydantic_ai.exceptions import UsageLimitExceeded
 from foundation import MaxRetriesExceededError, ModelUnavailableError, VrakshaError
 from registry.config import get_prompt
 
-from .registry import model_name_for_layer, model_settings_for_layer, usage_limits_for_layer
+from .registry import model_for_layer, model_settings_for_layer, usage_limits_for_layer
 from .retry import run_agent
 
 T = TypeVar("T")
@@ -66,7 +66,7 @@ def build_agent(
     so its version is tracked.
     """
     agent: Agent[None, T] = Agent(
-        model_name_for_layer(layer),
+        model_for_layer(layer),
         output_type=output_type,
         system_prompt=get_prompt(prompt_name).text,
         model_settings=model_settings_for_layer(layer),
@@ -97,7 +97,7 @@ def build_tool_agent(
     access. Not cached: tools/deps are per-run.
     """
     agent: Agent[Any, T] = Agent(
-        model_name_for_layer(model_role),
+        model_for_layer(model_role),
         output_type=output_type,
         system_prompt=system_prompt,
         model_settings=model_settings_for_layer(model_role),
@@ -162,6 +162,6 @@ async def run_structured(
     except Exception as exc:
         raise ModelUnavailableError(
             f"{handle.layer} model call failed: {exc}",
-            model=model_name_for_layer(handle.layer),
+            model=model_for_layer(handle.layer),
         ) from exc
     return result.output

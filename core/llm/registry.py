@@ -2,13 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Any
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any, Iterator
 
+from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
 from foundation import constants
 from registry.config import ModelProfile, load_model_registry
+
+# Per-request model overrides (role -> "provider:model"), set by the
+# delivery layer (web server) from the requesting user's preferences.
+# A ContextVar scopes the override to one asyncio task tree, so
+# concurrent runs by different users never see each other's choices.
+_MODEL_OVERRIDES: ContextVar[dict[str, str]] = ContextVar("vraksha_model_overrides", default={})
+
+
+@contextmanager
+def model_overrides(overrides: dict[str, str]) -> Iterator[None]:
+    """Apply per-run model overrides for the duration of a pipeline run."""
+    token = _MODEL_OVERRIDES.set(dict(overrides))
+    try:
+        yield
+    finally:
+        _MODEL_OVERRIDES.reset(token)
 
 
 def model_profile_for_layer(layer: str) -> ModelProfile:
@@ -23,9 +42,58 @@ def model_name_for_layer(layer: str) -> str:
     Pydantic AI accepts provider-qualified strings such as
     ``openai:gpt-5.2-mini``. Keeping this mapping here prevents verifier,
     filter, and orchestrator code from depending on provider naming details.
+    A per-run override (user preference) wins over models.yaml.
     """
+    override = _MODEL_OVERRIDES.get().get(layer)
+    if override:
+        return override
     profile = model_profile_for_layer(layer)
     return f"{profile.provider}:{profile.model}"
+
+
+# Which env var proves a provider is usable. Chain entries for providers
+# without a key are skipped instead of crashing the agent build.
+_PROVIDER_KEY_ENVS: dict[str, tuple[str, ...]] = {
+    "google": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+}
+
+
+def _provider_available(model_string: str) -> bool:
+    import os
+
+    provider = model_string.split(":", 1)[0]
+    env_names = _PROVIDER_KEY_ENVS.get(provider)
+    if env_names is None:
+        return True  # unknown provider — let pydantic-ai decide
+    return any(os.getenv(name) for name in env_names)
+
+
+def fallback_chain_for_layer(layer: str) -> list[str]:
+    """
+    The layer's quota-resilience chain from models.yaml `fallbacks:`,
+    filtered to providers whose API keys are actually configured.
+    """
+    config = load_model_registry().config
+    chains = config.get("fallbacks") or {}
+    chain = chains.get(layer) or []
+    return [str(model) for model in chain if _provider_available(str(model))]
+
+
+def model_for_layer(layer: str) -> str | FallbackModel:
+    """
+    Resolve the runnable model for a layer: the primary (override or
+    models.yaml) backed by the layer's fallback chain. Any model API
+    error — 429 quota, 503 overload, 404 retired id — moves to the next
+    model in the chain, so one provider/model outage or quota never
+    takes a run down with it.
+    """
+    primary = model_name_for_layer(layer)
+    chain = [model for model in fallback_chain_for_layer(layer) if model != primary]
+    if not chain:
+        return primary
+    return FallbackModel(primary, *chain)
 
 
 def model_settings_for_layer(layer: str) -> ModelSettings:
