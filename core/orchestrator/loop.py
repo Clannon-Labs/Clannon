@@ -57,8 +57,9 @@ async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     """Ask the memory manager (via the port) for context before the turn."""
     await ports.log.emit(DecisionLogEntry(kind="hydration", message="requesting memory hydration"))
     hydration = await ports.memory.hydrate(
-        HydrationRequest(session_id=ctx.session_id, normalized=normalized)
+        HydrationRequest(session_id=ctx.session_id, user_id=ctx.user_id, normalized=normalized)
     )
+    ctx.hydration_items = list(hydration.items)
     if hydration.notes:
         await ports.log.emit(DecisionLogEntry(kind="hydration", message=hydration.notes))
     return hydration

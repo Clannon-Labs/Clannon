@@ -30,7 +30,7 @@ from core.llm import build_agent, run_structured
 from .schemas import FilterResult
 
 
-def _grounding_view(response, findings: list) -> str:
+def _grounding_view(response, findings: list, memory: list) -> str:
     sources: list[str] = []
     for finding in findings:
         sources.extend(getattr(finding, "citations", []) or [])
@@ -38,18 +38,21 @@ def _grounding_view(response, findings: list) -> str:
         "draft": getattr(response, "text", ""),
         "expert_findings": len(findings),
         "sources": sources[:20],
+        # hydrated memory is a LEGITIMATE grounding source: claims supported
+        # by these entries are grounded, not hallucinated
+        "memory_grounding": [getattr(m, "content", str(m))[:300] for m in memory[:10]],
     }
     return json.dumps(view, default=str)
 
 
-async def _filter(response, findings: list) -> FilterResult:
+async def _filter(response, findings: list, memory: list) -> FilterResult:
     handle = build_agent(
         "filter",
         output_type=FilterResult,
         prompt_name="filter",
         retries=constants.FILTER_MAX_RETRIES,
     )
-    return await run_structured(handle, _grounding_view(response, findings))
+    return await run_structured(handle, _grounding_view(response, findings, memory))
 
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
@@ -62,7 +65,7 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
             # Nothing to filter (no draft produced); pass the flow through unchanged.
             return flow.next(await flow.load(), Origin.FILTER, started)
 
-        result = await _filter(response, flow.ctx.expert_findings)
+        result = await _filter(response, flow.ctx.expert_findings, flow.ctx.hydration_items)
         flow.ctx.filter_result = result
 
         if not result.proceed:

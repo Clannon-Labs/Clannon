@@ -35,10 +35,19 @@ class MemoryItem:
 
 @dataclass(frozen=True, slots=True)
 class HydrationRequest:
-    """What the orchestrator asks the memory manager to hydrate for a turn."""
+    """
+    What the orchestrator asks the memory manager to hydrate for a turn.
+
+    user_id is the MANDATORY memory scope (every read filters on it);
+    session_id is provenance/within-session recall only. allowed_tiers
+    lets the caller restrict which tiers are searched (plan gating) —
+    None means all tiers.
+    """
     session_id: str
+    user_id: str = ""
     normalized: NormalizedInput | None = None
     token_budget: int = 0
+    allowed_tiers: tuple[MemoryStore, ...] | None = None
 
 
 @dataclass(slots=True)
@@ -84,8 +93,8 @@ class MemoryPort(Protocol):
         ...
 
     async def record_write_proposals(
-        self, session_id: str, proposals: list[MemoryWriteProposal]
+        self, user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
     ) -> None:
-        """Hand proposed writes (scoped to a session) to the manager; it decides
-        whether/where to persist."""
+        """Hand proposed writes (scoped to a user + session) to the manager; it
+        decides whether/where to persist."""
         ...

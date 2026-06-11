@@ -9,6 +9,7 @@ queue, render the final response) with no change to this core.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -30,7 +31,9 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         flow.ctx.advance(PipelineStage.OUTPUT)
         response = flow.ctx.orchestrator_response
         flow.ctx.final_response = response.text if response is not None else ""
-        _deliver_cli(flow)
+        # interactive CLI renders the answer itself; quiet mode skips the raw dump
+        if os.getenv("VRAKSHA_CLI_QUIET") != "1":
+            _deliver_cli(flow)
         return flow.next(flow.ctx.final_response, Origin.OUTPUT, started)
     except Exception as exc:
         return flow.fail(VrakshaError(f"delivery failed: {exc}"), Origin.OUTPUT, started)

@@ -13,6 +13,8 @@ services:
     environment:
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
+      - QDRANT_URL=http://qdrant:6333
+      - VRAKSHA_EMBED_CACHE=/vraksha/assets/fastembed_cache
       - AGENT_YARA_DIR=/vraksha/rules
       - HF_HOME=/vraksha/assets/hf_cache
     stdin_open: true

@@ -114,7 +114,7 @@ LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
 # Main LLM. Gets the most time — it does the real reasoning.
 # ---------------------------------------------------------------------------
 
-ORCHESTRATOR_TIMEOUT_S      = 90.0   # whole-loop wall time; exceeding it fails the stage
+ORCHESTRATOR_TIMEOUT_S      = 240.0  # whole-loop wall time; research + fallback retries need headroom
 ORCHESTRATOR_MAX_TOKENS     = 8096
 ORCHESTRATOR_MAX_TURNS      = 20     # max tool rounds in one orchestrator turn
                                      # before the cap forces a final answer

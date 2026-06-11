@@ -53,7 +53,7 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
                 confidence=response.confidence,
             )
         )
-        await ports.memory.record_write_proposals(flow.ctx.session_id, flow.ctx.memory_writes_requested)
+        await ports.memory.record_write_proposals(flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested)
 
         return flow.next(response, Origin.ORCHESTRATOR, started)
 

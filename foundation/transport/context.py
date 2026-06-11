@@ -237,6 +237,11 @@ class VrakshaContext:
     orchestrator_response: Any | None = None  # PLACEHOLDER: will be foundation.OrchestratorResponse
                                               # raw response before output filtering
 
+    hydration_items: list[Any] = field(default_factory=list)
+                                              # PLACEHOLDER: will be foundation.MemoryItem
+                                              # memory injected this turn — the output filter
+                                              # treats these as legitimate grounding sources
+
     memory_writes_requested: list[Any] = field(default_factory=list)
                                               # PLACEHOLDER: will be foundation.MemoryWriteProposal
                                               # items the orchestrator flagged for memory
