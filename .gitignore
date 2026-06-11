@@ -13,6 +13,10 @@ venv/
 *.log
 vraksha.log
 
+# Model / embedding caches under assets (the directory itself can be tracked)
+assets/hf_cache/
+assets/fastembed_cache/
+
 security/vendors/
 
 /memory/

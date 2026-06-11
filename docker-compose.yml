@@ -19,7 +19,9 @@ services:
       - HF_HOME=/vraksha/assets/hf_cache
     stdin_open: true
     tty: true
-    restart: always
+    # interactive agent — never auto-restart: a restarting background copy
+    # is exactly the stale old-code process the launcher then attaches to
+    restart: "no"
 
   clamav:
     image: clamav/clamav:latest
