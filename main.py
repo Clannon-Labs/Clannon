@@ -92,8 +92,14 @@ def _write_run_log(brief: str, session_id: str, user_id: str, flow, summary: dic
 async def _one_shot(brief: str, user_id: str) -> int:
     # old behavior, scripts rely on it: delivery prints log + answer itself
     flow = await pipeline.run(brief, session_id="cli", user_id=user_id)
-    _write_run_log(brief, "cli", user_id, flow, flow.summary())
-    return 1 if flow.should_stop else 0
+    summary = flow.summary()
+    _write_run_log(brief, "cli", user_id, flow, summary)
+    if flow.should_stop:
+        # delivery never runs on a stopped flow — say why instead of exiting silently
+        detail = summary.get("error") or summary.get("reason") or "see vraksha.log"
+        print(f"vraksha: stopped at {summary.get('stage', '?')}: {detail}", file=sys.stderr)
+        return 1
+    return 0
 
 
 async def _repl(user_id: str) -> int:
