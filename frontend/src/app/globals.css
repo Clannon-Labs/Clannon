@@ -121,6 +121,25 @@
   border-color: var(--border);
 }
 
+/* anchor jumps (#pricing, #memory…) land below the sticky header */
+[id] {
+  scroll-margin-top: 5.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* kill the 300ms double-tap delay; taps respond like the app they're in */
+button,
+a,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

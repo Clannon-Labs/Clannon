@@ -57,6 +57,9 @@ function LoginForm() {
         next[issue.path[0] as keyof typeof values] = issue.message;
       }
       setErrors(next);
+      // WCAG focus management — put the keyboard where the problem is
+      const form = e.currentTarget as HTMLFormElement;
+      setTimeout(() => form.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus(), 0);
       return;
     }
     setSubmitting(true);

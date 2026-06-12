@@ -47,6 +47,20 @@ export function TabsList({ className, ...props }: HTMLAttributes<HTMLDivElement>
   return (
     <div
       role="tablist"
+      onKeyDown={(e) => {
+        // WAI-ARIA tabs: Left/Right arrows move between triggers
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        const tabs = Array.from(
+          e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+        );
+        const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+        if (current === -1) return;
+        e.preventDefault();
+        const delta = e.key === "ArrowRight" ? 1 : -1;
+        const next = tabs[(current + delta + tabs.length) % tabs.length];
+        next.focus();
+        next.click();
+      }}
       className={cn(
         "inline-flex items-center gap-1 rounded-md bg-muted p-1",
         className,
@@ -77,7 +91,7 @@ export function TabsTrigger({
       aria-controls={`${ctx.baseId}-panel-${value}`}
       onClick={() => ctx.setValue(value)}
       className={cn(
-        "cursor-pointer rounded-sm px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
+        "min-h-9 cursor-pointer rounded-sm px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
         active
           ? "bg-surface-raised text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground",

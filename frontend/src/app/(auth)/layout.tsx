@@ -30,7 +30,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* form panel */}
-      <main className="flex flex-1 flex-col px-5 py-8 sm:px-10">
+      <main id="main" className="flex flex-1 flex-col px-5 py-8 sm:px-10">
         <div className="flex items-center justify-between">
           <div className="lg:hidden">
             <Link href="/" aria-label={`${siteConfig.name} home`}>

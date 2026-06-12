@@ -67,9 +67,16 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={`${fraunces.variable} ${schibsted.variable} ${splineMono.variable} h-full antialiased`}
     >
       <body className="grain min-h-full flex flex-col">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-primary-foreground"
+        >
+          Skip to content
+        </a>
         {/* color tokens, generated from src/config/theme.config.ts */}
         <style>{themeCss()}</style>
         <Script src="/theme.js" strategy="beforeInteractive" />

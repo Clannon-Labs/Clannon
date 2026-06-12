@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ui/button";
@@ -11,6 +11,13 @@ import { MARKETING_NAV as NAV } from "@/config/nav.config";
 
 export function MarketingHeader() {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/85 backdrop-blur-md">
@@ -48,7 +55,7 @@ export function MarketingHeader() {
           <ThemeToggle />
           <button
             type="button"
-            className="cursor-pointer rounded-md p-2 text-foreground"
+            className="flex size-11 cursor-pointer items-center justify-center rounded-md text-foreground"
             aria-expanded={open}
             aria-label={open ? "Close menu" : "Open menu"}
             onClick={() => setOpen((o) => !o)}
@@ -69,7 +76,7 @@ export function MarketingHeader() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-2.5 text-[15px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-md px-3 py-3 text-[15px] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {item.label}
               </Link>

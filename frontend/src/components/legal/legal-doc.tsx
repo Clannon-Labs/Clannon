@@ -29,7 +29,8 @@ export function LegalDoc({
       {intro && (
         <p className="mt-6 text-[15px] leading-relaxed text-muted-foreground">{intro}</p>
       )}
-      <div className="report-prose mt-8 max-w-none text-muted-foreground [&_h2]:text-foreground [&_strong]:text-foreground">
+      {/* report-prose caps the measure at 70ch — long legal lines are unreadable */}
+      <div className="report-prose mt-8 text-muted-foreground [&_h2]:text-foreground [&_strong]:text-foreground">
         {children}
       </div>
     </article>

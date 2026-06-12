@@ -35,7 +35,7 @@ export default function LandingPage() {
        hero and closing CTA are .stage surfaces and adapt to either theme. */
     <div className="bg-background text-foreground">
       <MarketingHeader />
-      <main>
+      <main id="main">
         <MarketingHero />
 
         {/* ---------- pillars ---------- */}

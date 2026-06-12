@@ -154,7 +154,7 @@ function ModelsTab() {
                   },
                 )
               }
-              className="h-10 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-3 font-mono text-[13px] text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+              className="h-10 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-3 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-[13px]"
             >
               {layer.options.map((option) => (
                 <option key={option} value={option}>
@@ -208,7 +208,7 @@ function ModelsTab() {
                           },
                         )
                       }
-                      className="h-9 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-2.5 font-mono text-[12.5px] text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+                      className="h-9 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-2.5 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-[12.5px]"
                     >
                       {layer.options.map((option) => (
                         <option key={option} value={option}>

@@ -50,6 +50,9 @@ export default function SignupPage() {
         next[issue.path[0] as keyof typeof values] = issue.message;
       }
       setErrors(next);
+      // WCAG focus management — put the keyboard where the problem is
+      const form = e.currentTarget as HTMLFormElement;
+      setTimeout(() => form.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus(), 0);
       return;
     }
     setSubmitting(true);
@@ -121,7 +124,7 @@ export default function SignupPage() {
           type="password"
           name="password"
           autoComplete="new-password"
-          hint="At least 8 characters."
+          hint={`At least ${siteConfig.auth.passwordMinLength} characters.`}
           value={values.password}
           error={errors.password}
           onChange={(e) => setValues((v) => ({ ...v, password: e.target.value }))}

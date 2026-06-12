@@ -155,7 +155,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={`${label} — switch to ${next}`}
       title={`${label} (click for ${next})`}
       className={cn(
-        "cursor-pointer rounded-md p-2 text-muted-foreground transition-colors",
+        "flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors",
         "hover:bg-muted hover:text-foreground",
         className,
       )}

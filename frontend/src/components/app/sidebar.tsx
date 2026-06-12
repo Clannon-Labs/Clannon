@@ -111,7 +111,7 @@ export function Sidebar() {
                 window.location.assign("/");
               }}
               aria-label="Sign out"
-              className="cursor-pointer rounded-md p-2 text-faint transition-colors hover:bg-muted hover:text-foreground"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
             >
               <LogOut className="size-4" />
             </button>

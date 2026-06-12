@@ -5,7 +5,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const fieldBase =
-  "w-full rounded-md border border-border-strong bg-surface-raised px-3.5 text-[15px] text-foreground " +
+  // 16px on mobile — anything smaller makes iOS Safari zoom the page on focus
+  "w-full rounded-md border border-border-strong bg-surface-raised px-3.5 text-base sm:text-[15px] text-foreground " +
   "placeholder:text-faint transition-colors duration-150 " +
   "hover:border-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 " +
   "disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:focus:ring-destructive/25";
@@ -49,7 +50,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             type="button"
             onClick={() => setShow((s) => !s)}
             aria-label={show ? "Hide password" : "Show password"}
-            className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded-sm p-2 text-faint hover:text-foreground"
+            className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm text-faint hover:text-foreground"
           >
             {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>

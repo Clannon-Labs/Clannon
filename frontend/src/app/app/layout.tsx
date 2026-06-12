@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <RequireAuth>
         <Sidebar />
         <CommandPalette />
-        <main className="px-4 pb-24 pt-20 sm:px-6 md:ml-60 md:pb-10 md:pt-8 lg:px-10">
+        <main id="main" className="px-4 pb-24 pt-20 sm:px-6 md:ml-60 md:pb-10 md:pt-8 lg:px-10">
           {children}
         </main>
       </RequireAuth>

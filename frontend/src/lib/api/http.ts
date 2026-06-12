@@ -26,6 +26,25 @@ function url(endpoint: string, params?: Record<string, string>): string {
   return `${appConfig.apiBaseUrl}${path}`;
 }
 
+/**
+ * FastAPI's `detail` is a string for HTTPException but an ARRAY of
+ * error objects for Pydantic validation (422) — coerce both to prose,
+ * never let an object reach Error's message (it renders "[object Object]").
+ */
+function errorMessage(body: unknown, fallback: string): string {
+  if (typeof body !== "object" || body === null) return fallback;
+  const detail = (body as { detail?: unknown; message?: unknown }).detail
+    ?? (body as { message?: unknown }).message;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (typeof d?.msg === "string" ? d.msg : null))
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(" · ");
+  }
+  return fallback;
+}
+
 async function request<T>(
   endpoint: string,
   init: RequestInit & { params?: Record<string, string> } = {},
@@ -48,7 +67,7 @@ async function request<T>(
       let code: string | undefined;
       try {
         const body = await res.json();
-        message = body.detail ?? body.message ?? message;
+        message = errorMessage(body, message);
         code = body.code;
       } catch {
         // non-JSON error body; keep statusText
@@ -57,6 +76,18 @@ async function request<T>(
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    // a caller-initiated abort is intentional — let it propagate untouched
+    if (init.signal?.aborted) throw e;
+    // offline / DNS / refused → bare TypeError; timeout → AbortError.
+    // Map both to messages a user can act on.
+    throw new ApiError(
+      controller.signal.aborted
+        ? "The server took too long to respond — try again."
+        : "Can't reach the server — check your connection and try again.",
+      0,
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -126,6 +157,30 @@ export class HttpClient implements ClannonClient {
       method: "POST",
       body: JSON.stringify({ brief }),
     });
+  }
+
+  async setRunFeedback(
+    id: string,
+    rating: "up" | "down" | null,
+    comment?: string,
+  ): Promise<void> {
+    await request(appConfig.endpoints.runFeedback, {
+      method: "POST",
+      params: { id },
+      body: JSON.stringify({ rating, comment: comment ?? null }),
+    });
+  }
+
+  createFollowUp(id: string, brief: string): Promise<{ id: string }> {
+    return request(appConfig.endpoints.runFollowUp, {
+      method: "POST",
+      params: { id },
+      body: JSON.stringify({ brief }),
+    });
+  }
+
+  getRunThread(id: string): Promise<Run[]> {
+    return request(appConfig.endpoints.runThread, { params: { id } });
   }
 
   /**
@@ -204,8 +259,7 @@ export class HttpClient implements ClannonClient {
     if (!res.ok) {
       let message = res.statusText;
       try {
-        const body = await res.json();
-        message = body.detail ?? body.message ?? message;
+        message = errorMessage(await res.json(), message);
       } catch {
         // non-JSON error body
       }

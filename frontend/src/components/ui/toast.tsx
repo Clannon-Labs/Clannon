@@ -89,7 +89,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   item.action?.onClick();
                   dismiss(item.id);
                 }}
-                className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[13px] font-semibold text-primary hover:bg-primary-soft"
+                className="-my-1 min-h-9 shrink-0 cursor-pointer rounded-md px-2.5 py-1 text-[13px] font-semibold text-primary hover:bg-primary-soft"
               >
                 {item.action.label}
               </button>
@@ -98,7 +98,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => dismiss(item.id)}
               aria-label="Dismiss notification"
-              className="shrink-0 cursor-pointer rounded-md p-1 text-faint hover:bg-muted hover:text-foreground"
+              className="-my-1.5 -mr-1.5 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-faint hover:bg-muted hover:text-foreground"
             >
               <X className="size-3.5" />
             </button>

@@ -11,7 +11,15 @@
  *
  * Every gesture collapses to a static, instant render under
  * prefers-reduced-motion (honored globally by <MotionConfig reducedMotion="user">
- * in providers, and defensively per-component here).
+ * in providers, and per-component here via `initial={false}`).
+ *
+ * IMPORTANT: under reduced motion, keep the SAME motion tree and pass
+ * `initial={false}` — never return a different static tree. The server
+ * renders the animated tree (reduce is unknowable at SSR), and React
+ * hydration does not reconcile a differing style attribute, so a swapped
+ * static tree leaves elements stuck at their hidden initial styles.
+ * `initial={false}` renders at the target state and Motion's mount effect
+ * overwrites any stale SSR style.
  */
 
 import { type ReactNode } from "react";
@@ -53,9 +61,6 @@ export function TypeSet({
 }) {
   const reduce = useReducedMotion();
   const Outer = as === "div" ? motion.div : motion.span;
-  if (reduce) {
-    return <Outer className={className}>{children}</Outer>;
-  }
   const trigger = immediate
     ? { animate: "shown" as const }
     : { whileInView: "shown" as const, viewport: VIEWPORT };
@@ -67,7 +72,7 @@ export function TypeSet({
       <motion.span
         style={{ display: "inline-block", willChange: "transform" }}
         variants={lineVariants}
-        initial="hidden"
+        initial={reduce ? false : "hidden"}
         {...trigger}
         transition={{ duration, ease: EASE, delay }}
       >
@@ -128,7 +133,8 @@ export function StaggerItem({
   return (
     <Comp
       className={className}
-      variants={reduce ? undefined : riseVariants}
+      variants={riseVariants}
+      initial={reduce ? false : undefined}
       transition={{ duration: 0.6, ease: EASE }}
     >
       {children}
@@ -155,7 +161,6 @@ export function Reveal({
 }) {
   const reduce = useReducedMotion();
   const Comp = as === "section" ? motion.section : motion.div;
-  if (reduce) return <Comp className={className}>{children}</Comp>;
   const shown = { opacity: 1, y: 0 };
   const trigger = immediate
     ? { animate: shown }
@@ -163,7 +168,7 @@ export function Reveal({
   return (
     <Comp
       className={className}
-      initial={{ opacity: 0, y }}
+      initial={reduce ? false : { opacity: 0, y }}
       {...trigger}
       transition={{ duration: 0.7, ease: EASE, delay }}
     >
@@ -189,7 +194,6 @@ export function Rule({
 }) {
   const reduce = useReducedMotion();
   const base = vertical ? "w-px self-stretch bg-border" : "h-px w-full bg-border";
-  if (reduce) return <span aria-hidden className={`${base} ${className ?? ""}`} />;
   const shown = vertical ? { scaleY: 1 } : { scaleX: 1 };
   const trigger = immediate ? { animate: shown } : { whileInView: shown, viewport: VIEWPORT };
   return (
@@ -197,7 +201,7 @@ export function Rule({
       aria-hidden
       className={`${base} ${className ?? ""}`}
       style={{ transformOrigin: vertical ? "top" : "left", willChange: "transform" }}
-      initial={vertical ? { scaleY: 0 } : { scaleX: 0 }}
+      initial={reduce ? false : vertical ? { scaleY: 0 } : { scaleX: 0 }}
       {...trigger}
       transition={{ duration, ease: EASE_RULE, delay }}
     />

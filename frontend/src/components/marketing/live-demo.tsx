@@ -81,7 +81,7 @@ export function LiveDemo() {
               disabled={phase === "running"}
               onClick={() => start(i)}
               className={cn(
-                "cursor-pointer rounded-full border px-4 py-2 text-[13px] font-medium transition-colors",
+                "min-h-11 cursor-pointer rounded-full border px-4 py-2 text-[13px] font-medium transition-colors",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 phase !== "idle" && briefIndex === i
                   ? "border-primary bg-primary-soft text-primary"
@@ -95,7 +95,7 @@ export function LiveDemo() {
             <button
               type="button"
               onClick={() => start(briefIndex)}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-[13px] text-faint hover:text-foreground"
+              className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-[13px] text-faint hover:text-foreground"
             >
               <RotateCcw className="size-3.5" aria-hidden /> Run again
             </button>
