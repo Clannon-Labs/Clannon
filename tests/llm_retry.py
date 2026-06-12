@@ -45,8 +45,10 @@ def test_retries_transient_then_succeeds(monkeypatch):
 
 def test_exhausts_budget_and_reraises_last_transient(monkeypatch):
     _no_sleep(monkeypatch)
-    # default budget = LLM_TRANSIENT_MAX_RETRIES (2) + 1 = 3 attempts, all 503
-    agent = FakeAgent([_503(), _503(), _503()])
+    from foundation import constants
+    # budget = LLM_TRANSIENT_MAX_RETRIES + 1 attempts, all 503
+    attempts = constants.LLM_TRANSIENT_MAX_RETRIES + 1
+    agent = FakeAgent([_503() for _ in range(attempts)])
 
     try:
         asyncio.run(run_agent(agent, "prompt"))
@@ -54,7 +56,7 @@ def test_exhausts_budget_and_reraises_last_transient(monkeypatch):
     except ModelHTTPError as exc:
         assert exc.status_code == 503
 
-    assert agent.calls == 3  # fails closed after the bounded budget
+    assert agent.calls == attempts  # fails closed after the bounded budget
 
 
 def test_permanent_http_error_is_not_retried(monkeypatch):
@@ -92,3 +94,31 @@ def test_connection_timeout_is_transient(monkeypatch):
 
     assert result == "ok"
     assert agent.calls == 2
+
+
+def test_fallback_chain_exhaustion_with_rate_limit_is_retried(monkeypatch):
+    _no_sleep(monkeypatch)
+    # FallbackModel raises an ExceptionGroup when every chain entry fails; a
+    # 429 member means a backoff retry of the whole chain can succeed.
+    group = ExceptionGroup("All models failed", [
+        ModelHTTPError(status_code=429, model_name="anthropic:claude-haiku-4-5", body=None),
+        ModelHTTPError(status_code=401, model_name="openai:gpt-5.4-mini", body=None),
+    ])
+    agent = FakeAgent([group, "ok"])
+    assert asyncio.run(run_agent(agent, "prompt")) == "ok"
+    assert agent.calls == 2
+
+
+def test_fallback_chain_exhaustion_all_permanent_not_retried(monkeypatch):
+    _no_sleep(monkeypatch)
+    group = ExceptionGroup("All models failed", [
+        ModelHTTPError(status_code=401, model_name="anthropic:claude-haiku-4-5", body=None),
+        ModelHTTPError(status_code=404, model_name="openai:gpt-old", body=None),
+    ])
+    agent = FakeAgent([group])
+    try:
+        asyncio.run(run_agent(agent, "prompt"))
+        assert False, "should have raised immediately"
+    except ExceptionGroup:
+        pass
+    assert agent.calls == 1  # no retry budget wasted on permanent faults

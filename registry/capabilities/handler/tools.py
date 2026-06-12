@@ -53,7 +53,8 @@ class ToolHandler:
             return self._fail(request, ctx, started, f"bad arguments: {exc}")
 
         try:
-            output = await asyncio.wait_for(spec.impl().run(args), timeout=constants.TOOL_TIMEOUT_S)
+            timeout = getattr(spec, "timeout_s", None) or constants.TOOL_TIMEOUT_S
+            output = await asyncio.wait_for(spec.impl().run(args), timeout=timeout)
         except asyncio.TimeoutError:
             return self._fail(request, ctx, started, "tool timed out")
         except Exception as exc:

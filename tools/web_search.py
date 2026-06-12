@@ -28,6 +28,7 @@ class WebSearchTool:
     output_schema = WebSearchOut
     permission = PermissionLevel.NETWORK
     tags = ("internet", "sources", "research")
+    timeout_s = 75.0  # grounded search = LLM generation + possible key/model rotation; 30s default kills it
 
     async def run(self, args: WebSearchIn) -> WebSearchOut:
         result = await grounded_search(args.query)

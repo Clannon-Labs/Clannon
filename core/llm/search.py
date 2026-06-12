@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic_ai import Agent
 
-from .registry import model_name_for_layer, model_settings_for_layer
+from .registry import model_for_layer, model_settings_for_layer
 from .retry import run_agent
 
 
@@ -33,7 +33,9 @@ def _web_search_builtins() -> list[Any]:
 
 def _build_search_agent(layer: str) -> Agent:
     settings = model_settings_for_layer(layer)
-    model = model_name_for_layer(layer)
+    # full quota-resilience: the layer's fallback chain, with one entry per
+    # Google API key — account-level quota exhaustion rotates, never fails
+    model = model_for_layer(layer)
     try:
         return Agent(model, builtin_tools=_web_search_builtins(),
                      model_settings=settings, defer_model_check=True)

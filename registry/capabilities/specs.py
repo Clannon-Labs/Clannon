@@ -53,6 +53,7 @@ class CapabilitySpec:
 @dataclass(frozen=True)
 class ToolSpec(CapabilitySpec):
     """A tool: fully described by the base fields + its impl."""
+    timeout_s: float | None = None   # per-tool wall time; None = constants.TOOL_TIMEOUT_S
 
 
 @dataclass(frozen=True)

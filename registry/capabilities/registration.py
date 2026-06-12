@@ -43,6 +43,7 @@ def tool(cls: type | None = None, *, enabled: bool = True) -> type:
             permission=getattr(target, "permission", PermissionLevel.READ),
             input_schema=getattr(target, "input_schema", None),
             output_schema=getattr(target, "output_schema", None),
+            timeout_s=getattr(target, "timeout_s", None),
         )
         registry.register(spec, validate(spec))
         return target

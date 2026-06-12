@@ -104,9 +104,11 @@ VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
 # bounded; on exhaustion the original error is re-raised so callers fail closed.
 # ---------------------------------------------------------------------------
 
-LLM_TRANSIENT_MAX_RETRIES   = 2      # extra attempts after the first, on transient errors
-LLM_RETRY_BASE_DELAY_S      = 0.5    # first backoff delay; doubles each retry
-LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
+LLM_TRANSIENT_MAX_RETRIES   = 4      # extra attempts after the first, on transient errors
+LLM_RETRY_BASE_DELAY_S      = 2.0    # first backoff delay; doubles each retry
+LLM_RETRY_MAX_DELAY_S       = 30.0   # per-attempt backoff cap; ~30s total rides out a
+                                     # per-minute rate-limit window (parallel experts on
+                                     # one provider WILL burst past tier-1 TPM caps)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +116,9 @@ LLM_RETRY_MAX_DELAY_S       = 8.0    # per-attempt backoff cap
 # Main LLM. Gets the most time — it does the real reasoning.
 # ---------------------------------------------------------------------------
 
-ORCHESTRATOR_TIMEOUT_S      = 240.0  # whole-loop wall time; research + fallback retries need headroom
+ORCHESTRATOR_TIMEOUT_S      = 480.0  # whole-loop wall time, sized to the workflow worst case: a parallel
+                                     # expert batch + the synthesis writer (one EXPERT_TIMEOUT_S each,
+                                     # they run in sequence) + decompose/answer turns + fallback retries
 ORCHESTRATOR_MAX_TOKENS     = 8096
 ORCHESTRATOR_MAX_TURNS      = 20     # max tool rounds in one orchestrator turn
                                      # before the cap forces a final answer
