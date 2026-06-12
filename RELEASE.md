@@ -105,7 +105,7 @@ But it's not shipped yet, and I will ship it if this project is successful : )
 <!-- 
 ```bash
 .venv/bin/uvicorn server.app:app --port 8000
-cd clannon/frontend && npm install && npm run dev
+cd frontend && npm install && npm run dev
 ``` -->
 
 ## Memory
