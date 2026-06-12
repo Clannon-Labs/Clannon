@@ -27,6 +27,12 @@ from typing import Any, Generic, TypeVar
 
 from pydantic_ai import Agent, FunctionToolCallEvent, RunContext
 from pydantic_ai.exceptions import UsageLimitExceeded
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
 
 from foundation import MaxRetriesExceededError, ModelUnavailableError, VrakshaError
 from registry.config import get_prompt
@@ -120,6 +126,26 @@ def _event_handler(on_tool_event: Callable[[dict], Awaitable[None]]):
     return handler
 
 
+def _to_model_messages(conversation: Sequence[dict] | None) -> list[Any] | None:
+    """Convert the foundation-neutral conversation ({"role","content"} dicts,
+    oldest first) into PydanticAI ModelMessages. This is the single SDK boundary
+    for chat history — foundation never imports pydantic_ai. Unknown/empty turns
+    are skipped; an empty result returns None (no history)."""
+    if not conversation:
+        return None
+    messages: list[Any] = []
+    for turn in conversation:
+        role = turn.get("role")
+        content = turn.get("content") or ""
+        if not content:
+            continue
+        if role == "user":
+            messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            messages.append(ModelResponse(parts=[TextPart(content=content)]))
+    return messages or None
+
+
 async def run_structured(
     handle: AgentHandle[T],
     prompt: str,
@@ -129,6 +155,7 @@ async def run_structured(
     max_output_tokens: int | None = None,
     on_tool_event: Callable[[dict], Awaitable[None]] | None = None,
     model: Any | None = None,
+    conversation: Sequence[dict] | None = None,
 ) -> T:
     """
     Run an agent and return its validated structured output.
@@ -143,15 +170,18 @@ async def run_structured(
     """
     limits = usage_limits_for_layer(handle.layer, max_turns=max_turns, max_output_tokens=max_output_tokens)
     esh = _event_handler(on_tool_event) if on_tool_event is not None else None
+    history = _to_model_messages(conversation)
     try:
         if model is not None:
             with handle._agent.override(model=model):
                 result = await run_agent(
-                    handle._agent, prompt, deps=deps, usage_limits=limits, event_stream_handler=esh
+                    handle._agent, prompt, deps=deps, usage_limits=limits,
+                    event_stream_handler=esh, message_history=history,
                 )
         else:
             result = await run_agent(
-                handle._agent, prompt, deps=deps, usage_limits=limits, event_stream_handler=esh
+                handle._agent, prompt, deps=deps, usage_limits=limits,
+                event_stream_handler=esh, message_history=history,
             )
     except VrakshaError:
         raise

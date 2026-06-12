@@ -214,6 +214,15 @@ class VrakshaContext:
     # Written by: core/orchestrator.py and handlers/
     # ------------------------------------------------------------------
 
+    conversation: list = field(default_factory=list)
+                                              # prior turns of this session, oldest first, as
+                                              # neutral chat messages: {"role": "user"|"assistant",
+                                              # "content": str}. Set by the entry/caller BEFORE
+                                              # orchestration; the orchestrator feeds it as
+                                              # message_history so a follow-up genuinely continues
+                                              # the conversation. Empty on the first turn. Foundation
+                                              # stays SDK-free — core/llm converts this to ModelMessages.
+
     tool_calls:    list[ToolCallRecord]   = field(default_factory=list)
     expert_calls:  list[ExpertCallRecord] = field(default_factory=list)
 
@@ -251,6 +260,9 @@ class VrakshaContext:
     filter_blocked: bool = False
     filter_block_reason: str | None = None
     filter_retry_count: int = 0          # how many times filter rejected and retried
+    filter_feedback: str | None = None   # the filter's rejection reason, handed BACK to the
+                                         # orchestrator on a bounded retry so it can revise its
+                                         # draft. The filter still adjudicates every attempt.
 
     # ------------------------------------------------------------------
     # FINAL OUTPUT

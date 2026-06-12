@@ -60,6 +60,7 @@ class Capabilities:
         max_turns: int | None = None,
         max_output_tokens: int | None = None,
         model: Any | None = None,
+        conversation: Any | None = None,
     ) -> Any:
         """
         Run one orchestrator turn as a native tool-driving agent.
@@ -95,6 +96,7 @@ class Capabilities:
             return await run_structured(
                 handle, user_prompt, deps=deps, on_tool_event=on_event,
                 max_turns=max_turns, max_output_tokens=max_output_tokens, model=model,
+                conversation=conversation,
             )
         except MaxRetriesExceededError:
             forced = build_tool_agent(
@@ -104,4 +106,7 @@ class Capabilities:
                 tools=[],
                 deps_type=OrchestratorDeps,
             )
-            return await run_structured(forced, user_prompt, deps=deps, max_turns=1, model=model)
+            return await run_structured(
+                forced, user_prompt, deps=deps, max_turns=1, model=model,
+                conversation=conversation,
+            )

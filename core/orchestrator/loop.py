@@ -40,9 +40,14 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
 
     answer: OrchestratorAnswer = await ports.caps.run_turn(
         system_prompt=get_prompt("orchestrator").text,
-        user_prompt=build_user_prompt(normalized, hydration),
+        # revision_feedback is set only on a bounded retry after the output filter
+        # rejected the previous draft — it tells the orchestrator what to fix
+        user_prompt=build_user_prompt(normalized, hydration, ctx.filter_feedback),
         output_type=OrchestratorAnswer,
         on_event=on_event,
+        # prior turns of this session, fed as real chat history so a follow-up
+        # continues the conversation instead of re-reading a summary blob
+        conversation=ctx.conversation,
     )
 
     await ports.log.emit(DecisionLogEntry(kind="answer", message=answer.answer_text))
