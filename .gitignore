@@ -61,7 +61,4 @@ llm_view_snapshot.json
 .claude
 .agents/
 
-# Web delivery adapter + frontend — not public yet
-server/
-/frontend/
 static_analysis_semgrep_*/
