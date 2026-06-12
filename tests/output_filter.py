@@ -14,7 +14,7 @@ def _flow(text="hello"):
 
 
 def test_filter_proceeds(monkeypatch):
-    async def fake(response, findings):
+    async def fake(response, findings, memory, tool_calls):
         return FilterResult(proceed=True)
     monkeypatch.setattr(filter_stage, "_filter", fake)
 
@@ -24,7 +24,7 @@ def test_filter_proceeds(monkeypatch):
 
 
 def test_filter_blocks_unsafe(monkeypatch):
-    async def fake(response, findings):
+    async def fake(response, findings, memory, tool_calls):
         return FilterResult(proceed=False, blocked=True, reason="policy")
     monkeypatch.setattr(filter_stage, "_filter", fake)
 

@@ -28,7 +28,7 @@ def test_reasoning_and_output_chain(monkeypatch, capsys):
         return OrchestratorResponse(text="final answer", confidence=0.9)
     monkeypatch.setattr(orch_mod, "run_loop", fake_loop)
 
-    async def fake_filter(response, findings):
+    async def fake_filter(response, findings, memory, tool_calls):
         return FilterResult(proceed=True)
     monkeypatch.setattr(filter_mod, "_filter", fake_filter)
 

@@ -30,13 +30,47 @@ from core.llm import build_agent, run_structured
 from .schemas import FilterResult
 
 
-def _grounding_view(response, findings: list, memory: list) -> str:
+# bounds on the grounding payload — enough evidence for the filter to judge
+# groundedness without blowing up the filter call's token cost
+_MAX_FINDINGS = 8
+_FINDING_CHARS = 1500
+_MAX_TOOL_CALLS = 12
+_TOOL_RESULT_CHARS = 1200
+
+
+def _grounding_view(response, findings: list, memory: list, tool_calls: list) -> str:
     sources: list[str] = []
-    for finding in findings:
-        sources.extend(getattr(finding, "citations", []) or [])
+    evidence: list[dict] = []
+    for finding in findings[:_MAX_FINDINGS]:
+        citations = list(getattr(finding, "citations", []) or [])
+        sources.extend(citations)
+        # the filter MUST see the actual findings content to assess whether the
+        # draft's claims are grounded — a count and a URL list are not enough
+        evidence.append({
+            "expert": getattr(finding, "expert", ""),
+            "content": getattr(finding, "full_content", "")[:_FINDING_CHARS],
+            "citations": citations,
+        })
+    # the orchestrator's OWN tool calls (e.g. web_search, fetch_url) are grounding
+    # too — a turn can research directly without spawning an expert, and the draft
+    # is grounded in those results just as much as in expert findings.
+    tool_evidence: list[dict] = []
+    for tc in tool_calls[:_MAX_TOOL_CALLS]:
+        if not getattr(tc, "success", False):
+            continue
+        tool_evidence.append({
+            "tool": getattr(tc, "tool_name", ""),
+            "args": getattr(tc, "arguments", {}),
+            "result": str(getattr(tc, "result", ""))[:_TOOL_RESULT_CHARS],
+        })
     view = {
         "draft": getattr(response, "text", ""),
-        "expert_findings": len(findings),
+        # whether this turn actually researched — via experts OR direct tool calls.
+        # False ⇒ a direct/conversational answer, which groundedness does not apply to.
+        "did_research": bool(evidence or tool_evidence),
+        # the evidence the draft was synthesized from — claims supported here are grounded
+        "expert_findings": evidence,
+        "tool_results": tool_evidence,
         "sources": sources[:20],
         # hydrated memory is a LEGITIMATE grounding source: claims supported
         # by these entries are grounded, not hallucinated
@@ -45,14 +79,14 @@ def _grounding_view(response, findings: list, memory: list) -> str:
     return json.dumps(view, default=str)
 
 
-async def _filter(response, findings: list, memory: list) -> FilterResult:
+async def _filter(response, findings: list, memory: list, tool_calls: list) -> FilterResult:
     handle = build_agent(
         "filter",
         output_type=FilterResult,
         prompt_name="filter",
         retries=constants.FILTER_MAX_RETRIES,
     )
-    return await run_structured(handle, _grounding_view(response, findings, memory))
+    return await run_structured(handle, _grounding_view(response, findings, memory, tool_calls))
 
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
@@ -65,7 +99,9 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
             # Nothing to filter (no draft produced); pass the flow through unchanged.
             return flow.next(await flow.load(), Origin.FILTER, started)
 
-        result = await _filter(response, flow.ctx.expert_findings, flow.ctx.hydration_items)
+        result = await _filter(
+            response, flow.ctx.expert_findings, flow.ctx.hydration_items, flow.ctx.tool_calls
+        )
         flow.ctx.filter_result = result
 
         if not result.proceed:
