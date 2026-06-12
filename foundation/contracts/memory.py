@@ -54,11 +54,16 @@ class HydrationRequest:
 class HydrationPackage:
     """
     The memory manager's reply: ranked, budget-bounded context to inject.
-    The Phase-1 stub returns an empty package.
+
+    degraded=True means memory was wanted but is temporarily unavailable
+    (store down, embeddings down) — distinct from "this user has no memory
+    yet". Callers surface degradation honestly; an empty healthy package
+    needs no notice.
     """
     items: list[MemoryItem] = field(default_factory=list)
     token_budget: int = 0
     notes: str | None = None
+    degraded: bool = False
 
 
 @dataclass(frozen=True, slots=True)

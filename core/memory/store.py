@@ -55,6 +55,12 @@ def _qdrant():
     return _client
 
 
+def is_down() -> bool:
+    """True while the breaker is open (or memory is disabled) — lets the
+    manager tell 'no memory found' apart from 'memory unavailable'."""
+    return DISABLED or time.monotonic() < _down_until
+
+
 def _trip(exc: Exception) -> None:
     global _down_until
     log.warning("qdrant call failed (degrading for %ss): %s", _BREAKER_S, exc)

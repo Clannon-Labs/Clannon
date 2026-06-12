@@ -69,7 +69,10 @@ class MemoryManager:
 
         vectors = await embeddings.embed([query_text[:_MAX_CONTENT_CHARS]])
         if not vectors:
-            return HydrationPackage(token_budget=budget, notes="embeddings unavailable; memory degraded")
+            return HydrationPackage(
+                token_budget=budget, degraded=True,
+                notes="memory temporarily unavailable (embeddings); answering without it",
+            )
 
         tiers = list(request.allowed_tiers or _TIER_TRUST.keys())
         # store.search is a sync HTTP call — run the tiers concurrently in
@@ -90,6 +93,13 @@ class MemoryManager:
                 per_tier[tier] = scored
 
         if not per_tier:
+            if store.is_down():
+                # honesty: empty because the store is down, not because the
+                # user has no memory — say so instead of pretending
+                return HydrationPackage(
+                    token_budget=budget, degraded=True,
+                    notes="memory temporarily unavailable; answering without it",
+                )
             return HydrationPackage(token_budget=budget, notes="no prior memory for this user")
 
         # Lagrangian water-filling: floors first, remainder ∝ mean relevance.

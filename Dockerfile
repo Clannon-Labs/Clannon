@@ -23,6 +23,12 @@ COPY tools/ ./tools/
 COPY experts/ ./experts/
 COPY prompts/ ./prompts/
 COPY main.py models.yaml ./
-RUN mkdir -p /vraksha/workspace /vraksha/rules /vraksha/assets
+
+# run as an unprivileged user: if anything in the pipeline is ever exploited,
+# the blast radius is a non-root uid that owns only its own work dirs — not root
+RUN mkdir -p /vraksha/workspace /vraksha/rules /vraksha/assets \
+    && useradd --create-home --uid 10001 vraksha \
+    && chown -R vraksha:vraksha /vraksha
+USER vraksha
 
 CMD ["python", "main.py"]

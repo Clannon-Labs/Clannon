@@ -134,6 +134,9 @@ TOOL_TIMEOUT_S              = 30.0   # per tool call wall time
 TOOL_SANDBOX_TIMEOUT_S      = 25.0   # sandbox process must exit before tool timeout
 TOOL_MAX_RETRIES            = 2      # retries on transient sandbox errors
 TOOL_MAX_OUTPUT_BYTES       = 1 * 1024 * 1024   # 1 MB cap on tool output
+FETCH_MAX_RESPONSE_BYTES    = 5 * 1024 * 1024   # hard cap on a fetched HTTP body, enforced
+                                                # while streaming — a hostile/compromised server
+                                                # must never be able to stream us out of memory
 
 
 # ---------------------------------------------------------------------------

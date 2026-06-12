@@ -137,3 +137,38 @@ def test_fetch_url_rejects_non_http_scheme():
     rec = asyncio.run(ToolHandler().call_tool(
         ToolRequest(key="web.fetch_url", arguments={"url": "file:///etc/passwd"}), _ctx()))
     assert rec.success is False and "http" in rec.error.lower()
+
+
+def test_fetch_read_capped_aborts_oversized_body():
+    """A server streaming past the cap is aborted on bytes received, not on a
+    trusted Content-Length header."""
+    import asyncio
+    from tools.fetch_url import _read_capped, FetchBlocked
+
+    class FakeResponse:
+        async def aiter_bytes(self):
+            for _ in range(1000):
+                yield b"x" * 1024   # 1 MB total, streamed in 1 KB chunks
+
+    async def go():
+        try:
+            await _read_capped(FakeResponse(), limit=64 * 1024)   # 64 KB cap
+            return "no-cap"
+        except FetchBlocked as exc:
+            return str(exc)
+
+    result = asyncio.run(go())
+    assert "cap" in result   # aborted, never buffered the full megabyte
+
+
+def test_fetch_read_capped_allows_small_body():
+    import asyncio
+    from tools.fetch_url import _read_capped
+
+    class FakeResponse:
+        async def aiter_bytes(self):
+            yield b"hello "
+            yield b"world"
+
+    raw = asyncio.run(_read_capped(FakeResponse(), limit=1024))
+    assert raw == b"hello world"

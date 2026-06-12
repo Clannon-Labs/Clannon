@@ -64,3 +64,4 @@ llm_view_snapshot.json
 # Web delivery adapter + frontend — not public yet
 server/
 /frontend/
+static_analysis_semgrep_*/

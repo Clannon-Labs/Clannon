@@ -200,6 +200,11 @@ async def _repl(user_id: str) -> int:
                     border_style="green",
                 )
             )
+            # the live activity feed is transient — warnings (e.g. memory
+            # temporarily down) must stay visible after the answer renders
+            for entry in flow.ctx.decision_log:
+                if getattr(entry, "kind", "") == "warning":
+                    console.print(f"  [yellow]! {entry.message}[/]")
         console.print()
 
 

@@ -6,7 +6,10 @@ services:
       - clamav
       - qdrant
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # NOTE: the host docker socket is deliberately NOT mounted. Mounting it
+      # grants this container host-root-equivalent control, and nothing uses it.
+      # Out-of-process tool sandboxing (the python_exec TODO) must use a rootless
+      # runtime or a socket proxy, never a raw socket mount.
       - .:/vraksha
     env_file:
       - .env.local
@@ -26,18 +29,20 @@ services:
   clamav:
     image: clamav/clamav:latest
     container_name: agent_clamav
-    # Expose via internal TCP network to completely bypass cross-platform socket headaches.
+    # bound to loopback only: services reach it over the compose network by name;
+    # 0.0.0.0 would put an unauthenticated daemon on every host interface
     ports:
-      - "3310:3310"
+      - "127.0.0.1:3310:3310"
     volumes:
       - clamav_data:/var/lib/clamav
     restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
-    # expose the port for host access (optional)
+    # loopback only — Qdrant has no auth and holds ALL user memory; it must never
+    # be reachable from outside the host. Containers talk to it as http://qdrant:6333
     ports:
-      - "6333:6333"
+      - "127.0.0.1:6333:6333"
     volumes:
       - qdrant_storage:/qdrant/storage
 
