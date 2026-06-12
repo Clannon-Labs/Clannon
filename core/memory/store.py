@@ -62,26 +62,47 @@ def _trip(exc: Exception) -> None:
 
 
 def _ensure(client: Any, collection: str) -> bool:
-    """Create the collection + payload indexes once (idempotent)."""
+    """Create the collection + payload indexes once (idempotent).
+
+    user_id is the tenant key: its keyword index is marked is_tenant=True so
+    Qdrant physically groups each user's points together (the documented
+    multi-tenancy layout — faster tenant-scoped queries, better locality).
+    Existing collections with a plain index are upgraded in place.
+    """
     if collection in _ensured:
         return True
     from qdrant_client import models as qm
 
+    tenant_schema = qm.KeywordIndexParams(type=qm.KeywordIndexType.KEYWORD, is_tenant=True)
     try:
         if not client.collection_exists(collection):
             client.create_collection(
                 collection,
                 vectors_config=qm.VectorParams(size=DIMS, distance=qm.Distance.COSINE),
             )
-            for field in ("user_id", "session_id"):
-                client.create_payload_index(
-                    collection, field_name=field, field_schema=qm.PayloadSchemaType.KEYWORD
-                )
+            client.create_payload_index(collection, field_name="user_id", field_schema=tenant_schema)
+            client.create_payload_index(
+                collection, field_name="session_id", field_schema=qm.PayloadSchemaType.KEYWORD
+            )
+        else:
+            _ensure_tenant_index(client, collection, tenant_schema)
         _ensured.add(collection)
         return True
     except Exception as exc:
         _trip(exc)
         return False
+
+
+def _ensure_tenant_index(client: Any, collection: str, tenant_schema: Any) -> None:
+    """Upgrade a pre-existing collection's user_id index to the tenant layout."""
+    info = client.get_collection(collection)
+    entry = (info.payload_schema or {}).get("user_id")
+    params = getattr(entry, "params", None)
+    if getattr(params, "is_tenant", None):
+        return
+    if entry is not None:
+        client.delete_payload_index(collection, field_name="user_id")
+    client.create_payload_index(collection, field_name="user_id", field_schema=tenant_schema)
 
 
 def _user_filter(user_id: str):
@@ -109,7 +130,21 @@ def search(
             query_filter=_user_filter(user_id),
             with_payload=True,
         ).points
-        return [{"id": str(h.id), "score": float(h.score), **(h.payload or {})} for h in hits]
+        # Defense in depth: the filter above is THE scope, but a leaked hit
+        # would flow straight into another user's context — so verify every
+        # returned payload anyway and treat a mismatch as a security event.
+        results = []
+        for h in hits:
+            payload = h.payload or {}
+            if payload.get("user_id") != user_id:
+                log.error(
+                    "TENANT ISOLATION VIOLATION: %s returned a point for user %r "
+                    "on a query scoped to %r — hit dropped",
+                    collection, payload.get("user_id"), user_id,
+                )
+                continue
+            results.append({"id": str(h.id), "score": float(h.score), **payload})
+        return results
     except Exception as exc:
         _trip(exc)
         return []
@@ -138,6 +173,15 @@ def upsert(
 
     memory_id = point_id or str(uuid.uuid4())
     try:
+        if point_id is not None and not _owns_point(client, collection, point_id, user_id):
+            # refusing is the whole point: an upsert to an existing id REPLACES
+            # the point regardless of any filter — never let one user's write
+            # land on another user's memory
+            log.error(
+                "TENANT ISOLATION VIOLATION: refused upsert to point %s in %s — "
+                "it does not belong to user %r", point_id, collection, user_id,
+            )
+            return None
         client.upsert(
             collection,
             points=[
@@ -164,6 +208,14 @@ def upsert(
         return None
 
 
+def _owns_point(client: Any, collection: str, point_id: str, user_id: str) -> bool:
+    """True when the point doesn't exist yet (fresh insert) or belongs to user_id."""
+    points = client.retrieve(collection, ids=[point_id], with_payload=["user_id"])
+    if not points:
+        return True
+    return (points[0].payload or {}).get("user_id") == user_id
+
+
 def delete_user(user_id: str) -> None:
     """Erase every memory for a user across all tiers (right-to-deletion)."""
     client = _qdrant()
@@ -178,5 +230,6 @@ def delete_user(user_id: str) -> None:
                     collection, points_selector=qm.FilterSelector(filter=_user_filter(user_id))
                 )
         except Exception as exc:
+            # keep going: erasure must attempt every tier, a fault in one
+            # collection is no reason to leave the others populated
             _trip(exc)
-            return

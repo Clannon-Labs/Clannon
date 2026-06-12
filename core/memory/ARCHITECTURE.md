@@ -60,7 +60,10 @@ payload: {
 ```
 
 `user_id` and `session_id` get Qdrant keyword payload indexes at collection
-creation — filters stay fast at scale.
+creation. The `user_id` index is marked `is_tenant=true` (Qdrant's documented
+multi-tenancy layout): points are physically grouped per tenant, so scoped
+queries stay fast at scale. Pre-existing collections are upgraded in place on
+first use.
 
 ## 4. Hydration (read path)
 
@@ -121,12 +124,22 @@ costs one timeout per window, not one per call.
 1. `user_id` filter is constructed inside the store module — the ONLY place a
    Qdrant query is built. Nothing else imports the qdrant client. (CI Semgrep
    rule for unscoped queries lands with multi-tenancy hardening.)
-2. Memory content is treated as untrusted on the way in (it originated from
+2. Identity cannot come from the model: no tool/expert/proposal schema carries
+   a `user_id` field. Identity enters once at the trusted entry
+   (`Flow.new(user_id=)`) and travels only via `ctx`.
+3. Defense in depth on reads: every hit returned by a scoped search is
+   re-verified against the requested `user_id` in the store; a mismatch is
+   dropped and logged as a tenant-isolation violation.
+4. Defense in depth on writes: an upsert that names an existing `point_id`
+   first verifies the point belongs to the writing user (an upsert REPLACES
+   the point, filters don't apply) — foreign ids are refused and logged.
+5. Memory content is treated as untrusted on the way in (it originated from
    model output or retrieved web content): capped, plain text only.
-3. Wiki ingestion is a separate, user-authenticated path (delivery layer →
+6. Wiki ingestion is a separate, user-authenticated path (delivery layer →
    manager `sync_wiki()`); inferred writes can never masquerade as wiki.
-4. Erasure: `delete_user()` removes every point for a user across all tiers
-   (right-to-deletion; called by the delivery layer on account deletion).
+7. Erasure: `delete_user()` removes every point for a user across all tiers,
+   continuing past per-tier faults so one bad collection never leaves the
+   others populated (right-to-deletion; called on account deletion).
 
 ## 8. Module layout
 
