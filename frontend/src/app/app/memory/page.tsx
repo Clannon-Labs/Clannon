@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { BookMarked, Lock, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookMarked, ChevronDown, ChevronUp, Lock, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import {
   useDeleteMemory,
   useEffectivePlan,
@@ -43,6 +43,11 @@ const TIER_COPY: Record<MemoryTier, { hint: string; locked: string }> = {
   },
 };
 
+/* Collapse threshold for entry content — roughly 8 lines of rendered prose.
+   Imported files can be whole documents; the card shows a preview and the
+   reader opens the rest in place. */
+const ENTRY_PREVIEW_PX = 176;
+
 function EntryCard({
   entry,
   editable,
@@ -54,6 +59,22 @@ function EntryCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  // measure the rendered markdown, not the raw text — a long file clamps,
+  // a short one never shows the toggle
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => setOverflows(el.scrollHeight > ENTRY_PREVIEW_PX + 24);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [entry.content]);
+
   return (
     <article className="rounded-lg border border-border bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
@@ -64,7 +85,7 @@ function EntryCard({
               type="button"
               onClick={onEdit}
               aria-label={`Edit “${entry.title}”`}
-              className="cursor-pointer rounded-md p-2 text-faint transition-colors hover:bg-muted hover:text-foreground"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
             >
               <Pencil className="size-4" />
             </button>
@@ -72,7 +93,7 @@ function EntryCard({
               type="button"
               onClick={onDelete}
               aria-label={`Delete “${entry.title}”`}
-              className="cursor-pointer rounded-md p-2 text-faint transition-colors hover:bg-destructive-soft hover:text-destructive"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-soft hover:text-destructive"
             >
               <Trash2 className="size-4" />
             </button>
@@ -80,9 +101,35 @@ function EntryCard({
         )}
       </div>
       {/* wiki entries are markdown — render them, don't show bare #/* */}
-      <div className="mt-2 text-muted-foreground">
-        <Report markdown={entry.content} className="text-sm" />
+      <div className="relative mt-2 text-muted-foreground">
+        <div
+          ref={contentRef}
+          style={!expanded && overflows ? { maxHeight: ENTRY_PREVIEW_PX } : undefined}
+          className={!expanded && overflows ? "overflow-hidden" : undefined}
+        >
+          <Report markdown={entry.content} className="text-sm" />
+        </div>
+        {!expanded && overflows && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface to-transparent"
+          />
+        )}
       </div>
+      {overflows && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 flex min-h-9 cursor-pointer items-center gap-1 text-[13px] font-medium text-primary hover:underline underline-offset-4"
+        >
+          {expanded ? (
+            <>Collapse <ChevronUp className="size-3.5" aria-hidden /></>
+          ) : (
+            <>Read the whole entry <ChevronDown className="size-3.5" aria-hidden /></>
+          )}
+        </button>
+      )}
       <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-faint">
         <span>{formatRelativeTime(entry.updatedAt)}</span>
         {entry.confidence !== undefined && (
@@ -171,7 +218,7 @@ export default function MemoryPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search the archive…"
           aria-label="Search memory entries"
-          className="h-10 w-full rounded-md border border-border-strong bg-surface-raised pl-10 pr-3.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          className="h-10 w-full rounded-md border border-border-strong bg-surface-raised pl-10 pr-3.5 text-base text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-sm"
         />
       </div>
 
