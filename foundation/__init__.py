@@ -8,7 +8,7 @@ but callers should never reach into those paths directly — import the name her
 
 # transport — the fiber
 from .transport.flow import Flow, PayloadHandle, JournalEntry
-from .transport.primitives import Envelope, Status, Meta
+from .transport.primitives import Status, Meta
 from .transport.context import (
     VrakshaContext,
     PipelineStage,
@@ -68,7 +68,6 @@ from .vocab.types import (
     BlockReason,
     PermissionLevel,
     MemoryStore,
-    ExpertState,
     Origin,
 )
 from .vocab import constants
@@ -88,7 +87,6 @@ __all__ = [
     "coerce_to_bytes",
 
     # transport primitives (used inside flow, available if needed directly)
-    "Envelope",
     "Status",
     "Meta",
 
@@ -134,7 +132,6 @@ __all__ = [
     "BlockReason",
     "PermissionLevel",
     "MemoryStore",
-    "ExpertState",
     "Origin",
 
     # constants (always import as module)

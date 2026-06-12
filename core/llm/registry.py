@@ -122,6 +122,14 @@ def fallback_chain_for_layer(layer: str) -> list[str]:
     return [str(model) for model in chain if _provider_available(str(model))]
 
 
+# Resolved models, keyed by everything that can change a resolution: the layer,
+# the per-run override, and which provider keys exist. pydantic-ai model objects
+# are stateless and reusable; rebuilding them per agent build churns a fresh
+# provider (and HTTP client/connection pool) on every call.
+_RESOLVED_CACHE_MAX = 64
+_resolved_models: dict[tuple, "str | FallbackModel"] = {}
+
+
 def model_for_layer(layer: str) -> str | FallbackModel:
     """
     Resolve the runnable model for a layer: the primary (override or
@@ -130,6 +138,19 @@ def model_for_layer(layer: str) -> str | FallbackModel:
     model in the chain, so one provider/model outage or quota never
     takes a run down with it.
     """
+    import os
+
+    cache_key = (
+        layer,
+        _MODEL_OVERRIDES.get().get(layer),
+        tuple(_google_api_keys()),
+        bool(os.getenv("ANTHROPIC_API_KEY")),
+        bool(os.getenv("OPENAI_API_KEY")),
+    )
+    cached = _resolved_models.get(cache_key)
+    if cached is not None:
+        return cached
+
     primary = model_name_for_layer(layer)
     chain = [model for model in fallback_chain_for_layer(layer) if model != primary]
     if not _provider_available(primary) and chain:
@@ -139,9 +160,12 @@ def model_for_layer(layer: str) -> str | FallbackModel:
     entries = _expand_keys(primary)
     for model in chain:
         entries.extend(_expand_keys(model))
-    if len(entries) == 1:
-        return entries[0]
-    return FallbackModel(*entries)
+    resolved = entries[0] if len(entries) == 1 else FallbackModel(*entries)
+
+    if len(_resolved_models) >= _RESOLVED_CACHE_MAX:   # env churn (tests) — reset, don't grow
+        _resolved_models.clear()
+    _resolved_models[cache_key] = resolved
+    return resolved
 
 
 def model_settings_for_layer(layer: str) -> ModelSettings:

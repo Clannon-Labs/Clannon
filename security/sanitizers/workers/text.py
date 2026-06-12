@@ -14,9 +14,8 @@ escaping bare ``<``/``>``/``&`` would silently corrupt ordinary text and code
 (e.g. ``vector<int>`` or ``a < b``). XSS protection belongs to the output
 filter when content is rendered in the dashboard, not to input sanitization.
 
-scan() returns a TextScanResult for the runner. The original raw input remains
-available through flow.ctx.raw_input; sanitized_text is only the text worker's
-safe replacement payload for later stages.
+scan() returns a TextScanResult for the runner; sanitized_text is the text
+worker's safe replacement payload for later stages.
 """
 
 from dataclasses import dataclass

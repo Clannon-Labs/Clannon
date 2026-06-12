@@ -36,4 +36,4 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
             _deliver_cli(flow)
         return flow.next(flow.ctx.final_response, Origin.OUTPUT, started)
     except Exception as exc:
-        return flow.fail(VrakshaError(f"delivery failed: {exc}"), Origin.OUTPUT, started)
+        return flow.fail(VrakshaError(f"delivery failed: {exc}", cause=exc), Origin.OUTPUT, started)

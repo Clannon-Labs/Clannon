@@ -11,6 +11,7 @@ filter own that); infrastructure/loop faults fail the stage.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -26,6 +27,8 @@ from foundation import (
 
 from .loop import run_loop
 from .utils.wiring import build_default_ports
+
+log = logging.getLogger(__name__)
 
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
@@ -45,15 +48,22 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
         # Propose an episodic memory of this turn (experts/orchestrator only PROPOSE;
         # the manager owns persistence). Minimal: remember the request and answer.
-        flow.ctx.memory_writes_requested.append(
-            MemoryWriteProposal(
-                store=MemoryStore.EPISODIC,
-                content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
-                rationale="turn outcome",
-                confidence=response.confidence,
+        # Best-effort: the answer is already produced — a memory fault must never
+        # turn a successful turn into a failed one.
+        try:
+            flow.ctx.memory_writes_requested.append(
+                MemoryWriteProposal(
+                    store=MemoryStore.EPISODIC,
+                    content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
+                    rationale="turn outcome",
+                    confidence=response.confidence,
+                )
             )
-        )
-        await ports.memory.record_write_proposals(flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested)
+            await ports.memory.record_write_proposals(
+                flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested
+            )
+        except Exception as exc:
+            log.warning("memory write proposals dropped: %s", exc)
 
         return flow.next(response, Origin.ORCHESTRATOR, started)
 
@@ -62,4 +72,4 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     except OrchestratorError as exc:
         return flow.fail(exc, Origin.ORCHESTRATOR, started)
     except Exception as exc:
-        return flow.fail(OrchestratorError(f"orchestrator failed: {exc}"), Origin.ORCHESTRATOR, started)
+        return flow.fail(OrchestratorError(f"orchestrator failed: {exc}", cause=exc), Origin.ORCHESTRATOR, started)

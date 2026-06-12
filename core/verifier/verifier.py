@@ -99,4 +99,4 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         return flow.fail(exc, Origin.VERIFIER, started)
 
     except Exception as exc:
-        return flow.fail(VerifierError(f"Verifier failed: {exc}"), Origin.VERIFIER, started)
+        return flow.fail(VerifierError(f"Verifier failed: {exc}", cause=exc), Origin.VERIFIER, started)

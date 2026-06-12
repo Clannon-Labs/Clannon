@@ -15,6 +15,7 @@ Ordering is important:
 
 import time
 import asyncio
+import weakref
 
 from foundation import Flow, Origin, BlockReason, PipelineStage
 from foundation import constants, SanitizationError
@@ -25,7 +26,9 @@ from .workers import text, pdf, image, video, audio
 # One concurrency limiter per event loop, shared across requests on that loop.
 # Bounds how many modality workers run at once to constants.SANITIZER_MAX_WORKERS
 # (keyed by loop so tests that spin up fresh loops don't reuse a bound semaphore).
-_worker_semaphores: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+_worker_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def _worker_semaphore() -> asyncio.Semaphore:
@@ -109,30 +112,11 @@ async def run(flow: Flow) -> Flow:
             if isinstance(result, Exception):
                 return flow.fail(result, Origin.SANITIZER, started)
 
-            result_sanitized_text = getattr(result, "sanitized_text", None)
-            if result_sanitized_text is not None:
-                sanitized_payload = result_sanitized_text
-                sanitized_outputs["text"] = result_sanitized_text
-
-            result_sanitized_image = getattr(result, "sanitized_image", None)
-            if result_sanitized_image is not None:
-                sanitized_payload = result_sanitized_image
-                sanitized_outputs["image"] = result_sanitized_image
-
-            result_sanitized_pdf = getattr(result, "sanitized_pdf", None)
-            if result_sanitized_pdf is not None:
-                sanitized_payload = result_sanitized_pdf
-                sanitized_outputs["pdf"] = result_sanitized_pdf
-
-            result_sanitized_audio = getattr(result, "sanitized_audio", None)
-            if result_sanitized_audio is not None:
-                sanitized_payload = result_sanitized_audio
-                sanitized_outputs["audio"] = result_sanitized_audio
-
-            result_sanitized_video = getattr(result, "sanitized_video", None)
-            if result_sanitized_video is not None:
-                sanitized_payload = result_sanitized_video
-                sanitized_outputs["video"] = result_sanitized_video
+            for kind in ("text", "image", "pdf", "audio", "video"):
+                sanitized = getattr(result, f"sanitized_{kind}", None)
+                if sanitized is not None:
+                    sanitized_payload = sanitized
+                    sanitized_outputs[kind] = sanitized
 
             if result.threat_level.should_block:
                 # Persist the report on the same block path as pre-sanitization

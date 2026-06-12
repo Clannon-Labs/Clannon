@@ -316,7 +316,7 @@ class Flow(Generic[T]):
         )
         duration = _duration(started_at)
         new_meta  = self.meta.next_span(origin)
-        if duration:
+        if duration is not None:
             new_meta.duration_ms = duration
 
         entry = JournalEntry(
@@ -356,10 +356,13 @@ class Flow(Generic[T]):
         """
         duration = _duration(started_at)
         new_meta = self.meta.next_span(origin)
-        if duration:
+        if duration is not None:
             new_meta.duration_ms = duration
 
         self.ctx.mark_blocked(reason.value)
+        # stages after a block never run, so nothing will load this payload again —
+        # release the cached data now (it may be large or malicious)
+        self.handle.offload()
 
         entry = JournalEntry(
             origin=origin,
@@ -402,10 +405,11 @@ class Flow(Generic[T]):
         error_str = _truncate(str(error), constants.MAX_ERROR_LENGTH)
         duration = _duration(started_at)
         new_meta = self.meta.next_span(origin)
-        if duration:
+        if duration is not None:
             new_meta.duration_ms = duration
 
         self.ctx.mark_failed(error_str)
+        self.handle.offload()  # skipped stages never load this payload again
 
         entry = JournalEntry(
             origin=origin,
@@ -448,7 +452,7 @@ class Flow(Generic[T]):
         reason = _truncate(reason, constants.MAX_REASON_LENGTH)
         duration = _duration(started_at)
         new_meta = self.meta.next_span(origin)
-        if duration:
+        if duration is not None:
             new_meta.duration_ms = duration
 
         entry = JournalEntry(

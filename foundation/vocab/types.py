@@ -175,25 +175,3 @@ class MemoryStore(str, Enum):
     SEMANTIC   = "semantic"
     WIKI       = "wiki"
     PROCEDURAL = "procedural"
-
-
-# ---------------------------------------------------------------------------
-# Expert states
-# Used by: expert registry, expert handler, orchestrator
-# ---------------------------------------------------------------------------
-
-class ExpertState(str, Enum):
-    """
-    Current operational state of an expert.
-    The orchestrator reads this from the registry before invoking.
-    It will not invoke an expert that is not AVAILABLE.
-
-    AVAILABLE   — ready to receive work
-    BUSY        — currently processing another invocation
-    UNAVAILABLE — offline, errored, or circuit broken
-    RESTRICTED  — available but with reduced tool permissions
-    """
-    AVAILABLE   = "available"
-    BUSY        = "busy"
-    UNAVAILABLE = "unavailable"
-    RESTRICTED  = "restricted"

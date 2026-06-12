@@ -79,4 +79,4 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     except (FilterError, ModelUnavailableError) as exc:
         return flow.fail(exc, Origin.FILTER, started)
     except Exception as exc:
-        return flow.fail(FilterError(f"output filter failed: {exc}"), Origin.FILTER, started)
+        return flow.fail(FilterError(f"output filter failed: {exc}", cause=exc), Origin.FILTER, started)

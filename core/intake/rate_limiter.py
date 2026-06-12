@@ -48,6 +48,7 @@ class InMemorySlidingWindowRateLimiter:
         self.clock = clock
         self._requests: dict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._last_prune = 0.0
 
     def allow(self, key: str) -> bool:
         """Return True and record the request when key is inside its limit."""
@@ -72,11 +73,17 @@ class InMemorySlidingWindowRateLimiter:
         """
         Bound memory growth from many one-off session IDs.
 
-        The scan only runs after the key map reaches max_tracked_keys, so normal
-        hot-path requests do not pay for global cleanup.
+        The scan only runs after the key map reaches max_tracked_keys, and then
+        at most once per second — at capacity (e.g. a session-id rotation
+        attack) every request would otherwise pay a full O(keys) sweep under
+        the lock.
         """
         if len(self._requests) < self.max_tracked_keys:
             return
+        now = self.clock()
+        if now - self._last_prune < 1.0:
+            return
+        self._last_prune = now
 
         for key in list(self._requests.keys()):
             requests = self._requests[key]

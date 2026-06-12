@@ -74,4 +74,4 @@ def test_str_payload_is_never_read_as_a_path(tmp_path):
     assert out.status.value == "ok"
     assert out.ctx.detected_modalities == [Modality.TEXT.value]
     # The forwarded payload is the path string itself, not the file contents.
-    assert out.ctx.raw_input == str(secret)
+    assert asyncio.run(out.load()) == str(secret)

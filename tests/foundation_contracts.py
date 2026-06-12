@@ -37,3 +37,31 @@ def test_config_error_on_missing_role():
     registry = ModelRegistry({"defaults": {"provider": "google"}, "google": {}})
     with pytest.raises(ConfigError):
         registry.for_role("verifier")
+
+
+def test_flow_sub_millisecond_duration_is_still_recorded():
+    import time
+    flow = Flow.new("x", "s")
+    out = flow.next("y", Origin.INTAKE, started_at=time.monotonic())  # ~0.0ms
+    assert out.meta.duration_ms is not None
+    assert out.journal[-1].duration_ms is not None
+
+
+def test_flow_block_and_fail_release_the_cached_payload():
+    import asyncio
+
+    async def go():
+        flow = Flow.new(b"big malicious buffer", "s")
+        await flow.load()                       # cache it, as a stage would
+        blocked = flow.block(
+            __import__("foundation").BlockReason.MALICIOUS_CONTENT,
+            ThreatLevel.HIGH, Origin.SANITIZER,
+        )
+        assert blocked.handle._cached is None   # released — nothing downstream loads it
+
+        flow2 = Flow.new(b"payload", "s")
+        await flow2.load()
+        failed = flow2.fail(Exception("infra"), Origin.SANITIZER)
+        assert failed.handle._cached is None
+
+    asyncio.run(go())

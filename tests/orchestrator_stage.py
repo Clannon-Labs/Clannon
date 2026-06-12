@@ -43,3 +43,25 @@ def test_stage_times_out_and_fails(monkeypatch):
 
     out = asyncio.run(stage.run(_flow()))
     assert out.status.value == "error"
+
+
+def test_memory_fault_never_fails_a_delivered_turn(monkeypatch):
+    async def fake_loop(normalized, ports, ctx):
+        return OrchestratorResponse(text="answer", confidence=0.8)
+    monkeypatch.setattr(stage, "run_loop", fake_loop)
+
+    class BrokenMemory:
+        async def record_write_proposals(self, user_id, session_id, proposals):
+            raise RuntimeError("qdrant exploded")
+
+    real_build = stage.build_default_ports
+    def build_with_broken_memory(ctx):
+        ports = real_build(ctx)
+        ports.memory = BrokenMemory()
+        return ports
+    monkeypatch.setattr(stage, "build_default_ports", build_with_broken_memory)
+
+    out = asyncio.run(stage.run(_flow()))
+    # the answer was produced — a memory write fault must not undo that
+    assert out.status.value == "ok"
+    assert out.ctx.orchestrator_response.text == "answer"

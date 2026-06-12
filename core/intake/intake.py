@@ -112,7 +112,6 @@ async def process(flow: Flow) -> Flow:
 
         modality = _detect_modality(raw_input)
 
-        flow.ctx.raw_input = raw_input
         # Only the primary modality is processed today. detected_modalities stays
         # a list so multi-modality fan-out (e.g. a PDF with embedded images) can
         # be added later without changing this contract.

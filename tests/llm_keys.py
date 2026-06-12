@@ -52,3 +52,13 @@ def test_single_key_stays_plain(monkeypatch):
     # no per-key expansion with one key — plain chain entries, inferred lazily
     assert isinstance(model, FallbackModel)
     assert len(model.models) == 2
+
+
+def test_resolved_models_are_cached_not_rebuilt(monkeypatch):
+    _only_google_keys(monkeypatch, "k1", "k2", "k3")
+    first = reg.model_for_layer("search")
+    second = reg.model_for_layer("search")
+    # same object — providers (and their HTTP clients) are not rebuilt per call
+    assert first is second
+    monkeypatch.setenv("GOOGLE_API_KEY_4", "k4")
+    assert reg.model_for_layer("search") is not first  # env change = new resolution

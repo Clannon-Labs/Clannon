@@ -38,11 +38,9 @@ How to use it:
     Advanced: if you need a context without a Flow (e.g. tests, tooling):
             ctx = VrakshaContext.new(session_id="test-session")
 
-Placeholder types:
-    Several fields use placeholder types (marked with # PLACEHOLDER).
-    These will be replaced with real Pydantic models as each layer is built.
-    Do not remove the placeholders — they document what will go there
-    and allow the rest of the pipeline skeleton to be written now.
+Typing note:
+    Fields are typed Any to keep foundation import-free; the comment beside
+    each field names the real type that stage writes.
 
 Sections:
     PipelineStage    — enum of pipeline stages
@@ -175,11 +173,8 @@ class VrakshaContext:
     # Written by: core/intake.py
     # ------------------------------------------------------------------
 
-    raw_input:     Any | None = None   # PLACEHOLDER: will be intake.RawInput
-                                       # the raw, unprocessed input exactly as received
-
     detected_modalities: list[str] = field(default_factory=list)
-                                       # which modalities were detected in raw_input
+                                       # which modalities were detected in the input
                                        # e.g. ["text", "pdf", "image"]
 
     # ------------------------------------------------------------------
@@ -188,8 +183,7 @@ class VrakshaContext:
     # One result per modality. None = not present in this input.
     # ------------------------------------------------------------------
 
-    sanitization:  Any | None = None   # PLACEHOLDER: will be sanitizers.SanitizationResult
-                                       # aggregate result from all parallel workers
+    sanitization:  Any | None = None   # aggregate report from pre-sanitization + workers
 
     sanitization_blocked: bool = False
     sanitization_block_reason: str | None = None
@@ -199,7 +193,7 @@ class VrakshaContext:
     # Written by: core/normalizer.py
     # ------------------------------------------------------------------
 
-    normalized_input: Any | None = None  # PLACEHOLDER: will be foundation.NormalizedInput
+    normalized_input: Any | None = None  # foundation.NormalizedInput
                                          # structured form of the sanitized input
                                          # this is what the verifier and orchestrator see
 
@@ -208,7 +202,7 @@ class VrakshaContext:
     # Written by: core/verifier/verifier.py
     # ------------------------------------------------------------------
 
-    verifier_result: Any | None = None   # PLACEHOLDER: will be core.verifier.schemas.VerificationResult
+    verifier_result: Any | None = None   # core.verifier.schemas.VerificationResult
                                          # structured JSON from the verifier LLM:
                                          # {dangerous, warn, proceed, ...}
 
@@ -224,26 +218,26 @@ class VrakshaContext:
     expert_calls:  list[ExpertCallRecord] = field(default_factory=list)
 
     decision_log:  list[Any] = field(default_factory=list)
-                                              # PLACEHOLDER: will be orchestrator.DecisionLogEntry
+                                              # core.orchestrator.schemas.DecisionLogEntry
                                               # audit mirror of the streamed decision log; the
                                               # live stream goes through the decision-log sink
 
     expert_findings: list[Any] = field(default_factory=list)
-                                              # PLACEHOLDER: will be orchestrator.ExpertFindings
+                                              # registry.capabilities.ExpertFindings
                                               # FULL expert findings buffered for the output filter.
                                               # The orchestrator never reads these — it only sees
                                               # brief expert summaries (keeps its context lean)
 
-    orchestrator_response: Any | None = None  # PLACEHOLDER: will be foundation.OrchestratorResponse
+    orchestrator_response: Any | None = None  # foundation.OrchestratorResponse
                                               # raw response before output filtering
 
     hydration_items: list[Any] = field(default_factory=list)
-                                              # PLACEHOLDER: will be foundation.MemoryItem
+                                              # foundation.MemoryItem
                                               # memory injected this turn — the output filter
                                               # treats these as legitimate grounding sources
 
     memory_writes_requested: list[Any] = field(default_factory=list)
-                                              # PLACEHOLDER: will be foundation.MemoryWriteProposal
+                                              # foundation.MemoryWriteProposal
                                               # items the orchestrator flagged for memory
 
     # ------------------------------------------------------------------
@@ -251,7 +245,7 @@ class VrakshaContext:
     # Written by: security/filter/filter.py
     # ------------------------------------------------------------------
 
-    filter_result: Any | None = None     # PLACEHOLDER: will be filter.FilterResult
+    filter_result: Any | None = None     # security.filter.schemas.FilterResult
                                          # structured JSON from the filter LLM
 
     filter_blocked: bool = False
@@ -263,8 +257,7 @@ class VrakshaContext:
     # Written by: core/output.py
     # ------------------------------------------------------------------
 
-    final_response: Any | None = None    # PLACEHOLDER: will be output.FinalResponse
-                                         # what the user actually receives
+    final_response: Any | None = None    # what the user actually receives (str today)
 
     # ------------------------------------------------------------------
     # Terminal state
@@ -369,7 +362,7 @@ class VrakshaContext:
     def snapshot(self) -> dict[str, Any]:
         """
         Minimal dict for structured logging and dead letter output.
-        Safe to log — does not include raw_input or other sensitive payload.
+        Safe to log — never includes the raw payload or other sensitive content.
 
         Usage:
             logger.error("pipeline failed", **flow.ctx.snapshot())
