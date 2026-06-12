@@ -108,3 +108,31 @@ def test_expert_uses_scoped_tool_recorded_on_ctx():
     assert summaries[0].summary == "used tool"
     # an expert's tool call is recorded on ctx.tool_calls (unified audit)
     assert len(ctx.tool_calls) == 1 and ctx.tool_calls[0].success is True
+
+def test_env_snapshot_carries_prior_findings():
+    class Reader:
+        async def run(self, args, env):
+            seen = [f.ref for f in env.findings]
+            return ExpertOutput(summary="read", full_content=",".join(seen), confidence=0.5)
+    ctx = _ctx()
+    from registry.capabilities import ExpertFindings
+    ctx.expert_findings.append(ExpertFindings(expert="dom.earlier", ref="r1", full_content="prior"))
+    summaries = asyncio.run(ExpertHandler(registry=_expert_reg(Reader)).run_experts(
+        [ExpertRequest(key="dom.fake", arguments={"prompt": "T"})], ctx))
+    # the env snapshot let the expert read the earlier finding by ref
+    assert "r1" in ctx.expert_findings[-1].full_content and summaries[0].summary == "read"
+
+
+def test_orchestrator_spawn_returns_finding_ref():
+    from types import SimpleNamespace
+    from registry.capabilities.handler.support import OrchestratorDeps, _make_orchestrator_expert_fn
+
+    class Fake:
+        async def run(self, args, env):
+            return ExpertOutput(summary="sum", full_content="FULL", confidence=0.7)
+    ctx = _ctx()
+    handler = ExpertHandler(registry=_expert_reg(Fake))
+    fn = _make_orchestrator_expert_fn("dom.fake", _In, "d")
+    out = asyncio.run(fn(SimpleNamespace(deps=OrchestratorDeps(ctx=ctx, tools=None, experts=handler)), _In(prompt="T")))
+    # the model sees the ref it needs to hand to the writer / deliverable_ref
+    assert out == f"[finding_ref: {ctx.expert_findings[0].ref}] sum"

@@ -18,7 +18,7 @@ granted-tool wrappers carry a dynamic per-tool argument type that pydantic-ai
 must introspect as a real type, not a deferred string.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -91,6 +91,7 @@ class ExpertEnv:
     skills: SkillBook
     toolbox: ScopedToolbox | None
     granted: list   # granted tools' registry specs (key, input_schema, description)
+    findings: list = field(default_factory=list)  # prior ExpertFindings, snapshot at spawn — lets a synthesis expert read full research by ref
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +203,12 @@ def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str)
         summaries = await ctx.deps.experts.run_experts(
             [ExpertRequest(key=key, arguments=args.model_dump())], ctx.deps.ctx
         )
-        return summaries[0].summary if summaries else "[expert produced no result]"
+        if not summaries:
+            return "[expert produced no result]"
+        s = summaries[0]
+        # the ref names the buffered full findings — pass it to a synthesis
+        # expert (finding_refs) or deliver it directly (deliverable_ref)
+        return f"[finding_ref: {s.finding_ref}] {s.summary}" if s.finding_ref else s.summary
 
     spawn_expert.__name__ = key.replace(".", "_")
     spawn_expert.__doc__ = description

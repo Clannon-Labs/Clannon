@@ -23,9 +23,15 @@ class OrchestratorAnswer(BaseModel):
     The orchestrator agent's final structured output for a turn — produced after
     it has used whatever tools/experts it needed. The loop maps this to the
     cross-stage OrchestratorResponse (adding finding refs from ctx).
+
+    `deliverable_ref` lets a full expert artifact (e.g. a synthesized report) BE
+    the response without transiting the orchestrator's context: when set, the
+    loop swaps that finding's full content in as the response text and
+    `answer_text` serves as the lean summary for the decision log.
     """
     answer_text: str
     confidence: float = 0.0
+    deliverable_ref: str = ""
 
 
 # --- decision log -----------------------------------------------------------

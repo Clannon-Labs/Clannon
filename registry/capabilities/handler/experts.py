@@ -98,6 +98,7 @@ class ExpertHandler:
             skills=skills,
             toolbox=self._toolbox_for(granted, ctx),
             granted=granted,
+            findings=list(ctx.expert_findings),
         )
 
     def _toolbox_for(self, granted: list, ctx: VrakshaContext) -> ScopedToolbox | None:

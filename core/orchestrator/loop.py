@@ -47,10 +47,20 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
 
     await ports.log.emit(DecisionLogEntry(kind="answer", message=answer.answer_text))
     return OrchestratorResponse(
-        text=answer.answer_text,
+        text=_resolve_deliverable(answer, ctx),
         confidence=answer.confidence,
         finding_refs=[f.ref for f in ctx.expert_findings],
     )
+
+
+def _resolve_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str:
+    """The response text: a referenced expert artifact (full report, never seen by
+    the orchestrator's model) when one is named, else the model's own answer."""
+    if answer.deliverable_ref:
+        for finding in ctx.expert_findings:
+            if finding.ref == answer.deliverable_ref and finding.full_content:
+                return finding.full_content
+    return answer.answer_text
 
 
 async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:
