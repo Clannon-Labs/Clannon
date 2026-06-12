@@ -42,7 +42,7 @@ def _build_search_agent(layer: str) -> Agent:
         return Agent(model, model_settings=settings, defer_model_check=True)
 
 
-async def grounded_search(query: str, *, layer: str = "research") -> SearchResult:
+async def grounded_search(query: str, *, layer: str = "search") -> SearchResult:
     """Run a grounded search and return findings text + any source URLs."""
     agent = _build_search_agent(layer)
     prompt = (

@@ -91,6 +91,10 @@ def model_for_layer(layer: str) -> str | FallbackModel:
     """
     primary = model_name_for_layer(layer)
     chain = [model for model in fallback_chain_for_layer(layer) if model != primary]
+    if not _provider_available(primary) and chain:
+        # the configured primary has no API key in this environment — promote the
+        # first keyed chain entry instead of failing at FallbackModel build time
+        primary, chain = chain[0], chain[1:]
     if not chain:
         return primary
     return FallbackModel(primary, *chain)

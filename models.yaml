@@ -1,17 +1,35 @@
+# Free-tier Gemini quota is scarce (billing unavailable): spend it ONLY on what
+# Gemini alone can do — grounded search + multimodal. Every other layer runs on
+# paid keys (anthropic primary) so research never starves. XPRIZE minimum (one
+# Gemini call + one Google product) stays covered by the search role.
 defaults:
-  provider: google
-  verifier: google
-  normalizer: google
-  orchestrator: google
-  filter: google
-  media_expert: google
-  research: google
+  provider: anthropic
+  verifier: anthropic
+  normalizer: anthropic
+  orchestrator: anthropic
+  filter: anthropic
+  planner: anthropic
+  research: anthropic   # the research expert's REASONING model; grounded search is the separate `search` role
+  search: google        # Gemini-only capability — the one job on the free Gemini quota
+  media_expert: google  # multimodal understanding stays on Gemini
 
 anthropic:
   orchestrator:
     model: claude-sonnet-4-6
     capabilities: [text, json, tools]
     task: "Central brain, tool routing, memory decisions, multi-step planning"
+  verifier:
+    model: claude-haiku-4-5
+    capabilities: [text, json, tools]
+    task: "Input verification with structured output and optional tools"
+  normalizer:
+    model: claude-haiku-4-5
+    capabilities: [text, json]
+    task: "Target model profile for code-only normalizer decisions"
+  filter:
+    model: claude-haiku-4-5
+    capabilities: [text, json]
+    task: "Output safety filtering with structured output"
   code:
     model: claude-sonnet-4-6
     capabilities: [text, json, tools]
@@ -22,10 +40,10 @@ anthropic:
     task: "AI slop detection via commit forensics and code pattern analysis"
   research:
     model: claude-sonnet-4-6
-    capabilities: [text, json]
+    capabilities: [text, json, tools]
     task: "Web research, summarization"
   planner:
-    model: claude-opus-4-8 # Most capable Opus tier for deep architectural planning
+    model: claude-sonnet-4-6 # runs the writer expert per report — opus is overkill there, swap up for one-off architecture work
     capabilities: [text, json]
     task: "Architecture decisions, roadmaps, long-form reasoning"
   memory:
@@ -106,6 +124,10 @@ google:
     model: gemini-2.5-flash # supports grounding; 3.5-flash is launch-congested, it's in the fallback chain
     capabilities: [text, json, image]
     task: "Web research, summarization"
+  search:
+    model: gemini-2.5-flash # grounding-capable; one quota-cheap call per search, nothing else rides this model
+    capabilities: [text, json]
+    task: "Grounded web search via Google Search grounding"
   planner:
     model: gemini-2.5-pro
     capabilities: [text, json, image, audio, video]
@@ -299,25 +321,29 @@ huggingface:
 
 fallbacks:
   verifier:
-    - google:gemini-3.1-flash-lite
     - anthropic:claude-haiku-4-5
     - openai:gpt-5.4-mini
+    - google:gemini-3.1-flash-lite
   normalizer:
-    - google:gemini-3.1-flash-lite
-    - anthropic:claude-haiku-4-5
-  orchestrator:
-    - google:gemini-3.5-flash
-    - anthropic:claude-sonnet-4-6
-    - openai:gpt-5.4
-  research:
-    - google:gemini-3.5-flash
-    - anthropic:claude-sonnet-4-6
-    - openai:gpt-5.4
-  planner:
-    - google:gemini-2.5-pro
-    - anthropic:claude-sonnet-4-6
-    - openai:gpt-5.4
-  filter:
-    - google:gemini-3.1-flash-lite
     - anthropic:claude-haiku-4-5
     - openai:gpt-5.4-mini
+  orchestrator:
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+    - google:gemini-3.5-flash
+  research:
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+    - google:gemini-3.5-flash
+  search:
+    - google:gemini-2.5-flash
+    - google:gemini-3.5-flash      # separate per-model quota, still grounded
+    - anthropic:claude-sonnet-4-6  # anthropic's server-side web search, paid last resort
+  planner:
+    - anthropic:claude-sonnet-4-6
+    - openai:gpt-5.4
+    - google:gemini-2.5-pro
+  filter:
+    - anthropic:claude-haiku-4-5
+    - openai:gpt-5.4-mini
+    - google:gemini-3.1-flash-lite
