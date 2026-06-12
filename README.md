@@ -1,7 +1,7 @@
 # Vraksha: A Friend Who Always Remembers You
 
 <p align="center">
-  <img src="https://github.com/vraksha/vraksha/blob/main/assets/vraksha.png" alt="Vraksha Logo" style="width: 30%;">
+  <img src="assets/vraksha.png" alt="Vraksha Logo" style="width: 30%;">
 </p>
 
 > **"Vraksha remembers, so you can focus on creating."**
@@ -138,10 +138,10 @@ intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -
 
 Useful docs:
 
-- [foundation/README.md](https://github.com/vraksha/vraksha/blob/main/foundation/README.md)
-- [foundation/FLOW_GUIDE.md](https://github.com/vraksha/vraksha/blob/main/foundation/FLOW_GUIDE.md)
-- [core/README.md](https://github.com/vraksha/vraksha/blob/main/core/README.md)
-- [security/sanitizers/README.md](https://github.com/vraksha/vraksha/blob/main/security/sanitizers/README.md)
+- [foundation/README.md](foundation/README.md)
+- [foundation/FLOW_GUIDE.md](foundation/FLOW_GUIDE.md)
+- [core/README.md](core/README.md)
+- [security/sanitizers/README.md](security/sanitizers/README.md)
 
 ---
 
@@ -285,21 +285,21 @@ python main.py "your text here"      # prints the resulting Flow summary
     <tr>
       <td>
         <p align="center"><b>01. Introduction/thinking</b></p>
-        <img src="https://github.com/vraksha/vraksha/raw/main/assets/previews/introduction.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
+        <img src="assets/previews/introduction.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
       </td>
       <td>
         <p align="center"><b>02. Recent Context</b></p>
-        <img src="https://github.com/vraksha/vraksha/raw/main/assets/previews/recent.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
+        <img src="assets/previews/recent.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
       </td>
     </tr>
     <tr>
       <td>
         <p align="center"><b>03. Detection Report</b></p>
-        <img src="https://github.com/vraksha/vraksha/raw/main/assets/previews/detection-report.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
+        <img src="assets/previews/detection-report.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
       </td>
       <td>
         <p align="center"><b>04. Detection Feedback</b></p>
-        <img src="https://github.com/vraksha/vraksha/raw/main/assets/previews/detector-result-peter.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
+        <img src="assets/previews/detector-result-peter.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
       </td>
     </tr>
   </table>

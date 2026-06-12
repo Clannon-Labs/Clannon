@@ -242,7 +242,7 @@ flow.ctx.tool_calls.append(ToolCallRecord(tool_name="search", arguments={...}))
 
 ## Using Flow Across Layers
 
-For a full architecture walkthrough, see **[FLOW_GUIDE.md](https://github.com/vraksha/vraksha/blob/main/foundation/FLOW_GUIDE.md)**.
+For a full architecture walkthrough, see **[FLOW_GUIDE.md](FLOW_GUIDE.md)**.
 
 That guide shows how `Flow` should move through sanitizers, normalization,
 verification, the Pydantic AI orchestrator, tool and expert handlers, output
