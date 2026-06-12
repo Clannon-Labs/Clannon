@@ -25,6 +25,7 @@ security/vendors/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+server/data/
 
 # Repository Artifacts
 FUTURE_SELF_REVIEW_PLAN.md
