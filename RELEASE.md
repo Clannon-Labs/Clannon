@@ -1,6 +1,6 @@
-# Vraksha
+# Clannon
 
-Vraksha is a research pipeline with memory. You give it a brief, it plans
+Clannon is a research pipeline with memory. You give it a brief, it plans
 the work, sends out agents that can actually search the web and run code,
 checks the answer before showing it to you, and saves what it learned so
 the next run starts smarter. I built it because every AI tool I used forgot

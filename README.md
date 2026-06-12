@@ -1,47 +1,45 @@
-# Vraksha: A Friend Who Always Remembers You
+# Clannon: Research That Remembers
 
 <p align="center">
-  <img src="assets/vraksha.png" alt="Vraksha Logo" style="width: 30%;">
+  <img src="assets/clannon.png" alt="Clannon Logo" style="width: 30%;">
 </p>
 
-> **"Vraksha remembers, so you can focus on creating."**
+> **"Hand off the research. Keep the judgment."**
 
-Most AI assistants start from scratch every time you talk to them. They forget
-who you are, what you care about, and what you were building the moment the
-session ends. **Vraksha** is being built for the opposite experience: a secure,
-local-first agent runtime that can preserve context, understand multimodal
-inputs, and grow with you over time.
+Most AI tools start from scratch every time you talk to them. They forget who
+your clients are, what you found last week, and how you like your reports the
+moment the session ends. **Clannon** is built for the opposite experience: give
+it a client brief and a team of specialist agents researches it in parallel —
+every claim checked against its source before it reaches you, with a memory of
+each client that sharpens the next run.
 
 No more re-explaining. No more context drift. Just get straight to work.
 
 ---
 
-## Why Vraksha?
+## Why Clannon?
 
-Vraksha is not just another agent wrapper. It is being designed around three
-core ideas:
+Clannon is not another chat wrapper. It is designed around three core ideas:
 
-1. **Security that Actually Works**: Powerful agents need strong boundaries.
-   Vraksha is built as a layered pipeline where raw input is inspected,
-   sanitized, normalized, verified, orchestrated, filtered, and only then shown
-   back to the user.
-2. **Memory that Lasts**: The long-term vision is a local-first memory system
-   that keeps project context, durable facts, and user preferences available
-   across sessions without handing everything to a remote black box.
-3. **A Personal Agent With Taste**: Vraksha is meant to feel less like a
-   disposable chat window and more like a steady collaborator with a consistent
-   working style, tool access, and memory.
+1. **Glass box, not black box**: You watch every routing decision, every
+   search, every conflict between sources — live, as the orchestrator makes
+   them. Every run is auditable after the fact.
+2. **Filtered, not hopeful**: Powerful agents need strong boundaries. Raw input
+   is inspected, sanitized, normalized, and verified before any model reasons
+   over it — and citations are checked against their sources before delivery.
+   If a claim can't be grounded, it doesn't ship.
+3. **Memory that compounds**: Four memory tiers (wiki, semantic, episodic,
+   procedural) feed every run before planning even starts. By the third project
+   with a client, you stop re-explaining — the context is already in the room.
 
 ---
 
 ## What it can do right now
 
-- **Flow-Based Pipeline Foundation**: Every stage receives and returns a
-  `Flow`, carrying payloads, context, trace metadata, status, and a journal of
-  stage transitions.
-- **Input Intake Layer**: Vraksha can rate-limit requests, enforce raw input
-  size limits, detect modalities, and preserve the original input in request
-  context.
+- **Flow-Based Pipeline**: Every stage receives and returns a `Flow`, carrying
+  payloads, context, trace metadata, status, and a journal of stage transitions.
+- **Input Intake Layer**: Rate-limits requests, enforces raw input size limits,
+  detects modalities, and preserves the original input in request context.
 - **Security Sanitization Layer**: ClamAV and YARA run concurrently as a
   universal pre-gate before modality workers. Text, PDF, image, audio, and video
   workers validate and sanitize inputs while preserving quality wherever possible.
@@ -52,21 +50,27 @@ core ideas:
 - **Verifier Layer**: A small, fast LLM (Google Gemini by default) makes the
   final input-safety call. The deterministic regex pass is only a hint — the LLM
   always adjudicates text and is the sole content blocker. Output is structured.
-- **Orchestrator + Experts + Tools**: A Vraksha-owned reasoning loop — the model
-  advises with one structured decision per turn and the loop executes it — that
-  streams a structured decision log. Experts (web research, writer/synthesis) are
-  real agents with their own prompt, skills, and scoped tools; tools (web search,
-  fetch URL, sandboxed Python, calculator) run through a permissioned handler.
-  Both register through one **capability registry** (`@tool`/`@expert`,
-  auto-discovered), so adding a capability is just dropping a decorated file.
-- **Output Filter + Delivery**: A final structured safety/groundedness gate checks
-  the draft before a delivery stage sends it to the user (CLI today).
-- **Memory via a single door**: All memory goes through the `MemoryManager`
-  (`MemoryPort`); today a minimal in-process episodic store, with the real
-  Qdrant + fastembed tiers as a dedicated next step.
-- **Root Model Routing**: Model choices live in `models.yaml`, so every LLM stage
-  routes providers from one place; the LLM framework itself is confined to
-  `core/llm`. Google Gemini is the default provider.
+- **Orchestrator + Experts + Tools**: A native tool-driving reasoning agent that
+  streams a structured decision log as it works. Experts (web research,
+  writer/synthesis) are real agents with their own prompt, skills, and scoped
+  tools; tools (web search, fetch URL, sandboxed Python, calculator) run through
+  a permissioned handler. Both register through one **capability registry**
+  (`@tool`/`@expert`, auto-discovered), so adding a capability is just dropping
+  a decorated file.
+- **Four-Tier Memory**: Wiki, semantic, episodic, and procedural memory live on
+  Qdrant behind a single port — with trust ordering (wiki always wins), recency
+  decay, deduplication, and budget allocation. Everything enters memory through
+  a write policy, never directly.
+- **Output Filter + Delivery**: A final structured safety/groundedness gate
+  checks the draft before delivery — interactive TUI and one-shot CLI today,
+  plus a FastAPI server adapter (`server/`) for the web app.
+- **Web Frontend**: A Next.js workspace and marketing site (`frontend/`) with a
+  live decision-log stream, memory browser, and run views — currently
+  mock-backed; the mock client defines the exact SSE contract the server serves.
+- **Resilient Model Routing**: Model choices live in `models.yaml` with
+  cross-provider fallback chains per layer — no single provider quota can fail
+  a run. The LLM framework itself is confined to `core/llm`. Google Gemini is
+  the default provider.
 
 The active path today is:
 
@@ -76,30 +80,28 @@ raw input -> intake -> sanitizer -> normalizer -> verifier -> orchestrator -> ou
 
 ---
 
-## Coming Soon
+## Next Up
 
-These are the next major layers being built on top of the current foundation:
+The pipeline runs end-to-end; what's being built on top of it now:
 
-- **Pydantic AI Orchestrator**: The main reasoning agent that can call tools,
-  delegate to experts, and decide what should be remembered.
-- **Experts and Tool Handlers**: Controlled execution boundaries for tools,
-  specialist models, media understanding, code work, research, and automation.
-- **Output Filter**: A final LLM + code safety layer that checks candidate
-  responses before the user sees them.
-- **Memory Layer**: Persistent local memory for facts, sessions, preferences,
-  and project state.
+- **Frontend ↔ Server Wiring**: Switch the web app from mock mode to the live
+  FastAPI server (one config value — the SSE contract is already defined).
+- **No-Signup Demo**: An isolated, rate-limited demo that runs real briefs
+  without an account.
+- **Cloud Deployment**: Multi-tenancy, billing, and token budgets enforced
+  atomically — the hosted version.
 
 ---
 
 ## On the Horizon
 
-Here is where Vraksha is heading in the long run:
+Where Clannon is heading in the long run:
 
 - **Multimodal Native Reasoning**: Use image/audio/video-capable models when
   available, and route unsupported media to capable experts when needed.
-- **Local-First Memory Graph**: A durable memory system combining structured
-  records, semantic search, and project-aware context.
-- **Agents Talking to Agents**: Multiple Vraksha experts collaborating through
+- **MCP-Connected Context**: Client context injected automatically from the
+  tools you already use.
+- **Agents Talking to Agents**: Multiple experts collaborating through
   controlled, auditable boundaries.
 - **Sandboxed Execution**: Stronger isolation for tools and code execution
   using Docker today and stricter sandboxes later.
@@ -112,19 +114,28 @@ Here is where Vraksha is heading in the long run:
 
 ```text
 foundation/
-  Flow, context, constants, shared types, model registry
+  Flow, context, constants, shared types, contracts
 
 core/
-  intake, pipeline, normalizer, verifier, orchestrator, memory, llm adapter
+  intake, normalizer, verifier, orchestrator, memory, llm adapter
+
+registry/ + tools/ + experts/
+  the capability registry and the self-registering tools and experts
 
 security/
   sanitizers + output filter
 
+server/
+  FastAPI delivery adapter (auth, runs, config)
+
+frontend/
+  Next.js web app (workspace + marketing, design tokens in src/config/)
+
 delivery/
-  terminal stage (CLI today)
+  terminal stage (TUI + one-shot CLI)
 
 models.yaml
-  one place to route model providers and capabilities (Gemini default)
+  one place to route model providers, capabilities, and fallback chains
 
 prompts/
   versioned system/instruction prompts as markdown, indexed by registry.yaml
@@ -142,31 +153,33 @@ Useful docs:
 - [foundation/FLOW_GUIDE.md](foundation/FLOW_GUIDE.md)
 - [core/README.md](core/README.md)
 - [security/sanitizers/README.md](security/sanitizers/README.md)
+- [server/README.md](server/README.md)
+- [frontend/README.md](frontend/README.md)
 
 ---
 
 ## Installation
 
-There are two ways to set up Vraksha right now.
+There are two ways to set up Clannon right now.
 
 ### The Fast Path
 
 Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/vraksha/main/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-linux.sh | bash
 ```
 
 WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/vraksha/main/install-wsl.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-wsl.sh | bash
 ```
 
 macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/vraksha/main/install-macos.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-macos.sh | bash
 ```
 > After that, just run `vraksha` to start your first session.
 
@@ -179,8 +192,8 @@ see what is working today.
 Clone the repo, create a virtual environment, and install dependencies:
 
 ```bash
-git clone https://github.com/vraksha/vraksha
-cd vraksha
+git clone https://github.com/vraksha/Clannon
+cd Clannon
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
@@ -211,6 +224,14 @@ Model choices and layer routing live in:
 
 ```text
 models.yaml
+```
+
+To run the web app against the bundled mock backend:
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ### Security Services
@@ -276,11 +297,11 @@ python main.py "your text here"      # prints the resulting Flow summary
 
 ---
 
-**Official Site:** [agentvraksha.com](https://agentvraksha.com)
+**Official Site:** [clannon.com](https://clannon.com)
 
 <div align="center">
-  <h3>Vraksha System Architecture & Live Demos</h3>
-  
+  <h3>Clannon in Action</h3>
+
   <table border="0">
     <tr>
       <td>
@@ -303,6 +324,6 @@ python main.py "your text here"      # prints the resulting Flow summary
       </td>
     </tr>
   </table>
-  
-  <p><i>Vraksha: security-first memory agent runtime, built layer by layer.</i></p>
+
+  <p><i>Clannon: research that remembers — built on a security-first pipeline, layer by layer.</i></p>
 </div>
