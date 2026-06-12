@@ -42,6 +42,16 @@ export interface ClannonClient {
   createRun(brief: string): Promise<{ id: string }>;
   /** Live events for a run. Ends when the run reaches a terminal state. */
   streamRun(id: string, signal: AbortSignal): AsyncGenerator<RunEvent>;
+  /** Attach a thumbs rating (+ optional note) to a delivered run. */
+  setRunFeedback(
+    id: string,
+    rating: "up" | "down" | null,
+    comment?: string,
+  ): Promise<void>;
+  /** Continue a run: a new turn in the same session, threading prior context. */
+  createFollowUp(id: string, brief: string): Promise<{ id: string }>;
+  /** Every turn of this run's session, oldest first — the conversation thread. */
+  getRunThread(id: string): Promise<Run[]>;
 
   listMemory(): Promise<MemoryEntry[]>;
   saveMemoryEntry(

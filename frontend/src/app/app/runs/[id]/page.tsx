@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
-import { ArrowLeft, ShieldAlert, Check, Copy, Download } from "lucide-react";
+import { use, useState } from "react";
+import { ArrowLeft, ShieldAlert, Check, Copy, Download, ChevronRight, ListTree } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import { useRun, useLiveRun } from "@/lib/api/hooks";
+import { useRun, useLiveRun, useRunThread } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DecisionLog } from "@/components/app/decision-log";
 import { ExpertPanel, SourcesPanel } from "@/components/app/expert-panel";
@@ -15,13 +15,54 @@ import {
   stageIndex,
 } from "@/components/app/run-status";
 import { Reveal, Rule } from "@/components/motion";
+import { RunFeedback } from "@/components/app/run-feedback";
+import { PriorTurns } from "@/components/app/prior-turns";
+import type { Run } from "@/lib/api";
 import { cn, formatTokens } from "@/lib/utils";
+
+/** An honest, stage-specific block message — not the old "verifier found PII"
+ *  catch-all, which was wrong for output-filter blocks. */
+function blockMessage(stage: Run["blockStage"]): { title: string; body: string } {
+  switch (stage) {
+    case "sanitize":
+      return {
+        title: "Blocked before processing",
+        body: "The input scanner flagged the brief (malware signature, or unsafe/malformed content) and stopped it. Nothing was sent to the models. Edit the brief and resubmit.",
+      };
+    case "verify":
+      return {
+        title: "Blocked by the verifier",
+        body: "The verifier found content it couldn't safely process in the brief (for example, unredacted personal data). Nothing was sent to the models. Edit the brief and resubmit.",
+      };
+    case "filter":
+      return {
+        title: "Held back by the output filter",
+        body: "A draft was produced but the output filter didn't clear it for delivery. This can happen if claims couldn't be grounded in the research. Try rephrasing, or run it again.",
+      };
+    default:
+      return {
+        title: "Run blocked by the security pipeline",
+        body: "A security gate stopped this run before delivery. Your token budget was not charged for blocked work.",
+      };
+  }
+}
 
 export default function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: run, isLoading, error } = useRun(id);
+  const { data: thread } = useRunThread(id);
   const live = useLiveRun(run);
   const toast = useToast();
+
+  // turns of this session that came before the one on screen — the chat history.
+  // thread is oldest-first; take everything up to the current turn.
+  const orderedThread = thread ?? [];
+  const currentIndex = orderedThread.findIndex((t) => t.id === id);
+  const priorTurns = currentIndex > 0 ? orderedThread.slice(0, currentIndex) : [];
+
+  // the input + decision log collapse together — one toggle for "the process",
+  // so a finished turn reads as a clean report with the composer below
+  const [showProcess, setShowProcess] = useState(true);
 
   async function copyReport() {
     await navigator.clipboard.writeText(live.reportText);
@@ -70,15 +111,24 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
   return (
     <div className="mx-auto max-w-6xl">
-      {/* header */}
+      <Link
+        href="/app"
+        className="inline-flex items-center gap-1.5 py-2 text-[13px] text-faint transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden /> Workspace
+      </Link>
+
+      {/* the conversation so far — prior turns of this session */}
+      <div className="mt-4">
+        <PriorTurns turns={priorTurns} />
+      </div>
+
+      {/* current turn */}
       <header>
-        <Link
-          href="/app"
-          className="inline-flex items-center gap-1.5 text-[13px] text-faint transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" aria-hidden /> Workspace
-        </Link>
-        <div className="mt-4 flex flex-wrap items-start gap-x-4 gap-y-3">
+        {priorTurns.length > 0 && (
+          <p className="tag-label mb-2 text-primary">This turn</p>
+        )}
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
           <h1 className="display min-w-0 flex-1 basis-full text-balance text-[2rem] leading-[1.02] sm:basis-auto sm:text-[2.6rem]">
             {run.title}
           </h1>
@@ -93,6 +143,31 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         </div>
         <Rule className="mt-5" />
       </header>
+
+      {/* one control for "the process" — your input AND the decision log collapse
+          together, so a finished turn reads as a clean report + composer */}
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setShowProcess((s) => !s)}
+          aria-expanded={showProcess}
+          className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight
+            className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", showProcess && "rotate-90")}
+            aria-hidden
+          />
+          <ListTree className="size-3.5 shrink-0" aria-hidden />
+          {showProcess ? "Hide input & decision log" : "Show input & decision log"}
+        </button>
+      </div>
+
+      {/* the brief — the title is a truncated preview; this is the full input */}
+      {showProcess && run.brief && (
+        <p className="mt-3 whitespace-pre-wrap rounded-lg border border-border bg-surface px-4 py-3.5 text-sm leading-relaxed text-foreground">
+          {run.brief}
+        </p>
+      )}
 
       {/* pipeline progress — a ruled strike across the stages, not a row of pills */}
       <ol className="hairline-b mt-6 flex items-stretch overflow-x-auto" aria-label="Pipeline stages">
@@ -147,11 +222,11 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           <ShieldAlert className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
           <div>
             <p className="text-sm font-semibold text-destructive">
-              {live.status === "blocked" ? "Run blocked by the security pipeline" : "Run failed"}
+              {live.status === "blocked" ? blockMessage(run.blockStage).title : "Run failed"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {live.status === "blocked"
-                ? "The verifier found content it couldn't safely process (unredacted personal data in the brief). Nothing was sent to the models. Edit the brief and resubmit."
+                ? blockMessage(run.blockStage).body
                 : "A pipeline stage failed before delivery. Your token budget was not charged for incomplete work."}
             </p>
           </div>
@@ -164,18 +239,20 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         </p>
       )}
 
-      {/* live grid */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <DecisionLog
-          entries={live.log}
-          live={live.live}
-          className="h-[420px] lg:h-[480px]"
-        />
-        <div className="flex flex-col gap-4">
-          <ExpertPanel experts={live.experts} />
-          <SourcesPanel sources={live.sources} />
+      {/* live grid — collapses with the input under the one toggle above */}
+      {showProcess && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+          <DecisionLog
+            entries={live.log}
+            live={live.live}
+            className="h-[420px] lg:h-[480px]"
+          />
+          <div className="flex flex-col gap-4">
+            <ExpertPanel experts={live.experts} />
+            <SourcesPanel sources={live.sources} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* report */}
       {showReport && (
@@ -195,7 +272,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                     onClick={copyReport}
                     aria-label="Copy report as markdown"
                     title="Copy markdown"
-                    className="cursor-pointer rounded-md p-2 text-faint transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Copy className="size-4" />
                   </button>
@@ -204,7 +281,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                     onClick={downloadReport}
                     aria-label="Download report as a markdown file"
                     title="Download .md"
-                    className="cursor-pointer rounded-md p-2 text-faint transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Download className="size-4" />
                   </button>
@@ -220,6 +297,17 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             </div>
           </Reveal>
         </section>
+      )}
+
+      {/* continue the conversation — available on ANY terminal turn, including a
+          blocked or failed one, so a block is never a dead end. The thumbs
+          rating only shows when there's a delivered report to rate. */}
+      {(live.reportDone || isTerminalFailure) && (
+        <RunFeedback
+          runId={run.id}
+          initialRating={run.feedbackRating}
+          canRate={live.reportDone}
+        />
       )}
     </div>
   );

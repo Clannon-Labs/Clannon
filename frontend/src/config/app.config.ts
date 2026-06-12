@@ -47,6 +47,12 @@ export const appConfig = {
     createRun: "/runs",
     /** Server-Sent Events stream of RunEvent payloads. */
     runStream: "/runs/:id/stream",
+    /** Thumbs rating (+ optional note) on a delivered run. */
+    runFeedback: "/runs/:id/feedback",
+    /** Continue a run: spawns the next turn in the same session. */
+    runFollowUp: "/runs/:id/followup",
+    /** All turns of a run's session, oldest first. */
+    runThread: "/runs/:id/thread",
     memory: "/memory",
     memoryEntry: "/memory/:id",
     /** Multipart bulk import of .md/.txt files as wiki entries. */

@@ -64,6 +64,8 @@ export interface RunSummary {
   createdAt: string;
   tokensUsed: number;
   expertCount: number;
+  /** The session this turn belongs to — used to group turns into one thread. */
+  sessionId?: string;
 }
 
 export interface Run extends RunSummary {
@@ -73,6 +75,18 @@ export interface Run extends RunSummary {
   /** Markdown. Only present once the output filter has cleared it. */
   report?: string;
   sources: Source[];
+  /** User's thumbs rating on the delivered report, if given. */
+  feedbackRating?: "up" | "down" | null;
+  feedbackComment?: string | null;
+  /** Set when this run is a follow-up; links back to the run it continues. */
+  parentRunId?: string | null;
+  /** The session this turn belongs to. Root turns own their session; follow-ups
+   *  inherit the parent's, so a whole conversation shares one sessionId. */
+  sessionId?: string;
+  /** Which gate blocked the run, when status is "blocked":
+   *  "sanitize" | "verify" (input-side — nothing reached the models) |
+   *  "filter" (output-side — a draft was produced then held back) | "security". */
+  blockStage?: "sanitize" | "verify" | "filter" | "security" | null;
 }
 
 /** Events emitted on a live run stream (SSE `data:` payloads). */

@@ -64,11 +64,39 @@ export function useRun(id: string) {
   return useQuery({ queryKey: queryKeys.run(id), queryFn: () => getClient().getRun(id) });
 }
 
+/** Prior turns of this run's session (the conversation so far). */
+export function useRunThread(id: string) {
+  return useQuery({
+    queryKey: ["runs", id, "thread"],
+    queryFn: () => getClient().getRunThread(id),
+  });
+}
+
 export function useCreateRun() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (brief: string) => getClient().createRun(brief),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
+  });
+}
+
+export function useSetRunFeedback(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { rating: "up" | "down" | null; comment?: string }) =>
+      getClient().setRunFeedback(runId, vars.rating, vars.comment),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.run(runId) }),
+  });
+}
+
+export function useCreateFollowUp(parentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (brief: string) => getClient().createFollowUp(parentId, brief),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.runs });
+      qc.invalidateQueries({ queryKey: ["runs", parentId, "thread"] });
+    },
   });
 }
 

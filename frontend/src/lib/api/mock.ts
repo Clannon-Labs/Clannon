@@ -132,13 +132,14 @@ export class MockClient implements ClannonClient {
     await sleep(280);
     return [...this.runs.values()]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(({ id, title, status, createdAt, tokensUsed, expertCount }) => ({
+      .map(({ id, title, status, createdAt, tokensUsed, expertCount, sessionId }) => ({
         id,
         title,
         status,
         createdAt,
         tokensUsed,
         expertCount,
+        sessionId,
       }));
   }
 
@@ -168,8 +169,45 @@ export class MockClient implements ClannonClient {
       decisionLog: [],
       experts: [],
       sources: [],
+      sessionId: id, // a root turn opens its own session
     });
     return { id };
+  }
+
+  async setRunFeedback(
+    id: string,
+    rating: "up" | "down" | null,
+    comment?: string,
+  ): Promise<void> {
+    await sleep(200);
+    const run = this.runs.get(id);
+    if (!run) throw new ApiError("Run not found.", 404);
+    run.feedbackRating = rating;
+    run.feedbackComment = comment?.trim() || null;
+  }
+
+  async createFollowUp(id: string, brief: string): Promise<{ id: string }> {
+    const parent = this.runs.get(id);
+    if (!parent) throw new ApiError("Run not found.", 404);
+    const { id: newId } = await this.createRun(brief);
+    const child = this.runs.get(newId);
+    if (child) {
+      child.parentRunId = id;
+      // inherit the parent's session so the whole conversation is one thread
+      child.sessionId = parent.sessionId ?? parent.id;
+    }
+    return { id: newId };
+  }
+
+  async getRunThread(id: string): Promise<Run[]> {
+    await sleep(180);
+    const anchor = this.runs.get(id);
+    if (!anchor) throw new ApiError("Run not found.", 404);
+    const session = anchor.sessionId ?? anchor.id;
+    return [...this.runs.values()]
+      .filter((r) => (r.sessionId ?? r.id) === session)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((r) => structuredClone(r));
   }
 
   async *streamRun(id: string, signal: AbortSignal): AsyncGenerator<RunEvent> {
