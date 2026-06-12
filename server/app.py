@@ -15,6 +15,7 @@ import secrets
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -142,6 +143,49 @@ def get_run(run_id: str, user: auth.User = Depends(auth.current_user)) -> dict:
     if run is None:
         raise HTTPException(404, "Run not found.")
     return run.full_json()
+
+
+class FeedbackBody(BaseModel):
+    rating: Literal["up", "down"] | None = None
+    comment: str | None = Field(default=None, max_length=2_000)
+
+
+@app.post("/runs/{run_id}/feedback", status_code=204)
+def set_run_feedback(
+    run_id: str, body: FeedbackBody, user: auth.User = Depends(auth.current_user)
+) -> None:
+    comment = (body.comment or "").strip() or None
+    if not runs.STORE.set_feedback(user.id, run_id, body.rating, comment):
+        raise HTTPException(404, "Run not found.")
+
+
+class FollowUpBody(BaseModel):
+    brief: str = Field(min_length=1, max_length=20_000)
+
+
+@app.post("/runs/{run_id}/followup", status_code=201)
+async def follow_up_run(
+    run_id: str, body: FollowUpBody, user: auth.User = Depends(auth.current_user)
+) -> dict:
+    parent = runs.STORE.get(user.id, run_id)
+    if parent is None:
+        raise HTTPException(404, "Run not found.")
+    ask = body.brief.strip()
+    if len(ask) < config.LIMITS["briefMinChars"]:
+        raise HTTPException(422, "Follow-up is too short — say what to dig into next.")
+    run = runs.STORE.create_followup(user.id, ask, parent)
+    asyncio.get_running_loop().create_task(runs.execute(run))
+    return {"id": run.id}
+
+
+@app.get("/runs/{run_id}/thread")
+def run_thread(run_id: str, user: auth.User = Depends(auth.current_user)) -> list[dict]:
+    """All turns of this run's session, oldest first — the full conversation."""
+    run = runs.STORE.get(user.id, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found.")
+    session_id = run.session_id or run.id
+    return [t.full_json() for t in runs.STORE.session_turns(user.id, session_id)]
 
 
 @app.get("/runs/{run_id}/stream")

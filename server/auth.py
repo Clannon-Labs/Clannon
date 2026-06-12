@@ -52,9 +52,26 @@ def _db() -> sqlite3.Connection:
             brief TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
             tokens_used INTEGER NOT NULL DEFAULT 0, log_json TEXT NOT NULL DEFAULT '[]',
             experts_json TEXT NOT NULL DEFAULT '[]', report TEXT,
-            memory_writes_json TEXT NOT NULL DEFAULT '[]'
+            memory_writes_json TEXT NOT NULL DEFAULT '[]',
+            feedback_rating TEXT, feedback_comment TEXT, feedback_at REAL,
+            parent_run_id TEXT, session_id TEXT, block_stage TEXT
         )"""
     )
+    # self-healing migration: add columns missing on databases created before
+    # the feedback/follow-up feature (CREATE TABLE IF NOT EXISTS won't alter them)
+    _existing = {r[1] for r in conn.execute("PRAGMA table_info(runs)")}
+    for _col, _decl in (
+        ("feedback_rating", "TEXT"),
+        ("feedback_comment", "TEXT"),
+        ("feedback_at", "REAL"),
+        ("parent_run_id", "TEXT"),
+        ("session_id", "TEXT"),
+        ("block_stage", "TEXT"),
+    ):
+        if _col not in _existing:
+            conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")
+    # backfill: pre-session rows become their own single-turn session
+    conn.execute("UPDATE runs SET session_id = id WHERE session_id IS NULL OR session_id = ''")
     conn.execute(
         """CREATE TABLE IF NOT EXISTS model_prefs (
             user_id TEXT NOT NULL, layer TEXT NOT NULL, model TEXT NOT NULL,
