@@ -138,10 +138,10 @@ intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -
 
 Useful docs:
 
-- [foundation/README.md](https://github.com/vraksha/vraksha/blob/refractor/foundation/README.md)
-- [foundation/FLOW_GUIDE.md](https://github.com/vraksha/vraksha/blob/refractor/foundation/FLOW_GUIDE.md)
-- [core/README.md](https://github.com/vraksha/vraksha/blob/refractor/core/README.md)
-- [security/sanitizers/README.md](https://github.com/vraksha/vraksha/blob/refractor/security/sanitizers/README.md)
+- [foundation/README.md](https://github.com/vraksha/vraksha/blob/main/foundation/README.md)
+- [foundation/FLOW_GUIDE.md](https://github.com/vraksha/vraksha/blob/main/foundation/FLOW_GUIDE.md)
+- [core/README.md](https://github.com/vraksha/vraksha/blob/main/core/README.md)
+- [security/sanitizers/README.md](https://github.com/vraksha/vraksha/blob/main/security/sanitizers/README.md)
 
 ---
 
