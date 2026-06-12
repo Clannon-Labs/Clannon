@@ -19,6 +19,7 @@ assets/fastembed_cache/
 
 security/vendors/
 
+demos/
 /memory/
 
 # Exclude SQLite and Temp Files

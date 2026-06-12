@@ -7,7 +7,7 @@ backend↔frontend contract — when you add or change an endpoint, update the
 table here.
 
 ```bash
-# from the Vraksha repo root
+# from the repo root
 .venv/bin/uvicorn server.app:app --port 8000 --reload
 ```
 
@@ -49,8 +49,11 @@ JSON keys are camelCase to match the frontend types in
 | `/auth/oauth/:provider` | GET (navigation) | — | 302 → frontend (`?error=oauth_unavailable` until Supabase OAuth) |
 | `/runs` | GET | — | `RunSummary[]` |
 | `/runs` | POST | `{brief}` | `{id}`, starts the pipeline in the background |
-| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources) |
+| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, feedbackRating, parentRunId, sessionId, blockStage) |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
+| `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
+| `/runs/:id/followup` | POST | `{brief}` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
+| `/runs/:id/thread` | GET | — | `Run[]` — every turn of this run's session, oldest first (the conversation) |
 | `/memory` | GET | — | `MemoryEntry[]` (wiki from SQLite + episodic from runs) |
 | `/memory` | POST | `{tier:"wiki", title, content}` | created entry (only wiki is user-writable) |
 | `/memory/:id` | PUT / DELETE | entry / — | updated entry / 204 |

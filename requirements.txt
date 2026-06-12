@@ -41,6 +41,11 @@ tiktoken                     # token counting for budget tracking and context pr
 # --- Text Security ---
 presidio-analyzer            # PII detection
 presidio-anonymizer          # PII anonymization/redaction
+# Presidio's default NER model — pinned as a build-time wheel so it is baked
+# into the deploy image. WITHOUT this, Presidio downloads it (~400MB) at first
+# request and the run fails at the sanitize stage. Keep the version aligned
+# with the installed spaCy (3.8.x).
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
 detect-secrets               # API keys, tokens, credentials detection
 nh3                          # HTML sanitization (replaces archived bleach)
 
@@ -103,3 +108,11 @@ tenacity                     # retries
 cachetools                   # in-memory caching
 orjson                       # fast JSON serialization
 uvloop                       # faster event loop (Linux)
+
+# ============================================================
+# DELIVERY SERVER (server/)
+# ============================================================
+
+fastapi                      # the API surface the frontend talks to
+uvicorn                      # ASGI server (server/README.md run command)
+python-multipart             # FastAPI UploadFile parsing (/memory/upload)
