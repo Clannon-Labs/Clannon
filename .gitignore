@@ -61,5 +61,6 @@ llm_view_snapshot.json
 .claude
 .agents/
 
-# Web delivery adapter — not part of the Macondo submission yet
+# Web delivery adapter + frontend — not public yet
 server/
+/frontend/
