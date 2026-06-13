@@ -12,6 +12,7 @@ from .capability import Capabilities
 from .experts import ExpertHandler
 from .tools import ToolHandler
 from .support import (
+    Expert,
     ExpertDeps,
     ExpertEnv,
     ScopedToolbox,
@@ -26,6 +27,7 @@ __all__ = [
     "Capabilities",
     "ToolHandler",
     "ExpertHandler",
+    "Expert",
     "ExpertDeps",
     "ExpertEnv",
     "ScopedToolbox",

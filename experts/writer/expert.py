@@ -1,13 +1,14 @@
 """Writer/synthesis expert (key: synthesis.writer) — turns a task and gathered
-findings into a clear, cited brief. Its prompt and skills live beside this file."""
+findings into a clear, cited brief. Its behavior lives in its system prompt +
+skills beside this file; this module declares what it is and how its richer input
+(attached findings) becomes the agent's task."""
 
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 from registry import expert
-from registry.capabilities import ExpertOutput
-from registry.capabilities.handler import ExpertEnv, think
+from registry.capabilities.handler import Expert, ExpertEnv
 
 
 class WriteIn(BaseModel):
@@ -21,26 +22,20 @@ class WriteIn(BaseModel):
 
 
 @expert
-class WriterExpert:
+class WriterExpert(Expert):
     name = "writer"
     domain = "synthesis"
     description = "Synthesize a task (and any gathered findings) into a clear, cited brief."
     input_schema = WriteIn
-    output_schema = ExpertOutput
-    skills = ("skills",)       # the skills/ folder beside this file
+    skills = ("skills",)       # baseline skills/ beside this file
     tools = ()                 # writer reasons over what it's given; no external tools
     model_role = "planner"
     tags = ("report", "writing", "citations")
 
-    async def run(self, args: WriteIn, env: ExpertEnv) -> ExpertOutput:
-        user_prompt = (
-            f"Writing task: {args.prompt}\n"
-            f"{_materials(args.finding_refs, env.findings)}\n"
-            "Load a skill if it helps structure the piece. Then return ExpertOutput: "
-            "a one-line summary, the full written piece as full_content, any sources "
-            "you relied on in citations, and a confidence (0-1)."
-        )
-        return await think(env, user_prompt)
+    def render(self, args: WriteIn, env: ExpertEnv) -> str:
+        # Custom input: inline the FULL content of the referenced findings as source
+        # material, so the writer synthesizes the real research it was handed.
+        return f"Writing task: {args.prompt}\n{_materials(args.finding_refs, env.findings)}"
 
 
 def _materials(refs: list[str], findings: list) -> str:
