@@ -78,7 +78,18 @@ async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     await ports.log.emit(DecisionLogEntry(kind="hydration", message="requesting memory hydration"))
     try:
         hydration = await ports.memory.hydrate(
-            HydrationRequest(session_id=ctx.session_id, user_id=ctx.user_id, normalized=normalized)
+            HydrationRequest(
+                session_id=ctx.session_id,
+                user_id=ctx.user_id,
+                normalized=normalized,
+                # the user's wiki (set by the delivery layer) — loaded as the
+                # highest-trust text tier, selected by relevance at hydration
+                wiki=tuple(
+                    (e.get("title", ""), e.get("content", ""))
+                    for e in ctx.wiki_entries
+                    if isinstance(e, dict)
+                ),
+            )
         )
     except Exception:
         hydration = HydrationPackage(

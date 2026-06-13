@@ -48,6 +48,11 @@ class HydrationRequest:
     normalized: NormalizedInput | None = None
     token_budget: int = 0
     allowed_tiers: tuple[MemoryStore, ...] | None = None
+    # User-authored wiki entries (title, content), supplied by the delivery
+    # layer that owns wiki storage. Wiki is kept as TEXT (not embedded): the
+    # manager selects the relevant ones by text overlap at hydration, as the
+    # highest-trust tier. Empty when the caller has no wiki to offer.
+    wiki: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(slots=True)
@@ -102,4 +107,20 @@ class MemoryPort(Protocol):
     ) -> None:
         """Hand proposed writes (scoped to a user + session) to the manager; it
         decides whether/where to persist."""
+        ...
+
+    async def learn(
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        task: str,
+        answer: str,
+        findings: list[str],
+    ) -> None:
+        """Distil durable memory from a completed turn — semantic facts and
+        procedural patterns — and persist what's worth keeping. This is the
+        background memory-agent (its own LLM call) living behind the door:
+        callers hand over the turn, not pre-made proposals. Best-effort; a
+        failure here never affects the turn."""
         ...

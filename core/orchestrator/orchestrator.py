@@ -65,6 +65,20 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         except Exception as exc:
             log.warning("memory write proposals dropped: %s", exc)
 
+        # the memory agent distils semantic facts + procedural patterns from the
+        # turn (its own LLM call, behind the port). Only on substantive turns —
+        # a quick conversational reply has nothing durable to learn. Best-effort.
+        if flow.ctx.expert_findings or len(response.text) >= 240:
+            try:
+                await ports.memory.learn(
+                    flow.ctx.user_id, flow.ctx.session_id,
+                    task=normalized.content or "",
+                    answer=response.text,
+                    findings=[getattr(f, "full_content", "") for f in flow.ctx.expert_findings],
+                )
+            except Exception as exc:
+                log.warning("memory learning dropped: %s", exc)
+
         return flow.next(response, Origin.ORCHESTRATOR, started)
 
     except asyncio.TimeoutError as exc:

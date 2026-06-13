@@ -475,6 +475,8 @@ async def execute(run: RunState) -> None:
     # replay this session's earlier turns as real chat history — the orchestrator
     # continues the conversation instead of re-reading a summary blob
     flow.ctx.conversation = _build_conversation(run)
+    # the user's wiki — the highest-trust memory tier, loaded as text at hydration
+    flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id)
 
     try:
         # user model preferences apply to every stage in this run

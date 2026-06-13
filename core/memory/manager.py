@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 
 from foundation import (
@@ -21,7 +22,7 @@ from foundation import (
     MemoryWriteProposal,
 )
 
-from . import embeddings, store
+from . import embeddings, store, writer
 
 log = logging.getLogger(__name__)
 
@@ -64,35 +65,48 @@ class MemoryManager:
             return HydrationPackage(token_budget=budget, notes="no user scope; memory skipped")
 
         query_text = (request.normalized.content if request.normalized else "") or ""
-        if not query_text.strip():
-            return HydrationPackage(token_budget=budget, notes="empty query; memory skipped")
+        allowed = request.allowed_tiers  # None = all tiers
 
-        vectors = await embeddings.embed([query_text[:_MAX_CONTENT_CHARS]])
-        if not vectors:
+        items: list[MemoryItem] = []
+
+        # WIKI — the user-authored, highest-trust tier. Kept as TEXT (not embedded):
+        # select the relevant entries by lexical overlap, bounded by the wiki floor.
+        if (allowed is None or MemoryStore.WIKI in allowed) and request.wiki:
+            items.extend(self._select_wiki(request.wiki, query_text, int(budget * _TIER_FLOOR[MemoryStore.WIKI])))
+
+        # the inferred tiers are vector-retrieved (need the query embedded)
+        inferred = [
+            t for t in (MemoryStore.SEMANTIC, MemoryStore.EPISODIC, MemoryStore.PROCEDURAL)
+            if allowed is None or t in allowed
+        ]
+        embeddable = query_text.strip()
+        vectors = await embeddings.embed([query_text[:_MAX_CONTENT_CHARS]]) if embeddable and inferred else None
+
+        if embeddable and inferred and not vectors:
+            # embeddings down — degrade, but still hand back any wiki we already have
             return HydrationPackage(
-                token_budget=budget, degraded=True,
-                notes="memory temporarily unavailable (embeddings); answering without it",
+                items=items, token_budget=budget, degraded=not items,
+                notes="memory temporarily unavailable (embeddings); answering without it" if not items else None,
             )
 
-        tiers = list(request.allowed_tiers or _TIER_TRUST.keys())
-        # store.search is a sync HTTP call — run the tiers concurrently in
-        # threads so hydration never blocks the event loop (4 sequential
-        # round-trips against a remote Qdrant would stall every other turn)
-        tier_hits = await asyncio.gather(
-            *(asyncio.to_thread(store.search, tier, request.user_id, vectors[0], _SEARCH_K)
-              for tier in tiers)
-        )
         per_tier: dict[MemoryStore, list[dict]] = {}
-        for tier, hits in zip(tiers, tier_hits):
-            scored = [
-                {**h, "rank_score": h["score"] * _recency(float(h.get("created_at", 0)))}
-                for h in hits
-            ]
-            scored.sort(key=lambda h: h["rank_score"], reverse=True)
-            if scored:
-                per_tier[tier] = scored
+        if vectors:
+            # store.search is a sync HTTP call — run the tiers concurrently in
+            # threads so hydration never blocks the event loop
+            tier_hits = await asyncio.gather(
+                *(asyncio.to_thread(store.search, tier, request.user_id, vectors[0], _SEARCH_K)
+                  for tier in inferred)
+            )
+            for tier, hits in zip(inferred, tier_hits):
+                scored = [
+                    {**h, "rank_score": h["score"] * _recency(float(h.get("created_at", 0)))}
+                    for h in hits
+                ]
+                scored.sort(key=lambda h: h["rank_score"], reverse=True)
+                if scored:
+                    per_tier[tier] = scored
 
-        if not per_tier:
+        if not items and not per_tier:
             if store.is_down():
                 # honesty: empty because the store is down, not because the
                 # user has no memory — say so instead of pretending
@@ -102,34 +116,58 @@ class MemoryManager:
                 )
             return HydrationPackage(token_budget=budget, notes="no prior memory for this user")
 
-        # Lagrangian water-filling: floors first, remainder ∝ mean relevance.
-        floors = {t: int(budget * _TIER_FLOOR[t]) for t in per_tier}
-        remainder = max(0, budget - sum(floors.values()))
-        means = {t: sum(h["rank_score"] for h in hs) / len(hs) for t, hs in per_tier.items()}
-        total_mean = sum(means.values()) or 1.0
-        allocation = {
-            t: floors[t] + int(remainder * (means[t] / total_mean)) for t in per_tier
-        }
+        if per_tier:
+            # Lagrangian water-filling over what's left after wiki: floors first,
+            # remainder ∝ mean relevance.
+            wiki_spent = sum(max(1, len(i.content) // _CHARS_PER_TOKEN) for i in items)
+            inferred_budget = max(0, budget - wiki_spent)
+            floors = {t: int(inferred_budget * _TIER_FLOOR[t]) for t in per_tier}
+            remainder = max(0, inferred_budget - sum(floors.values()))
+            means = {t: sum(h["rank_score"] for h in hs) / len(hs) for t, hs in per_tier.items()}
+            total_mean = sum(means.values()) or 1.0
+            allocation = {t: floors[t] + int(remainder * (means[t] / total_mean)) for t in per_tier}
 
-        items: list[MemoryItem] = []
-        for tier, hits in per_tier.items():
-            spent = 0
-            for hit in hits:
-                cost = max(1, len(hit.get("content", "")) // _CHARS_PER_TOKEN)
-                if spent + cost > allocation[tier]:
-                    break
-                spent += cost
-                items.append(
-                    MemoryItem(
-                        store=tier,
-                        content=hit.get("content", ""),
-                        score=hit["rank_score"],
-                        trust=_TIER_TRUST[tier],
-                    )
-                )
+            for tier, hits in per_tier.items():
+                spent = 0
+                for hit in hits:
+                    cost = max(1, len(hit.get("content", "")) // _CHARS_PER_TOKEN)
+                    if spent + cost > allocation[tier]:
+                        break
+                    spent += cost
+                    items.append(MemoryItem(
+                        store=tier, content=hit.get("content", ""),
+                        score=hit["rank_score"], trust=_TIER_TRUST[tier],
+                    ))
 
         items.sort(key=lambda i: (i.trust, i.score), reverse=True)
         return HydrationPackage(items=items, token_budget=budget)
+
+    def _select_wiki(self, wiki: tuple, query: str, wiki_budget: int) -> list[MemoryItem]:
+        """Pick the wiki entries most relevant to the query (lexical overlap),
+        bounded by the wiki budget. Wiki is small and authoritative, so a couple
+        of entries are included even on weak overlap — it's the source of truth."""
+        if not wiki or wiki_budget <= 0:
+            return []
+        q_tokens = set(re.findall(r"\w+", query.lower()))
+        scored: list[tuple[int, str]] = []
+        for title, content in wiki:
+            text = f"{title}\n{content}".strip()
+            if not text:
+                continue
+            w_tokens = set(re.findall(r"\w+", f"{title} {content}".lower()))
+            scored.append((len(q_tokens & w_tokens), text[:_MAX_CONTENT_CHARS]))
+        scored.sort(key=lambda s: s[0], reverse=True)  # most relevant first; ties keep order
+        items, spent = [], 0
+        for _overlap, text in scored:
+            cost = max(1, len(text) // _CHARS_PER_TOKEN)
+            if spent + cost > wiki_budget:
+                break
+            spent += cost
+            items.append(MemoryItem(
+                store=MemoryStore.WIKI, content=text, score=1.0,
+                trust=_TIER_TRUST[MemoryStore.WIKI],
+            ))
+        return items
 
     async def record_write_proposals(
         self, user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
@@ -174,6 +212,22 @@ class MemoryManager:
                 trust=_TIER_TRUST[tier],
                 point_id=point_id,
             )
+
+    async def learn(
+        self, user_id: str, session_id: str, *, task: str, answer: str, findings: list[str]
+    ) -> None:
+        """The background memory-agent: distil semantic facts + procedural patterns
+        from a finished turn and persist what clears the write policy. Best-effort —
+        a fault here never affects the turn that already answered the user."""
+        if not user_id:
+            return
+        try:
+            proposals = await writer.distill(task, answer, findings)
+        except Exception as exc:  # noqa: BLE001 — never let learning break a turn
+            log.warning("memory distillation failed: %s", exc)
+            return
+        if proposals:
+            await self.record_write_proposals(user_id, session_id, proposals)
 
     # ---- delivery-layer surface (not part of MemoryPort) ----------------
 

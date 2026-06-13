@@ -1,0 +1,91 @@
+"""
+The memory agent's distillation step.
+
+After a turn completes, this runs the `memory`-layer LLM over (task, answer,
+findings) and extracts what is worth keeping long-term:
+  - SEMANTIC — durable, source-backed facts about the user's clients/domains.
+  - PROCEDURAL — how this user likes to work: formats, conventions, recurring moves.
+
+It only PROPOSES; the manager's write policy (confidence floor + dedup) decides
+what actually persists. Best-effort: any fault returns no proposals, never raises.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from pydantic import BaseModel, Field
+
+from foundation import MemoryStore, MemoryWriteProposal, constants
+from core.llm import build_agent, run_structured
+
+log = logging.getLogger(__name__)
+
+# keep the distillation call cheap and bounded — it runs on every substantive turn
+_MAX_TASK_CHARS = 1200
+_MAX_ANSWER_CHARS = 3500
+_MAX_FINDING_CHARS = 1000
+_MAX_FINDINGS = 5
+_MAX_OUTPUT_TOKENS = 700
+
+
+class _Extracted(BaseModel):
+    """One distilled memory the agent proposes."""
+    content: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    rationale: str = ""
+
+
+class MemoryExtraction(BaseModel):
+    """The memory agent's structured verdict on a completed turn."""
+    semantic: list[_Extracted] = Field(default_factory=list)
+    procedural: list[_Extracted] = Field(default_factory=list)
+
+
+def _build_prompt(task: str, answer: str, findings: list[str]) -> str:
+    parts = [
+        "A research turn just finished. Distil only what is worth remembering.\n",
+        f"## The user's request\n{(task or '')[:_MAX_TASK_CHARS]}\n",
+        f"## The answer delivered\n{(answer or '')[:_MAX_ANSWER_CHARS]}\n",
+    ]
+    digest = [f[:_MAX_FINDING_CHARS] for f in findings[:_MAX_FINDINGS] if f]
+    if digest:
+        parts.append("## Supporting findings\n" + "\n---\n".join(digest))
+    return "\n".join(parts)
+
+
+async def distill(task: str, answer: str, findings: list[str]) -> list[MemoryWriteProposal]:
+    """Run the memory agent and return its proposed semantic/procedural writes.
+    Returns [] on any failure — distillation never breaks a turn."""
+    handle = build_agent(
+        "memory",
+        output_type=MemoryExtraction,
+        prompt_name="memory",
+        retries=constants.FILTER_MAX_RETRIES,
+    )
+    try:
+        result = await run_structured(
+            handle,
+            _build_prompt(task, answer, findings),
+            max_turns=1,
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort; a fault must not affect the turn
+        log.warning("memory distillation failed: %s", exc)
+        return []
+
+    proposals: list[MemoryWriteProposal] = []
+    for tier, items in (
+        (MemoryStore.SEMANTIC, result.semantic),
+        (MemoryStore.PROCEDURAL, result.procedural),
+    ):
+        for item in items:
+            content = (item.content or "").strip()
+            if content:
+                proposals.append(MemoryWriteProposal(
+                    store=tier,
+                    content=content,
+                    rationale=item.rationale,
+                    confidence=item.confidence,
+                ))
+    return proposals

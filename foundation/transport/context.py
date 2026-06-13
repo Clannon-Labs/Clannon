@@ -223,6 +223,12 @@ class VrakshaContext:
                                               # the conversation. Empty on the first turn. Foundation
                                               # stays SDK-free — core/llm converts this to ModelMessages.
 
+    wiki_entries: list = field(default_factory=list)
+                                              # the user's wiki entries [{"title","content"}], set by
+                                              # the delivery layer that owns wiki storage (SQLite/R2).
+                                              # Passed into HydrationRequest so the memory manager can
+                                              # load the highest-trust tier as TEXT (wiki isn't embedded).
+
     tool_calls:    list[ToolCallRecord]   = field(default_factory=list)
     expert_calls:  list[ExpertCallRecord] = field(default_factory=list)
 

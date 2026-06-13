@@ -29,3 +29,8 @@ filter:
   file: filter/system.md
   locked: true   # output safety/quality gate — a security boundary
 
+memory:
+  version: 1
+  file: memory/system.md
+  locked: false   # the memory-distillation agent — behavior, not a security boundary
+

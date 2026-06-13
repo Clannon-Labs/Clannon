@@ -168,3 +168,14 @@ def current_user(request: Request) -> User:
     if row is None:
         raise HTTPException(401, "Session expired.")
     return User(row["id"], row["email"], row["name"], row["plan"])
+
+
+def fetch_wiki(user_id: str) -> list[dict]:
+    """A user's wiki entries (title + content), newest first. Handed to the
+    pipeline so the memory manager can load the wiki tier as text at hydration."""
+    with _db() as db:
+        rows = db.execute(
+            "SELECT title, content FROM wiki_entries WHERE user_id=? ORDER BY updated_at DESC",
+            (user_id,),
+        ).fetchall()
+    return [{"title": r["title"], "content": r["content"]} for r in rows]
