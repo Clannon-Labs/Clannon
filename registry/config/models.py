@@ -17,10 +17,10 @@ from typing import Any
 
 import yaml
 
-from foundation import ConfigError
+from foundation import ConfigError, get_root
 
 
-DEFAULT_MODELS_PATH = Path(__file__).resolve().parents[2] / "models.yaml"
+DEFAULT_MODELS_PATH = get_root() / "models.yaml"
 DEFAULT_PROVIDER_ENV = "VRAKSHA_MODEL_PROVIDER"
 
 

@@ -29,6 +29,9 @@ from .contracts.memory import (
 # payload boundary
 from .coercion import coerce_to_bytes
 
+# project root
+from .paths import get_root
+
 # vocab — shared declarations
 from .vocab.errors import (
     VrakshaError,
@@ -85,6 +88,7 @@ __all__ = [
     "MemoryWriteProposal",
     "MemoryPort",
     "coerce_to_bytes",
+    "get_root",
 
     # transport primitives (used inside flow, available if needed directly)
     "Status",
