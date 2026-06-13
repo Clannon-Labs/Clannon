@@ -253,47 +253,6 @@ async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
     return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS)
 
 
-class Expert:
-    """
-    Base class for experts. An expert is a self-contained tool-driving agent: it
-    DECLARES what it is and what it needs, and the handler hands it a fully
-    equipped run environment (`ExpertEnv`). The model then drives its OWN tool +
-    skill loop against the expert's (overlay-hardened) co-located system prompt and
-    returns the structured `ExpertOutput`. The expert does the work itself — it is
-    not the handler doing it for a thin shim.
-
-    Authoring a new expert is just a folder under `experts/`:
-
-        experts/<name>/
-          expert.py   — an input_schema (pydantic) + a class subclassing Expert
-                        that sets: name, domain, description, input_schema, skills,
-                        and (optional) tools, model_role, permission, tags. The
-                        tools you name are REQUESTED; the handler grants them
-                        (scoped + guarded). Override render() only when the per-call
-                        task needs more than the input's `prompt` field (e.g.
-                        inlining attached findings).
-          system.md   — the baseline behavior prompt (committed dev/CI fallback).
-          skills/      — baseline skill `.md` files (optional frontmatter
-                        `description:` + body), loaded on demand.
-        prompts.secure/experts/<name>/  — the hardened system.md + skills/ overlay.
-
-    Most experts never touch run(): behavior lives in the system prompt + skills,
-    capabilities in the declared fields. That is the whole expert.
-    """
-
-    output_schema = ExpertOutput
-
-    def render(self, args, env: ExpertEnv) -> str:
-        """Turn the validated structured input into the agent's task text. Default:
-        the input's `prompt` field. Override for richer inputs."""
-        return getattr(args, "prompt", "") or str(args)
-
-    async def run(self, args, env: ExpertEnv) -> ExpertOutput:
-        """Run the expert as a tool-driving agent over its system prompt + granted
-        tools + skills. Rarely overridden — shape behavior via the prompt and render()."""
-        return await think(env, self.render(args, env))
-
-
 # ---------------------------------------------------------------------------
 # Orchestrator support — the orchestrator is also a tool-driving agent. Its
 # native tools are every available tool + expert, each a guarded wrapper. Tool
