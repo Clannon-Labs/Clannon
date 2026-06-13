@@ -49,6 +49,12 @@ class WorkspacePort(Protocol):
         """Read a text file at a workspace-relative path (confined)."""
         ...
 
+    async def read_bytes(self, rel_path: str) -> bytes:
+        """Read a file's raw bytes at a workspace-relative path (confined). Used to
+        capture output artifacts (which may be binary, e.g. an image) from the
+        workspace before teardown."""
+        ...
+
     async def list(self) -> list[str]:
         """The workspace-relative paths of the files currently in the workspace."""
         ...

@@ -76,6 +76,10 @@ class DockerWorkspace:
         self._guard_open()
         return self._resolve(rel_path).read_text(encoding="utf-8")
 
+    async def read_bytes(self, rel_path: str) -> bytes:
+        self._guard_open()
+        return self._resolve(rel_path).read_bytes()
+
     async def list(self) -> list[str]:
         self._guard_open()
         root = self._root.resolve()

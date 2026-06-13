@@ -26,13 +26,17 @@ from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
 from .sandbox import DockerWorkspace
 from .support import ExpertEnv, ScopedToolbox, SkillBook
 
+_MAX_ARTIFACTS = 20                       # max output artifacts captured per expert run
+_MAX_ARTIFACT_BYTES = 10 * 1024 * 1024    # 10 MB cap per artifact
+
 
 class ExpertHandler:
     """Implements ExpertHandlerPort over the capability registry."""
 
-    def __init__(self, registry=default_registry, tools=None) -> None:
+    def __init__(self, registry=default_registry, tools=None, artifact_store=None) -> None:
         self._registry = registry
         self._tools = tools                          # a ToolHandler, for scoping
+        self._artifacts = artifact_store             # an ArtifactStore; lazy LocalArtifactStore if None
         self._semaphore = asyncio.Semaphore(constants.EXPERT_MAX_CONCURRENT)
 
     async def run_experts(
@@ -69,10 +73,14 @@ class ExpertHandler:
                     return self._fail(request, ctx, started, f"expert error: {exc}")
 
                 ref = uuid4().hex[:8]
+                # capture designated output artifacts out of the workspace BEFORE it
+                # is torn down (the finally below closes it)
+                artifacts = await self._capture_artifacts(output, env, ctx)
                 ctx.expert_findings.append(
                     ExpertFindings(
                         expert=spec.key, ref=ref, full_content=output.full_content,
-                        citations=list(output.citations), metadata={"confidence": output.confidence},
+                        citations=list(output.citations),
+                        metadata={"confidence": output.confidence, "artifacts": artifacts},
                     )
                 )
                 ctx.expert_calls.append(
@@ -125,6 +133,32 @@ class ExpertHandler:
             allowed_keys={spec.key for spec in granted}, grants=frozenset(grants), workspace=workspace
         )
         return ScopedToolbox(scoped, ctx)
+
+    async def _capture_artifacts(self, output, env, ctx: VrakshaContext) -> list[dict]:
+        """Copy the expert's designated output files out of the (about-to-be-closed)
+        workspace into durable storage; return their references as dicts. Best-effort:
+        a missing, oversized, or unreadable artifact is skipped, never fatal."""
+        paths = list(getattr(output, "artifacts", None) or [])
+        if not paths or env.workspace is None:
+            return []
+        store = self._artifacts
+        if store is None:
+            from core.artifacts import LocalArtifactStore
+            store = self._artifacts = LocalArtifactStore()
+        refs: list[dict] = []
+        for path in paths[:_MAX_ARTIFACTS]:
+            try:
+                data = await env.workspace.read_bytes(path)
+            except Exception:  # noqa: BLE001 — designated file missing/unreadable -> skip
+                continue
+            if len(data) > _MAX_ARTIFACT_BYTES:
+                continue
+            try:
+                name = str(path).replace("\\", "/").split("/")[-1]
+                refs.append((await store.put(ctx.trace_id, name, data)).as_dict())
+            except Exception:  # noqa: BLE001
+                continue
+        return refs
 
     def _fail(self, request, ctx, started, reason) -> ExpertSummary:
         ctx.expert_calls.append(

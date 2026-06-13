@@ -60,3 +60,9 @@ class ExpertOutput(BaseModel):
     full_content: str
     citations: list[str] = Field(default_factory=list)
     confidence: float = 0.0
+    artifacts: list[str] = Field(
+        default_factory=list,
+        description="Workspace-relative paths of files to deliver as output artifacts "
+        "(e.g. a generated report or code file). The handler copies these out of the "
+        "workspace into durable storage before it is torn down. Empty if nothing to deliver.",
+    )
