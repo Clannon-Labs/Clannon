@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from foundation import ToolCallRecord, constants
+from foundation import MaxRetriesExceededError, ToolCallRecord, constants
 from core.llm import RunContext      # SDK types only via the core/llm boundary
 
 from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
@@ -232,9 +232,20 @@ def skills_hint(skills: SkillBook) -> str:
     )
 
 
+_EXPERT_FORCE_ANSWER = (
+    "\n\nYou have reached your tool/turn limit. Return your ExpertOutput NOW using "
+    "only the work you have already done; do not request any tools. Be honest about "
+    "what you did and did not finish or verify, and lower confidence accordingly."
+)
+
+
 async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
     """Assemble the expert's agent from `env` and run it (it may call its tools /
-    load skills) for an ExpertOutput, bounded to EXPERT_MAX_TURNS tool rounds."""
+    load skills) for an ExpertOutput, bounded to EXPERT_MAX_TURNS tool rounds.
+
+    At the turn/usage cap, gracefully force ONE final answer with tools withheld —
+    exactly as the orchestrator does — so a thorough expert returns its best
+    ExpertOutput instead of failing hard."""
     from core.llm import build_tool_agent, run_structured
     from registry.config.prompts import read_overlay_text
 
@@ -242,15 +253,23 @@ async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
         _expert_overlay_rel(env.module_dir, "system.md"), env.module_dir / "system.md"
     )
     system_prompt = base_text + skills_hint(env.skills)
-    agent = build_tool_agent(
-        env.model_role,
-        output_type=ExpertOutput,
-        system_prompt=system_prompt,
-        tools=build_expert_tools(env.granted, env.skills),
-        deps_type=ExpertDeps,
-    )
     deps = ExpertDeps(skills=env.skills, tools=env.toolbox)
-    return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS)
+
+    def _agent(sys_prompt: str, tools: list) -> object:
+        return build_tool_agent(
+            env.model_role,
+            output_type=ExpertOutput,
+            system_prompt=sys_prompt,
+            tools=tools,
+            deps_type=ExpertDeps,
+        )
+
+    agent = _agent(system_prompt, build_expert_tools(env.granted, env.skills))
+    try:
+        return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS)
+    except MaxRetriesExceededError:
+        forced = _agent(system_prompt + _EXPERT_FORCE_ANSWER, [])
+        return await run_structured(forced, user_prompt, deps=deps, max_turns=1)
 
 
 # ---------------------------------------------------------------------------
