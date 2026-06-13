@@ -17,6 +17,14 @@ vraksha.log
 assets/hf_cache/
 assets/fastembed_cache/
 
+# Production prompt overlay (auto-discovered, or VRAKSHA_PROMPTS_DIR). The real,
+# hardened prompts for EVERY llm call (verifier/filter/orchestrator/memory +
+# experts' system.md and skills) live here and must never be committed. The
+# committed prompts/ and experts/*/ files are the dev/CI baselines.
+*.secure/
+secure.*/
+prompts.secure/
+
 security/vendors/
 
 demos/

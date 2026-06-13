@@ -29,6 +29,38 @@ from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
 
 
 # ---------------------------------------------------------------------------
+# Prompt overlay — an expert's system.md and skills are co-located beside its
+# code (the committed baseline), but their production text can be supplied out of
+# git via the same overlay folder the registry prompts use. These helpers map an
+# expert file to its overlay-relative path and resolve overlay-first. (Imports are
+# local to dodge any package import-order edge.)
+# ---------------------------------------------------------------------------
+
+
+def _expert_overlay_rel(module_dir: Path, *parts: str) -> str:
+    """Overlay-relative path for an expert file, mirroring its repo layout
+    (e.g. experts/web_research/system.md). Falls back to the bare dir name if the
+    module somehow sits outside the repo root."""
+    from registry.config.prompts import REPO_ROOT
+
+    try:
+        rel = module_dir.resolve().relative_to(REPO_ROOT)
+    except ValueError:
+        rel = Path(module_dir.name)
+    return rel.joinpath(*parts).as_posix()
+
+
+def _overlaid(module_dir: Path, baseline: Path) -> Path:
+    """Resolve one expert file (system.md or a skill) through the prompt overlay:
+    the production text wins, the committed file is the fallback."""
+    from registry.config.prompts import resolve_overlay
+
+    rel = _expert_overlay_rel(module_dir, *baseline.relative_to(module_dir).parts)
+    path, _source = resolve_overlay(rel, baseline)
+    return path
+
+
+# ---------------------------------------------------------------------------
 # Skills — loaded on demand, never dumped into context
 # ---------------------------------------------------------------------------
 
@@ -43,14 +75,18 @@ class SkillBook:
     """
 
     def __init__(self, base_dir: Path, entries: tuple[str, ...]) -> None:
+        # The SET of skills is defined by the committed files beside the expert;
+        # each is then resolved through the prompt overlay (prod text wins, the
+        # committed file is the fallback), so the overlay can harden a skill but
+        # never introduce one.
         self._index: dict[str, Path] = {}
         for entry in entries:
             path = base_dir / entry
             if path.is_dir():
                 for md in sorted(path.glob("*.md")):
-                    self._index[md.stem] = md
+                    self._index[md.stem] = _overlaid(base_dir, md)
             elif path.is_file():
-                self._index[path.stem] = path
+                self._index[path.stem] = _overlaid(base_dir, path)
 
     def names(self) -> list[str]:
         """Skill names this expert may load."""
@@ -149,8 +185,12 @@ async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
     """Assemble the expert's agent from `env` and run it (it may call its tools /
     load skills) for an ExpertOutput, bounded to EXPERT_MAX_TURNS tool rounds."""
     from core.llm import build_tool_agent, run_structured
+    from registry.config.prompts import read_overlay_text
 
-    system_prompt = (env.module_dir / "system.md").read_text(encoding="utf-8").strip() + skills_hint(env.skills)
+    base_text, _source = read_overlay_text(
+        _expert_overlay_rel(env.module_dir, "system.md"), env.module_dir / "system.md"
+    )
+    system_prompt = base_text + skills_hint(env.skills)
     agent = build_tool_agent(
         env.model_role,
         output_type=ExpertOutput,

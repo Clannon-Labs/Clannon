@@ -2,7 +2,15 @@
 resolution (prompts/). Depend only on foundation."""
 
 from .models import ModelProfile, ModelRegistry, load_model_registry
-from .prompts import Prompt, PromptRegistry, get_prompt, load_prompt_registry
+from .prompts import (
+    Prompt,
+    PromptRegistry,
+    get_prompt,
+    load_prompt_registry,
+    overlay_root,
+    read_overlay_text,
+    resolve_overlay,
+)
 
 __all__ = [
     "ModelProfile",
@@ -12,4 +20,7 @@ __all__ = [
     "PromptRegistry",
     "get_prompt",
     "load_prompt_registry",
+    "overlay_root",
+    "read_overlay_text",
+    "resolve_overlay",
 ]

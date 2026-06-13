@@ -6,8 +6,12 @@
 # produced it.
 #
 # `locked: true` marks a security-boundary prompt (verifier, output filter).
-# Locked prompts must never be overridable at runtime or by end users — see the
-# SECURITY note in foundation/config/prompt_registry.py.
+# Locked prompts must never be overridable at runtime or by end users (see the
+# SECURITY note in registry/config/prompts.py). At deploy, the real text of any
+# prompt -- these AND each expert's co-located system.md + skills -- is supplied
+# out-of-git via the auto-discovered `prompts.secure/` overlay (or
+# VRAKSHA_PROMPTS_DIR). This manifest and its locked flags are ALWAYS read from
+# here, never the overlay, so the overlay can never un-lock a prompt or add one.
 #
 # This registry holds the system-level / security-boundary prompts. Expert prompts
 # are NOT here: each expert co-locates its system.md beside its code under
