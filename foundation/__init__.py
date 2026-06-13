@@ -25,6 +25,7 @@ from .contracts.memory import (
     MemoryWriteProposal,
     MemoryPort,
 )
+from .contracts.workspace import RunResult, WorkspacePort
 
 # payload boundary
 from .coercion import coerce_to_bytes
@@ -87,6 +88,8 @@ __all__ = [
     "HydrationPackage",
     "MemoryWriteProposal",
     "MemoryPort",
+    "RunResult",
+    "WorkspacePort",
     "coerce_to_bytes",
     "get_root",
 
