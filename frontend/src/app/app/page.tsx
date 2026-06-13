@@ -86,7 +86,7 @@ export default function WorkspacePage() {
       <header>
         <p className="tag-label text-faint">Workspace</p>
         <h1 className="display mt-3 text-[2.4rem] leading-[1.0] sm:text-[3rem]">
-          What are we researching
+          What can I help with
           {firstName ? (
             <>
               , <span className="capitalize text-primary">{firstName}</span>?
@@ -101,7 +101,7 @@ export default function WorkspacePage() {
       <form onSubmit={onSubmit} className="mt-8">
         <div className="overflow-hidden rounded-lg border border-border-strong bg-surface transition-colors focus-within:border-primary">
           <label htmlFor="brief" className="sr-only">
-            Research brief
+            Message
           </label>
           <textarea
             id="brief"
@@ -112,7 +112,7 @@ export default function WorkspacePage() {
                 e.currentTarget.form?.requestSubmit();
               }
             }}
-            placeholder="Paste the client brief — raw notes are fine. The pipeline will figure out what it needs…"
+            placeholder="Ask anything — a quick question, or a whole brief to dig into…"
             rows={5}
             className="w-full resize-none bg-transparent px-5 py-4 text-base leading-relaxed placeholder:text-faint focus:outline-none sm:text-[15px]"
           />
@@ -121,13 +121,13 @@ export default function WorkspacePage() {
               {tooShort ? (
                 <span className="text-muted-foreground">
                   {brief.trim().length === 0
-                    ? `Add a brief to begin — at least ${appConfig.limits.briefMinChars} characters.`
-                    : `${appConfig.limits.briefMinChars - brief.trim().length} more character${appConfig.limits.briefMinChars - brief.trim().length === 1 ? "" : "s"} to run.`}
+                    ? "Type a message to begin."
+                    : "Say a little more…"}
                 </span>
               ) : (
                 <>
-                  Memory loads automatically · every decision is streamed live ·{" "}
-                  <kbd className="rounded border border-border px-1 font-mono text-[11px]">⌘↵</kbd> to run
+                  Remembers your past work ·{" "}
+                  <kbd className="rounded border border-border px-1 font-mono text-[11px]">⌘↵</kbd> to send
                 </>
               )}
             </p>
@@ -136,7 +136,7 @@ export default function WorkspacePage() {
               loading={createRun.isPending}
               disabled={tooShort}
             >
-              {createRun.isPending ? "Entering pipeline…" : "Run research"}
+              {createRun.isPending ? "Sending…" : "Send"}
               {!createRun.isPending && <ArrowRight className="size-4" aria-hidden />}
             </Button>
           </div>

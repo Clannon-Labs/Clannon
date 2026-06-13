@@ -88,8 +88,9 @@ export const appConfig = {
    * always remains the enforcing authority either way.
    */
   limits: {
-    /** Minimum brief length before a run can start. */
-    briefMinChars: 20,
+    /** Minimum message length. Low on purpose — the workspace is a
+     *  conversation, so a two-character "hi" is a valid message. */
+    briefMinChars: 2,
   },
 } as const;
 

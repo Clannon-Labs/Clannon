@@ -131,7 +131,7 @@ def list_runs(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 async def create_run(body: CreateRunBody, user: auth.User = Depends(auth.current_user)) -> dict:
     brief = body.brief.strip()
     if len(brief) < config.LIMITS["briefMinChars"]:
-        raise HTTPException(422, "Brief is too short — give the pipeline something to work with.")
+        raise HTTPException(422, "Say a little more to get started.")
     run = runs.STORE.create(user.id, brief)
     asyncio.get_running_loop().create_task(runs.execute(run))
     return {"id": run.id}
@@ -172,7 +172,7 @@ async def follow_up_run(
         raise HTTPException(404, "Run not found.")
     ask = body.brief.strip()
     if len(ask) < config.LIMITS["briefMinChars"]:
-        raise HTTPException(422, "Follow-up is too short — say what to dig into next.")
+        raise HTTPException(422, "Say a little more to continue.")
     run = runs.STORE.create_followup(user.id, ask, parent)
     asyncio.get_running_loop().create_task(runs.execute(run))
     return {"id": run.id}

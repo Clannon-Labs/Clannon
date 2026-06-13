@@ -87,7 +87,9 @@ PLANS = [
 ]
 
 FEATURES = {"demo": True, "billing": True}
-LIMITS = {"briefMinChars": 20}
+# low floor on purpose: a message can be as short as "hi" — the workspace is a
+# conversation, not a form. The pipeline handles short and long inputs alike.
+LIMITS = {"briefMinChars": 2}
 
 # ---------------------------------------------------------------------------
 # Model catalog — the single backend-editable source for what users see in
