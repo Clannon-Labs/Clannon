@@ -23,6 +23,7 @@ from foundation import ExpertCallRecord, PermissionLevel, VrakshaContext, consta
 
 from .. import CapabilityKind, registry as default_registry
 from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
+from .sandbox import DockerWorkspace
 from .support import ExpertEnv, ScopedToolbox, SkillBook
 
 
@@ -58,58 +59,70 @@ class ExpertHandler:
 
             env = self._build_env(spec, ctx)
             try:
-                output = await asyncio.wait_for(
-                    spec.impl().run(args, env), timeout=constants.EXPERT_TIMEOUT_S
-                )
-            except asyncio.TimeoutError:
-                return self._fail(request, ctx, started, "expert timed out")
-            except Exception as exc:
-                return self._fail(request, ctx, started, f"expert error: {exc}")
+                try:
+                    output = await asyncio.wait_for(
+                        spec.impl().run(args, env), timeout=constants.EXPERT_TIMEOUT_S
+                    )
+                except asyncio.TimeoutError:
+                    return self._fail(request, ctx, started, "expert timed out")
+                except Exception as exc:
+                    return self._fail(request, ctx, started, f"expert error: {exc}")
 
-            ref = uuid4().hex[:8]
-            ctx.expert_findings.append(
-                ExpertFindings(
-                    expert=spec.key, ref=ref, full_content=output.full_content,
-                    citations=list(output.citations), metadata={"confidence": output.confidence},
+                ref = uuid4().hex[:8]
+                ctx.expert_findings.append(
+                    ExpertFindings(
+                        expert=spec.key, ref=ref, full_content=output.full_content,
+                        citations=list(output.citations), metadata={"confidence": output.confidence},
+                    )
                 )
-            )
-            ctx.expert_calls.append(
-                ExpertCallRecord(
-                    expert_name=spec.key,
-                    arguments=dict(request.arguments),
-                    result={"finding_ref": ref, "mark": _mark(output)},
-                    success=True,
-                    duration_ms=round((time.monotonic() - started) * 1000, 2),
+                ctx.expert_calls.append(
+                    ExpertCallRecord(
+                        expert_name=spec.key,
+                        arguments=dict(request.arguments),
+                        result={"finding_ref": ref, "mark": _mark(output)},
+                        success=True,
+                        duration_ms=round((time.monotonic() - started) * 1000, 2),
+                    )
                 )
-            )
-            return ExpertSummary(
-                expert=spec.key, summary=output.summary,
-                confidence=output.confidence, finding_ref=ref,
-            )
+                return ExpertSummary(
+                    expert=spec.key, summary=output.summary,
+                    confidence=output.confidence, finding_ref=ref,
+                )
+            finally:
+                # the per-run sandbox dies when the work is done (success or fail)
+                if env.workspace is not None:
+                    await env.workspace.close()
 
     def _build_env(self, spec, ctx: VrakshaContext) -> ExpertEnv:
         """Pack the expert's run materials; the agent itself is assembled in think()."""
         module_dir = Path(inspect.getfile(spec.impl)).parent
         skills = SkillBook(module_dir, spec.skills)
         granted = [s for s in (self._registry.get_tool(k) for k in spec.tool_grants) if s is not None]
+        # spin up a per-run sandbox only if this expert is actually granted a
+        # workspace tool (and there's a tool handler to route through). Cheap until
+        # first use — the Docker container is lazy; the temp dir is wiped on close.
+        needs_ws = self._tools is not None and any(getattr(s.impl, "wants_workspace", False) for s in granted)
+        workspace = DockerWorkspace() if needs_ws else None
         return ExpertEnv(
             module_dir=module_dir,
             model_role=spec.model_role,
             skills=skills,
-            toolbox=self._toolbox_for(granted, ctx),
+            toolbox=self._toolbox_for(granted, ctx, workspace),
             granted=granted,
             findings=list(ctx.expert_findings),
+            workspace=workspace,
         )
 
-    def _toolbox_for(self, granted: list, ctx: VrakshaContext) -> ScopedToolbox | None:
-        """A tool box scoped to the expert's granted tool keys, or None if it has none."""
+    def _toolbox_for(self, granted: list, ctx: VrakshaContext, workspace=None) -> ScopedToolbox | None:
+        """A tool box scoped to the expert's granted tool keys (bound to its per-run
+        workspace), or None if it has none."""
         if self._tools is None or not granted:
             return None
         grants = {PermissionLevel.READ}
         for spec in granted:
             grants.add(spec.permission)
         scoped = self._tools.scoped(
-            allowed_keys={spec.key for spec in granted}, grants=frozenset(grants)
+            allowed_keys={spec.key for spec in granted}, grants=frozenset(grants), workspace=workspace
         )
         return ScopedToolbox(scoped, ctx)
 

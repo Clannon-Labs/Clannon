@@ -82,6 +82,10 @@ class Capabilities:
 
         reg = self._registry
         tool_specs = [reg.get_tool(c["key"]) for c in reg.cards(CapabilityKind.TOOL)]
+        # workspace tools (fs.read/fs.write/code.run) need a per-run sandbox, so they
+        # are expert-scoped and NOT offered to the orchestrator directly — it delegates
+        # file/code work to an expert (e.g. code.engineer) that holds the workspace.
+        tool_specs = [s for s in tool_specs if s and not getattr(s.impl, "wants_workspace", False)]
         expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
         deps = OrchestratorDeps(ctx=self.ctx, tools=self._tools, experts=self._experts)
 

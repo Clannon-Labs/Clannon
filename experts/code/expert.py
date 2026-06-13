@@ -27,7 +27,7 @@ class CodeExpert:
     input_schema = CodeIn
     output_schema = ExpertOutput
     skills = ("skills",)               # baseline skills/ beside this file
-    tools = ("code.python_exec",)      # REQUESTED; the handler grants it (scoped, guarded)
+    tools = ("fs.read", "fs.write", "code.run")  # REQUESTED; grants a per-run sandboxed workspace
     model_role = "code"
     permission = PermissionLevel.EXECUTE
     tags = ("code", "debugging", "tests")

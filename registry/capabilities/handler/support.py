@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from foundation import MaxRetriesExceededError, ToolCallRecord, constants
+from foundation import MaxRetriesExceededError, ToolCallRecord, WorkspacePort, constants
 from core.llm import RunContext      # SDK types only via the core/llm boundary
 
 from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
@@ -174,6 +174,7 @@ class ExpertEnv:
     toolbox: ScopedToolbox | None
     granted: list   # granted tools' registry specs (key, input_schema, description)
     findings: list = field(default_factory=list)  # prior ExpertFindings, snapshot at spawn — lets a synthesis expert read full research by ref
+    workspace: WorkspacePort | None = None  # per-run sandbox, if this expert is granted workspace tools; closed when the run ends
 
 
 # ---------------------------------------------------------------------------

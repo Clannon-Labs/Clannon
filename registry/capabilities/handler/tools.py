@@ -26,14 +26,16 @@ _ALL_PERMISSIONS = frozenset(PermissionLevel)
 class ToolHandler:
     """Implements ToolHandlerPort over the capability registry."""
 
-    def __init__(self, registry=default_registry, grants=_ALL_PERMISSIONS, allowed_keys=None) -> None:
+    def __init__(self, registry=default_registry, grants=_ALL_PERMISSIONS, allowed_keys=None, workspace=None) -> None:
         self._registry = registry
         self._grants = frozenset(grants)
         self._allowed_keys = None if allowed_keys is None else frozenset(allowed_keys)
+        self._workspace = workspace   # per-run WorkspacePort for `wants_workspace` tools; None outside a workspace scope
 
-    def scoped(self, allowed_keys, grants) -> "ToolHandler":
-        """A handler restricted to specific tool keys + permission grants (for experts)."""
-        return ToolHandler(self._registry, grants=grants, allowed_keys=allowed_keys)
+    def scoped(self, allowed_keys, grants, workspace=None) -> "ToolHandler":
+        """A handler restricted to specific tool keys + permission grants (for experts),
+        optionally bound to a per-run workspace that its `wants_workspace` tools use."""
+        return ToolHandler(self._registry, grants=grants, allowed_keys=allowed_keys, workspace=workspace)
 
     async def call_tool(self, request: ToolRequest, ctx: VrakshaContext) -> ToolCallRecord:
         started = time.monotonic()
@@ -52,9 +54,17 @@ class ToolHandler:
         except Exception as exc:
             return self._fail(request, ctx, started, f"bad arguments: {exc}")
 
+        impl = spec.impl()
+        if getattr(impl, "wants_workspace", False):
+            if self._workspace is None:
+                return self._fail(request, ctx, started, "tool needs a workspace; not available in this scope")
+            coro = impl.run(args, self._workspace)
+        else:
+            coro = impl.run(args)
+
         try:
             timeout = getattr(spec, "timeout_s", None) or constants.TOOL_TIMEOUT_S
-            output = await asyncio.wait_for(spec.impl().run(args), timeout=timeout)
+            output = await asyncio.wait_for(coro, timeout=timeout)
         except asyncio.TimeoutError:
             return self._fail(request, ctx, started, "tool timed out")
         except Exception as exc:
