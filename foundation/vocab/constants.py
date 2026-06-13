@@ -144,7 +144,9 @@ FETCH_MAX_RESPONSE_BYTES    = 5 * 1024 * 1024   # hard cap on a fetched HTTP bod
 # Experts can run longer than tools — they may themselves invoke tools.
 # ---------------------------------------------------------------------------
 
-EXPERT_TIMEOUT_S            = 120.0  # per expert invocation
+EXPERT_TIMEOUT_S            = 240.0  # per expert invocation; room for a thorough
+                                     # tool-driving expert (e.g. code: write + run +
+                                     # test over several exec rounds on a long prompt)
 EXPERT_MAX_CONCURRENT       = 3      # max experts running in parallel
                                      # for one orchestrator turn
 EXPERT_MAX_OUTPUT_TOKENS    = 4096
