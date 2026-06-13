@@ -1,3 +1,7 @@
+---
+description: How to structure a short, action-ready brief. Load when the deliverable is a single focused answer, a recommendation, or a short decision-support write-up where the reader wants the point fast.
+---
+
 # Skill: structuring a brief
 
 Write briefs that a busy reader can act on:

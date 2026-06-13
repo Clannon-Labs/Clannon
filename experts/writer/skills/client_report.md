@@ -1,3 +1,7 @@
+---
+description: How to structure a multi-finding client research report (executive summary, one section per research angle, recommendations/next steps, sources & confidence). Load when synthesizing several research angles into a substantial paying-client deliverable.
+---
+
 # Skill: structuring a client research report
 
 For synthesizing multiple research findings into a report a client pays for:

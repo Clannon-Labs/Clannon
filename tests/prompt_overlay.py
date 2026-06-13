@@ -206,3 +206,30 @@ def test_skillbook_hardens_via_overlay_but_cannot_add_a_skill(tmp_path, monkeypa
     book = S.SkillBook(module_dir, ("skills",))
     assert book.load("client_report") == "HARDENED skill"   # overlay hardens
     assert "ghost" not in book.names()                       # but cannot add
+
+
+def test_skillbook_surfaces_description_and_strips_frontmatter(tmp_path, monkeypatch):
+    # progressive disclosure: name + frontmatter description up front, body on load
+    monkeypatch.setattr(P, "REPO_ROOT", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("VRAKSHA_PROMPTS_DIR", raising=False)
+    module_dir = tmp_path / "experts" / "writer"
+    (module_dir / "skills").mkdir(parents=True)
+    (module_dir / "skills" / "brief.md").write_text(
+        "---\ndescription: When to use the brief skill.\n---\n\n# Skill: brief\nBody line.",
+        encoding="utf-8")
+    (module_dir / "skills" / "plain.md").write_text("# Plain\nstuff", encoding="utf-8")
+
+    book = S.SkillBook(module_dir, ("skills",))
+    cat = dict(book.catalog())
+    assert cat["brief"] == "When to use the brief skill."   # description surfaced
+    assert cat["plain"] == ""                                # no frontmatter -> empty desc
+
+    body = book.load("brief")
+    assert not body.startswith("---")                        # frontmatter stripped from body
+    assert body.startswith("# Skill: brief")                 # body intact
+    assert book.load("plain") == "# Plain\nstuff"            # frontmatter-less file is its own body
+
+    hint = S.skills_hint(book)
+    assert "brief: When to use the brief skill." in hint      # name: description in the hint
+    assert "Body line." not in hint                           # body NOT dumped into context

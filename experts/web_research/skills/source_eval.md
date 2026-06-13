@@ -1,3 +1,7 @@
+---
+description: How to judge and cross-check source reliability. Load when a task turns on source quality — conflicting sources, surprising or high-stakes claims, fast-moving topics, or whenever you're unsure how much to trust what you found.
+---
+
 # Skill: evaluating sources
 
 When researching the open web, judge each source before relying on it:
