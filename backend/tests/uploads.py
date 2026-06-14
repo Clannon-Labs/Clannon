@@ -52,9 +52,17 @@ def test_rejects_empty_and_oversized(monkeypatch):
 
 def test_rejects_unsupported_binary_type(monkeypatch):
     _clean(monkeypatch)
-    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64        # sniffs as image/png — out of scope
-    item, reason = asyncio.run(uploads.scan_upload("logo.png", png))
+    zip_bytes = b"PK\x03\x04" + b"\x00" * 64        # sniffs as application/zip — out of scope
+    item, reason = asyncio.run(uploads.scan_upload("bundle.zip", zip_bytes))
     assert item is None and "unsupported" in reason
+
+
+def test_admits_image_with_original_bytes(monkeypatch):
+    _clean(monkeypatch)
+    gif = b"GIF89a\x01\x00\x01\x00\x00\x00\x00;"      # a minimal GIF — sniffs as image/gif
+    item, reason = asyncio.run(uploads.scan_upload("logo.gif", gif))
+    assert reason is None
+    assert item.modality == "image" and item.data == gif   # original bytes, never nerfed
 
 
 def test_blocks_malicious_content(monkeypatch):

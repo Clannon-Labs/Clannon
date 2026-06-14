@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Generic, TypeVar
 
-from pydantic_ai import Agent, FunctionToolCallEvent, RunContext
+from pydantic_ai import Agent, BinaryContent, FunctionToolCallEvent, RunContext
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import (
     ModelRequest,
@@ -126,6 +126,19 @@ def _event_handler(on_tool_event: Callable[[dict], Awaitable[None]]):
     return handler
 
 
+def _with_media(prompt: str, media: Sequence[tuple[bytes, str]] | None) -> Any:
+    """Build the user prompt: plain text, or — when media is attached — a list of
+    [text, BinaryContent...] so a multimodal model sees the bytes alongside the text.
+    This is the ONLY place raw media becomes an SDK type, keeping pydantic_ai confined
+    here; callers pass neutral (bytes, mime) tuples. Empty/None media → the bare string."""
+    if not media:
+        return prompt
+    parts: list[Any] = [prompt]
+    for data, mime in media:
+        parts.append(BinaryContent(data=data, media_type=mime))
+    return parts
+
+
 def _to_model_messages(conversation: Sequence[dict] | None) -> list[Any] | None:
     """Convert the foundation-neutral conversation ({"role","content"} dicts,
     oldest first) into PydanticAI ModelMessages. This is the single SDK boundary
@@ -156,6 +169,7 @@ async def run_structured(
     on_tool_event: Callable[[dict], Awaitable[None]] | None = None,
     model: Any | None = None,
     conversation: Sequence[dict] | None = None,
+    media: Sequence[tuple[bytes, str]] | None = None,
 ) -> T:
     """
     Run an agent and return its validated structured output.
@@ -164,23 +178,27 @@ async def run_structured(
     / `max_output_tokens` are neutral per-run overrides (the SDK `UsageLimits` is
     built here, so callers never import it). `on_tool_event` streams a live decision
     log; `model` overrides the model for this run only (tests inject a TestModel/
-    FunctionModel). Foundation errors propagate unchanged; a usage/turn-cap breach
+    FunctionModel). `media` is a list of neutral (bytes, mime) attachments folded into
+    the user message for a multimodal model. Foundation errors propagate unchanged; a usage/turn-cap breach
     becomes `MaxRetriesExceededError` (fail closed at the cap); any other
     framework/provider failure becomes `ModelUnavailableError`.
     """
     limits = usage_limits_for_layer(handle.layer, max_turns=max_turns, max_output_tokens=max_output_tokens)
     esh = _event_handler(on_tool_event) if on_tool_event is not None else None
     history = _to_model_messages(conversation)
+    # text by default; [text, BinaryContent...] when a caller attaches media (the
+    # media expert passes images here for a multimodal model)
+    user_prompt = _with_media(prompt, media)
     try:
         if model is not None:
             with handle._agent.override(model=model):
                 result = await run_agent(
-                    handle._agent, prompt, deps=deps, usage_limits=limits,
+                    handle._agent, user_prompt, deps=deps, usage_limits=limits,
                     event_stream_handler=esh, message_history=history,
                 )
         else:
             result = await run_agent(
-                handle._agent, prompt, deps=deps, usage_limits=limits,
+                handle._agent, user_prompt, deps=deps, usage_limits=limits,
                 event_stream_handler=esh, message_history=history,
             )
     except VrakshaError:

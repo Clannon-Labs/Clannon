@@ -254,9 +254,12 @@ def _input_files_note(env: ExpertEnv) -> str:
     )
 
 
-async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
+async def think(env: ExpertEnv, user_prompt: str, *, media=None) -> ExpertOutput:
     """Assemble the expert's agent from `env` and run it (it may call its tools /
     load skills) for an ExpertOutput, bounded to EXPERT_MAX_TURNS tool rounds.
+
+    `media` is an optional list of (bytes, mime) attachments folded into the user
+    message for a multimodal model (the media expert passes its images here).
 
     At the turn/usage cap, gracefully force ONE final answer with tools withheld —
     exactly as the orchestrator does — so a thorough expert returns its best
@@ -283,10 +286,10 @@ async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
 
     agent = _agent(system_prompt, build_expert_tools(env.granted, env.skills))
     try:
-        return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS)
+        return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS, media=media)
     except MaxRetriesExceededError:
         forced = _agent(system_prompt + _EXPERT_FORCE_ANSWER, [])
-        return await run_structured(forced, user_prompt, deps=deps, max_turns=1)
+        return await run_structured(forced, user_prompt, deps=deps, max_turns=1, media=media)
 
 
 # ---------------------------------------------------------------------------
