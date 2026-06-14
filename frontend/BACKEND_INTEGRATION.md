@@ -1,13 +1,15 @@
 # Frontend ⇆ Backend integration spec (complete — build from this, don't guess)
 
 You are a Claude Code instance working in `frontend/`. This is the **complete,
-authoritative** description of what the backend serves today, what's built but not
-yet rendered, and what's coming — plus the exact frontend edits for each. Nothing
-here should require guessing; if something seems ambiguous, the backend source is
-the tiebreaker: **`../backend/api/app.py`** (routes), **`../backend/api/runs.py`**
-(run shapes + SSE), **`../backend/api/config.py`** (/config, plans, models),
-**`../backend/api/auth.py`** (sessions). The endpoint table is in
-`../backend/api/README.md`.
+authoritative, self-contained** description of what the backend serves today, what's
+built but not yet rendered, and what's coming — plus the exact frontend edits for
+each. **Build entirely from this doc. Do NOT read the backend code** under
+`../backend/`: it is being actively changed in parallel (new experts + media
+support), so reading it now could mislead you — and you don't need to. Every shape
+your work touches is FROZEN and fully specified below; the HTTP contract does not
+change under the work coming to the backend (it only adds, and the headroom notes in
+§9 cover that). If something genuinely seems missing here, ask the human — do not go
+spelunking the in-flux backend.
 
 > READ FIRST: `frontend/AGENTS.md` — this is **Next.js 16 + React 19**, with
 > breaking changes from your training data. Read the guides in
@@ -442,5 +444,6 @@ failure / timeout → `ApiError(message, 0)`. A 401 anywhere means the session e
 - `npm run lint`, `npm run typecheck`, `npm run build` all pass.
 - Verified at **390px** (phone-first), in **light and dark** themes.
 
-When a shape is unclear, the backend source wins — read it, don't assume. The
-backend stays the enforcing authority for every limit; the UI shows, it never guards.
+If a shape genuinely seems unspecified here, ask the human — do NOT read the in-flux
+backend. The backend stays the enforcing authority for every limit; the UI shows, it
+never guards.
