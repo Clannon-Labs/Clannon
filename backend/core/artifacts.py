@@ -19,7 +19,7 @@ _MAX_NAME = 200
 
 def _base_dir() -> Path:
     env = os.getenv(_BASE_ENV)
-    base = Path(env) if env else (get_root() / "server" / "data" / "artifacts")
+    base = Path(env) if env else (get_root() / "api" / "data" / "artifacts")
     base.mkdir(parents=True, exist_ok=True)
     return base
 

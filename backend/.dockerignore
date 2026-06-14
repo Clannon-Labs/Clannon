@@ -1,0 +1,22 @@
+# secrets come from Railway env vars, never baked into the image
+.env
+.env.local
+
+# the hardened prompt overlay is provided at deploy time (R2 sync / mount /
+# unpacked env var), never committed or baked — see CLAUDE.md deployment notes
+prompts.secure/
+
+# local caches: the embedder cache is warmed in-build into a baked path, not copied
+assets/fastembed_cache/
+assets/hf_cache/
+
+# not needed in the runtime image
+tests/
+api/data/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.log
+.venv/
+venv/

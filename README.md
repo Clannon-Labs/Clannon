@@ -189,17 +189,21 @@ see what is working today.
 
 ### The Developer Path
 
+The repo is split for deployment: **`backend/`** (the Python pipeline + FastAPI,
+deploys to Railway) and **`frontend/`** (Next.js, deploys to Vercel). All backend
+commands run from inside `backend/`.
+
 Clone the repo, create a virtual environment, and install dependencies:
 
 ```bash
 git clone https://github.com/vraksha/Clannon
-cd Clannon
+cd Clannon/backend
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
-Create local env files:
+Create local env files (inside `backend/`):
 
 ```bash
 cp .env.example .env.local
@@ -223,10 +227,10 @@ HF_TOKEN=your_hugging_face_key_here
 Model choices and layer routing live in:
 
 ```text
-models.yaml
+backend/models.yaml
 ```
 
-To run the web app against the bundled mock backend:
+To run the web app against the bundled mock backend (from the repo root):
 
 ```bash
 cd frontend
@@ -266,33 +270,22 @@ brew install ffmpeg exiftool libmagic
 
 ## Verification
 
-Useful checks for the current active layers:
+Run the test suite (from `backend/`):
 
 ```bash
-python -m py_compile \
-  foundation/flow.py \
-  foundation/constants.py \
-  foundation/model_registry.py \
-  core/intake/intake.py \
-  core/intake/rate_limiter.py \
-  security/sanitizers/runner.py \
-  security/sanitizers/pre_sanitization.py \
-  core/normalizer/normalizer.py
+cd backend && pytest
 ```
 
-```bash
-python -m pytest tests/
-```
+The ClamAV EICAR test requires a running `clamd` daemon, and the memory tests
+need Qdrant; if either is unavailable those tests are skipped.
 
-The ClamAV EICAR test requires a running `clamd` daemon. If the daemon is not
-available, that test is skipped.
-
-To run the active pipeline end-to-end (intake -> sanitizer -> normalizer ->
-verifier) against real ClamAV and a live verifier LLM:
+To run the active pipeline end-to-end against real services (from `backend/`):
 
 ```bash
-docker compose up -d clamav          # start the ClamAV daemon
-python main.py "your text here"      # prints the resulting Flow summary
+docker compose up -d clamav qdrant     # from the repo root: start the deps
+cd backend
+python main.py "your text here"        # CLI: prints the resulting Flow summary
+uvicorn api.app:app --port 8000        # or the FastAPI server (the frontend's backend)
 ```
 
 ---

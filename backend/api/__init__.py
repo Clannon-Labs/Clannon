@@ -6,5 +6,5 @@ modifying it: runs.py drives the same stage chain and observes ctx.decision_log
 to stream live events. Serves the exact contract documented in
 clannon/frontend/README.md ("The contract the backend must serve").
 
-Run:  .venv/bin/uvicorn server.app:app --port 8000 --reload
+Run:  .venv/bin/uvicorn api.app:app --port 8000 --reload
 """

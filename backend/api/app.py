@@ -1,7 +1,7 @@
 """
 The FastAPI application — serves the contract in clannon/frontend/README.md.
 
-    .venv/bin/uvicorn server.app:app --port 8000
+    .venv/bin/uvicorn api.app:app --port 8000
 
 Set FRONTEND_ORIGIN for CORS (default http://localhost:3000). Loads .env /
 .env.local exactly like main.py so the pipeline gets its provider keys.
@@ -399,7 +399,7 @@ def usage(user: auth.User = Depends(auth.current_user)) -> dict:
     }
 
 
-# ---------- model settings (catalog lives in server/config.py) ----------
+# ---------- model settings (catalog lives in api/config.py) ----------
 
 
 class ModelBody(BaseModel):

@@ -304,7 +304,7 @@ ensure_security_runtime_deps() {
 }
 
 prune_vraksha_docker_clutter() {
-    docker compose rm -sf vraksha >/dev/null
+    docker compose rm -sf backend >/dev/null
     docker container prune -f --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" >/dev/null
     docker image prune -f >/dev/null
 }
@@ -355,8 +355,8 @@ if docker ps \
     --format "{{.Names}}" | grep -q .
 then
     printf "  ${A}${GL_DIAMOND}${NC}  ${M}stopping stale background Vraksha container...${NC}\n"
-    docker compose stop vraksha &>/dev/null
-    docker compose rm -f vraksha &>/dev/null
+    docker compose stop backend &>/dev/null
+    docker compose rm -f backend &>/dev/null
 fi
 
 # System Link Validation
@@ -375,7 +375,7 @@ fi
 REBUILD_NEEDED=$FORCE_BUILD
 if [ "$REBUILD_NEEDED" = false ]; then
     # Check if the project image exists in docker
-    if ! docker image inspect vraksha-runtime:latest &>/dev/null; then
+    if ! docker image inspect clannon-backend:latest &>/dev/null; then
         REBUILD_NEEDED=true
     fi
 fi
@@ -439,4 +439,4 @@ hr
 
 # 3. launch agent
 # --rm ensures no container redundancy
-docker compose run --rm --remove-orphans vraksha 2> >(grep -vE "Creating|Created|Starting|Started|Network" >&2)
+docker compose run --rm --remove-orphans backend 2> >(grep -vE "Creating|Created|Starting|Started|Network" >&2)

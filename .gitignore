@@ -14,8 +14,8 @@ venv/
 vraksha.log
 
 # Model / embedding caches under assets (the directory itself can be tracked)
-assets/hf_cache/
-assets/fastembed_cache/
+backend/assets/hf_cache/
+backend/assets/fastembed_cache/
 
 # Production prompt overlay (auto-discovered, or VRAKSHA_PROMPTS_DIR). The real,
 # hardened prompts for EVERY llm call (verifier/filter/orchestrator/memory +
@@ -34,7 +34,7 @@ demos/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
-server/data/
+backend/api/data/
 
 # Repository Artifacts
 FUTURE_SELF_REVIEW_PLAN.md
@@ -42,6 +42,7 @@ FUTURE_SELF_REVIEW_PLAN.md
 
 # Architecture Backups & Legacy Residue
 .architecture/*
+.judgments/
 
 # Documentation
 /docs/

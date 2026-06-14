@@ -8,7 +8,7 @@ table here.
 
 ```bash
 # from the repo root
-.venv/bin/uvicorn server.app:app --port 8000 --reload
+.venv/bin/uvicorn api.app:app --port 8000 --reload
 ```
 
 ## Environment
@@ -21,7 +21,7 @@ pipeline gets its provider keys. Server-specific variables:
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allow-origin + where OAuth errors redirect. Must exactly match the frontend's origin (scheme + host + port). |
 | `SERVER_DEFAULT_PLAN` | `free` | Plan for new signups. Use `pro` in local dev to unlock all memory tiers. |
 | `SERVER_COOKIE_SECURE` | `0` | Set `1` in production (HTTPS) so the session cookie is Secure. |
-| `SERVER_DB_PATH` | `server/data/clannon.db` | SQLite location (users, sessions, wiki, model prefs). |
+| `SERVER_DB_PATH` | `api/data/clannon.db` | SQLite location (users, sessions, wiki, model prefs). |
 
 ## Module map
 
@@ -79,7 +79,7 @@ Example: you want "archived runs" — `GET /runs/archive`. Six steps, in order.
 Steps 1–2 are this repo; 3–6 are the frontend. None of them touch page code
 beyond the component that uses the new data.
 
-**1. Server route (`server/app.py`)**
+**1. Server route (`api/app.py`)**
 
 ```python
 @app.get("/runs/archive")
@@ -155,7 +155,7 @@ and an `AsyncGenerator` client-side — copy `streamRun` in both `runs.py` and
 ## Deployment (Railway + Vercel)
 
 1. Deploy this repo to Railway: start command
-   `uvicorn server.app:app --host 0.0.0.0 --port $PORT`, set `FRONTEND_ORIGIN`
+   `uvicorn api.app:app --host 0.0.0.0 --port $PORT`, set `FRONTEND_ORIGIN`
    to the Vercel URL, `SERVER_COOKIE_SECURE=1`, and the provider API keys.
 2. On Vercel, set the frontend env: `NEXT_PUBLIC_API_MODE=http`,
    `NEXT_PUBLIC_API_BASE_URL=https://<railway-app>.up.railway.app`,

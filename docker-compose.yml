@@ -1,7 +1,10 @@
+# Local dev stack. The backend (built from ./backend) plus its service deps.
+# Railway does NOT use this file — it builds backend/Dockerfile directly; this is
+# only for running everything together on one host.
 services:
-  vraksha:
-    image: vraksha-runtime:latest
-    build: .
+  backend:
+    image: clannon-backend:latest
+    build: ./backend
     depends_on:
       - clamav
       - qdrant
@@ -10,16 +13,19 @@ services:
       # grants this container host-root-equivalent control, and nothing uses it.
       # Out-of-process tool sandboxing (the python_exec TODO) must use a rootless
       # runtime or a socket proxy, never a raw socket mount.
-      - .:/vraksha
+      - ./backend:/app
     env_file:
-      - .env.local
+      - ./backend/.env.local
     environment:
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
       - QDRANT_URL=http://qdrant:6333
-      - VRAKSHA_EMBED_CACHE=/vraksha/assets/fastembed_cache
-      - AGENT_YARA_DIR=/vraksha/rules
-      - HF_HOME=/vraksha/assets/hf_cache
+      - VRAKSHA_EMBED_CACHE=/app/assets/fastembed_cache
+      - AGENT_YARA_DIR=/app/rules
+      - HF_HOME=/app/assets/hf_cache
+    # the interactive CLI/TUI (the API image default is uvicorn); override to
+    # `uvicorn api.app:app --host 0.0.0.0 --port 8000` to run the server here
+    command: ["python", "main.py"]
     stdin_open: true
     tty: true
     # interactive agent — never auto-restart: a restarting background copy

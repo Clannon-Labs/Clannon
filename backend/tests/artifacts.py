@@ -86,8 +86,8 @@ def test_capture_noop_without_workspace_or_artifacts(tmp_path):
 
 def test_run_artifacts_survive_persist_and_reload(tmp_path, monkeypatch):
     # a finished run's artifact refs round-trip through SQLite (new column)
-    import server.config as cfg
-    import server.runs as runs_mod
+    import api.config as cfg
+    import api.runs as runs_mod
 
     monkeypatch.setattr(cfg, "DB_PATH", str(tmp_path / "t.db"))
     store = runs_mod.RunStore()
@@ -104,9 +104,9 @@ def test_run_artifacts_survive_persist_and_reload(tmp_path, monkeypatch):
 
 
 def test_download_artifact_serves_designated_bytes_only(tmp_path, monkeypatch):
-    from server.app import download_artifact
-    from server.auth import User
-    import server.runs as runs_mod
+    from api.app import download_artifact
+    from api.auth import User
+    import api.runs as runs_mod
 
     # the file as it would sit in the store after capture (under the run id)
     monkeypatch.setenv("VRAKSHA_ARTIFACTS_DIR", str(tmp_path))
