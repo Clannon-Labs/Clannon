@@ -75,8 +75,17 @@ export function useRunThread(id: string) {
 export function useCreateRun() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (brief: string) => getClient().createRun(brief),
+    mutationFn: (vars: { brief: string; files?: File[] }) =>
+      getClient().createRun(vars.brief, vars.files),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
+  });
+}
+
+/** Fetch a run artifact's bytes (auth via cookie). The caller saves the Blob. */
+export function useDownloadArtifact() {
+  return useMutation({
+    mutationFn: ({ runId, name }: { runId: string; name: string }) =>
+      getClient().downloadArtifact(runId, name),
   });
 }
 
@@ -189,25 +198,40 @@ export interface LiveRunState {
 
 const TERMINAL: RunStatus[] = ["delivered", "blocked", "failed"];
 
+const initialLiveState = (): LiveRunState => ({
+  status: "queued",
+  log: [],
+  experts: [],
+  sources: [],
+  reportText: "",
+  reportDone: false,
+  tokensUsed: 0,
+  streamError: null,
+  live: false,
+});
+
 export function useLiveRun(run: Run | undefined): LiveRunState {
   // Only what the stream itself produced lives in state; everything
   // the run query already knows is merged during render below.
-  const [state, setState] = useState<LiveRunState>(() => ({
-    status: "queued",
-    log: [],
-    experts: [],
-    sources: [],
-    reportText: "",
-    reportDone: false,
-    tokensUsed: 0,
-    streamError: null,
-    live: false,
-  }));
+  const [state, setState] = useState<LiveRunState>(initialLiveState);
   const qc = useQueryClient();
   const startedFor = useRef<string | null>(null);
+  // Which run.id `state` currently holds. The RunPage component is reused
+  // across /runs/[id] navigations, so without this the previous run's
+  // streamed log/report would bleed into the next run through the merge below.
+  const stateRunId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!run) return;
+
+    // A different run is on screen now — drop the prior run's streamed state
+    // before it can show through the merge. Done for ANY target, including a
+    // terminal one (e.g. opening a delivered prior turn while a stream is live).
+    if (stateRunId.current !== run.id) {
+      stateRunId.current = run.id;
+      setState(initialLiveState());
+    }
+
     if (TERMINAL.includes(run.status)) return;
     if (startedFor.current === run.id) return;
     startedFor.current = run.id;

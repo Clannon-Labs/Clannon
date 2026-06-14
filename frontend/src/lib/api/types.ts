@@ -57,6 +57,30 @@ export interface Source {
   domain: string;
 }
 
+/**
+ * A file the run produced for download (output side), fetched via
+ * GET /runs/:id/artifacts/:name. The backend sends snake_case `run_id`
+ * for this shape (unlike the camelCase run/user shapes) — keep it as-is.
+ */
+export interface Artifact {
+  id: string;
+  run_id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/**
+ * A file attached to a run at creation (input side), after the boundary
+ * malware scan. `modality` is free-form so new kinds (image/audio/video)
+ * slot in without a type change — today it's "text" | "pdf".
+ */
+export interface InputFileMeta {
+  name: string;
+  modality: string;
+  size: number;
+}
+
 export interface RunSummary {
   id: string;
   title: string;
@@ -75,6 +99,10 @@ export interface Run extends RunSummary {
   /** Markdown. Only present once the output filter has cleared it. */
   report?: string;
   sources: Source[];
+  /** Files this run delivered for download. Empty until an expert publishes one. */
+  artifacts: Artifact[];
+  /** Files attached to this run at creation. Empty for a typed-only brief. */
+  inputs: InputFileMeta[];
   /** User's thumbs rating on the delivered report, if given. */
   feedbackRating?: "up" | "down" | null;
   feedbackComment?: string | null;

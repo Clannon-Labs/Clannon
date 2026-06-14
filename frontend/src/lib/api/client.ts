@@ -39,7 +39,10 @@ export interface ClannonClient {
 
   listRuns(): Promise<RunSummary[]>;
   getRun(id: string): Promise<Run>;
-  createRun(brief: string): Promise<{ id: string }>;
+  /** Start a run. Optional input files ride along as multipart (text-family + PDF). */
+  createRun(brief: string, files?: File[]): Promise<{ id: string }>;
+  /** Download one of a run's published artifacts as a Blob (auth via cookie). */
+  downloadArtifact(runId: string, name: string): Promise<Blob>;
   /** Live events for a run. Ends when the run reaches a terminal state. */
   streamRun(id: string, signal: AbortSignal): AsyncGenerator<RunEvent>;
   /** Attach a thumbs rating (+ optional note) to a delivered run. */

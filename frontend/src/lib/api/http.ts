@@ -152,11 +152,37 @@ export class HttpClient implements ClannonClient {
     return request(appConfig.endpoints.run, { params: { id } });
   }
 
-  createRun(brief: string): Promise<{ id: string }> {
-    return request(appConfig.endpoints.createRun, {
+  async createRun(brief: string, files: File[] = []): Promise<{ id: string }> {
+    // multipart now (was JSON): brief + repeated "files" field. Let the
+    // browser set the multipart boundary — the json request() helper can't.
+    const form = new FormData();
+    form.append("brief", brief);
+    for (const f of files) form.append("files", f, f.name); // field name MUST be "files"
+    const res = await fetch(url(appConfig.endpoints.createRun), {
       method: "POST",
-      body: JSON.stringify({ brief }),
+      credentials: appConfig.http.credentials,
+      body: form,
     });
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        message = errorMessage(await res.json(), message);
+      } catch {
+        // non-JSON error body
+      }
+      throw new ApiError(message, res.status); // 422 detail names the rejected file
+    }
+    return (await res.json()) as { id: string };
+  }
+
+  async downloadArtifact(runId: string, name: string): Promise<Blob> {
+    // fetch-blob, not a bare <a download>: the backend is a different origin
+    // and auth is a cookie — credentials:"include" reliably authenticates.
+    const res = await fetch(url(appConfig.endpoints.runArtifact, { id: runId, name }), {
+      credentials: appConfig.http.credentials,
+    });
+    if (!res.ok) throw new ApiError(`Download failed: ${res.statusText}`, res.status);
+    return res.blob();
   }
 
   async setRunFeedback(

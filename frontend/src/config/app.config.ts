@@ -47,6 +47,8 @@ export const appConfig = {
     createRun: "/runs",
     /** Server-Sent Events stream of RunEvent payloads. */
     runStream: "/runs/:id/stream",
+    /** Download one of a run's published artifacts by name (bytes, attachment). */
+    runArtifact: "/runs/:id/artifacts/:name",
     /** Thumbs rating (+ optional note) on a delivered run. */
     runFeedback: "/runs/:id/feedback",
     /** Continue a run: spawns the next turn in the same session. */

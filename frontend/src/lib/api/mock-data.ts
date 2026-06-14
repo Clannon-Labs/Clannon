@@ -161,6 +161,11 @@ export const SEED_RUNS: Run[] = [
     ],
     report: SAMPLE_REPORT,
     sources: SEED_SOURCES,
+    inputs: [{ name: "meridian-financials.csv", modality: "text", size: 48_120 }],
+    artifacts: [
+      { id: "a1", run_id: "run_seed_1", name: "uk-market-entry.md", mime: "text/markdown", size: 11_240 },
+      { id: "a2", run_id: "run_seed_1", name: "competitor-revenue.csv", mime: "text/csv", size: 2_980 },
+    ],
   },
   {
     id: "run_seed_2",
@@ -177,6 +182,8 @@ export const SEED_RUNS: Run[] = [
     ],
     report: "# Competitor teardown — PM software for architects\n\n## Summary\n\nMonograph and Programa both anchor pricing at $45–55 per seat but leave **phase-based billing** — the way architecture studios actually invoice — underserved. Full matrix and sourcing below.\n\n## Where they are strong\n\n- Monograph: time-tracking UX, US brand recognition among AIA firms\n- Programa: spec/FF&E workflows, strong in interior design crossover\n\n## The opening\n\nNeither product models **RIBA/AIA phase fee structures** natively; both communities surface this in reviews repeatedly. A studio-shaped billing engine is the wedge.\n",
     sources: SEED_SOURCES.slice(0, 3),
+    inputs: [],
+    artifacts: [],
   },
   {
     id: "run_seed_3",
@@ -214,6 +221,8 @@ export const SEED_RUNS: Run[] = [
     experts: [],
     report: undefined,
     sources: [],
+    inputs: [],
+    artifacts: [],
   },
 ];
 

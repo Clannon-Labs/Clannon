@@ -2,18 +2,44 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
-import { ArrowRight, MessagesSquare, Sprout } from "lucide-react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, MessagesSquare, Paperclip, Sprout, X } from "lucide-react";
 import { useCreateRun, useMe, useRuns } from "@/lib/api/hooks";
 import { ApiError, type RunSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton, EmptyState } from "@/components/ui/skeleton";
 import { RunStatusBadge } from "@/components/app/run-status";
 import { HydrationPanel } from "@/components/app/hydration-panel";
-import { formatRelativeTime, formatTokens } from "@/lib/utils";
+import { formatBytes, formatRelativeTime, formatTokens } from "@/lib/utils";
 
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
 import { appConfig } from "@/config/app.config";
+
+// Input-file limits. These MIRROR the backend for fast feedback only — the
+// backend stays the authority and its 422 (which file, why) is surfaced verbatim.
+const MAX_FILES = 10;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const ACCEPTED_INPUT =
+  ".txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.html,.htm,.log,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff";
+const TEXT_LIKE = /\.(txt|md|markdown|csv|tsv|json|jsonl|ya?ml|xml|html?|log|rtf)$/i;
+// Images are a live upload type (the Media Expert reads them via Gemini). Audio
+// and video are NOT accepted yet. .svg is intentionally excluded — it's a
+// vector/XSS-shaped format we don't invite from the UI.
+const IMAGE_LIKE = /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i;
+
+/** A reason to reject a file before upload, or null if it's acceptable today. */
+function rejectInputFile(file: File): string | null {
+  if (file.size > MAX_FILE_BYTES) return `${file.name} is larger than 50 MB.`;
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  const isText = file.type.startsWith("text/") || TEXT_LIKE.test(file.name);
+  const isImage =
+    (file.type.startsWith("image/") && file.type !== "image/svg+xml") ||
+    IMAGE_LIKE.test(file.name);
+  if (!isPdf && !isText && !isImage) {
+    return `${file.name}: only text files, PDFs, and images are supported right now.`;
+  }
+  return null;
+}
 
 interface SessionEntry {
   sessionId: string;
@@ -61,10 +87,31 @@ export default function WorkspacePage() {
   const { data: runs, isLoading } = useRuns();
   const createRun = useCreateRun();
   const [brief, setBrief] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const firstName = user?.name.split(" ")[0] ?? "";
   const tooShort = brief.trim().length < appConfig.limits.briefMinChars;
+
+  function addFiles(picked: File[]) {
+    setError(null);
+    const next = [...files];
+    for (const f of picked) {
+      if (next.length >= MAX_FILES) {
+        setError(`Up to ${MAX_FILES} files per run.`);
+        break;
+      }
+      if (next.some((e) => e.name === f.name && e.size === f.size)) continue; // dedupe
+      const reason = rejectInputFile(f);
+      if (reason) {
+        setError(reason);
+        continue;
+      }
+      next.push(f);
+    }
+    setFiles(next);
+  }
 
   // collapse a multi-turn conversation into ONE entry: a session shows the
   // original ask as its title, links to the latest turn (which renders the full
@@ -74,11 +121,14 @@ export default function WorkspacePage() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    createRun.mutate(brief, {
-      onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
-      onError: (err) =>
-        setError(err instanceof ApiError ? err.message : "Could not start the run — try again."),
-    });
+    createRun.mutate(
+      { brief, files },
+      {
+        onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
+        onError: (err) =>
+          setError(err instanceof ApiError ? err.message : "Could not start the run — try again."),
+      },
+    );
   }
 
   return (
@@ -116,21 +166,66 @@ export default function WorkspacePage() {
             rows={5}
             className="w-full resize-none bg-transparent px-5 py-4 text-base leading-relaxed placeholder:text-faint focus:outline-none sm:text-[15px]"
           />
+          {/* attached input files — removable before submit */}
+          {files.length > 0 && (
+            <ul className="flex flex-wrap gap-2 px-4 pb-1">
+              {files.map((f, i) => (
+                <li
+                  key={`${f.name}-${f.size}-${i}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[12px] text-muted-foreground"
+                >
+                  <Paperclip className="size-3 shrink-0 text-faint" aria-hidden />
+                  <span className="truncate">{f.name}</span>
+                  <span className="shrink-0 text-faint tabular">{formatBytes(f.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${f.name}`}
+                    className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint hover:text-destructive"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex flex-col gap-3 border-t border-border bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12px] text-faint" aria-live="polite">
-              {tooShort ? (
-                <span className="text-muted-foreground">
-                  {brief.trim().length === 0
-                    ? "Type a message to begin."
-                    : "Say a little more…"}
-                </span>
-              ) : (
-                <>
-                  Remembers your past work ·{" "}
-                  <kbd className="rounded border border-border px-1 font-mono text-[11px]">⌘↵</kbd> to send
-                </>
-              )}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Paperclip className="size-4" aria-hidden /> Attach
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPTED_INPUT}
+                multiple
+                className="hidden"
+                aria-label="Attach input files — text files, PDFs, or images"
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  e.target.value = ""; // allow re-picking the same file
+                  if (picked.length) addFiles(picked);
+                }}
+              />
+              <p className="text-[12px] text-faint" aria-live="polite">
+                {tooShort ? (
+                  <span className="text-muted-foreground">
+                    {brief.trim().length === 0
+                      ? "Type a message to begin."
+                      : "Say a little more…"}
+                  </span>
+                ) : (
+                  <>
+                    Remembers your past work ·{" "}
+                    <kbd className="rounded border border-border px-1 font-mono text-[11px]">⌘↵</kbd> to send
+                  </>
+                )}
+              </p>
+            </div>
             <Button
               type="submit"
               loading={createRun.isPending}

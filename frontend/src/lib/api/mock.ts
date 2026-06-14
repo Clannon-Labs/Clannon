@@ -150,7 +150,7 @@ export class MockClient implements ClannonClient {
     return structuredClone(run);
   }
 
-  async createRun(brief: string): Promise<{ id: string }> {
+  async createRun(brief: string, files: File[] = []): Promise<{ id: string }> {
     await sleep(450);
     const trimmed = brief.trim();
     if (trimmed.length < appConfig.limits.briefMinChars) {
@@ -158,6 +158,15 @@ export class MockClient implements ClannonClient {
     }
     const id = nextId("run");
     const title = trimmed.length > 64 ? `${trimmed.slice(0, 61).trimEnd()}…` : trimmed;
+    const inputs = files.map((f) => ({
+      name: f.name,
+      modality: f.type.startsWith("image/")
+        ? "image"
+        : f.type.includes("pdf")
+          ? "pdf"
+          : "text",
+      size: f.size,
+    }));
     this.runs.set(id, {
       id,
       title,
@@ -169,9 +178,16 @@ export class MockClient implements ClannonClient {
       decisionLog: [],
       experts: [],
       sources: [],
+      artifacts: [],
+      inputs,
       sessionId: id, // a root turn opens its own session
     });
     return { id };
+  }
+
+  async downloadArtifact(_runId: string, name: string): Promise<Blob> {
+    await sleep(200);
+    return new Blob([`mock artifact — ${name}`], { type: "text/plain" });
   }
 
   async setRunFeedback(

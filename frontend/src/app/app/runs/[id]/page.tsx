@@ -2,10 +2,26 @@
 
 import Link from "next/link";
 import { use, useState } from "react";
-import { ArrowLeft, ShieldAlert, Check, Copy, Download, ChevronRight, ListTree } from "lucide-react";
+import {
+  ArrowLeft,
+  ShieldAlert,
+  Check,
+  Copy,
+  Download,
+  ChevronRight,
+  ListTree,
+  File,
+  FileText,
+  FileType,
+  FileAudio,
+  FileVideo,
+  Image,
+  type LucideIcon,
+} from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import { useRun, useLiveRun, useRunThread } from "@/lib/api/hooks";
+import { useRun, useLiveRun, useRunThread, useDownloadArtifact } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { DecisionLog } from "@/components/app/decision-log";
 import { ExpertPanel, SourcesPanel } from "@/components/app/expert-panel";
 import { Report } from "@/components/app/report";
@@ -18,7 +34,36 @@ import { Reveal, Rule } from "@/components/motion";
 import { RunFeedback } from "@/components/app/run-feedback";
 import { PriorTurns } from "@/components/app/prior-turns";
 import type { Run } from "@/lib/api";
-import { cn, formatTokens } from "@/lib/utils";
+import { cn, formatBytes, formatTokens } from "@/lib/utils";
+
+/** Icon for an attached input file, picked by modality (text/pdf today;
+ *  image/audio/video slot in as the backend's media support lands). */
+function iconForModality(modality: string): LucideIcon {
+  switch (modality) {
+    case "pdf":
+      return FileType;
+    case "image":
+      return Image;
+    case "audio":
+      return FileAudio;
+    case "video":
+      return FileVideo;
+    case "text":
+      return FileText;
+    default:
+      return File;
+  }
+}
+
+/** Icon for a delivered artifact, picked by its mime type. */
+function iconForMime(mime: string): LucideIcon {
+  if (mime.startsWith("image/")) return Image;
+  if (mime.startsWith("audio/")) return FileAudio;
+  if (mime.startsWith("video/")) return FileVideo;
+  if (mime === "application/pdf") return FileType;
+  if (mime.startsWith("text/")) return FileText;
+  return File;
+}
 
 /** An honest, stage-specific block message — not the old "verifier found PII"
  *  catch-all, which was wrong for output-filter blocks. */
@@ -52,6 +97,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const { data: run, isLoading, error } = useRun(id);
   const { data: thread } = useRunThread(id);
   const live = useLiveRun(run);
+  const download = useDownloadArtifact();
   const toast = useToast();
 
   // turns of this session that came before the one on screen — the chat history.
@@ -77,6 +123,24 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     a.download = `${(run?.title ?? "report").replace(/[^\w-]+/g, "-").slice(0, 60)}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function saveArtifact(name: string) {
+    if (!run) return;
+    download.mutate(
+      { runId: run.id, name },
+      {
+        onSuccess: (blob) => {
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = name;
+          a.click();
+          URL.revokeObjectURL(objectUrl);
+        },
+        onError: () => toast({ title: `Couldn't download ${name}`, tone: "warning" }),
+      },
+    );
   }
 
   if (isLoading) {
@@ -167,6 +231,25 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         <p className="mt-3 whitespace-pre-wrap rounded-lg border border-border bg-surface px-4 py-3.5 text-sm leading-relaxed text-foreground">
           {run.brief}
         </p>
+      )}
+
+      {/* attached input files, after the boundary malware scan — a quiet chip row */}
+      {showProcess && run.inputs && run.inputs.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-2" aria-label="Attached files">
+          {run.inputs.map((input, i) => {
+            const Icon = iconForModality(input.modality);
+            return (
+              <li
+                key={`${input.name}-${i}`}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] text-muted-foreground"
+              >
+                <Icon className="size-3.5 shrink-0 text-faint" aria-hidden />
+                <span className="truncate">{input.name}</span>
+                <span className="shrink-0 text-faint tabular">{formatBytes(input.size)}</span>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {/* pipeline progress — a ruled strike across the stages, not a row of pills */}
@@ -296,6 +379,49 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
               />
             </div>
           </Reveal>
+        </section>
+      )}
+
+      {/* files this run delivered — the canonical download UI (the report
+          markdown may name files; this is where you get them) */}
+      {run.artifacts && run.artifacts.length > 0 && (
+        <section aria-label="Files" className="mt-6">
+          <h2 className="tag-label text-faint">Files</h2>
+          <ul className="mt-3 flex flex-col gap-2">
+            {run.artifacts.map((artifact) => {
+              const Icon = iconForMime(artifact.mime);
+              const pending =
+                download.isPending && download.variables?.name === artifact.name;
+              return (
+                <li
+                  key={artifact.id}
+                  className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Icon className="size-4 shrink-0 text-faint" aria-hidden />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {artifact.name}
+                      </p>
+                      <p className="text-[12px] text-faint tabular">
+                        {artifact.mime} · {formatBytes(artifact.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => saveArtifact(artifact.name)}
+                    loading={pending}
+                    className="shrink-0"
+                  >
+                    {!pending && <Download className="size-4" aria-hidden />}
+                    Download
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
