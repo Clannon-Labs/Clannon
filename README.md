@@ -149,12 +149,12 @@ intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -
 
 Useful docs:
 
-- [foundation/README.md](foundation/README.md)
-- [foundation/FLOW_GUIDE.md](foundation/FLOW_GUIDE.md)
-- [core/README.md](core/README.md)
-- [security/sanitizers/README.md](security/sanitizers/README.md)
-- [server/README.md](server/README.md)
-- [frontend/README.md](frontend/README.md)
+- [foundation/README.md](https://github.com/vraksha/Clannon/blob/main/backend/foundation/README.md)
+- [foundation/FLOW_GUIDE.md](https://github.com/vraksha/Clannon/blob/main/backend/foundation/FLOW_GUIDE.md)
+- [core/README.md](https://github.com/vraksha/Clannon/tree/main/backend/core)
+- [security/sanitizers/README.md](https://github.com/vraksha/Clannon/tree/main/backend/security/sanitizers)
+- [api/README.md](https://github.com/vraksha/Clannon/blob/main/backend/api/README.md)
+- [frontend/README.md](https://github.com/vraksha/Clannon/blob/main/frontend/README.md)
 
 ---
 
@@ -291,32 +291,3 @@ uvicorn api.app:app --port 8000        # or the FastAPI server (the frontend's b
 ---
 
 **Official Site:** [clannon.com](https://clannon.com)
-
-<div align="center">
-  <h3>Clannon in Action</h3>
-
-  <table border="0">
-    <tr>
-      <td>
-        <p align="center"><b>01. Introduction/thinking</b></p>
-        <img src="assets/previews/introduction.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
-      </td>
-      <td>
-        <p align="center"><b>02. Recent Context</b></p>
-        <img src="assets/previews/recent.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <p align="center"><b>03. Detection Report</b></p>
-        <img src="assets/previews/detection-report.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
-      </td>
-      <td>
-        <p align="center"><b>04. Detection Feedback</b></p>
-        <img src="assets/previews/detector-result-peter.png" width="400" style="border-radius: 6px; border: 1px solid #30363d;">
-      </td>
-    </tr>
-  </table>
-
-  <p><i>Clannon: research that remembers — built on a security-first pipeline, layer by layer.</i></p>
-</div>
