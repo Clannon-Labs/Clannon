@@ -231,6 +231,17 @@ delivered`. Terminal states: `delivered` | `blocked` | `failed`. On `blocked`,
 `blockStage` says which gate: `sanitize`/`verify` (input-side — nothing reached the
 models) vs `filter` (output-side — a draft was produced then held) vs `security`.
 
+**The orchestrator degrades gracefully — it does NOT `failed` on a timeout or a
+provider rate-limit.** If reasoning can't finish (the 480s wall-clock elapses, or
+every model in the fallback chain is rate-limited/429), the run still reaches
+`delivered` with an honest report: a clear "couldn't finish, providers are
+momentarily rate-limited, please try again" message, plus any partial findings the
+run gathered before it stopped. A `warning` decision-log entry (which you already
+render) carries the same reason. So you don't need a special UI for this — it shows
+up as a normal delivered run whose report explains itself. `failed` is now reserved
+for genuine infrastructure faults (e.g. the output filter itself erroring), not the
+common transient rate-limit/slow-run case.
+
 **SSE frame format:** each message is `data: <json>\n\n`. `<json>` is one
 `RunEvent`. The stream replays buffered events first (so a late subscriber catches
 up), then streams live ones, then the server sends a sentinel and closes.
