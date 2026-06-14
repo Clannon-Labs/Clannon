@@ -7,14 +7,16 @@ backend↔frontend contract — when you add or change an endpoint, update the
 table here.
 
 ```bash
-# from the repo root
-.venv/bin/uvicorn api.app:app --port 8000 --reload
+# from backend/ (with the venv activated) — the dir that holds api/, main.py,
+# models.yaml and .env.local; running from elsewhere can't resolve api.app or
+# the top-level core/foundation/security imports
+uvicorn api.app:app --port 8000 --reload
 ```
 
 ## Environment
 
-Loads `.env` then `.env.local` from the repo root (same as `main.py`), so the
-pipeline gets its provider keys. Server-specific variables:
+Loads `.env` then `.env.local` from `backend/` (the working directory, same as
+`main.py`), so the pipeline gets its provider keys. Server-specific variables:
 
 | Variable | Default | What it does |
 |---|---|---|
