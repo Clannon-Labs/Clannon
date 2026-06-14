@@ -66,12 +66,11 @@ are substituted automatically.
 
 A reference implementation of this contract — wrapping the real
 Vraksha pipeline with live SSE decision-log streaming, cookie auth,
-and SQLite-backed wiki memory — lives in the engine repo at
-`server/` (FastAPI):
+and SQLite-backed wiki memory — lives at `backend/api/` (FastAPI):
 
 ```bash
-# from the Vraksha repo root
-.venv/bin/uvicorn server.app:app --port 8000
+# from backend/ (with the venv activated)
+uvicorn api.app:app --port 8000
 # then run this frontend with the env above (FRONTEND_ORIGIN on the
 # server must match this app's origin for CORS)
 ```

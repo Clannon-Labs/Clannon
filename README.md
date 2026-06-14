@@ -63,7 +63,7 @@ Clannon is not another chat wrapper. It is designed around three core ideas:
   a write policy, never directly.
 - **Output Filter + Delivery**: A final structured safety/groundedness gate
   checks the draft before delivery — interactive TUI and one-shot CLI today,
-  plus a FastAPI server adapter (`server/`) for the web app.
+  plus a FastAPI server adapter (`backend/api/`) for the web app.
 - **Web Frontend**: A Next.js workspace and marketing site (`frontend/`) with a
   live decision-log stream, memory browser, and run views — currently
   mock-backed; the mock client defines the exact SSE contract the server serves.
@@ -125,7 +125,7 @@ registry/ + tools/ + experts/
 security/
   sanitizers + output filter
 
-server/
+api/
   FastAPI delivery adapter (auth, runs, config)
 
 frontend/
@@ -200,7 +200,7 @@ git clone https://github.com/vraksha/Clannon
 cd Clannon/backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt   # add -dev for the test suite
 ```
 
 Create local env files (inside `backend/`):

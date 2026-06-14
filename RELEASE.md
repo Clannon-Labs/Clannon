@@ -38,11 +38,13 @@ Manual setup if you'd rather not docker the agent itself: Python 3.12,
 Docker for the support services, and a Gemini API key.
 
 ```bash
+cd backend                                              # all backend files live here
+
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-docker compose up -d qdrant clamav
+docker compose -f ../docker-compose.yml up -d qdrant clamav   # compose file is at the repo root
 
-# .env.local in the repo root:
+# .env.local in backend/:
 #   GOOGLE_API_KEY=...          required
 #   ANTHROPIC_API_KEY=...       optional
 #   OPENAI_API_KEY=...          optional
@@ -57,7 +59,7 @@ model per day. If runs start failing in the evening that's almost
 certainly what happened. Every model call has fallbacks configured
 (Google then Anthropic then OpenAI), so if you add a funded key for any
 of those providers the pipeline will use it automatically when the
-primary dies. models.yaml at the root is where all of that is configured.
+primary dies. backend/models.yaml is where all of that is configured.
 
 ## Running it
 
@@ -67,7 +69,7 @@ a prompt, watch a live feed of what the pipeline is doing (which expert
 spawned, which tool got called), and get the answer in a panel. Everything
 noisier than that goes to vraksha.log next to the repo.
 
-Without the installer it's the same thing via:
+Without the installer it's the same thing, from `backend/`, via:
 
 ```bash
 .venv/bin/python main.py
@@ -104,8 +106,9 @@ pipeline with a live-streamed decision log and a UI for browsing memory.
 But it's not shipped yet, and I will ship it if this project is successful : )
 <!-- 
 ```bash
-.venv/bin/uvicorn server.app:app --port 8000
-cd frontend && npm install && npm run dev
+# from backend/
+.venv/bin/uvicorn api.app:app --port 8000
+cd ../frontend && npm install && npm run dev
 ``` -->
 
 ## Memory

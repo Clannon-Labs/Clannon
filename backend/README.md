@@ -28,7 +28,7 @@ models.yaml   model/provider routing
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt   # runtime + test deps
 cp .env.example .env.local          # add provider keys
 
 # from the repo root: bring up the service deps

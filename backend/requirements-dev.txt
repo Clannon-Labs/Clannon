@@ -1,0 +1,9 @@
+# Development + test dependencies — NOT needed at runtime or in the deploy image.
+# Install on top of the runtime deps, from backend/:
+#     pip install -r requirements.txt -r requirements-dev.txt
+#
+# (The test suite under tests/ drives async code with asyncio.run(), so no
+# pytest-asyncio is required.)
+
+pytest                       # runs the suite under tests/
+pyflakes                     # quick unused/undefined-import lint
