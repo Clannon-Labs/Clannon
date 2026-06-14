@@ -238,6 +238,17 @@ up), then streams live ones, then the server sends a sentinel and closes.
 each, **skips malformed/`[DONE]` frames**, and ends on stream close. Keep that
 tolerance — unknown future event types must not crash it.
 
+**Full-replay guarantee (for reconnect).** Every resubscribe to `/runs/:id/stream`
+replays the FULL event sequence from the run's start (every status/log/expert/
+report_delta/report_done/usage, in order) before live frames, for the run's whole
+live lifetime. The buffer is an append-only list, not a ring buffer — no early drops.
+So a dropped stream can be recovered by **resubscribe + reset-and-rebuild** (clear
+accumulated state, replay from scratch); `report_delta` chunks are re-sent identically
+and `report_done` exactly once, so the rebuilt report is identical. Caveat: the buffer
+is in-process memory — once a run reaches terminal and is evicted, a resubscribe
+replays EMPTY then closes. **Treat an empty replay as the terminal case → fetch
+`GET /runs/:id` for the final state; do not show "stream lost" on an empty replay.**
+
 **Event order (typical):** `status:orchestrating` → `log`(hydration) →
 `expert`(spawned/working) → many `log`(tool_call/observation) →
 `expert`(done) → `status:filtering` → `report_delta`×N → `report_done` →
@@ -293,8 +304,9 @@ in `http.ts` (it already does multipart correctly).
    (Update its one caller in the composer accordingly.)
 6. **Composer** (`src/app/app/page.tsx`) — add a file-attach control to the main
    composer. Validate client-side to MATCH the backend (text-family files, PDF,
-   **images, audio, and video**; ≤10 files; ≤50 MB each — note very large audio/video
-   can exceed the model's inline limit and that single call fails gracefully) but let
+   **images, audio, and video**; ≤10 files; ≤50 MB each — a very large audio/video over
+   the model's inline limit (~15 MB) is SKIPPED by the media expert and reported in the
+   report itself, with an actionable "compress/trim" note, so the run does NOT fail) but let
    the backend stay the authority: on a 422, surface
    its `detail` message verbatim (it names the rejected file + reason). Show
    selected files as removable chips before submit.

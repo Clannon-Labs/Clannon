@@ -49,12 +49,30 @@ class MediaExpert:
     tags = ("media", "image", "audio", "video", "vision", "transcription")
 
     async def run(self, args: MediaIn, env: ExpertEnv) -> ExpertOutput:
-        return await think(env, _task(args, env), media=await _media(env))
+        media, oversized = await _media(env)
+        return await think(env, _task(args, oversized), media=media)
 
 
-def _task(args: MediaIn, env: ExpertEnv) -> str:
-    """This expert's per-call task: the request itself; the media rides as multimodal input."""
-    return args.prompt
+# media rides INLINE in the request; a single file past the provider's inline limit
+# would 400 the call, so we skip it (and report it) instead of failing the run. A
+# File-API upload path for big files is a later enhancement.
+_INLINE_LIMIT_BYTES = 15 * 1024 * 1024
+
+
+def _task(args: MediaIn, oversized: list[tuple[str, int]]) -> str:
+    """This expert's per-call task: the request, plus a clear, actionable note about any
+    media that was too large to include inline (so the answer stays legible to the user)."""
+    task = args.prompt
+    if oversized:
+        listing = ", ".join(f"{name} (~{size // (1024 * 1024)} MB)" for name, size in oversized)
+        limit_mb = _INLINE_LIMIT_BYTES // (1024 * 1024)
+        task += (
+            f"\n\nNOTE: these attached files were too large to analyze inline and were NOT "
+            f"included: {listing}. The inline limit is about {limit_mb} MB. Say this plainly in "
+            f"your answer and suggest the user compress or trim them, then analyze whatever "
+            f"media WAS included."
+        )
+    return task
 
 
 # Map the non-canonical mime forms libmagic/mimetypes emit to the canonical media
@@ -78,20 +96,28 @@ def _canonical_mime(mime: str) -> str:
     return _MIME_ALIASES.get(mime, mime)
 
 
-async def _media(env: ExpertEnv) -> list[tuple[bytes, str]]:
-    """The attached media (image/audio/video) as (bytes, canonical-mime) pairs, read
-    from the workspace they were seeded into. Non-media inputs are ignored. Best-effort:
-    an unreadable file is skipped rather than sinking the run."""
+async def _media(env: ExpertEnv) -> tuple[list[tuple[bytes, str]], list[tuple[str, int]]]:
+    """Gather the attached media from the workspace it was seeded into.
+
+    Returns (media, oversized): `media` is [(bytes, canonical-mime)] for files within the
+    inline limit; `oversized` is [(name, size)] for media skipped because it exceeds the
+    limit (reported to the user instead of 400-ing the multimodal call). Non-media inputs
+    are ignored; an unreadable file is skipped rather than sinking the run."""
     workspace = getattr(env, "workspace", None)
     if workspace is None:
-        return []
-    out: list[tuple[bytes, str]] = []
+        return [], []
+    media: list[tuple[bytes, str]] = []
+    oversized: list[tuple[str, int]] = []
     for name in getattr(env, "input_files", None) or []:
         mime = mimetypes.guess_type(name)[0] or ""
         if not mime.startswith(_MEDIA_PREFIXES):
             continue
         try:
-            out.append((await workspace.read_bytes(name), _canonical_mime(mime)))
+            data = await workspace.read_bytes(name)
         except Exception:  # noqa: BLE001 — a single unreadable file must not sink the run
             continue
-    return out
+        if len(data) > _INLINE_LIMIT_BYTES:
+            oversized.append((name, len(data)))
+        else:
+            media.append((data, _canonical_mime(mime)))
+    return media, oversized

@@ -74,15 +74,29 @@ def _env(ws, seeded_names):
 def test_media_gathers_image_audio_video_with_canonical_mime():
     ws = _WS({"logo.png": b"PNG", "notes.txt": b"hi", "talk.wav": b"WAV", "clip.mp4": b"MP4"})
     env = _env(ws, ["logo.png", "notes.txt", "talk.wav", "clip.mp4"])
-    got = dict((m, d) for d, m in asyncio.run(_media(env)))
-    # notes.txt (not media) skipped; wav mime canonicalized x-wav -> wav
+    media, oversized = asyncio.run(_media(env))
+    got = dict((m, d) for d, m in media)
+    # notes.txt (not media) skipped; wav mime canonicalized x-wav -> wav; nothing oversized
     assert got == {"image/png": b"PNG", "audio/wav": b"WAV", "video/mp4": b"MP4"}
+    assert oversized == []
+
+
+def test_media_skips_and_reports_oversized_files(monkeypatch):
+    import experts.media.expert as me
+    monkeypatch.setattr(me, "_INLINE_LIMIT_BYTES", 8)            # tiny cap for the test
+    ws = _WS({"small.png": b"PNG", "big.mp4": b"x" * 64})        # big.mp4 exceeds 8 bytes
+    media, oversized = asyncio.run(_media(_env(ws, ["small.png", "big.mp4"])))
+    assert [m for _, m in media] == ["image/png"]               # small one included
+    assert oversized == [("big.mp4", 64)]                       # big one reported, not sent
+    # and the task carries an actionable note about the skipped file
+    task = me._task(me.MediaIn(prompt="describe these"), oversized)
+    assert "big.mp4" in task and "too large" in task and "compress" in task
 
 
 def test_media_empty_without_workspace_or_media():
-    assert asyncio.run(_media(_env(None, ["logo.png"]))) == []          # no workspace
+    assert asyncio.run(_media(_env(None, ["logo.png"]))) == ([], [])    # no workspace
     ws = _WS({"notes.txt": b"hi"})
-    assert asyncio.run(_media(_env(ws, ["notes.txt"]))) == []           # no media among inputs
+    assert asyncio.run(_media(_env(ws, ["notes.txt"]))) == ([], [])     # no media among inputs
 
 
 def test_canonical_mime_normalizes_known_aliases():
