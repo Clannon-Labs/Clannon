@@ -61,6 +61,12 @@ async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:
     """
     attempts = constants.LLM_TRANSIENT_MAX_RETRIES + 1
     delay = constants.LLM_RETRY_BASE_DELAY_S
+    # A FallbackModel that exhausts its chain already tried EVERY provider this round.
+    # Re-running the whole chain on the full retry budget multiplies latency by the chain
+    # length (N providers per attempt) for little gain — if every provider is rate-limited
+    # now, a few seconds of backoff won't clear it. So cap whole-chain re-runs hard and let
+    # the run fail fast into graceful degradation instead of spinning to the expert timeout.
+    chain_retries_left = constants.LLM_FALLBACK_MAX_RETRIES
 
     for attempt in range(attempts):
         try:
@@ -69,5 +75,9 @@ async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:
             is_last = attempt == attempts - 1
             if is_last or not _is_transient(exc):
                 raise
+            if isinstance(exc, BaseExceptionGroup):     # the whole fallback chain exhausted
+                if chain_retries_left <= 0:
+                    raise
+                chain_retries_left -= 1
             await asyncio.sleep(min(delay, constants.LLM_RETRY_MAX_DELAY_S))
             delay *= 2
