@@ -125,12 +125,36 @@ SELECTABLE_MODELS = [
     "gpt-5.4-nano",
 ]
 
-# Experts users can override individually (key = capability name shown in
-# the UI; role = the models.yaml role that expert resolves through).
-EXPERTS = [
-    {"key": "web.research", "label": "Web research", "role": "research"},
-    {"key": "synthesis.writer", "label": "Synthesis writer", "role": "planner"},
-]
+# Experts users can override individually (key = capability key; label = display
+# name; role = the models.yaml role that expert resolves through). DERIVED from the
+# capability registry so the model-settings UI auto-renders ANY expert added to the
+# backend, with zero edits here — drop an expert in backend/experts/ and it shows up.
+def _expert_label(key: str) -> str:
+    """A readable display name from a capability key, e.g. 'media.analyst' -> 'Media analyst'."""
+    return key.replace(".", " ").replace("_", " ").capitalize()
+
+
+def _discover_experts() -> list[dict]:
+    """Every registered, healthy expert as {key, label, role}, from the registry."""
+    from registry.capabilities import CapabilityKind, discover, registry
+
+    discover()
+    broken = {b.key for b in registry.broken()}
+    out: list[dict] = []
+    for card in registry.cards(CapabilityKind.EXPERT):
+        key = card["key"]
+        if key in broken:
+            continue
+        spec = registry.get_expert(key)
+        out.append({
+            "key": key,
+            "label": _expert_label(key),
+            "role": getattr(spec, "model_role", None) or "research",
+        })
+    return sorted(out, key=lambda e: e["key"])
+
+
+EXPERTS = _discover_experts()
 
 
 def qualify_model(model_id: str) -> str:
