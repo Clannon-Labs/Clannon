@@ -6,8 +6,8 @@ import asyncio
 from pydantic_ai import BinaryContent
 
 from core.llm.framework import AgentHandle, run_structured
-from experts.media.expert import MediaExpert, _images
-from registry.capabilities import CapabilityKind, discover, registry
+from experts.media.expert import _canonical_mime, _media
+from registry.capabilities import discover, registry
 from registry.capabilities.handler.support import ExpertEnv, SkillBook
 
 
@@ -71,17 +71,25 @@ def _env(ws, seeded_names):
     return env
 
 
-def test_images_gathers_only_image_files():
-    ws = _WS({"logo.png": b"PNGBYTES", "notes.txt": b"hi", "chart.jpg": b"JPGBYTES"})
-    env = _env(ws, ["logo.png", "notes.txt", "chart.jpg"])
-    got = asyncio.run(_images(env))
-    assert sorted((m, d) for d, m in got) == [("image/jpeg", b"JPGBYTES"), ("image/png", b"PNGBYTES")]
+def test_media_gathers_image_audio_video_with_canonical_mime():
+    ws = _WS({"logo.png": b"PNG", "notes.txt": b"hi", "talk.wav": b"WAV", "clip.mp4": b"MP4"})
+    env = _env(ws, ["logo.png", "notes.txt", "talk.wav", "clip.mp4"])
+    got = dict((m, d) for d, m in asyncio.run(_media(env)))
+    # notes.txt (not media) skipped; wav mime canonicalized x-wav -> wav
+    assert got == {"image/png": b"PNG", "audio/wav": b"WAV", "video/mp4": b"MP4"}
 
 
-def test_images_empty_without_workspace_or_images():
-    assert asyncio.run(_images(_env(None, ["logo.png"]))) == []        # no workspace
+def test_media_empty_without_workspace_or_media():
+    assert asyncio.run(_media(_env(None, ["logo.png"]))) == []          # no workspace
     ws = _WS({"notes.txt": b"hi"})
-    assert asyncio.run(_images(_env(ws, ["notes.txt"]))) == []          # no images among inputs
+    assert asyncio.run(_media(_env(ws, ["notes.txt"]))) == []           # no media among inputs
+
+
+def test_canonical_mime_normalizes_known_aliases():
+    assert _canonical_mime("audio/x-wav") == "audio/wav"
+    assert _canonical_mime("audio/mpeg") == "audio/mp3"
+    assert _canonical_mime("video/quicktime") == "video/mov"
+    assert _canonical_mime("image/png") == "image/png"                  # pass-through unchanged
 
 
 # ---- it self-registers, ready for the orchestrator -------------------------

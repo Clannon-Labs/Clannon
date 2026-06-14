@@ -292,9 +292,10 @@ in `http.ts` (it already does multipart correctly).
    `(vars: { brief: string; files?: File[] }) => getClient().createRun(vars.brief, vars.files)`.
    (Update its one caller in the composer accordingly.)
 6. **Composer** (`src/app/app/page.tsx`) — add a file-attach control to the main
-   composer. Validate client-side to MATCH the backend (text-family files, PDF, and
-   **images** — audio/video land next; ≤10 files; ≤50 MB each) but let the backend
-   stay the authority: on a 422, surface
+   composer. Validate client-side to MATCH the backend (text-family files, PDF,
+   **images, audio, and video**; ≤10 files; ≤50 MB each — note very large audio/video
+   can exceed the model's inline limit and that single call fails gracefully) but let
+   the backend stay the authority: on a 422, surface
    its `detail` message verbatim (it names the rejected file + reason). Show
    selected files as removable chips before submit.
 7. **Run view** (`src/app/app/runs/[id]/page.tsx`) — render `run.inputs` as a quiet
@@ -386,10 +387,11 @@ run page, the API architecture, security headers, no `dangerouslySetInnerHTML`).
 The backend's next initiative (#2) is **all-media + the full expert roster**. None
 of this changes the existing contract; it ADDS. Design so it slots in:
 
-- **All media inputs.** Upload-IN now accepts **images** too (the **Media Expert**,
-  `media.analyst`, reads them via Gemini multimodal); **audio / video** come next.
-  `InputFileMeta.modality` is `"image"` for an image (and will gain `"audio"|"video"`).
-  The "Attached" chip row (§5) should pick an icon by modality and not assume text.
+- **All media inputs (LIVE).** Upload-IN now accepts **images, audio, and video**
+  (the **Media Expert**, `media.analyst`, reads them via Gemini multimodal — describes
+  images + OCR, transcribes/summarizes audio, describes video). `InputFileMeta.modality`
+  is `"image" | "audio" | "video"` accordingly. The "Attached" chip row (§5) should pick
+  an icon by modality and not assume text.
 - **More experts.** The roster keeps growing (documentation, summarization, and
   more next). Live today: web.research, synthesis.writer, verification.claims,
   code.engineer, data.analyst, and **media.analyst**. The decision log + expert panel

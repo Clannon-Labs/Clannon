@@ -8,11 +8,11 @@ deliberately do NOT run the redacting modality workers (Presidio PII, etc.) on i
 the file is the user's own data and the expert needs it with full fidelity; the
 no-network sandbox + the output filter contain residual risk.
 
-Scope today: text-family files + PDF + images, decided by CONTENT sniff (libmagic),
-not by extension. Images are malware-scanned then passed through INTACT (no metadata
-stripping — don't nerf the media); the media expert reads them via a multimodal model.
-Audio/video admit the same way once their expert lands. Fail-closed: if the malware
-gate cannot run (e.g. ClamAV unreachable), the file is rejected, not admitted.
+Scope: text-family files + PDF + images + audio + video, decided by CONTENT sniff
+(libmagic), not by extension. Media (image/audio/video) is malware-scanned then passed
+through INTACT — no metadata stripping, don't nerf the media; the media expert reads it
+via a multimodal model. Fail-closed: if the malware gate cannot run (e.g. ClamAV
+unreachable), the file is rejected, not admitted.
 
 The server calls `scan_upload` per file; admitted files become `foundation.InputFile`
 and ride on the context to be seeded into the expert's workspace.
@@ -39,9 +39,9 @@ def _safe_name(name: str) -> str:
 
 
 def _admitted_modality(data: bytes) -> str | None:
-    """Content-sniff the bytes: 'text' for the text family, 'pdf' for PDF, 'image'
-    for images, else None (out of scope for this cut). Mirrors intake's modality map.
-    Audio/video are next; they admit the same way once an expert consumes them."""
+    """Content-sniff the bytes to a modality: 'text' for the text family, 'pdf' for
+    PDF, 'image'/'audio'/'video' for media, else None (unsupported). Mirrors intake's
+    modality map; the media expert reads image/audio/video via a multimodal model."""
     try:
         mime = magic.from_buffer(data, mime=True)
     except Exception:  # noqa: BLE001 — undetectable type is just unsupported
@@ -52,6 +52,10 @@ def _admitted_modality(data: bytes) -> str | None:
         return "pdf"
     if mime.startswith("image/"):
         return "image"
+    if mime.startswith("audio/"):
+        return "audio"
+    if mime.startswith("video/"):
+        return "video"
     return None
 
 
@@ -65,7 +69,7 @@ async def scan_upload(name: str, data: bytes) -> tuple[InputFile | None, str | N
         return None, f"{safe}: larger than the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit."
     modality = _admitted_modality(data)
     if modality is None:
-        return None, f"{safe}: unsupported file type — text-family files, PDF, and images only for now."
+        return None, f"{safe}: unsupported file type — text-family files, PDF, images, audio, and video only."
     try:
         pre = await pre_sanitization.run(data)
     except SanitizationError:

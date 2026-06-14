@@ -65,6 +65,20 @@ def test_admits_image_with_original_bytes(monkeypatch):
     assert item.modality == "image" and item.data == gif   # original bytes, never nerfed
 
 
+def test_admits_audio_with_original_bytes(monkeypatch):
+    _clean(monkeypatch)
+    wav = b"RIFF\x24\x00\x00\x00WAVEfmt "            # sniffs as audio/x-wav
+    item, reason = asyncio.run(uploads.scan_upload("voice.wav", wav))
+    assert reason is None and item.modality == "audio" and item.data == wav
+
+
+def test_admits_video_with_original_bytes(monkeypatch):
+    _clean(monkeypatch)
+    mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"   # sniffs as video/mp4
+    item, reason = asyncio.run(uploads.scan_upload("clip.mp4", mp4))
+    assert reason is None and item.modality == "video" and item.data == mp4
+
+
 def test_blocks_malicious_content(monkeypatch):
     async def fake_run(data):
         return NS(threat_level=ThreatLevel.HIGH, reason="ClamAV: Eicar-Test-Signature")
