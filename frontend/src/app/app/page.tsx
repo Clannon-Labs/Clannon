@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton, EmptyState } from "@/components/ui/skeleton";
 import { RunStatusBadge } from "@/components/app/run-status";
 import { HydrationPanel } from "@/components/app/hydration-panel";
-import { formatBytes, formatRelativeTime, formatTokens } from "@/lib/utils";
+import { cn, formatBytes, formatRelativeTime, formatTokens } from "@/lib/utils";
 
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
 import { appConfig } from "@/config/app.config";
@@ -103,7 +103,10 @@ export default function WorkspacePage() {
   const [brief, setBrief] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // depth counter so dragenter/leave over child nodes doesn't flicker the state
+  const dragDepth = useRef(0);
 
   const firstName = user?.name.split(" ")[0] ?? "";
   const tooShort = brief.trim().length < appConfig.limits.briefMinChars;
@@ -164,7 +167,40 @@ export default function WorkspacePage() {
 
       {/* brief composer */}
       <form onSubmit={onSubmit} className="mt-8">
-        <div className="overflow-hidden rounded-lg border border-border-strong bg-surface transition-colors focus-within:border-primary">
+        <div
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragDepth.current += 1;
+            setDragOver(true);
+          }}
+          onDragOver={(e) => e.preventDefault()} // allow drop
+          onDragLeave={(e) => {
+            e.preventDefault();
+            dragDepth.current -= 1;
+            if (dragDepth.current <= 0) {
+              dragDepth.current = 0;
+              setDragOver(false);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            dragDepth.current = 0;
+            setDragOver(false);
+            const dropped = Array.from(e.dataTransfer.files);
+            if (dropped.length) addFiles(dropped); // same validation as the picker
+          }}
+          className={cn(
+            "relative overflow-hidden rounded-lg border border-border-strong bg-surface transition-colors focus-within:border-primary",
+            dragOver && "border-primary ring-2 ring-primary/30",
+          )}
+        >
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary-soft/80 backdrop-blur-sm">
+              <span className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Paperclip className="size-4" aria-hidden /> Drop files to attach
+              </span>
+            </div>
+          )}
           <label htmlFor="brief" className="sr-only">
             Message
           </label>
@@ -173,7 +209,19 @@ export default function WorkspacePage() {
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              // Enter sends; Shift/Cmd/Ctrl+Enter insert a newline. Never submit
+              // mid IME composition (non-Latin input), when empty, or in flight.
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.metaKey &&
+                !e.ctrlKey &&
+                !e.altKey &&
+                !e.nativeEvent.isComposing &&
+                !tooShort &&
+                !createRun.isPending
+              ) {
+                e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
               }
             }}
@@ -240,8 +288,8 @@ export default function WorkspacePage() {
                   </span>
                 ) : (
                   <>
-                    Remembers your past work ·{" "}
-                    <kbd className="rounded border border-border px-1 font-mono text-[11px]">⌘↵</kbd> to send
+                    <kbd className="rounded border border-border px-1 font-mono text-[11px]">↵</kbd> to send ·{" "}
+                    <kbd className="rounded border border-border px-1 font-mono text-[11px]">⇧↵</kbd> new line
                   </>
                 )}
               </p>

@@ -185,7 +185,19 @@ export function RunFeedback({
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              // Enter sends; Shift/Cmd/Ctrl+Enter insert a newline. Guard IME
+              // composition, the empty/too-short case, and an in-flight send.
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.metaKey &&
+                !e.ctrlKey &&
+                !e.altKey &&
+                !e.nativeEvent.isComposing &&
+                !tooShort &&
+                !followUp.isPending
+              ) {
+                e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
               }
             }}
