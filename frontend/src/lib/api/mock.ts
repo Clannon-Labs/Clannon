@@ -207,10 +207,10 @@ export class MockClient implements ClannonClient {
     run.feedbackComment = comment?.trim() || null;
   }
 
-  async createFollowUp(id: string, brief: string): Promise<{ id: string }> {
+  async createFollowUp(id: string, brief: string, files: File[] = []): Promise<{ id: string }> {
     const parent = this.runs.get(id);
     if (!parent) throw new ApiError("Run not found.", 404);
-    const { id: newId } = await this.createRun(brief);
+    const { id: newId } = await this.createRun(brief, files);
     const child = this.runs.get(newId);
     if (child) {
       child.parentRunId = id;

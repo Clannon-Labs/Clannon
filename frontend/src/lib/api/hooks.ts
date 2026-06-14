@@ -102,7 +102,8 @@ export function useSetRunFeedback(runId: string) {
 export function useCreateFollowUp(parentId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (brief: string) => getClient().createFollowUp(parentId, brief),
+    mutationFn: (vars: { brief: string; files?: File[] }) =>
+      getClient().createFollowUp(parentId, vars.brief, vars.files),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.runs });
       qc.invalidateQueries({ queryKey: ["runs", parentId, "thread"] });

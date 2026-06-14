@@ -197,12 +197,26 @@ export class HttpClient implements ClannonClient {
     });
   }
 
-  createFollowUp(id: string, brief: string): Promise<{ id: string }> {
-    return request(appConfig.endpoints.runFollowUp, {
+  async createFollowUp(id: string, brief: string, files: File[] = []): Promise<{ id: string }> {
+    // multipart now (was JSON): brief + repeated "files", mirroring createRun.
+    const form = new FormData();
+    form.append("brief", brief);
+    for (const f of files) form.append("files", f, f.name); // field name MUST be "files"
+    const res = await fetch(url(appConfig.endpoints.runFollowUp, { id }), {
       method: "POST",
-      params: { id },
-      body: JSON.stringify({ brief }),
+      credentials: appConfig.http.credentials,
+      body: form,
     });
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        message = errorMessage(await res.json(), message);
+      } catch {
+        // non-JSON error body
+      }
+      throw new ApiError(message, res.status); // 422 detail names the rejected file
+    }
+    return (await res.json()) as { id: string };
   }
 
   getRunThread(id: string): Promise<Run[]> {

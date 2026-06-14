@@ -51,8 +51,9 @@ export interface ClannonClient {
     rating: "up" | "down" | null,
     comment?: string,
   ): Promise<void>;
-  /** Continue a run: a new turn in the same session, threading prior context. */
-  createFollowUp(id: string, brief: string): Promise<{ id: string }>;
+  /** Continue a run: a new turn in the same session, threading prior context.
+   *  Optional input files ride along as multipart, same as createRun. */
+  createFollowUp(id: string, brief: string, files?: File[]): Promise<{ id: string }>;
   /** Every turn of this run's session, oldest first — the conversation thread. */
   getRunThread(id: string): Promise<Run[]>;
 

@@ -2,25 +2,26 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import { ThumbsUp, ThumbsDown, ArrowRight, Paperclip, X, MessageSquarePlus } from "lucide-react";
+import { ThumbsUp, ThumbsDown, ArrowRight, Paperclip, MessageSquarePlus } from "lucide-react";
 import { useSetRunFeedback, useCreateFollowUp } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import {
+  useFileAttachments,
+  AttachmentChips,
+  DropOverlay,
+  HeavyMediaNote,
+} from "@/components/app/attachments";
+import { ACCEPTED_INPUT } from "@/lib/uploads";
 import { appConfig } from "@/config/app.config";
 import { cn } from "@/lib/utils";
 
-/** The follow-up route is text-only, so its attach (picker OR drop) folds .md/.txt
- *  CONTENT into the brief — it is never a real file upload. Keep dropped files to that. */
-const FOLLOW_TEXT_FILE = /\.(md|markdown|txt)$/i;
-function isFollowTextFile(f: File): boolean {
-  return f.type.startsWith("text/") || FOLLOW_TEXT_FILE.test(f.name);
-}
-
 /**
- * The post-report footer: a thumbs rating (with an optional note) and a
- * follow-up composer. A follow-up creates a new linked run that threads this
- * report in as context, so the conversation continues instead of dead-ending.
+ * The post-report footer. It LEADS with a "continue the conversation" composer —
+ * a new linked run in the same session that threads this report in as context —
+ * with a small, secondary thumbs rating beneath it. The composer takes files of
+ * every type a root run does (real multipart upload, not text-inlining).
  */
 export function RunFeedback({
   runId,
@@ -43,26 +44,8 @@ export function RunFeedback({
   const [comment, setComment] = useState("");
   const [ask, setAsk] = useState("");
   const [followError, setFollowError] = useState<string | null>(null);
-  // attached text files (.md/.txt) — their content is folded into the brief, so
-  // it passes through the same sanitize/verify pipeline as typed text
-  const [attachments, setAttachments] = useState<{ name: string; content: string }[]>([]);
+  const attach = useFileAttachments();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const dragDepth = useRef(0); // avoids flicker as the drag crosses child nodes
-
-  async function attachFiles(files: File[]) {
-    setFollowError(null);
-    const read = await Promise.all(
-      files.map(async (f) => ({ name: f.name, content: (await f.text()).slice(0, 50_000) })),
-    );
-    setAttachments((prev) => [...prev, ...read].slice(0, 5));
-  }
-
-  function effectiveBrief(): string {
-    const parts = [ask.trim()];
-    for (const a of attachments) parts.push(`\n[Attached file: ${a.name}]\n${a.content}`);
-    return parts.filter(Boolean).join("\n").trim();
-  }
 
   function rate(next: "up" | "down") {
     const value = rating === next ? null : next; // click again to clear
@@ -88,95 +71,27 @@ export function RunFeedback({
   function sendFollowUp(e: FormEvent) {
     e.preventDefault();
     setFollowError(null);
-    followUp.mutate(effectiveBrief(), {
-      onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
-      onError: (err) =>
-        setFollowError(
-          err instanceof ApiError ? err.message : "Could not start the follow-up — try again.",
-        ),
-    });
+    followUp.mutate(
+      { brief: ask, files: attach.files },
+      {
+        onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
+        onError: (err) =>
+          setFollowError(
+            err instanceof ApiError ? err.message : "Could not start the follow-up — try again.",
+          ),
+      },
+    );
   }
 
-  // attachments count toward the minimum too — a file alone can carry the brief
-  const tooShort = effectiveBrief().length < appConfig.limits.briefMinChars;
+  const tooShort = ask.trim().length < appConfig.limits.briefMinChars;
 
   return (
-    <section aria-label="Report feedback" className="mt-6">
-      {/* rating row — only when there's a delivered report to rate */}
-      {canRate && (
-      <>
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[13px] text-muted-foreground">Was this useful?</span>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => rate("up")}
-            aria-pressed={rating === "up"}
-            aria-label="Helpful"
-            className={cn(
-              "flex size-10 cursor-pointer items-center justify-center rounded-md border transition-colors",
-              rating === "up"
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-faint hover:border-border-strong hover:text-foreground",
-            )}
-          >
-            <ThumbsUp className="size-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => rate("down")}
-            aria-pressed={rating === "down"}
-            aria-label="Not helpful"
-            className={cn(
-              "flex size-10 cursor-pointer items-center justify-center rounded-md border transition-colors",
-              rating === "down"
-                ? "border-destructive bg-destructive-soft text-destructive"
-                : "border-border text-faint hover:border-border-strong hover:text-foreground",
-            )}
-          >
-            <ThumbsDown className="size-4" aria-hidden />
-          </button>
-        </div>
-      </div>
-
-      {showComment && (
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label htmlFor="fb-comment" className="sr-only">
-              What worked or what was off?
-            </label>
-            <textarea
-              id="fb-comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={
-                rating === "down"
-                  ? "What was off? (optional — helps tune the pipeline)"
-                  : "What worked well? (optional)"
-              }
-              rows={2}
-              className="w-full resize-none rounded-md border border-border-strong bg-surface-raised px-3.5 py-2.5 text-base leading-relaxed text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-sm"
-            />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={saveComment}
-            loading={setFeedback.isPending}
-            className="shrink-0"
-          >
-            Save note
-          </Button>
-        </div>
-      )}
-      </>
-      )}
-
-      {/* continue the conversation — a distinct, unmissable composer that reads
-          as "your turn to reply" rather than just another field on the page */}
+    <section aria-label="Continue the conversation" className="mt-6">
+      {/* PRIMARY: continue the conversation — a distinct, unmissable composer that
+          reads as "your turn to reply", taking files of every supported type */}
       <form
         onSubmit={sendFollowUp}
-        className="mt-7 rounded-xl border-2 border-primary/30 bg-primary-soft/30 p-4 shadow-sm"
+        className="rounded-xl border-2 border-primary/30 bg-primary-soft/30 p-4 shadow-sm"
       >
         <div className="flex items-center gap-2">
           <MessageSquarePlus className="size-4 text-primary" aria-hidden />
@@ -189,43 +104,13 @@ export function RunFeedback({
         </p>
 
         <div
-          onDragEnter={(e) => {
-            e.preventDefault();
-            dragDepth.current += 1;
-            setDragOver(true);
-          }}
-          onDragOver={(e) => e.preventDefault()} // allow drop
-          onDragLeave={(e) => {
-            e.preventDefault();
-            dragDepth.current -= 1;
-            if (dragDepth.current <= 0) {
-              dragDepth.current = 0;
-              setDragOver(false);
-            }
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            dragDepth.current = 0;
-            setDragOver(false);
-            const dropped = Array.from(e.dataTransfer.files);
-            const textFiles = dropped.filter(isFollowTextFile);
-            if (textFiles.length) attachFiles(textFiles); // same path as the picker
-            if (textFiles.length < dropped.length) {
-              setFollowError("Follow-ups take text files (.md, .txt) only — folded in as context.");
-            }
-          }}
+          {...attach.dropZoneProps}
           className={cn(
             "relative mt-3 overflow-hidden rounded-lg border border-border-strong bg-surface-raised transition-colors focus-within:border-primary",
-            dragOver && "border-primary ring-2 ring-primary/30",
+            attach.dragOver && "border-primary ring-2 ring-primary/30",
           )}
         >
-          {dragOver && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary-soft/80 backdrop-blur-sm">
-              <span className="flex items-center gap-2 text-sm font-medium text-primary">
-                <Paperclip className="size-4" aria-hidden /> Drop a text file to attach
-              </span>
-            </div>
-          )}
+          <DropOverlay show={attach.dragOver} />
           <textarea
             id="followup"
             value={ask}
@@ -251,32 +136,11 @@ export function RunFeedback({
             rows={3}
             className="w-full resize-none bg-transparent px-4 py-3 text-base leading-relaxed placeholder:text-faint focus:outline-none sm:text-[15px]"
           />
-
-          {/* attached files */}
-          {attachments.length > 0 && (
-            <ul className="flex flex-wrap gap-2 px-3 pb-2">
-              {attachments.map((a, i) => (
-                <li
-                  key={`${a.name}-${i}`}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-muted-foreground"
-                >
-                  <Paperclip className="size-3 shrink-0 text-faint" aria-hidden />
-                  <span className="truncate">{a.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                    aria-label={`Remove ${a.name}`}
-                    className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint hover:text-destructive"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <AttachmentChips files={attach.files} onRemove={attach.removeFile} />
+          <HeavyMediaNote show={attach.hasHeavyMedia} />
 
           <div className="flex items-center justify-between gap-2 border-t border-border bg-background/40 px-3 py-2.5">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -287,19 +151,15 @@ export function RunFeedback({
               <input
                 ref={fileRef}
                 type="file"
-                accept=".md,.markdown,.txt,text/plain,text/markdown"
+                accept={ACCEPTED_INPUT}
                 multiple
                 className="hidden"
-                aria-label="Attach text files to your follow-up"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  e.target.value = "";
-                  if (files.length) attachFiles(files);
-                }}
+                aria-label="Attach files to your follow-up — text, PDF, image, audio, or video"
+                onChange={attach.handlePicked}
               />
               <span className="text-[12px] text-faint" aria-live="polite">
-                {tooShort && effectiveBrief().length > 0
-                  ? `${appConfig.limits.briefMinChars - effectiveBrief().length} more characters`
+                {tooShort && ask.trim().length > 0
+                  ? `${appConfig.limits.briefMinChars - ask.trim().length} more characters`
                   : "Continues this session"}
               </span>
             </div>
@@ -309,12 +169,83 @@ export function RunFeedback({
             </Button>
           </div>
         </div>
-        {followError && (
+        {(followError || attach.error) && (
           <p role="alert" className="mt-2 text-sm text-destructive">
-            {followError}
+            {followError || attach.error}
           </p>
         )}
       </form>
+
+      {/* SECONDARY: was this useful? — a quiet rating beneath the composer, shown
+          only when there's a delivered report to rate */}
+      {canRate && (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[12.5px] text-faint">Was this useful?</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => rate("up")}
+                aria-pressed={rating === "up"}
+                aria-label="Helpful"
+                className={cn(
+                  "flex size-10 cursor-pointer items-center justify-center rounded-md border transition-colors",
+                  rating === "up"
+                    ? "border-primary bg-primary-soft text-primary"
+                    : "border-border text-faint hover:border-border-strong hover:text-foreground",
+                )}
+              >
+                <ThumbsUp className="size-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => rate("down")}
+                aria-pressed={rating === "down"}
+                aria-label="Not helpful"
+                className={cn(
+                  "flex size-10 cursor-pointer items-center justify-center rounded-md border transition-colors",
+                  rating === "down"
+                    ? "border-destructive bg-destructive-soft text-destructive"
+                    : "border-border text-faint hover:border-border-strong hover:text-foreground",
+                )}
+              >
+                <ThumbsDown className="size-4" aria-hidden />
+              </button>
+            </div>
+          </div>
+
+          {showComment && (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="fb-comment" className="sr-only">
+                  What worked or what was off?
+                </label>
+                <textarea
+                  id="fb-comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={
+                    rating === "down"
+                      ? "What was off? (optional — helps tune the pipeline)"
+                      : "What worked well? (optional)"
+                  }
+                  rows={2}
+                  className="w-full resize-none rounded-md border border-border-strong bg-surface-raised px-3.5 py-2.5 text-base leading-relaxed text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-sm"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={saveComment}
+                loading={setFeedback.isPending}
+                className="shrink-0"
+              >
+                Save note
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
