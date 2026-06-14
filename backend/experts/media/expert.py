@@ -17,7 +17,6 @@ is a later enhancement)."""
 
 from __future__ import annotations
 
-import asyncio
 import mimetypes
 
 from pydantic import BaseModel, Field
@@ -27,6 +26,8 @@ from foundation import PermissionLevel
 from registry import expert
 from registry.capabilities import ExpertOutput
 from registry.capabilities.handler import ExpertEnv, think
+
+from .preprocess import preprocess
 
 
 class MediaIn(BaseModel):
@@ -86,37 +87,6 @@ def _nothing_attached() -> ExpertOutput:
     )
     return ExpertOutput(summary="No media or document was attached to this turn.",
                         full_content=msg, confidence=0.0)
-
-
-# PDF text extraction (local, deterministic — no model call).
-_MAX_DOC_CHARS = 50_000   # cap the extracted text fed to the model so a long PDF stays in context
-_MIN_PDF_TEXT = 50        # below this the PDF is effectively scanned/image -> use the multimodal path
-
-
-def _pdf_text_sync(data: bytes) -> str:
-    import fitz  # PyMuPDF — the same lib the PDF sanitizer uses
-    parts: list[str] = []
-    total = 0
-    with fitz.open(stream=data, filetype="pdf") as doc:
-        for page in doc:
-            text = page.get_text().strip()
-            if not text:
-                continue
-            parts.append(text)
-            total += len(text)
-            if total >= _MAX_DOC_CHARS:
-                break
-    return "\n\n".join(parts)[:_MAX_DOC_CHARS]
-
-
-async def _extract_pdf_text(data: bytes) -> str:
-    """Extract a PDF's text with PyMuPDF, off the event loop (parsing is blocking). Returns
-    '' when it is not a parseable text PDF (scanned, encrypted, malformed) so the caller
-    falls back to the multimodal model."""
-    try:
-        return await asyncio.to_thread(_pdf_text_sync, data)
-    except Exception:  # noqa: BLE001 — extraction failure just means "let the model read it"
-        return ""
 
 
 def _task(args: MediaIn, docs: list[tuple[str, str]], oversized: list[tuple[str, int]]) -> str:
@@ -200,11 +170,9 @@ async def _gather(
         if len(data) > _INLINE_LIMIT_BYTES:
             oversized.append((name, len(data)))
             continue
-        if mime == "application/pdf":
-            text = await _extract_pdf_text(data)
-            if len(text) >= _MIN_PDF_TEXT:        # a real text PDF — local path, no model image call
-                docs.append((name, text))
-                continue
-            # otherwise it's scanned/image-only: fall through to the multimodal path
-        media.append((data, _canonical_mime(mime)))
+        # local preprocessing turns the file into model-ready inputs: extracted/transcribed
+        # text (cheap, any model) + images the multimodal model should see
+        texts, file_media = await preprocess(name, _canonical_mime(mime), data)
+        docs.extend((name, text) for text in texts)
+        media.extend(file_media)
     return media, docs, oversized
