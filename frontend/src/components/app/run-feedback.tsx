@@ -10,6 +10,13 @@ import { useToast } from "@/components/ui/toast";
 import { appConfig } from "@/config/app.config";
 import { cn } from "@/lib/utils";
 
+/** The follow-up route is text-only, so its attach (picker OR drop) folds .md/.txt
+ *  CONTENT into the brief — it is never a real file upload. Keep dropped files to that. */
+const FOLLOW_TEXT_FILE = /\.(md|markdown|txt)$/i;
+function isFollowTextFile(f: File): boolean {
+  return f.type.startsWith("text/") || FOLLOW_TEXT_FILE.test(f.name);
+}
+
 /**
  * The post-report footer: a thumbs rating (with an optional note) and a
  * follow-up composer. A follow-up creates a new linked run that threads this
@@ -40,6 +47,8 @@ export function RunFeedback({
   // it passes through the same sanitize/verify pipeline as typed text
   const [attachments, setAttachments] = useState<{ name: string; content: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0); // avoids flicker as the drag crosses child nodes
 
   async function attachFiles(files: File[]) {
     setFollowError(null);
@@ -179,7 +188,44 @@ export function RunFeedback({
           Stays in this session — everything above is carried along as context.
         </p>
 
-        <div className="mt-3 overflow-hidden rounded-lg border border-border-strong bg-surface-raised transition-colors focus-within:border-primary">
+        <div
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragDepth.current += 1;
+            setDragOver(true);
+          }}
+          onDragOver={(e) => e.preventDefault()} // allow drop
+          onDragLeave={(e) => {
+            e.preventDefault();
+            dragDepth.current -= 1;
+            if (dragDepth.current <= 0) {
+              dragDepth.current = 0;
+              setDragOver(false);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            dragDepth.current = 0;
+            setDragOver(false);
+            const dropped = Array.from(e.dataTransfer.files);
+            const textFiles = dropped.filter(isFollowTextFile);
+            if (textFiles.length) attachFiles(textFiles); // same path as the picker
+            if (textFiles.length < dropped.length) {
+              setFollowError("Follow-ups take text files (.md, .txt) only — folded in as context.");
+            }
+          }}
+          className={cn(
+            "relative mt-3 overflow-hidden rounded-lg border border-border-strong bg-surface-raised transition-colors focus-within:border-primary",
+            dragOver && "border-primary ring-2 ring-primary/30",
+          )}
+        >
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary-soft/80 backdrop-blur-sm">
+              <span className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Paperclip className="size-4" aria-hidden /> Drop a text file to attach
+              </span>
+            </div>
+          )}
           <textarea
             id="followup"
             value={ask}
