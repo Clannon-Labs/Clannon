@@ -43,6 +43,15 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${++counter}`;
 
+/** Map a picked file to its input modality, mirroring the backend's labels. */
+function modalityOf(file: File): string {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.includes("pdf")) return "pdf";
+  return "text";
+}
+
 /**
  * In-browser simulator of the Clannon pipeline. Implements the same
  * interface as HttpClient so the rest of the app cannot tell the
@@ -160,11 +169,7 @@ export class MockClient implements ClannonClient {
     const title = trimmed.length > 64 ? `${trimmed.slice(0, 61).trimEnd()}…` : trimmed;
     const inputs = files.map((f) => ({
       name: f.name,
-      modality: f.type.startsWith("image/")
-        ? "image"
-        : f.type.includes("pdf")
-          ? "pdf"
-          : "text",
+      modality: modalityOf(f),
       size: f.size,
     }));
     this.runs.set(id, {

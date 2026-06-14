@@ -20,12 +20,14 @@ import { appConfig } from "@/config/app.config";
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_INPUT =
-  ".txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.html,.htm,.log,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff";
+  ".txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.html,.htm,.log,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.avi";
 const TEXT_LIKE = /\.(txt|md|markdown|csv|tsv|json|jsonl|ya?ml|xml|html?|log|rtf)$/i;
-// Images are a live upload type (the Media Expert reads them via Gemini). Audio
-// and video are NOT accepted yet. .svg is intentionally excluded — it's a
-// vector/XSS-shaped format we don't invite from the UI.
+// Images, audio, and video are all live upload types now (the Media Expert reads
+// the three via Gemini). .svg is intentionally excluded — a vector/XSS-shaped
+// format we don't invite from the UI.
 const IMAGE_LIKE = /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i;
+const AUDIO_LIKE = /\.(mp3|wav|m4a|aac|ogg|flac)$/i;
+const VIDEO_LIKE = /\.(mp4|mov|webm|avi)$/i;
 
 /** A reason to reject a file before upload, or null if it's acceptable today. */
 function rejectInputFile(file: File): string | null {
@@ -35,10 +37,22 @@ function rejectInputFile(file: File): string | null {
   const isImage =
     (file.type.startsWith("image/") && file.type !== "image/svg+xml") ||
     IMAGE_LIKE.test(file.name);
-  if (!isPdf && !isText && !isImage) {
-    return `${file.name}: only text files, PDFs, and images are supported right now.`;
+  const isAudio = file.type.startsWith("audio/") || AUDIO_LIKE.test(file.name);
+  const isVideo = file.type.startsWith("video/") || VIDEO_LIKE.test(file.name);
+  if (!isPdf && !isText && !isImage && !isAudio && !isVideo) {
+    return `${file.name}: only text files, PDFs, images, audio, and video are supported.`;
   }
   return null;
+}
+
+/** Audio/video, which can be heavy enough to exceed the model's inline limit. */
+function isAudioOrVideo(file: File): boolean {
+  return (
+    file.type.startsWith("audio/") ||
+    file.type.startsWith("video/") ||
+    AUDIO_LIKE.test(file.name) ||
+    VIDEO_LIKE.test(file.name)
+  );
 }
 
 interface SessionEntry {
@@ -93,6 +107,7 @@ export default function WorkspacePage() {
 
   const firstName = user?.name.split(" ")[0] ?? "";
   const tooShort = brief.trim().length < appConfig.limits.briefMinChars;
+  const hasHeavyMedia = files.some(isAudioOrVideo);
 
   function addFiles(picked: File[]) {
     setError(null);
@@ -189,6 +204,11 @@ export default function WorkspacePage() {
               ))}
             </ul>
           )}
+          {hasHeavyMedia && (
+            <p className="px-4 pb-1 text-[12px] text-faint">
+              A very large audio or video can exceed the model&apos;s inline limit — that one run fails gracefully if so.
+            </p>
+          )}
           <div className="flex flex-col gap-3 border-t border-border bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <button
@@ -204,7 +224,7 @@ export default function WorkspacePage() {
                 accept={ACCEPTED_INPUT}
                 multiple
                 className="hidden"
-                aria-label="Attach input files — text files, PDFs, or images"
+                aria-label="Attach input files — text files, PDFs, images, audio, or video"
                 onChange={(e) => {
                   const picked = Array.from(e.target.files ?? []);
                   e.target.value = ""; // allow re-picking the same file
