@@ -4,8 +4,10 @@ Orchestrator stage — the layer's entry point.
 A Flow stage like the others (`async def run(flow) -> Flow`). It builds the
 default ports, runs the bounded reasoning loop under the orchestrator timeout,
 stores the draft response and proposed memory writes on the context, and hands
-off. The orchestrator never content-blocks (the verifier and the future output
-filter own that); infrastructure/loop faults fail the stage.
+off. The orchestrator never content-blocks (the verifier and the output filter
+own that); a timeout, provider rate-limit storm, or loop fault degrades
+gracefully (utils/recovery) to an honest, grounded answer rather than a blank
+failure — the user never gets nothing.
 """
 
 from __future__ import annotations
@@ -19,13 +21,14 @@ from foundation import (
     Flow,
     MemoryStore,
     MemoryWriteProposal,
-    OrchestratorError,
     Origin,
     PipelineStage,
     constants,
 )
 
 from .loop import run_loop
+from .schemas import DecisionLogEntry
+from .utils.recovery import build_degraded_response, classify_failure, degraded_reason
 from .utils.wiring import build_default_ports
 
 log = logging.getLogger(__name__)
@@ -81,9 +84,17 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
         return flow.next(response, Origin.ORCHESTRATOR, started)
 
-    except asyncio.TimeoutError as exc:
-        return flow.fail(OrchestratorError("orchestrator timed out", cause=exc), Origin.ORCHESTRATOR, started)
-    except OrchestratorError as exc:
-        return flow.fail(exc, Origin.ORCHESTRATOR, started)
     except Exception as exc:
-        return flow.fail(OrchestratorError(f"orchestrator failed: {exc}", cause=exc), Origin.ORCHESTRATOR, started)
+        # Graceful degradation: a timeout, a provider rate-limit storm, or an
+        # unexpected fault must never hand the user a blank failure. Salvage an
+        # honest, grounded answer from whatever the run already gathered (LLM-free
+        # — another model call would only fail again under rate limits) and let it
+        # flow on through the filter → delivery like any answer.
+        kind = classify_failure(exc)
+        log.warning("orchestrator degraded (%s): %s", kind, exc)
+        flow.ctx.decision_log.append(
+            DecisionLogEntry(kind="warning", message=f"answering in degraded mode: {degraded_reason(kind)}")
+        )
+        degraded = build_degraded_response(flow.ctx, kind)
+        flow.ctx.orchestrator_response = degraded
+        return flow.next(degraded, Origin.ORCHESTRATOR, started)
