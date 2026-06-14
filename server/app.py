@@ -28,6 +28,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
+from core.artifacts import LocalArtifactStore
+
 from . import auth, config, runs
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
@@ -186,6 +188,31 @@ def run_thread(run_id: str, user: auth.User = Depends(auth.current_user)) -> lis
         raise HTTPException(404, "Run not found.")
     session_id = run.session_id or run.id
     return [t.full_json() for t in runs.STORE.session_turns(user.id, session_id)]
+
+
+@app.get("/runs/{run_id}/artifacts/{name}")
+async def download_artifact(
+    run_id: str, name: str, user: auth.User = Depends(auth.current_user)
+) -> Response:
+    """Stream one delivered artifact's bytes. The run's own artifact list is the
+    authorization boundary — only files this user's run actually published are
+    served, so an unknown name (or a path-y one) is just a 404, never a read off
+    disk by an attacker-chosen path."""
+    run = runs.STORE.get(user.id, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found.")
+    ref = next((a for a in run.artifacts if a.get("name") == name), None)
+    if ref is None:
+        raise HTTPException(404, "Artifact not found.")
+    try:
+        data = await LocalArtifactStore().get(ref["id"])
+    except FileNotFoundError:
+        raise HTTPException(404, "Artifact not found.")
+    return Response(
+        content=data,
+        media_type=ref.get("mime") or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{ref["name"]}"'},
+    )
 
 
 @app.get("/runs/{run_id}/stream")

@@ -79,3 +79,49 @@ def test_capture_noop_without_workspace_or_artifacts(tmp_path):
     assert asyncio.run(handler._capture_artifacts(NS(artifacts=["x"]), _env(tmp_path, None), ctx)) == []
     ws = _WS({})
     assert asyncio.run(handler._capture_artifacts(NS(artifacts=[]), _env(tmp_path, ws), ctx)) == []
+
+
+# ---- Stage 2: serve (the run carries refs; the server hands back bytes) -----
+
+
+def test_run_artifacts_survive_persist_and_reload(tmp_path, monkeypatch):
+    # a finished run's artifact refs round-trip through SQLite (new column)
+    import server.config as cfg
+    import server.runs as runs_mod
+
+    monkeypatch.setattr(cfg, "DB_PATH", str(tmp_path / "t.db"))
+    store = runs_mod.RunStore()
+    run = runs_mod.RunState(id="run_abc", user_id="u1", title="t", brief="b", status="delivered")
+    run.report = "done"
+    run.artifacts = [{"id": "run_abc/report.md", "run_id": "run_abc",
+                      "name": "report.md", "mime": "text/markdown", "size": 4}]
+    store.persist(run)                                   # writes the row, drops live copy
+
+    reloaded = store.get("u1", "run_abc")
+    assert reloaded is not None
+    assert reloaded.artifacts == run.artifacts           # survived the DB round-trip
+    assert reloaded.full_json()["artifacts"] == run.artifacts
+
+
+def test_download_artifact_serves_designated_bytes_only(tmp_path, monkeypatch):
+    from server.app import download_artifact
+    from server.auth import User
+    import server.runs as runs_mod
+
+    # the file as it would sit in the store after capture (under the run id)
+    monkeypatch.setenv("VRAKSHA_ARTIFACTS_DIR", str(tmp_path))
+    ref = asyncio.run(LocalArtifactStore(base_dir=tmp_path).put("run_xyz", "report.md", b"# hi"))
+
+    run = runs_mod.RunState(id="run_xyz", user_id="u1", title="t", brief="b")
+    run.artifacts = [ref.as_dict()]
+    monkeypatch.setattr(runs_mod.STORE, "get",
+                        lambda uid, rid: run if (uid == "u1" and rid == "run_xyz") else None)
+    user = User(id="u1", email="u@x.io", name="U", plan="free")
+
+    resp = asyncio.run(download_artifact("run_xyz", "report.md", user))
+    assert resp.body == b"# hi" and resp.media_type == "text/markdown"
+
+    # a name the run never published is a 404, never an arbitrary disk read
+    with pytest.raises(Exception) as exc:
+        asyncio.run(download_artifact("run_xyz", "secrets.env", user))
+    assert getattr(exc.value, "status_code", None) == 404

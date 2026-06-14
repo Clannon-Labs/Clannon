@@ -49,7 +49,8 @@ JSON keys are camelCase to match the frontend types in
 | `/auth/oauth/:provider` | GET (navigation) | — | 302 → frontend (`?error=oauth_unavailable` until Supabase OAuth) |
 | `/runs` | GET | — | `RunSummary[]` |
 | `/runs` | POST | `{brief}` | `{id}`, starts the pipeline in the background |
-| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, feedbackRating, parentRunId, sessionId, blockStage) |
+| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, artifacts, feedbackRating, parentRunId, sessionId, blockStage) |
+| `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
 | `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
 | `/runs/:id/followup` | POST | `{brief}` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |

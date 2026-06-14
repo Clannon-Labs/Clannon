@@ -130,6 +130,9 @@ class RunState:
     experts: dict[str, dict] = field(default_factory=dict)
     report: str | None = None
     tokens_used: int = 0
+    # delivered output artifacts (ArtifactRef dicts) — files an expert produced
+    # and published, captured out of its workspace to durable storage
+    artifacts: list[dict] = field(default_factory=list)
     subscribers: list[asyncio.Queue] = field(default_factory=list)
     memory_writes: list[dict] = field(default_factory=list)
     feedback_rating: str | None = None       # "up" | "down" | None
@@ -237,6 +240,7 @@ class RunState:
             "experts": list(self.experts.values()),
             "report": self.report,
             "sources": [],  # structured sources arrive with the citation expert
+            "artifacts": self.artifacts,
             "feedbackRating": self.feedback_rating,
             "feedbackComment": self.feedback_comment,
             "parentRunId": self.parent_run_id,
@@ -304,15 +308,15 @@ class RunStore:
             db.execute(
                 "INSERT OR REPLACE INTO runs "
                 "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,memory_writes_json,"
-                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id, run.user_id, run.title, run.brief, run.status,
                     run.created_at, run.tokens_used, json.dumps(run.log),
                     json.dumps(list(run.experts.values())), run.report,
                     json.dumps(run.memory_writes),
                     run.feedback_rating, run.feedback_comment, run.parent_run_id,
-                    run.session_id or run.id, run.block_stage,
+                    run.session_id or run.id, run.block_stage, json.dumps(run.artifacts),
                 ),
             )
         # finished runs no longer need live queues in memory
@@ -336,6 +340,7 @@ class RunStore:
         # rows created before the session column default to a self-session
         run.session_id = (("session_id" in keys and row["session_id"]) or row["id"])
         run.block_stage = row["block_stage"] if "block_stage" in keys else None
+        run.artifacts = json.loads(row["artifacts_json"]) if "artifacts_json" in keys and row["artifacts_json"] else []
         return run
 
     def get(self, user_id: str, rid: str) -> RunState | None:
@@ -469,6 +474,9 @@ async def execute(run: RunState) -> None:
         run.brief,
         session_id=run.session_id or run.id,
         user_id=run.user_id,
+        # pin the trace to the run id so captured artifacts (stored under
+        # ctx.trace_id) are addressable by the same id the API serves them under
+        trace_id=run.id,
     )
     # observe the decision log without touching pipeline code
     flow.ctx.decision_log = _ObservedLog(run.on_log_entry)
@@ -530,6 +538,14 @@ async def execute(run: RunState) -> None:
                 text = ctx.final_response or (
                     ctx.orchestrator_response.text if ctx.orchestrator_response else ""
                 )
+                # surface the delivered output artifacts (experts captured them to
+                # durable storage; here we just collect their refs for the API).
+                # Only on the delivered path — a withheld draft keeps its files held.
+                run.artifacts = [
+                    art
+                    for finding in ctx.expert_findings
+                    for art in (finding.metadata or {}).get("artifacts", [])
+                ]
                 run.on_status("delivered")
                 await run.stream_report(str(text))
 
