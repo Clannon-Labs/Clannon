@@ -8,7 +8,8 @@ def test_documentation_and_summarization_register():
     discover()
     docs = registry.get_expert("docs.writer")
     assert docs is not None and docs.model_role == "planner"
-    assert tuple(docs.tool_grants) == ("fs.read", "fs.write")   # reads sources, writes + delivers the doc
+    # reads sources, writes + delivers the doc, and can recall prior docs/decisions
+    assert tuple(docs.tool_grants) == ("fs.read", "fs.write", "memory.search")
 
     summ = registry.get_expert("summary.condenser")
     assert summ is not None and summ.model_role == "research"

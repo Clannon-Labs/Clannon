@@ -30,7 +30,7 @@ class WriterExpert:
     input_schema = WriteIn
     output_schema = ExpertOutput
     skills = ("skills",)       # baseline skills/ beside this file
-    tools = ()                 # writer reasons over what it's given; no external tools
+    tools = ("memory.search",) # mostly reasons over what it's given; memory.search recalls the user's context/preferences/style
     model_role = "planner"
     tags = ("report", "writing", "citations")
 
