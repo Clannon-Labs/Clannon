@@ -41,7 +41,7 @@ def _safe_name(name: str) -> str:
 def _admitted_modality(data: bytes) -> str | None:
     """Content-sniff the bytes to a modality: 'text' for the text family, 'pdf' for
     PDF, 'image'/'audio'/'video' for media, else None (unsupported). Mirrors intake's
-    modality map; the media expert reads image/audio/video via a multimodal model."""
+    modality map; the media expert reads image/audio/video/pdf via a multimodal model."""
     try:
         mime = magic.from_buffer(data, mime=True)
     except Exception:  # noqa: BLE001 — undetectable type is just unsupported

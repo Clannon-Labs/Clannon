@@ -29,14 +29,16 @@ def build_user_prompt(
         normalized.content or "[non-text payload]",
     ]
 
-    names = [getattr(f, "name", None) for f in (input_files or [])]
-    names = [n for n in names if n]
-    if names:
+    files = [f for f in (input_files or []) if getattr(f, "name", None)]
+    if files:
+        listed = ", ".join(f"{f.name} ({getattr(f, 'modality', '?')})" for f in files)
         parts.append(
-            "\nThe user attached input files for this task: "
-            + ", ".join(names)
-            + ". They are available only inside a file-capable expert's workspace — "
-            "delegate to the right expert (e.g. data analysis or code) to read and use them."
+            "\nThe user attached input files for this task: " + listed + ". They are "
+            "available only inside a file-capable expert's workspace, so you MUST delegate "
+            "to read them. Route by modality: images, audio, video, and PDF documents go to "
+            "the media expert (it reads them with a multimodal model); data and code files "
+            "(CSV, JSON, plain text, source) go to data analysis or code. Do not try to read "
+            "a file's contents yourself."
         )
 
     if getattr(hydration, "items", None):

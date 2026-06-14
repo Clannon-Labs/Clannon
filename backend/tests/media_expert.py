@@ -71,13 +71,16 @@ def _env(ws, seeded_names):
     return env
 
 
-def test_media_gathers_image_audio_video_with_canonical_mime():
-    ws = _WS({"logo.png": b"PNG", "notes.txt": b"hi", "talk.wav": b"WAV", "clip.mp4": b"MP4"})
-    env = _env(ws, ["logo.png", "notes.txt", "talk.wav", "clip.mp4"])
+def test_media_gathers_image_audio_video_and_pdf_with_canonical_mime():
+    ws = _WS({"logo.png": b"PNG", "notes.txt": b"hi", "talk.wav": b"WAV",
+              "clip.mp4": b"MP4", "report.pdf": b"%PDF-1.7"})
+    env = _env(ws, ["logo.png", "notes.txt", "talk.wav", "clip.mp4", "report.pdf"])
     media, oversized = asyncio.run(_media(env))
     got = dict((m, d) for d, m in media)
-    # notes.txt (not media) skipped; wav mime canonicalized x-wav -> wav; nothing oversized
-    assert got == {"image/png": b"PNG", "audio/wav": b"WAV", "video/mp4": b"MP4"}
+    # notes.txt (not media/doc) skipped; wav mime canonicalized x-wav -> wav; PDF gathered
+    # so Gemini reads it natively; nothing oversized
+    assert got == {"image/png": b"PNG", "audio/wav": b"WAV",
+                   "video/mp4": b"MP4", "application/pdf": b"%PDF-1.7"}
     assert oversized == []
 
 

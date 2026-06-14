@@ -413,11 +413,12 @@ run page, the API architecture, security headers, no `dangerouslySetInnerHTML`).
 The backend's next initiative (#2) is **all-media + the full expert roster**. None
 of this changes the existing contract; it ADDS. Design so it slots in:
 
-- **All media inputs (LIVE).** Upload-IN now accepts **images, audio, and video**
-  (the **Media Expert**, `media.analyst`, reads them via Gemini multimodal — describes
-  images + OCR, transcribes/summarizes audio, describes video). `InputFileMeta.modality`
-  is `"image" | "audio" | "video"` accordingly. The "Attached" chip row (§5) should pick
-  an icon by modality and not assume text.
+- **All media + document inputs (LIVE).** Upload-IN accepts **images, audio, video, and
+  PDFs** (the **Media Expert**, `media.analyst`, reads them via Gemini multimodal —
+  describes images + OCR, transcribes/summarizes audio, describes video, reads/summarizes
+  PDF documents). `InputFileMeta.modality` is `"image" | "audio" | "video" | "pdf" |
+  "text"` accordingly. The "Attached" chip row (§5) should pick an icon by modality and
+  not assume text.
 - **More experts.** The roster keeps growing (documentation, summarization, and
   more next). Live today: web.research, synthesis.writer, verification.claims,
   code.engineer, data.analyst, and **media.analyst**. The decision log + expert panel

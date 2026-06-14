@@ -162,3 +162,16 @@ def test_user_prompt_names_attached_files():
     # no attachments -> no note
     plain = build_user_prompt(NS(modality="text", content="hi"), NS(items=[]), None, [])
     assert "attached input files" not in plain
+
+
+def test_user_prompt_routes_a_pdf_to_the_media_expert():
+    # a PDF must be steered to the media expert (Gemini reads it), NOT code/data — else
+    # the orchestrator sends it to the code sandbox, which can't parse a PDF
+    note = build_user_prompt(
+        NS(modality="text", content="what does this say?"),
+        NS(items=[]),
+        None,
+        [InputFile("clannon.pdf", "pdf", b"%PDF", 4)],
+    )
+    assert "clannon.pdf (pdf)" in note            # the modality is surfaced
+    assert "media expert" in note                 # and the routing points there

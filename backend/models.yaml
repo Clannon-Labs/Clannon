@@ -110,8 +110,8 @@ google:
     task: "Output safety filtering with structured output"
   media_expert:
     model: gemini-2.5-flash
-    capabilities: [text, json, image, audio, video]
-    task: "Fast multimodal understanding for normalizer/expert fallback"
+    capabilities: [text, json, image, audio, video, document]
+    task: "Fast multimodal understanding of images, audio, video, and PDF documents"
   code:
     model: gemini-2.5-pro
     capabilities: [text, json, tools, image]
