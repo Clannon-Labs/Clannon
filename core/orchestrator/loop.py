@@ -42,7 +42,7 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         system_prompt=get_prompt("orchestrator").text,
         # revision_feedback is set only on a bounded retry after the output filter
         # rejected the previous draft — it tells the orchestrator what to fix
-        user_prompt=build_user_prompt(normalized, hydration, ctx.filter_feedback),
+        user_prompt=build_user_prompt(normalized, hydration, ctx.filter_feedback, ctx.input_files),
         output_type=OrchestratorAnswer,
         on_event=on_event,
         # prior turns of this session, fed as real chat history so a follow-up

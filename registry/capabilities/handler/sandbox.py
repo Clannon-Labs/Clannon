@@ -72,6 +72,12 @@ class DockerWorkspace:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
+    async def write_bytes(self, rel_path: str, data: bytes) -> None:
+        self._guard_open()
+        target = self._resolve(rel_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
     async def read(self, rel_path: str) -> str:
         self._guard_open()
         return self._resolve(rel_path).read_text(encoding="utf-8")

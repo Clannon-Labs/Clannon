@@ -63,6 +63,9 @@ class ExpertHandler:
 
             env = self._build_env(spec, ctx)
             try:
+                # seed any uploaded input files into this expert's workspace before
+                # it runs (no-op unless it has a workspace and the run carried files)
+                await self._seed_inputs(env, ctx)
                 try:
                     output = await asyncio.wait_for(
                         spec.impl().run(args, env), timeout=constants.EXPERT_TIMEOUT_S
@@ -133,6 +136,23 @@ class ExpertHandler:
             allowed_keys={spec.key for spec in granted}, grants=frozenset(grants), workspace=workspace
         )
         return ScopedToolbox(scoped, ctx)
+
+    async def _seed_inputs(self, env, ctx: VrakshaContext) -> None:
+        """Place the run's uploaded input files into this expert's workspace so it
+        can read them with its file tools. No-op unless the expert actually has a
+        workspace and the run carried files. Records the seeded names on the env so
+        think() can tell the expert they're there. Best-effort per file."""
+        files = list(getattr(ctx, "input_files", None) or [])
+        if env.workspace is None or not files:
+            return
+        seeded: list[str] = []
+        for f in files:
+            try:
+                await env.workspace.write_bytes(f.name, f.data)
+                seeded.append(f.name)
+            except Exception:  # noqa: BLE001 — one bad file must not sink the run
+                continue
+        env.input_files = seeded
 
     async def _capture_artifacts(self, output, env, ctx: VrakshaContext) -> list[dict]:
         """Copy the expert's designated output files out of the (about-to-be-closed)

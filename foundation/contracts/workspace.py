@@ -45,6 +45,12 @@ class WorkspacePort(Protocol):
         """Create/overwrite a text file at a workspace-relative path (confined)."""
         ...
 
+    async def write_bytes(self, rel_path: str, data: bytes) -> None:
+        """Create/overwrite a file from raw bytes at a workspace-relative path
+        (confined). Used to seed uploaded input files (which may be binary, e.g. a
+        PDF) into the workspace before the expert runs."""
+        ...
+
     async def read(self, rel_path: str) -> str:
         """Read a text file at a workspace-relative path (confined)."""
         ...

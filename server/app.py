@@ -23,12 +23,13 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 load_dotenv(".env.local", override=True)
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
+from security.sanitizers import uploads as upload_scan
 
 from . import auth, config, runs
 
@@ -120,8 +121,29 @@ def oauth_start(provider: str) -> RedirectResponse:
 # ---------- runs ----------
 
 
-class CreateRunBody(BaseModel):
-    brief: str = Field(min_length=1, max_length=20_000)
+# Run creation is multipart so a brief can carry optional input files (a CSV to
+# analyze, code to work on). Files are malware-scanned at this boundary and the
+# clean originals are seeded into the expert workspace; the brief still crosses
+# the full pipeline.
+_MAX_INPUT_FILES = 10
+
+
+async def _admit_uploads(files: list[UploadFile]) -> list:
+    """Scan each uploaded file at the boundary; return the admitted InputFiles.
+    A rejected file (oversized, unsupported, malicious, unscannable) is a 422 with
+    a readable reason — the run is never created with an unscanned file."""
+    if not files:
+        return []
+    if len(files) > _MAX_INPUT_FILES:
+        raise HTTPException(422, f"At most {_MAX_INPUT_FILES} files per run.")
+    admitted = []
+    for upload in files:
+        data = await upload.read()
+        item, reason = await upload_scan.scan_upload(upload.filename or "upload", data)
+        if reason:
+            raise HTTPException(422, reason)
+        admitted.append(item)
+    return admitted
 
 
 @app.get("/runs")
@@ -130,12 +152,18 @@ def list_runs(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 
 
 @app.post("/runs", status_code=201)
-async def create_run(body: CreateRunBody, user: auth.User = Depends(auth.current_user)) -> dict:
-    brief = body.brief.strip()
+async def create_run(
+    brief: str = Form(..., min_length=1, max_length=20_000),
+    files: list[UploadFile] = File(default=[]),
+    user: auth.User = Depends(auth.current_user),
+) -> dict:
+    brief = brief.strip()
     if len(brief) < config.LIMITS["briefMinChars"]:
         raise HTTPException(422, "Say a little more to get started.")
+    input_files = await _admit_uploads(files)
     run = runs.STORE.create(user.id, brief)
-    asyncio.get_running_loop().create_task(runs.execute(run))
+    run.inputs = [f.as_dict() for f in input_files]
+    asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
 

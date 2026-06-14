@@ -229,6 +229,12 @@ class VrakshaContext:
                                               # Passed into HydrationRequest so the memory manager can
                                               # load the highest-trust tier as TEXT (wiki isn't embedded).
 
+    input_files: list = field(default_factory=list)
+                                              # foundation.InputFile — user-uploaded files admitted for
+                                              # THIS run (malware-scanned at the boundary, original bytes).
+                                              # Set by the caller before the run; the expert handler seeds
+                                              # them into a file-capable expert's sandbox workspace.
+
     tool_calls:    list[ToolCallRecord]   = field(default_factory=list)
     expert_calls:  list[ExpertCallRecord] = field(default_factory=list)
 

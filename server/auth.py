@@ -55,7 +55,8 @@ def _db() -> sqlite3.Connection:
             memory_writes_json TEXT NOT NULL DEFAULT '[]',
             feedback_rating TEXT, feedback_comment TEXT, feedback_at REAL,
             parent_run_id TEXT, session_id TEXT, block_stage TEXT,
-            artifacts_json TEXT NOT NULL DEFAULT '[]'
+            artifacts_json TEXT NOT NULL DEFAULT '[]',
+            inputs_json TEXT NOT NULL DEFAULT '[]'
         )"""
     )
     # self-healing migration: add columns missing on databases created before
@@ -69,6 +70,7 @@ def _db() -> sqlite3.Connection:
         ("session_id", "TEXT"),
         ("block_stage", "TEXT"),
         ("artifacts_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("inputs_json", "TEXT NOT NULL DEFAULT '[]'"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")

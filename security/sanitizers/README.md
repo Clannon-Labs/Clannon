@@ -63,6 +63,18 @@ If the YARA rules directory is missing, it is created automatically. If no rules
 exist, YARA skips with a clean result in development; in production (env-gated by
 `VRAKSHA_ENV` / `AGENT_REQUIRE_YARA`) a missing rule set fails closed.
 
+## Upload Admission (input files)
+
+`uploads.py` is a separate entry point (not part of the Flow stage chain) used by
+the server to admit user-uploaded INPUT files before they are seeded into an
+expert's sandbox workspace. `scan_upload(name, data)` content-sniffs the type
+(text-family or PDF only, by libmagic — not by extension), then runs the SAME
+`pre_sanitization` malware gate (ClamAV/YARA). By policy it does **not** run the
+redacting modality workers: a clean file is admitted with its **original bytes**
+intact (the expert needs full fidelity), and only genuinely malicious content is
+blocked. Fail-closed: if the gate cannot run, the file is rejected. Admitted
+files become `foundation.InputFile` and ride on `ctx.input_files`.
+
 Relevant environment variables:
 
 ```env

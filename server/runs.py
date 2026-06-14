@@ -133,6 +133,9 @@ class RunState:
     # delivered output artifacts (ArtifactRef dicts) — files an expert produced
     # and published, captured out of its workspace to durable storage
     artifacts: list[dict] = field(default_factory=list)
+    # uploaded input files admitted for this run (metadata only: name/modality/size;
+    # the bytes are passed to execute() and seeded into the expert workspace, never stored here)
+    inputs: list[dict] = field(default_factory=list)
     subscribers: list[asyncio.Queue] = field(default_factory=list)
     memory_writes: list[dict] = field(default_factory=list)
     feedback_rating: str | None = None       # "up" | "down" | None
@@ -241,6 +244,7 @@ class RunState:
             "report": self.report,
             "sources": [],  # structured sources arrive with the citation expert
             "artifacts": self.artifacts,
+            "inputs": self.inputs,
             "feedbackRating": self.feedback_rating,
             "feedbackComment": self.feedback_comment,
             "parentRunId": self.parent_run_id,
@@ -308,8 +312,8 @@ class RunStore:
             db.execute(
                 "INSERT OR REPLACE INTO runs "
                 "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,memory_writes_json,"
-                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json,inputs_json) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id, run.user_id, run.title, run.brief, run.status,
                     run.created_at, run.tokens_used, json.dumps(run.log),
@@ -317,6 +321,7 @@ class RunStore:
                     json.dumps(run.memory_writes),
                     run.feedback_rating, run.feedback_comment, run.parent_run_id,
                     run.session_id or run.id, run.block_stage, json.dumps(run.artifacts),
+                    json.dumps(run.inputs),
                 ),
             )
         # finished runs no longer need live queues in memory
@@ -341,6 +346,7 @@ class RunStore:
         run.session_id = (("session_id" in keys and row["session_id"]) or row["id"])
         run.block_stage = row["block_stage"] if "block_stage" in keys else None
         run.artifacts = json.loads(row["artifacts_json"]) if "artifacts_json" in keys and row["artifacts_json"] else []
+        run.inputs = json.loads(row["inputs_json"]) if "inputs_json" in keys and row["inputs_json"] else []
         return run
 
     def get(self, user_id: str, rid: str) -> RunState | None:
@@ -468,8 +474,12 @@ async def _recover_from_filter_block(flow: Flow[Any], run: RunState) -> Flow[Any
     return flow
 
 
-async def execute(run: RunState) -> None:
-    """Drive the real pipeline for one run, emitting events as it goes."""
+async def execute(run: RunState, input_files: list | None = None) -> None:
+    """Drive the real pipeline for one run, emitting events as it goes.
+
+    `input_files` are uploaded, already-malware-scanned foundation.InputFile objects
+    (admitted at the HTTP boundary); they ride on the context and are seeded into a
+    file-capable expert's workspace. The brief itself still crosses the full pipeline."""
     flow: Flow[Any] = Flow.new(
         run.brief,
         session_id=run.session_id or run.id,
@@ -485,6 +495,8 @@ async def execute(run: RunState) -> None:
     flow.ctx.conversation = _build_conversation(run)
     # the user's wiki — the highest-trust memory tier, loaded as text at hydration
     flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id)
+    # uploaded input files for this run — seeded into the expert workspace downstream
+    flow.ctx.input_files = input_files or []
 
     try:
         # user model preferences apply to every stage in this run

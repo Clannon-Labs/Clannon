@@ -175,6 +175,7 @@ class ExpertEnv:
     granted: list   # granted tools' registry specs (key, input_schema, description)
     findings: list = field(default_factory=list)  # prior ExpertFindings, snapshot at spawn — lets a synthesis expert read full research by ref
     workspace: WorkspacePort | None = None  # per-run sandbox, if this expert is granted workspace tools; closed when the run ends
+    input_files: list = field(default_factory=list)  # names of uploaded files seeded into the workspace for this run (set by the handler)
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +241,19 @@ _EXPERT_FORCE_ANSWER = (
 )
 
 
+def _input_files_note(env: ExpertEnv) -> str:
+    """A line telling the expert which uploaded files are already in its workspace,
+    so it reads them with its file tools instead of assuming their contents. Empty
+    when nothing was seeded (no uploads, or this expert has no workspace)."""
+    names = getattr(env, "input_files", None)
+    if not names:
+        return ""
+    return (
+        "\n\nInput files for this task have been placed in your workspace: "
+        f"{', '.join(names)}. Read them with your file tools — do not assume their contents."
+    )
+
+
 async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
     """Assemble the expert's agent from `env` and run it (it may call its tools /
     load skills) for an ExpertOutput, bounded to EXPERT_MAX_TURNS tool rounds.
@@ -254,6 +268,8 @@ async def think(env: ExpertEnv, user_prompt: str) -> ExpertOutput:
         _expert_overlay_rel(env.module_dir, "system.md"), env.module_dir / "system.md"
     )
     system_prompt = base_text + skills_hint(env.skills)
+    # seeded uploads are task data, so they go on the user message, not the prompt
+    user_prompt = user_prompt + _input_files_note(env)
     deps = ExpertDeps(skills=env.skills, tools=env.toolbox)
 
     def _agent(sys_prompt: str, tools: list) -> object:

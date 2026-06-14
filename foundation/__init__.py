@@ -27,6 +27,7 @@ from .contracts.memory import (
 )
 from .contracts.workspace import RunResult, WorkspacePort
 from .contracts.artifact import ArtifactRef, ArtifactStore
+from .contracts.input_file import InputFile
 
 # payload boundary
 from .coercion import coerce_to_bytes
@@ -93,6 +94,7 @@ __all__ = [
     "WorkspacePort",
     "ArtifactRef",
     "ArtifactStore",
+    "InputFile",
     "coerce_to_bytes",
     "get_root",
 

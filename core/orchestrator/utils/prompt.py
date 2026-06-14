@@ -16,15 +16,28 @@ def build_user_prompt(
     normalized: NormalizedInput,
     hydration: HydrationPackage,
     revision_feedback: str | None = None,
+    input_files: list | None = None,
 ) -> str:
     """Render the orchestrator's user message: the request + relevant memory.
 
     `revision_feedback` is set only on a retry after the output filter rejected
-    the previous draft — it tells the orchestrator what to fix and try again."""
+    the previous draft — it tells the orchestrator what to fix and try again.
+    `input_files` are uploaded files admitted for this run (foundation.InputFile);
+    naming them tells the orchestrator to delegate to a file-capable expert."""
     parts: list[str] = [
         f"User request (modality={normalized.modality}):",
         normalized.content or "[non-text payload]",
     ]
+
+    names = [getattr(f, "name", None) for f in (input_files or [])]
+    names = [n for n in names if n]
+    if names:
+        parts.append(
+            "\nThe user attached input files for this task: "
+            + ", ".join(names)
+            + ". They are available only inside a file-capable expert's workspace — "
+            "delegate to the right expert (e.g. data analysis or code) to read and use them."
+        )
 
     if getattr(hydration, "items", None):
         parts.append("\nRelevant memory:")

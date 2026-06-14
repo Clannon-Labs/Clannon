@@ -48,8 +48,8 @@ JSON keys are camelCase to match the frontend types in
 | `/auth/me` | GET | — | `User` or 401 |
 | `/auth/oauth/:provider` | GET (navigation) | — | 302 → frontend (`?error=oauth_unavailable` until Supabase OAuth) |
 | `/runs` | GET | — | `RunSummary[]` |
-| `/runs` | POST | `{brief}` | `{id}`, starts the pipeline in the background |
-| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, artifacts, feedbackRating, parentRunId, sessionId, blockStage) |
+| `/runs` | POST | `multipart/form-data`: `brief` (text) + optional `files` (input files) | `{id}`, starts the pipeline in the background. Each uploaded file is malware-scanned at the boundary (ClamAV/YARA) and seeded into the expert workspace with its original bytes — clean files are NOT redacted; a malicious/unsupported/oversized file is a 422. Scope: text-family files + PDF, max 10 |
+| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, artifacts, inputs, feedbackRating, parentRunId, sessionId, blockStage) |
 | `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
 | `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
