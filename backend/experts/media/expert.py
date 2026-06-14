@@ -53,6 +53,13 @@ class MediaExpert:
 
     async def run(self, args: MediaIn, env: ExpertEnv) -> ExpertOutput:
         media, oversized = await _media(env)
+        if not media and not oversized:
+            # Nothing was attached to THIS turn, so there is nothing to read. Return
+            # immediately and DO NOT call the model: with no media it would only
+            # hallucinate, and under provider rate limits the empty call burns the whole
+            # expert timeout. (Uploads are per-turn — a file from an earlier message is
+            # not carried forward, so a "try again" without re-attaching lands here.)
+            return _nothing_attached()
         return await think(env, _task(args, oversized), media=media)
 
 
@@ -60,6 +67,19 @@ class MediaExpert:
 # would 400 the call, so we skip it (and report it) instead of failing the run. A
 # File-API upload path for big files is a later enhancement.
 _INLINE_LIMIT_BYTES = 15 * 1024 * 1024
+
+
+def _nothing_attached() -> ExpertOutput:
+    """The answer when no media/document reached this turn — an honest, actionable note
+    instead of a hallucinated reading of a file that isn't there. No model call."""
+    msg = (
+        "No image, audio, video, or PDF was attached to this turn, so there is nothing to "
+        "analyze. Uploaded files apply only to the message they are sent with — a file from "
+        "an earlier turn is not carried forward. Ask the user to re-attach the file with "
+        "their request."
+    )
+    return ExpertOutput(summary="No media or document was attached to this turn.",
+                        full_content=msg, confidence=0.0)
 
 
 def _task(args: MediaIn, oversized: list[tuple[str, int]]) -> str:

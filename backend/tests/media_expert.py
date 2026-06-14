@@ -96,6 +96,22 @@ def test_media_skips_and_reports_oversized_files(monkeypatch):
     assert "big.mp4" in task and "too large" in task and "compress" in task
 
 
+def test_media_returns_immediately_when_nothing_attached(monkeypatch):
+    import experts.media.expert as me
+    # with nothing to read, the expert must NOT call the model — doing so only
+    # hallucinates and, under rate limits, burns the whole 240s expert timeout
+    async def boom(*a, **k):
+        raise AssertionError("think() must not run when no media is attached")
+    monkeypatch.setattr(me, "think", boom)
+
+    # a "try again" with no re-attached file: empty workspace, and a non-media file both
+    for env in (_env(_WS({}), []), _env(_WS({"notes.txt": b"hi"}), ["notes.txt"])):
+        out = asyncio.run(me.MediaExpert().run(me.MediaIn(prompt="what does the file say?"), env))
+        assert out.confidence == 0.0
+        assert "attached" in out.summary.lower()
+        assert "re-attach" in out.full_content.lower()
+
+
 def test_media_empty_without_workspace_or_media():
     assert asyncio.run(_media(_env(None, ["logo.png"]))) == ([], [])    # no workspace
     ws = _WS({"notes.txt": b"hi"})
