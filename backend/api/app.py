@@ -189,22 +189,26 @@ def set_run_feedback(
         raise HTTPException(404, "Run not found.")
 
 
-class FollowUpBody(BaseModel):
-    brief: str = Field(min_length=1, max_length=20_000)
-
-
 @app.post("/runs/{run_id}/followup", status_code=201)
 async def follow_up_run(
-    run_id: str, body: FollowUpBody, user: auth.User = Depends(auth.current_user)
+    run_id: str,
+    brief: str = Form(..., min_length=1, max_length=20_000),
+    files: list[UploadFile] = File(default=[]),
+    user: auth.User = Depends(auth.current_user),
 ) -> dict:
+    # a follow-up turn carries the same input types as a root run: multipart
+    # brief + optional files, admitted (malware-scanned, original bytes) exactly
+    # like POST /runs, and seeded into the expert workspace for this turn.
     parent = runs.STORE.get(user.id, run_id)
     if parent is None:
         raise HTTPException(404, "Run not found.")
-    ask = body.brief.strip()
+    ask = brief.strip()
     if len(ask) < config.LIMITS["briefMinChars"]:
         raise HTTPException(422, "Say a little more to continue.")
+    input_files = await _admit_uploads(files)
     run = runs.STORE.create_followup(user.id, ask, parent)
-    asyncio.get_running_loop().create_task(runs.execute(run))
+    run.inputs = [f.as_dict() for f in input_files]
+    asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
 

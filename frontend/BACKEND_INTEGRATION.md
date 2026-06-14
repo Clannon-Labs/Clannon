@@ -93,7 +93,7 @@ automatically); unauthenticated calls to protected routes return **401**.
 | GET | `/runs/:id/stream` | — (SSE) | `text/event-stream` of `RunEvent` | see §4. |
 | GET | `/runs/:id/artifacts/:name` | — | file **bytes** (`Content-Disposition: attachment`) | **NEW. See §6.** 404 unless the run published that exact name. |
 | POST | `/runs/:id/feedback` | `{rating: "up"\|"down"\|null, comment?}` | 204 | thumbs on a delivered run. |
-| POST | `/runs/:id/followup` | `{brief}` JSON | `{id}` | next turn of the same session. **Text-only today** (no files). |
+| POST | `/runs/:id/followup` | `multipart/form-data`: `brief` (text) + optional `files` | `{id}` | next turn of the same session. **Takes files now, exactly like `POST /runs`** (same scan, modalities, limits, 422-with-`detail`); the follow-up `Run.inputs` lists the attached files. |
 | GET | `/runs/:id/thread` | — | `Run[]` | all turns of the session, oldest first. |
 | GET | `/memory` | — | `MemoryEntry[]` | wiki entries (from SQLite) + episodic (from run memory writes). |
 | POST | `/memory` | `{tier, title, content}` | `MemoryEntry` | **only `tier:"wiki"`**; other tiers → 403 (pipeline-written). |
@@ -323,8 +323,11 @@ in `http.ts` (it already does multipart correctly).
    selected files as removable chips before submit.
 7. **Run view** (`src/app/app/runs/[id]/page.tsx`) — render `run.inputs` as a quiet
    "Attached" chip row near the brief (filename + size, a file-type icon).
-8. **Follow-up composer** stays text-only (the backend `followup` route takes no
-   files yet) — don't show attach there.
+8. **Follow-up composer** takes the SAME file UX as the root composer: the
+   `followup` route is now `multipart/form-data` (`brief` + optional `files`) with
+   identical scan/modalities/limits/422, and the follow-up `Run.inputs` lists the
+   attached files (render the same "Attached" chip row). Share one upload
+   helper/hook between both composers so the limits and validation stay identical.
 
 ---
 

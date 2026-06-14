@@ -55,7 +55,7 @@ JSON keys are camelCase to match the frontend types in
 | `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
 | `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
-| `/runs/:id/followup` | POST | `{brief}` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
+| `/runs/:id/followup` | POST | `multipart/form-data`: `brief` (text) + optional `files` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Carries input files exactly like `POST /runs` (same malware scan, modalities, ≤10 / ≤50MB limits, 422-with-`detail`); the follow-up run's `inputs` lists them. Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
 | `/runs/:id/thread` | GET | — | `Run[]` — every turn of this run's session, oldest first (the conversation) |
 | `/memory` | GET | — | `MemoryEntry[]` (wiki from SQLite + episodic from runs) |
 | `/memory` | POST | `{tier:"wiki", title, content}` | created entry (only wiki is user-writable) |
