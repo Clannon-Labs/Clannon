@@ -1,8 +1,8 @@
 """Schemas owned by the verifier: the verifier-LLM I/O models plus the
 VerificationResult contract written to ctx.verifier_result.
 
-VerificationResult used to live in foundation, but the verifier is its only
-consumer, so it belongs here (foundation never references it)."""
+VerificationResult lives here, not in foundation: the verifier is its only
+consumer, and foundation never references it."""
 
 from __future__ import annotations
 

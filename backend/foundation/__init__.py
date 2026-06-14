@@ -2,8 +2,9 @@
 Foundation public surface.
 
 This is the only import seam the rest of Vraksha uses: `from foundation import X`.
-Internals are organised into buckets (transport/, vocab/, contracts/, config/),
-but callers should never reach into those paths directly — import the name here.
+Internals are organised into buckets (transport/, vocab/, contracts/, plus
+coercion at the root), but callers should never reach into those paths directly —
+import the name here.
 """
 
 # transport — the fiber

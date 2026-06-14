@@ -49,10 +49,10 @@ foundation/
       HydrationRequest/Package, MemoryWriteProposal).
 ```
 
-Model and prompt config loaders used to live here under `config/`. They now live
-in the root **`registry/`** package (`registry.config`) — the single place
-anything gets registered. `foundation` imports nothing else, so it cannot depend
-on `registry`; config consumers import `from registry.config import ...` directly.
+Model and prompt config loaders live in the root **`registry/`** package
+(`registry.config`) — the single place anything gets registered — not here:
+`foundation` imports nothing else, so it cannot depend on `registry`. Config
+consumers import `from registry.config import ...` directly.
 
 `vocab/` and `transport/primitives.py`/`context.py` are the primitive layer — they
 do not import from the rest of Vraksha. `transport/flow.py` builds on those
@@ -259,8 +259,7 @@ Most stage code should use `Flow` instead. Use `Envelope` directly only when
 you need low-level control outside the standard pipeline, such as internal
 worker-to-worker communication before results are joined.
 
-`Origin` used to live here. It now lives in `vocab/types.py`. Import it
-with:
+`Origin` lives in `vocab/types.py`. Import it with:
 
 ```python
 from foundation import Origin
@@ -335,18 +334,16 @@ except ToolError as e:
     logger.error("tool failed", tool=e.tool)
 ```
 
-## Model & prompt routing (moved to `registry.config`)
+## Model & prompt routing (`registry.config`)
 
 Model routing (`models.yaml`) and prompt routing (`prompts/` + `registry.yaml`,
-with the `locked` security flag) used to live in `foundation/config`. They now
-live in the root `registry/` package and are documented there. Resolve them via:
+with the `locked` security flag) live in the root `registry/` package and are
+documented there — not in `foundation`, which imports nothing else and so cannot
+depend on `registry` (where capability registration also lives). Resolve them via:
 
 ```python
 from registry.config import load_model_registry, get_prompt
 ```
-
-They moved out of foundation because `foundation` imports nothing else, so it
-cannot depend on `registry` (where capability registration also lives).
 
 ## vocab/constants.py: Hardcoded Values
 
@@ -495,7 +492,7 @@ enum belongs to one layer, such as `security/`, define it in that layer's own
 
 **Do not:**
 - Import from anywhere else in Vraksha inside this package — `foundation` is the
-  base and depends on nothing (this is why config moved out to `registry`).
+  base and depends on nothing (which is why config lives in `registry`, not here).
 - Add business logic or LLM calls to any file here.
 - Add config/file I/O here — model & prompt loading live in `registry.config`.
 - Define layer-specific types here; they belong in that layer's `schema.py`.
