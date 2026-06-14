@@ -6,7 +6,7 @@ import asyncio
 from pydantic_ai import BinaryContent
 
 from core.llm.framework import AgentHandle, run_structured
-from experts.media.expert import _canonical_mime, _media
+from experts.media.expert import _canonical_mime, _gather
 from registry.capabilities import discover, registry
 from registry.capabilities.handler.support import ExpertEnv, SkillBook
 
@@ -71,28 +71,48 @@ def _env(ws, seeded_names):
     return env
 
 
-def test_media_gathers_image_audio_video_and_pdf_with_canonical_mime():
+def test_media_gathers_image_audio_video_with_canonical_mime():
+    # an unparseable "pdf" (fake bytes) can't be text-extracted, so it falls through to
+    # the multimodal path like the other media; nothing oversized; no docs extracted
     ws = _WS({"logo.png": b"PNG", "notes.txt": b"hi", "talk.wav": b"WAV",
               "clip.mp4": b"MP4", "report.pdf": b"%PDF-1.7"})
     env = _env(ws, ["logo.png", "notes.txt", "talk.wav", "clip.mp4", "report.pdf"])
-    media, oversized = asyncio.run(_media(env))
+    media, docs, oversized = asyncio.run(_gather(env))
     got = dict((m, d) for d, m in media)
-    # notes.txt (not media/doc) skipped; wav mime canonicalized x-wav -> wav; PDF gathered
-    # so Gemini reads it natively; nothing oversized
     assert got == {"image/png": b"PNG", "audio/wav": b"WAV",
                    "video/mp4": b"MP4", "application/pdf": b"%PDF-1.7"}
-    assert oversized == []
+    assert docs == [] and oversized == []
+
+
+def test_media_extracts_a_text_pdf_locally_no_model_image_call():
+    import fitz  # build a real one-page text PDF
+    doc = fitz.open()
+    doc.new_page().insert_text(
+        (72, 72),
+        "Clannon test document. The project codename is BLUEFERN and the launch month "
+        "is October. This is a genuine text PDF used to verify local extraction.")
+    pdf_bytes = doc.tobytes()
+    ws = _WS({"brief.pdf": pdf_bytes})
+    media, docs, oversized = asyncio.run(_gather(_env(ws, ["brief.pdf"])))
+    # the PDF text was pulled LOCALLY -> goes to docs, NOT to the multimodal `media` list
+    assert media == [] and oversized == []
+    assert len(docs) == 1 and docs[0][0] == "brief.pdf"
+    assert "BLUEFERN" in docs[0][1]
+    # and _task inlines that text (clearly marked as data) for the model to reason over
+    import experts.media.expert as me
+    task = me._task(me.MediaIn(prompt="what is the codename?"), docs, [])
+    assert "BLUEFERN" in task and "brief.pdf" in task
 
 
 def test_media_skips_and_reports_oversized_files(monkeypatch):
     import experts.media.expert as me
     monkeypatch.setattr(me, "_INLINE_LIMIT_BYTES", 8)            # tiny cap for the test
     ws = _WS({"small.png": b"PNG", "big.mp4": b"x" * 64})        # big.mp4 exceeds 8 bytes
-    media, oversized = asyncio.run(_media(_env(ws, ["small.png", "big.mp4"])))
+    media, docs, oversized = asyncio.run(_gather(_env(ws, ["small.png", "big.mp4"])))
     assert [m for _, m in media] == ["image/png"]               # small one included
     assert oversized == [("big.mp4", 64)]                       # big one reported, not sent
     # and the task carries an actionable note about the skipped file
-    task = me._task(me.MediaIn(prompt="describe these"), oversized)
+    task = me._task(me.MediaIn(prompt="describe these"), docs, oversized)
     assert "big.mp4" in task and "too large" in task and "compress" in task
 
 
@@ -113,9 +133,9 @@ def test_media_returns_immediately_when_nothing_attached(monkeypatch):
 
 
 def test_media_empty_without_workspace_or_media():
-    assert asyncio.run(_media(_env(None, ["logo.png"]))) == ([], [])    # no workspace
+    assert asyncio.run(_gather(_env(None, ["logo.png"]))) == ([], [], [])  # no workspace
     ws = _WS({"notes.txt": b"hi"})
-    assert asyncio.run(_media(_env(ws, ["notes.txt"]))) == ([], [])     # no media among inputs
+    assert asyncio.run(_gather(_env(ws, ["notes.txt"]))) == ([], [], [])   # no media among inputs
 
 
 def test_canonical_mime_normalizes_known_aliases():
