@@ -66,6 +66,13 @@ Pillow                       # image sanitization and metadata stripping
 ffmpeg-python                # media probing/remuxing and sanitization
 mutagen                      # audio metadata inspection
 
+# --- Media understanding (local preprocessing) ---
+# faster-whisper transcribes audio/video locally (CTranslate2, fast + low-memory on CPU)
+# so any model can understand them, provider-independently. Pulls `av` (PyAV) for decode.
+# The model (default "base") downloads on first use into VRAKSHA_WHISPER_CACHE; ffmpeg
+# (system package) does the audio extraction + frame sampling for video.
+faster-whisper
+
 # --- Universal File Scanning ---
 yara-python                  # threat signature scanning
 

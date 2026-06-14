@@ -22,6 +22,13 @@ Per modality:
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
+import subprocess
+import tempfile
+import threading
+
+from foundation import get_root
 
 # PDF: how much text to inline, and how many pages to render (visual content) and at what
 # resolution. 150 DPI keeps small details legible without ballooning the request.
@@ -29,6 +36,20 @@ _MAX_DOC_CHARS = 50_000
 _MIN_PDF_TEXT = 50              # below this the PDF is effectively scanned -> render it
 _PDF_RENDER_DPI = 150
 _MAX_PDF_RENDER_PAGES = 8       # cap rendered pages so a long PDF can't explode the request
+
+# Audio/video: transcribe with faster-whisper (CTranslate2 — fast, low-memory on CPU) and
+# sample video frames with ffmpeg, so any model can understand them and a run survives the
+# multimodal provider being down. The model downloads once into a persistent cache.
+_WHISPER_MODEL = os.getenv("VRAKSHA_WHISPER_MODEL", "base")    # tiny/base/small/medium/large-v3
+_WHISPER_CACHE = os.getenv("VRAKSHA_WHISPER_CACHE") or str(get_root() / "assets" / "whisper_cache")
+_MAX_TRANSCRIPT_CHARS = 50_000
+_VIDEO_FRAME_EVERY_S = 5        # sample one frame every N seconds of video
+_MAX_VIDEO_FRAMES = 8           # cap frames so a long video can't explode the request
+_FFMPEG_TIMEOUT_S = 90         # bound ffmpeg work
+_MEDIA_TMP = os.getenv("VRAKSHA_MEDIA_TMP") or None   # temp dir for av decode (None = system tmp)
+
+_whisper = None
+_whisper_lock = threading.Lock()
 
 
 def _pdf_sync(data: bytes) -> tuple[str, list[bytes]]:
@@ -70,11 +91,103 @@ async def _pdf(data: bytes) -> tuple[list[str], list[tuple[bytes, str]]]:
     return texts, media
 
 
+# ---- audio: local transcription (faster-whisper) ---------------------------
+
+
+def _get_whisper():
+    """Load the faster-whisper model once (thread-safe), cached on disk after first use."""
+    global _whisper
+    if _whisper is None:
+        with _whisper_lock:
+            if _whisper is None:
+                from faster_whisper import WhisperModel
+                _whisper = WhisperModel(
+                    _WHISPER_MODEL, device="cpu", compute_type="int8", download_root=_WHISPER_CACHE
+                )
+    return _whisper
+
+
+def _transcribe(path: str) -> str:
+    segments, _info = _get_whisper().transcribe(path, vad_filter=True)
+    return " ".join(s.text.strip() for s in segments).strip()[:_MAX_TRANSCRIPT_CHARS]
+
+
+def _audio_sync(data: bytes, suffix: str) -> str:
+    fd, path = tempfile.mkstemp(suffix=suffix, dir=_MEDIA_TMP)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        return _transcribe(path)
+    finally:
+        os.unlink(path)
+
+
+async def _audio(data: bytes, mime: str) -> tuple[list[str], list[tuple[bytes, str]]]:
+    try:
+        suffix = "." + (mime.split("/", 1)[1] if "/" in mime else "audio")
+        text = await asyncio.to_thread(_audio_sync, data, suffix)
+    except Exception:  # noqa: BLE001 — transcription unavailable/failed -> let the model try
+        text = ""
+    if text:
+        return [f"[audio transcript] {text}"], []
+    return [], [(data, mime)]   # empty/failed -> hand the raw audio to the multimodal model
+
+
+# ---- video: ffmpeg -> extracted audio (transcribe) + sampled frames --------
+
+
+def _video_sync(data: bytes, suffix: str) -> tuple[str, list[bytes]]:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg not available")
+    work = tempfile.mkdtemp(dir=_MEDIA_TMP)
+    try:
+        src = os.path.join(work, "in" + suffix)
+        with open(src, "wb") as fh:
+            fh.write(data)
+
+        # audio track -> mono 16k wav -> transcript (best-effort: a silent video has none)
+        wav = os.path.join(work, "audio.wav")
+        subprocess.run([ffmpeg, "-nostdin", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav],
+                       capture_output=True, timeout=_FFMPEG_TIMEOUT_S)
+        transcript = _transcribe(wav) if os.path.exists(wav) and os.path.getsize(wav) > 0 else ""
+
+        # one frame every N seconds, capped, for the model to SEE
+        subprocess.run([ffmpeg, "-nostdin", "-y", "-i", src, "-vf", f"fps=1/{_VIDEO_FRAME_EVERY_S}",
+                        "-frames:v", str(_MAX_VIDEO_FRAMES), os.path.join(work, "f_%03d.png")],
+                       capture_output=True, timeout=_FFMPEG_TIMEOUT_S)
+        frames: list[bytes] = []
+        for i in range(1, _MAX_VIDEO_FRAMES + 1):
+            fp = os.path.join(work, f"f_{i:03d}.png")
+            if os.path.exists(fp):
+                with open(fp, "rb") as fh:
+                    frames.append(fh.read())
+        return transcript, frames
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+async def _video(data: bytes, mime: str) -> tuple[list[str], list[tuple[bytes, str]]]:
+    try:
+        suffix = "." + (mime.split("/", 1)[1] if "/" in mime else "mp4")
+        transcript, frames = await asyncio.to_thread(_video_sync, data, suffix)
+    except Exception:  # noqa: BLE001 — ffmpeg/whisper unavailable -> let the model try the raw video
+        return [], [(data, mime)]
+    texts = [f"[video transcript] {transcript}"] if transcript else []
+    media = [(png, "image/png") for png in frames]
+    if not texts and not media:
+        return [], [(data, mime)]   # extracted nothing -> raw fallback
+    return texts, media
+
+
 async def preprocess(name: str, mime: str, data: bytes) -> tuple[list[str], list[tuple[bytes, str]]]:
     """Turn one attached file into (texts, media) for the model. Unknown types fall back to
     handing the raw bytes to the multimodal model."""
     if mime == "application/pdf":
         return await _pdf(data)
-    # images ride at full resolution so the model sees fine detail; audio/video fall back
-    # to the multimodal model here until the audio/video preprocessing lands.
+    if mime.startswith("audio/"):
+        return await _audio(data, mime)
+    if mime.startswith("video/"):
+        return await _video(data, mime)
+    # images ride at full resolution so the model sees fine detail
     return [], [(data, mime)]

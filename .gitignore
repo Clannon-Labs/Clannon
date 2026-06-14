@@ -16,6 +16,7 @@ vraksha.log
 # Model / embedding caches under assets (the directory itself can be tracked)
 backend/assets/hf_cache/
 backend/assets/fastembed_cache/
+backend/assets/whisper_cache/
 
 # Production prompt overlay (auto-discovered, or VRAKSHA_PROMPTS_DIR). The real,
 # hardened prompts for EVERY llm call (verifier/filter/orchestrator/memory +
