@@ -28,12 +28,14 @@ from security.filter import run as _OUTPUT_FILTER
 from . import auth, config
 
 
-def build_model_overrides(user_id: str) -> dict[str, str]:
+def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
     """
-    Translate the user's stored model preferences into pipeline role
-    overrides ("role" -> "provider:model"). Locked layers are never
-    overridable; the "experts" default applies to every expert role
-    unless a per-expert choice exists.
+    Resolve the model overrides for a run, as role -> "provider:model".
+
+    Two layers: the user's stored WORKSPACE defaults (per-role, persisted via
+    /settings/models), with the run's PER-SESSION choices (`session`, role -> bare
+    model id) layered on top — the session choice wins for that run. Only unlocked
+    roles are honored; locked security gates (verifier, filter) are never overridable.
     """
     with auth._db() as db:
         prefs = {
@@ -42,15 +44,12 @@ def build_model_overrides(user_id: str) -> dict[str, str]:
                 "SELECT layer, model FROM model_prefs WHERE user_id=?", (user_id,)
             )
         }
-    overrides: dict[str, str] = {}
-    locked = {e["layer"] for e in config.MODEL_CATALOG if e["locked"]}
-    if "orchestrator" in prefs and "orchestrator" not in locked:
-        overrides["orchestrator"] = config.qualify_model(prefs["orchestrator"])
-    for expert in config.EXPERTS:
-        chosen = prefs.get(f"expert:{expert['key']}") or prefs.get("experts")
-        if chosen:
-            overrides[expert["role"]] = config.qualify_model(chosen)
-    return overrides
+    merged = {**prefs, **(session or {})}   # the session choice overrides the workspace default
+    return {
+        role: config.qualify_model(model)
+        for role, model in merged.items()
+        if role in config.SELECTABLE_ROLES   # silently drop locked/unknown roles
+    }
 
 # one display status per ACTIVE_STAGES entry (intake, sanitizer, normalizer,
 # verifier, orchestrator, output filter, delivery)
@@ -148,6 +147,9 @@ class RunState:
     # the session this turn belongs to. Root turns own their session (= id);
     # follow-ups inherit the parent's, so the whole chat is one session.
     session_id: str = ""
+    # per-session model choices for THIS run (role -> bare model id), layered over
+    # the user's workspace defaults at execute time. Empty = use workspace defaults.
+    session_models: dict[str, str] = field(default_factory=dict)
 
     def emit(self, event: dict) -> None:
         self.events.append(event)
@@ -500,7 +502,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
 
     try:
         # user model preferences apply to every stage in this run
-        with model_overrides(build_model_overrides(run.user_id)):
+        with model_overrides(build_model_overrides(run.user_id, run.session_models)):
             for stage, status in zip(ACTIVE_STAGES, _STAGE_STATUS):
                 if flow.should_stop:
                     break

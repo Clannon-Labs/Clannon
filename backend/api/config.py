@@ -102,9 +102,9 @@ LIMITS = {"briefMinChars": 2}
 # read-only. The actual model the pipeline uses comes from models.yaml.
 # ---------------------------------------------------------------------------
 
-# User-selectable pool for the reasoning layers (orchestrator, experts).
+# User-selectable text/reasoning models (orchestrator, research, planning, code).
 SELECTABLE_MODELS = [
-    # Google (default provider)
+    # Google
     "gemini-3.5-flash",
     "gemini-3.1-pro-preview",
     "gemini-3.1-flash-lite",
@@ -125,17 +125,40 @@ SELECTABLE_MODELS = [
     "gpt-5.4-nano",
 ]
 
-# Experts users can override individually (key = capability key; label = display
-# name; role = the models.yaml role that expert resolves through). DERIVED from the
-# capability registry so the model-settings UI auto-renders ANY expert added to the
-# backend, with zero edits here — drop an expert in backend/experts/ and it shows up.
+# Media/document understanding needs MULTIMODAL models. Gemini reads everything
+# (image/audio/video/PDF); the cross-provider vision models cover image + PDF. Audio
+# and video need Gemini, so it leads the list.
+MEDIA_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash-lite",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "gpt-5.4",
+]
+
+
+def qualify_model(model_id: str) -> str:
+    """Map a bare catalog id to pydantic-ai's provider-qualified form."""
+    if model_id.startswith("gemini-"):
+        return f"google:{model_id}"
+    if model_id.startswith("claude-"):
+        return f"anthropic:{model_id}"
+    if model_id.startswith("gpt-"):
+        return f"openai:{model_id}"
+    return model_id
+
+
 def _expert_label(key: str) -> str:
     """A readable display name from a capability key, e.g. 'media.analyst' -> 'Media analyst'."""
     return key.replace(".", " ").replace("_", " ").capitalize()
 
 
 def _discover_experts() -> list[dict]:
-    """Every registered, healthy expert as {key, label, role}, from the registry."""
+    """Every registered, healthy expert as {key, label, role}, from the registry. The
+    model-settings UI groups these UNDER their role, so any expert added to the backend
+    auto-appears under the role it runs on, with zero edits here."""
     from registry.capabilities import CapabilityKind, discover, registry
 
     discover()
@@ -157,51 +180,57 @@ def _discover_experts() -> list[dict]:
 EXPERTS = _discover_experts()
 
 
-def qualify_model(model_id: str) -> str:
-    """Map a bare catalog id to pydantic-ai's provider-qualified form."""
-    if model_id.startswith("gemini-"):
-        return f"google:{model_id}"
-    if model_id.startswith("claude-"):
-        return f"anthropic:{model_id}"
-    if model_id.startswith("gpt-"):
-        return f"openai:{model_id}"
-    return model_id
+def _role_default(role: str) -> str:
+    """The bare model id models.yaml routes this role to by default, so the picker's
+    default selection always matches what the pipeline actually runs (best-for-task
+    there: Claude for reasoning, Gemini for media) — never a hardcoded provider."""
+    from core.llm.registry import model_profile_for_layer
+
+    try:
+        return model_profile_for_layer(role).model
+    except Exception:  # noqa: BLE001 — a role models.yaml doesn't define has no default to show
+        return ""
 
 
-MODEL_CATALOG = [
-    # {
-    #     "layer": "verifier",
-    #     "label": "Verifier",
-    #     "description": "Security gate on every input. System-managed — this is part of the pipeline's safety guarantee, not a preference.",
-    #     "locked": True,
-    #     "default": "gemini-2.5-flash-lite",
-    #     "options": [],
-    # },
-    {
-        "layer": "orchestrator",
-        "label": "Orchestrator",
-        "description": "Plans the run, routes experts, streams the decision log.",
-        "locked": False,
-        "default": "gemini-3.1-flash-lite",
-        "options": SELECTABLE_MODELS,
-    },
-    {
-        "layer": "experts",
-        "label": "Experts",
-        "description": "Research and synthesis workers.",
-        "locked": False,
-        "default": "gemini-3.1-flash-lite",
-        "options": SELECTABLE_MODELS,
-    },
-    # {
-    #     "layer": "filter",
-    #     "label": "Output filter",
-    #     "description": "Groundedness and policy gate on every report. System-managed for the same reason as the verifier.",
-    #     "locked": True,
-    #     "default": "gemini-2.5-flash-lite",
-    #     "options": [],
-    # },
+# The roles a user can see/configure, each a models.yaml role: (layer, label,
+# description, locked, options). locked=True = security gate (verifier, output filter):
+# system-managed, shown read-only, 403 on write — users must never swap a weaker model
+# into their own input/output guards. The default is DERIVED from models.yaml so the UI
+# stays in lockstep with routing.
+_ROLES = [
+    ("orchestrator", "Orchestrator", "Plans the run, routes experts, streams the decision log.", False, SELECTABLE_MODELS),
+    ("research", "Research", "Web research, fact-checking, and summarizing sources.", False, SELECTABLE_MODELS),
+    ("planner", "Writing & planning", "Synthesis, documentation, and long-form reasoning.", False, SELECTABLE_MODELS),
+    ("code", "Code & data", "Code generation, debugging, and data analysis.", False, SELECTABLE_MODELS),
+    ("media_expert", "Media & documents", "Images, audio, video, and PDF documents.", False, MEDIA_MODELS),
+    ("verifier", "Verifier", "Security gate on every input. System-managed, not a preference.", True, []),
+    ("filter", "Output filter", "Groundedness and policy gate on every report. System-managed.", True, []),
 ]
+
+
+def model_catalog() -> list[dict]:
+    """Per-role catalog: label, options, locked, default (derived from models.yaml),
+    and the experts each role drives (informational, so the UI can explain the mapping)."""
+    return [
+        {
+            "layer": layer,
+            "label": label,
+            "description": desc,
+            "locked": locked,
+            "default": _role_default(layer),
+            "options": list(options),
+            "experts": [
+                {"key": e["key"], "label": e["label"]} for e in EXPERTS if e["role"] == layer
+            ],
+        }
+        for layer, label, desc, locked, options in _ROLES
+    ]
+
+
+MODEL_CATALOG = model_catalog()
+# Roles a workspace default / per-session override may target (unlocked only).
+SELECTABLE_ROLES = {layer for layer, _l, _d, locked, _o in _ROLES if not locked}
+LOCKED_ROLES = {layer for layer, _l, _d, locked, _o in _ROLES if locked}
 
 
 def remote_config() -> dict:

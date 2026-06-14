@@ -13,6 +13,7 @@ import {
   DropOverlay,
   HeavyMediaNote,
 } from "@/components/app/attachments";
+import { useSessionModels, SessionModelPicker } from "@/components/app/model-picker";
 import { ACCEPTED_INPUT } from "@/lib/uploads";
 import { appConfig } from "@/config/app.config";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function RunFeedback({
   const [ask, setAsk] = useState("");
   const [followError, setFollowError] = useState<string | null>(null);
   const attach = useFileAttachments();
+  const session = useSessionModels();
   const fileRef = useRef<HTMLInputElement>(null);
 
   function rate(next: "up" | "down") {
@@ -72,7 +74,7 @@ export function RunFeedback({
     e.preventDefault();
     setFollowError(null);
     followUp.mutate(
-      { brief: ask, files: attach.files },
+      { brief: ask, files: attach.files, models: session.models },
       {
         onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
         onError: (err) =>
@@ -169,6 +171,7 @@ export function RunFeedback({
             </Button>
           </div>
         </div>
+        <SessionModelPicker models={session.models} onSetRole={session.setRole} />
         {(followError || attach.error) && (
           <p role="alert" className="mt-2 text-sm text-destructive">
             {followError || attach.error}

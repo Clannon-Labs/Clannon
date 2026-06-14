@@ -164,26 +164,37 @@ export interface UsageSummary {
   byDay: UsageDay[];
 }
 
-export type PipelineLayer = "verifier" | "orchestrator" | "experts" | "filter";
+/**
+ * A selectable pipeline role. Known roles are listed for autocomplete, but the
+ * UI renders whatever the backend sends — a new role appears with no type change.
+ */
+export type PipelineLayer =
+  | "orchestrator"
+  | "research"
+  | "planner"
+  | "code"
+  | "media_expert"
+  | "verifier"
+  | "filter"
+  | (string & {});
 
 export interface LayerModelConfig {
+  /** The role string, e.g. "orchestrator" | "media_expert". */
   layer: PipelineLayer;
   label: string;
   description: string;
+  /** The user's current choice for this role (their default, if unset). */
   model: string;
+  /** Models selectable for this role. media_expert carries a vision-only list. */
   options: string[];
   /**
-   * System-managed layer (verifier, output filter): the model is part
-   * of the security posture and cannot be changed by users. The
-   * backend rejects writes with 403; the UI renders it read-only.
+   * System-managed role (verifier, output filter): the model is part of the
+   * security posture and cannot be changed. The backend rejects writes with 403;
+   * the UI renders it read-only.
    */
   locked?: boolean;
-  /**
-   * Present on the "experts" layer: individually overridable experts.
-   * Write one via setModelLayer("expert:<key>", model); unset experts
-   * follow the layer default.
-   */
-  experts?: { key: string; label: string; model: string }[];
+  /** The best-for-task default the backend uses when the user hasn't chosen. */
+  default?: string;
 }
 
 /* ---------- remote config (backend → frontend, read-only) ---------- */

@@ -16,6 +16,7 @@ import {
   DropOverlay,
   HeavyMediaNote,
 } from "@/components/app/attachments";
+import { useSessionModels, SessionModelPicker } from "@/components/app/model-picker";
 import { ACCEPTED_INPUT } from "@/lib/uploads";
 import { cn, formatRelativeTime, formatTokens } from "@/lib/utils";
 
@@ -70,6 +71,7 @@ export default function WorkspacePage() {
   const [brief, setBrief] = useState("");
   const [error, setError] = useState<string | null>(null);
   const attach = useFileAttachments();
+  const session = useSessionModels();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const firstName = user?.name.split(" ")[0] ?? "";
@@ -84,7 +86,7 @@ export default function WorkspacePage() {
     e.preventDefault();
     setError(null);
     createRun.mutate(
-      { brief, files: attach.files },
+      { brief, files: attach.files, models: session.models },
       {
         onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
         onError: (err) =>
@@ -192,6 +194,7 @@ export default function WorkspacePage() {
             </Button>
           </div>
         </div>
+        <SessionModelPicker models={session.models} onSetRole={session.setRole} />
         {(error || attach.error) && (
           <p role="alert" className="mt-3 text-sm text-destructive">
             {error || attach.error}

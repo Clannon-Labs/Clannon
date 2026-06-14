@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlanId } from "@/config/plans";
-import { Check, ChevronRight, Cpu, ShieldCheck } from "lucide-react";
+import { Check } from "lucide-react";
 import {
   useEffectivePlan,
   useEffectivePlans,
@@ -14,6 +14,7 @@ import {
   useSetModelLayer,
   useUsage,
 } from "@/lib/api/hooks";
+import { ModelRoleList } from "@/components/app/model-picker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeSegment } from "@/components/theme";
 import { Button } from "@/components/ui/button";
@@ -100,130 +101,29 @@ function ModelsTab() {
   return (
     <div className="flex flex-col gap-3">
       <p className="max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-        The reasoning layers are yours to configure. The security layers —
-        verifier and output filter — are system-managed: their models are part
-        of the pipeline&apos;s safety guarantee and can&apos;t be swapped.
+        Pick a model per role — these are your workspace defaults, applied to every new
+        run. Defaults are best-for-task, and you can still override per run from the
+        composer. The security roles — verifier and output filter — are system-managed
+        and can&apos;t be swapped.
       </p>
-      {layers.map((layer) => (
-        <div
-          key={layer.layer}
-          className="rounded-lg border border-border bg-surface p-5"
-        >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[15px] font-semibold">
-              {layer.locked ? (
-                <ShieldCheck className="size-4 text-memory" aria-hidden />
-              ) : (
-                <Cpu className="size-4 text-primary" aria-hidden />
-              )}
-              {layer.label}
-              {layer.locked && (
-                <span className="tag-label rounded-full bg-memory-soft px-2 py-0.5 text-memory">
-                  System managed
-                </span>
-              )}
-            </p>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-              {layer.description}
-            </p>
-          </div>
-          {layer.locked ? (
-            <p className="shrink-0 rounded-md border border-border bg-background px-3 py-2.5 font-mono text-[13px] text-muted-foreground">
-              {layer.model}
-            </p>
-          ) : (
-          <div className="shrink-0">
-            <label className="sr-only" htmlFor={`model-${layer.layer}`}>
-              Model for {layer.label}
-            </label>
-            <select
-              id={`model-${layer.layer}`}
-              value={layer.model}
-              disabled={setLayer.isPending}
-              onChange={(e) =>
-                setLayer.mutate(
-                  { layer: layer.layer, model: e.target.value },
-                  {
-                    onSuccess: () =>
-                      toast({
-                        title: `${layer.label} model updated`,
-                        description: `Next runs use ${e.target.value}.`,
-                        tone: "success",
-                      }),
-                  },
-                )
-              }
-              className="h-10 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-3 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-[13px]"
-            >
-              {layer.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-          )}
-        </div>
-
-        {/* per-expert overrides, tucked away until wanted */}
-        {layer.experts && layer.experts.length > 0 && (
-          <details className="group mt-4 border-t border-border pt-3">
-            <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-              <ChevronRight
-                className="size-3.5 transition-transform duration-200 group-open:rotate-90"
-                aria-hidden
-              />
-              Per-expert overrides
-              <span className="text-faint">— each expert can run its own model</span>
-            </summary>
-            <div className="mt-3 flex flex-col gap-2.5">
-              {layer.experts.map((expert) => (
-                <div
-                  key={expert.key}
-                  className="flex flex-col gap-2 rounded-md bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <p className="font-mono text-[13px]">
-                    {expert.key}
-                    <span className="ml-2 font-sans text-faint">{expert.label}</span>
-                  </p>
-                  <div>
-                    <label className="sr-only" htmlFor={`model-expert-${expert.key}`}>
-                      Model for {expert.label}
-                    </label>
-                    <select
-                      id={`model-expert-${expert.key}`}
-                      value={expert.model}
-                      disabled={setLayer.isPending}
-                      onChange={(e) =>
-                        setLayer.mutate(
-                          { layer: `expert:${expert.key}`, model: e.target.value },
-                          {
-                            onSuccess: () =>
-                              toast({
-                                title: `${expert.label} model updated`,
-                                description: `Next runs use ${e.target.value} for this expert.`,
-                                tone: "success",
-                              }),
-                          },
-                        )
-                      }
-                      className="h-9 cursor-pointer rounded-md border border-border-strong bg-surface-raised px-2.5 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-[12.5px]"
-                    >
-                      {layer.options.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
-        </div>
-      ))}
+      <ModelRoleList
+        layers={layers}
+        valueFor={(l) => l.model}
+        pending={setLayer.isPending}
+        onSelect={(l, model) =>
+          setLayer.mutate(
+            { layer: l.layer, model },
+            {
+              onSuccess: () =>
+                toast({
+                  title: `${l.label} model updated`,
+                  description: `New runs use ${model} for ${l.label.toLowerCase()}.`,
+                  tone: "success",
+                }),
+            },
+          )
+        }
+      />
     </div>
   );
 }

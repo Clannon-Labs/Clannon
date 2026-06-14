@@ -316,7 +316,7 @@ export function buildSeedUsage(): UsageSummary {
   };
 }
 
-/** Mirrors server/config.py MODEL_CATALOG (verified June 2026). */
+/** Mirrors the backend MODEL_CATALOG (verified June 2026). */
 const SELECTABLE_MODELS = [
   "gemini-3.5-flash",
   "gemini-3.1-pro-preview",
@@ -336,33 +336,71 @@ const SELECTABLE_MODELS = [
   "gpt-5.4-nano",
 ];
 
+/** Vision-capable subset — the only models the media role can run. */
+const VISION_MODELS = [
+  "gemini-3.5-flash",
+  "gemini-3.1-pro-preview",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "gpt-5.5",
+  "gpt-5.4",
+];
+
+// Defaults are best-for-task, DERIVED from routing (Claude for reasoning roles,
+// Gemini for media) — the picker shows these until the user chooses otherwise.
+// Selection is PER ROLE: 5 selectable + 2 system-managed (verifier, filter).
 export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
-  {
-    layer: "verifier",
-    label: "Verifier",
-    description:
-      "Security gate on every input. System-managed — this is part of the pipeline's safety guarantee, not a preference.",
-    model: "gemini-2.5-flash-lite",
-    options: [],
-    locked: true,
-  },
   {
     layer: "orchestrator",
     label: "Orchestrator",
     description: "Plans the run, routes experts, streams the decision log.",
-    model: "gemini-3.1-flash-lite",
+    model: "claude-haiku-4-5",
+    default: "claude-haiku-4-5",
     options: SELECTABLE_MODELS,
   },
   {
-    layer: "experts",
-    label: "Experts",
-    description: "Research and synthesis workers.",
-    model: "gemini-3.1-flash-lite",
+    layer: "research",
+    label: "Research",
+    description: "Gathers and cross-checks sources across the open web.",
+    model: "claude-haiku-4-5",
+    default: "claude-haiku-4-5",
     options: SELECTABLE_MODELS,
-    experts: [
-      { key: "web.research", label: "Web research", model: "gemini-3.1-flash-lite" },
-      { key: "synthesis.writer", label: "Synthesis writer", model: "gemini-3.1-flash-lite" },
-    ],
+  },
+  {
+    layer: "planner",
+    label: "Writing & planning",
+    description: "Synthesizes the findings into the structured draft.",
+    model: "claude-sonnet-4-6",
+    default: "claude-sonnet-4-6",
+    options: SELECTABLE_MODELS,
+  },
+  {
+    layer: "code",
+    label: "Code & data",
+    description: "Writes and runs code, and does the data analysis.",
+    model: "claude-sonnet-4-6",
+    default: "claude-sonnet-4-6",
+    options: SELECTABLE_MODELS,
+  },
+  {
+    layer: "media_expert",
+    label: "Media & documents",
+    description: "Reads images, audio, video, and documents — vision-capable models only.",
+    model: "gemini-2.5-flash",
+    default: "gemini-2.5-flash",
+    options: VISION_MODELS,
+  },
+  {
+    layer: "verifier",
+    label: "Verifier",
+    description:
+      "Security gate on every input. System-managed — part of the pipeline's safety guarantee, not a preference.",
+    model: "gemini-2.5-flash-lite",
+    default: "gemini-2.5-flash-lite",
+    options: [],
+    locked: true,
   },
   {
     layer: "filter",
@@ -370,6 +408,7 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     description:
       "Groundedness and policy gate on every report. System-managed for the same reason as the verifier.",
     model: "gemini-2.5-flash-lite",
+    default: "gemini-2.5-flash-lite",
     options: [],
     locked: true,
   },

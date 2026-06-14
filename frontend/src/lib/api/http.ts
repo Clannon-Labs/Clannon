@@ -152,12 +152,17 @@ export class HttpClient implements ClannonClient {
     return request(appConfig.endpoints.run, { params: { id } });
   }
 
-  async createRun(brief: string, files: File[] = []): Promise<{ id: string }> {
+  async createRun(
+    brief: string,
+    files: File[] = [],
+    models: Record<string, string> = {},
+  ): Promise<{ id: string }> {
     // multipart now (was JSON): brief + repeated "files" field. Let the
     // browser set the multipart boundary — the json request() helper can't.
     const form = new FormData();
     form.append("brief", brief);
     for (const f of files) form.append("files", f, f.name); // field name MUST be "files"
+    if (Object.keys(models).length) form.append("models", JSON.stringify(models)); // per-session overrides
     const res = await fetch(url(appConfig.endpoints.createRun), {
       method: "POST",
       credentials: appConfig.http.credentials,
@@ -197,11 +202,17 @@ export class HttpClient implements ClannonClient {
     });
   }
 
-  async createFollowUp(id: string, brief: string, files: File[] = []): Promise<{ id: string }> {
+  async createFollowUp(
+    id: string,
+    brief: string,
+    files: File[] = [],
+    models: Record<string, string> = {},
+  ): Promise<{ id: string }> {
     // multipart now (was JSON): brief + repeated "files", mirroring createRun.
     const form = new FormData();
     form.append("brief", brief);
     for (const f of files) form.append("files", f, f.name); // field name MUST be "files"
+    if (Object.keys(models).length) form.append("models", JSON.stringify(models)); // per-session overrides
     const res = await fetch(url(appConfig.endpoints.runFollowUp, { id }), {
       method: "POST",
       credentials: appConfig.http.credentials,

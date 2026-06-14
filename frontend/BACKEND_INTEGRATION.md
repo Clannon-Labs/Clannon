@@ -88,12 +88,12 @@ automatically); unauthenticated calls to protected routes return **401**.
 | GET | `/auth/me` | — | `User` or **401** | client maps 401 → null. |
 | GET | `/auth/oauth/:provider` | — (navigation) | 302 → frontend | `?error=oauth_unavailable` until Supabase. |
 | GET | `/runs` | — | `RunSummary[]` | the user's runs, newest first. |
-| POST | `/runs` | **multipart**: `brief` + optional `files` | `{id}` | **CHANGED — was JSON. See §5.** Starts the pipeline in the background. 422 if a file is rejected. |
+| POST | `/runs` | **multipart**: `brief` + optional `files` + optional `models` | `{id}` | Starts the pipeline. 422 if a file is rejected. `models` = JSON object `role -> model` for per-SESSION model choices (see §11). |
 | GET | `/runs/:id` | — | `Run` (full) | 404 if not the user's run. |
 | GET | `/runs/:id/stream` | — (SSE) | `text/event-stream` of `RunEvent` | see §4. |
 | GET | `/runs/:id/artifacts/:name` | — | file **bytes** (`Content-Disposition: attachment`) | **NEW. See §6.** 404 unless the run published that exact name. |
 | POST | `/runs/:id/feedback` | `{rating: "up"\|"down"\|null, comment?}` | 204 | thumbs on a delivered run. |
-| POST | `/runs/:id/followup` | `multipart/form-data`: `brief` (text) + optional `files` | `{id}` | next turn of the same session. **Takes files now, exactly like `POST /runs`** (same scan, modalities, limits, 422-with-`detail`); the follow-up `Run.inputs` lists the attached files. |
+| POST | `/runs/:id/followup` | `multipart/form-data`: `brief` + optional `files` + optional `models` | `{id}` | next turn of the same session. Takes files AND per-session `models` exactly like `POST /runs`; the follow-up `Run.inputs` lists the attached files. |
 | GET | `/runs/:id/thread` | — | `Run[]` | all turns of the session, oldest first. |
 | GET | `/memory` | — | `MemoryEntry[]` | wiki entries (from SQLite) + episodic (from run memory writes). |
 | POST | `/memory` | `{tier, title, content}` | `MemoryEntry` | **only `tier:"wiki"`**; other tiers → 403 (pipeline-written). |
@@ -101,8 +101,8 @@ automatically); unauthenticated calls to protected routes return **401**.
 | POST | `/memory/upload` | **multipart** `files` (.md/.txt) | `MemoryEntry[]` | ≤10 files, ≤512 KB each. Already wired. |
 | DELETE | `/memory/:id` | — | 204 | 404 if not found. |
 | GET | `/usage` | — | `UsageSummary` | token metering placeholder (zeros until Redis budgets land). |
-| GET | `/settings/models` | — | `LayerModelConfig[]` | per-layer model choices; locked layers read-only. |
-| PUT | `/settings/models` | `{layer, model}` | 204 | 403 locked, 404 unknown layer, 422 model not in options. `layer` may be `"expert:<key>"`. |
+| GET | `/settings/models` | — | `RoleModelConfig[]` | PER-ROLE catalog (see §11): 5 selectable roles + verifier/filter read-only. Each entry: `layer` (role), `label`, `description`, `locked`, `model` (workspace choice or default), `default`, `options`, `experts` (what the role drives). |
+| PUT | `/settings/models` | `{layer, model}` | 204 | sets the user's WORKSPACE default for a role. 403 locked, 404 unknown role, 422 model not in that role's `options`. (No more `"expert:<key>"` — it's per-role now.) |
 | POST | `/billing/checkout` | `{planId}` | **501** today | Stripe lands with cloud. |
 | POST | `/billing/portal` | — | **501** today | same. |
 
@@ -212,11 +212,9 @@ interface RemoteConfig {
 **`/config` returns today** (from `backend/api/config.py`): `version:"0.1-dev"`,
 4 plans (`free` Seedling / `starter` $29 / `pro` $79 / `agency` $199 — token
 budgets 100k/2M/6M/20M, memoryTiers per plan), `features:{demo:true,billing:true}`,
-`limits:{briefMinChars:2}`. `/settings/models` today returns just **orchestrator**
-and **experts** layers (both unlocked, default `gemini-3.1-flash-lite`); verifier +
-filter are commented out (locked layers come back later). The experts layer carries
-a per-expert list (`web.research`, `synthesis.writer` today). **Do not hard-code any
-of this — render whatever `/config` and `/settings/models` send.**
+`limits:{briefMinChars:2}`. `/settings/models` now returns the PER-ROLE catalog
+(see §11). **Do not hard-code any of this — render whatever `/config` and
+`/settings/models` send.**
 
 ---
 
@@ -423,8 +421,8 @@ of this changes the existing contract; it ADDS. Design so it slots in:
   more next). Live today: web.research, synthesis.writer, verification.claims,
   code.engineer, data.analyst, and **media.analyst**. The decision log + expert panel
   already render whatever `name`/`domain` the backend streams, so **new experts appear
-  automatically — make sure NO component hard-codes an expert list** (the only expert
-  list to render dynamically is from `/settings/models`'s `experts` array).
+  automatically — make sure NO component hard-codes an expert list** (each role entry in
+  `/settings/models` carries an `experts` array of what it drives, §11 — render from that).
 - **Sources will populate.** `Run.sources` is `[]` today; the **citation** expert
   fills it (and a `{type:"sources"}` SSE event may start arriving — the union and
   `useLiveRun` already handle it). The sources panel exists; keep it.
@@ -451,7 +449,45 @@ of this changes the existing contract; it ADDS. Design so it slots in:
 
 ---
 
-## 11. Error handling contract
+## 11. Per-role model selection (workspace default + per-session)
+
+Users pick the model for each ROLE — at the workspace (a standing default) and per
+session (the composer, before sending). Five roles are selectable; two are read-only.
+
+**Roles** (the `layer` field; each maps to a pipeline role):
+`orchestrator`, `research`, `planner` (writing/synthesis), `code`, `media_expert`
+(images/audio/video/PDF) are selectable. `verifier` + `filter` are `locked: true`
+security gates — render them read-only, never PUT them (403).
+
+**Defaults are best-for-task, NOT "Gemini everywhere."** Derived from `models.yaml`:
+Claude for the reasoning roles, Gemini for media. Just render each entry's `model` /
+`default`; never hardcode a model or a role list (new roles/experts auto-appear).
+
+**`GET /settings/models`** → array, one entry per role:
+```jsonc
+{ "layer": "research", "label": "Research", "description": "...",
+  "locked": false,
+  "model":   "claude-haiku-4-5",      // the user's workspace choice, else `default`
+  "default": "claude-haiku-4-5",      // the system default (for a "reset" affordance)
+  "options": ["gemini-2.5-pro", "claude-opus-4-8", ...],  // media role has a DIFFERENT (vision) list
+  "experts": [ {"key":"web.research","label":"Web research"}, ... ] }  // informational: what this role drives
+```
+
+**Two sinks for the same picker:**
+- **Workspace default** → `PUT /settings/models` `{layer:"<role>", model:"<id>"}` (persisted
+  per user; applies to every new run). 403 locked, 404 unknown role, 422 model ∉ `options`.
+- **Per session** → add a `models` field to the **run POST** (`POST /runs` and
+  `/runs/:id/followup`), a JSON string of `{ "<role>": "<id>", ... }`, e.g.
+  `fd.append("models", JSON.stringify({orchestrator:"claude-opus-4-8"}))`. Omit it for
+  "use my workspace defaults." Same validation (422 on bad role/model). Session wins
+  over the workspace default for that one run.
+
+`options` is per-entry — the media role's list is vision-capable models, the others are
+text models. Render whatever each entry carries.
+
+---
+
+## 12. Error handling contract
 
 FastAPI errors come back as `{detail: ...}`. `detail` is a **string** for
 `HTTPException` but an **array** of `{msg,...}` for Pydantic 422 validation errors.
@@ -463,7 +499,7 @@ failure / timeout → `ApiError(message, 0)`. A 401 anywhere means the session e
 
 ---
 
-## 12. Done =
+## 13. Done =
 
 - `NEXT_PUBLIC_API_MODE=http` against a local backend: sign up/in; create a run
   **with and without a file**; watch it stream (status, decision log, experts,

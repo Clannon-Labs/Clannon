@@ -159,6 +159,8 @@ export class MockClient implements ClannonClient {
     return structuredClone(run);
   }
 
+  // Note: the http client also passes per-session `models`, but the mock has no
+  // Run field to reflect them, so it accepts only the args it can simulate.
   async createRun(brief: string, files: File[] = []): Promise<{ id: string }> {
     await sleep(450);
     const trimmed = brief.trim();
@@ -396,28 +398,12 @@ export class MockClient implements ClannonClient {
 
   async setModelLayer(layer: string, model: string): Promise<void> {
     await sleep(320);
-    // per-expert override: "expert:<key>" targets one expert under "experts"
-    if (layer.startsWith("expert:")) {
-      const key = layer.slice("expert:".length);
-      const expertsCfg = this.models.find((m) => m.layer === "experts");
-      const expert = expertsCfg?.experts?.find((e) => e.key === key);
-      if (!expertsCfg || !expert) throw new ApiError("Unknown expert.", 404);
-      if (!expertsCfg.options.includes(model)) {
-        throw new ApiError("Model not available for this layer.", 422);
-      }
-      expert.model = model;
-      return;
-    }
     const cfg = this.models.find((m) => m.layer === layer);
-    if (!cfg) throw new ApiError("Unknown layer.", 404);
+    if (!cfg) throw new ApiError("Unknown role.", 404);
     if (cfg.locked) {
-      throw new ApiError("This layer is system-managed and cannot be changed.", 403);
+      throw new ApiError("This role is system-managed and cannot be changed.", 403);
     }
-    if (!cfg.options.includes(model)) throw new ApiError("Model not available for this layer.", 422);
+    if (!cfg.options.includes(model)) throw new ApiError("Model not available for this role.", 422);
     cfg.model = model;
-    // experts default cascades to experts without their own override
-    if (layer === "experts" && cfg.experts) {
-      for (const expert of cfg.experts) expert.model = model;
-    }
   }
 }

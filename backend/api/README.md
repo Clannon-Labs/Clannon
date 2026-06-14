@@ -50,18 +50,18 @@ JSON keys are camelCase to match the frontend types in
 | `/auth/me` | GET | — | `User` or 401 |
 | `/auth/oauth/:provider` | GET (navigation) | — | 302 → frontend (`?error=oauth_unavailable` until Supabase OAuth) |
 | `/runs` | GET | — | `RunSummary[]` |
-| `/runs` | POST | `multipart/form-data`: `brief` (text) + optional `files` (input files) | `{id}`, starts the pipeline in the background. Each uploaded file is malware-scanned at the boundary (ClamAV/YARA) and seeded into the expert workspace with its original bytes — clean files are NOT redacted; a malicious/unsupported/oversized file is a 422. Scope: text-family files + PDF, max 10 |
+| `/runs` | POST | `multipart/form-data`: `brief` (text) + optional `files` (input files) + optional `models` (JSON object `role -> model`, per-session model choices) | `{id}`, starts the pipeline in the background. Each uploaded file is malware-scanned at the boundary (ClamAV/YARA) and seeded into the expert workspace with its original bytes — clean files are NOT redacted; a malicious/unsupported/oversized file is a 422. File scope: text, PDF, image, audio, video; max 10. `models` overrides the user's workspace defaults for this run only (422 on an unknown/locked role or an unavailable model) |
 | `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, artifacts, inputs, feedbackRating, parentRunId, sessionId, blockStage) |
 | `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
 | `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
-| `/runs/:id/followup` | POST | `multipart/form-data`: `brief` (text) + optional `files` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Carries input files exactly like `POST /runs` (same malware scan, modalities, ≤10 / ≤50MB limits, 422-with-`detail`); the follow-up run's `inputs` lists them. Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
+| `/runs/:id/followup` | POST | `multipart/form-data`: `brief` (text) + optional `files` + optional `models` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Carries input files AND per-session `models` exactly like `POST /runs`; the follow-up run's `inputs` lists the files. Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
 | `/runs/:id/thread` | GET | — | `Run[]` — every turn of this run's session, oldest first (the conversation) |
 | `/memory` | GET | — | `MemoryEntry[]` (wiki from SQLite + episodic from runs) |
 | `/memory` | POST | `{tier:"wiki", title, content}` | created entry (only wiki is user-writable) |
 | `/memory/:id` | PUT / DELETE | entry / — | updated entry / 204 |
 | `/usage` | GET | — | `UsageSummary` (plan budget; metering arrives with Redis budgets) |
-| `/settings/models` | GET / PUT | — / `{layer, model}` | `LayerModelConfig[]` / 204 (stored per-user; pipeline wiring TODO) |
+| `/settings/models` | GET / PUT | — / `{layer, model}` | `RoleModelConfig[]` / 204. One entry PER ROLE: 5 selectable (orchestrator, research, planner, code, media_expert) + verifier/filter read-only. Each entry carries `model` (the user's workspace default or the system default), `default`, `options`, `locked`, and `experts` (which experts the role drives). Defaults are derived from `models.yaml` (Claude for reasoning, Gemini for media). PUT sets the per-user WORKSPACE default for a role (403 locked, 422 model not in options). Per-SESSION overrides go on the run POST via `models`. |
 | `/billing/checkout` `/billing/portal` | POST | — | 501 until Stripe |
 
 ## How a run streams (the one non-obvious part)

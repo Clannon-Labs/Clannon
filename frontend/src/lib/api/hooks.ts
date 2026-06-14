@@ -76,8 +76,8 @@ export function useRunThread(id: string) {
 export function useCreateRun() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { brief: string; files?: File[] }) =>
-      getClient().createRun(vars.brief, vars.files),
+    mutationFn: (vars: { brief: string; files?: File[]; models?: Record<string, string> }) =>
+      getClient().createRun(vars.brief, vars.files, vars.models),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
   });
 }
@@ -102,8 +102,8 @@ export function useSetRunFeedback(runId: string) {
 export function useCreateFollowUp(parentId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { brief: string; files?: File[] }) =>
-      getClient().createFollowUp(parentId, vars.brief, vars.files),
+    mutationFn: (vars: { brief: string; files?: File[]; models?: Record<string, string> }) =>
+      getClient().createFollowUp(parentId, vars.brief, vars.files, vars.models),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.runs });
       qc.invalidateQueries({ queryKey: ["runs", parentId, "thread"] });

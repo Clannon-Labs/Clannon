@@ -39,8 +39,13 @@ export interface ClannonClient {
 
   listRuns(): Promise<RunSummary[]>;
   getRun(id: string): Promise<Run>;
-  /** Start a run. Optional input files ride along as multipart (text-family + PDF). */
-  createRun(brief: string, files?: File[]): Promise<{ id: string }>;
+  /** Start a run. Optional input files + per-session model overrides ride along as
+   *  multipart. `models` is a sparse { role: modelId } applied to THIS run only. */
+  createRun(
+    brief: string,
+    files?: File[],
+    models?: Record<string, string>,
+  ): Promise<{ id: string }>;
   /** Download one of a run's published artifacts as a Blob (auth via cookie). */
   downloadArtifact(runId: string, name: string): Promise<Blob>;
   /** Live events for a run. Ends when the run reaches a terminal state. */
@@ -52,8 +57,13 @@ export interface ClannonClient {
     comment?: string,
   ): Promise<void>;
   /** Continue a run: a new turn in the same session, threading prior context.
-   *  Optional input files ride along as multipart, same as createRun. */
-  createFollowUp(id: string, brief: string, files?: File[]): Promise<{ id: string }>;
+   *  Optional input files + per-session model overrides ride along, same as createRun. */
+  createFollowUp(
+    id: string,
+    brief: string,
+    files?: File[],
+    models?: Record<string, string>,
+  ): Promise<{ id: string }>;
   /** Every turn of this run's session, oldest first — the conversation thread. */
   getRunThread(id: string): Promise<Run[]>;
 

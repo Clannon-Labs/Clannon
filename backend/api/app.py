@@ -10,6 +10,7 @@ Set FRONTEND_ORIGIN for CORS (default http://localhost:3000). Loads .env /
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 import sqlite3
@@ -128,6 +129,31 @@ def oauth_start(provider: str) -> RedirectResponse:
 _MAX_INPUT_FILES = 10
 
 
+def _parse_session_models(models: str) -> dict[str, str]:
+    """Parse the optional per-session `models` form field (a JSON object role -> bare
+    model id) and validate each choice against the catalog. A malformed body, an unknown
+    or locked role, or a model not offered for that role is a 422 — never silently dropped.
+    Empty/absent -> no per-session overrides (the run uses the user's workspace defaults)."""
+    if not models or not models.strip():
+        return {}
+    try:
+        raw = json.loads(models)
+    except (ValueError, TypeError):
+        raise HTTPException(422, "`models` must be a JSON object of role -> model.")
+    if not isinstance(raw, dict):
+        raise HTTPException(422, "`models` must be a JSON object of role -> model.")
+    by_role = {e["layer"]: e for e in config.MODEL_CATALOG}
+    chosen: dict[str, str] = {}
+    for role, model in raw.items():
+        entry = by_role.get(role)
+        if entry is None or entry["locked"]:
+            raise HTTPException(422, f"Unknown or system-managed role: {role}")
+        if model not in entry["options"]:
+            raise HTTPException(422, f"Model '{model}' is not available for role '{role}'.")
+        chosen[role] = model
+    return chosen
+
+
 async def _admit_uploads(files: list[UploadFile]) -> list:
     """Scan each uploaded file at the boundary; return the admitted InputFiles.
     A rejected file (oversized, unsupported, malicious, unscannable) is a 422 with
@@ -155,14 +181,17 @@ def list_runs(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 async def create_run(
     brief: str = Form(..., min_length=1, max_length=20_000),
     files: list[UploadFile] = File(default=[]),
+    models: str = Form(default=""),
     user: auth.User = Depends(auth.current_user),
 ) -> dict:
     brief = brief.strip()
     if len(brief) < config.LIMITS["briefMinChars"]:
         raise HTTPException(422, "Say a little more to get started.")
     input_files = await _admit_uploads(files)
+    session_models = _parse_session_models(models)
     run = runs.STORE.create(user.id, brief)
     run.inputs = [f.as_dict() for f in input_files]
+    run.session_models = session_models
     asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
@@ -194,11 +223,13 @@ async def follow_up_run(
     run_id: str,
     brief: str = Form(..., min_length=1, max_length=20_000),
     files: list[UploadFile] = File(default=[]),
+    models: str = Form(default=""),
     user: auth.User = Depends(auth.current_user),
 ) -> dict:
     # a follow-up turn carries the same input types as a root run: multipart
     # brief + optional files, admitted (malware-scanned, original bytes) exactly
-    # like POST /runs, and seeded into the expert workspace for this turn.
+    # like POST /runs, and seeded into the expert workspace for this turn. It can
+    # also carry its own per-session model choices.
     parent = runs.STORE.get(user.id, run_id)
     if parent is None:
         raise HTTPException(404, "Run not found.")
@@ -206,8 +237,10 @@ async def follow_up_run(
     if len(ask) < config.LIMITS["briefMinChars"]:
         raise HTTPException(422, "Say a little more to continue.")
     input_files = await _admit_uploads(files)
+    session_models = _parse_session_models(models)
     run = runs.STORE.create_followup(user.id, ask, parent)
     run.inputs = [f.as_dict() for f in input_files]
+    run.session_models = session_models
     asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
@@ -413,55 +446,44 @@ class ModelBody(BaseModel):
 
 @app.get("/settings/models")
 def get_models(user: auth.User = Depends(auth.current_user)) -> list[dict]:
+    """The per-role model catalog with the user's workspace choices applied: one entry
+    per role (5 selectable + verifier/filter read-only). `model` is the user's choice or
+    the role's default; `default` is the system default; `experts` lists what the role
+    drives (informational)."""
     with auth._db() as db:
         prefs = {
             row["layer"]: row["model"]
             for row in db.execute("SELECT layer, model FROM model_prefs WHERE user_id=?", (user.id,))
         }
-    payload = []
-    for entry in config.MODEL_CATALOG:
-        item = {
+    return [
+        {
             "layer": entry["layer"],
             "label": entry["label"],
             "description": entry["description"],
             "locked": entry["locked"],
-            # locked layers always report the system default — user prefs
-            # are ignored for them even if a row exists
+            # locked roles always report the system default — user prefs are ignored
             "model": entry["default"] if entry["locked"] else prefs.get(entry["layer"], entry["default"]),
+            "default": entry["default"],
             "options": entry["options"],
+            "experts": entry["experts"],
         }
-        if entry["layer"] == "experts":
-            # per-expert overrides: fall back to the experts default
-            item["experts"] = [
-                {
-                    "key": expert["key"],
-                    "label": expert["label"],
-                    "model": prefs.get(f"expert:{expert['key']}") or item["model"],
-                }
-                for expert in config.EXPERTS
-            ]
-        payload.append(item)
-    return payload
+        for entry in config.MODEL_CATALOG
+    ]
 
 
 @app.put("/settings/models", status_code=204)
 def set_model(body: ModelBody, user: auth.User = Depends(auth.current_user)) -> None:
-    # per-expert overrides validate against the experts catalog entry
-    if body.layer.startswith("expert:"):
-        key = body.layer.removeprefix("expert:")
-        if not any(e["key"] == key for e in config.EXPERTS):
-            raise HTTPException(404, "Unknown expert.")
-        entry = next(e for e in config.MODEL_CATALOG if e["layer"] == "experts")
-    else:
-        entry = next((e for e in config.MODEL_CATALOG if e["layer"] == body.layer), None)
+    """Set the user's WORKSPACE default model for a role (applied to every new run unless
+    a per-session choice overrides it). `layer` is a role; locked roles are 403."""
+    entry = next((e for e in config.MODEL_CATALOG if e["layer"] == body.layer), None)
     if entry is None:
-        raise HTTPException(404, "Unknown layer.")
+        raise HTTPException(404, "Unknown role.")
     if entry["locked"]:
         # the verifier and output filter are security gates — their models
         # are system policy, never a user preference
-        raise HTTPException(403, "This layer is system-managed and cannot be changed.")
+        raise HTTPException(403, "This role is system-managed and cannot be changed.")
     if body.model not in entry["options"]:
-        raise HTTPException(422, "Model not available for this layer.")
+        raise HTTPException(422, "Model not available for this role.")
     with auth._db() as db:
         db.execute(
             "INSERT INTO model_prefs (user_id, layer, model) VALUES (?,?,?) "
