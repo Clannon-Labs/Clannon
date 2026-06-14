@@ -13,6 +13,7 @@ import type {
   ExpertState,
   MemoryEntry,
   Run,
+  RunEvent,
   RunStatus,
   Source,
   User,
@@ -194,9 +195,18 @@ export interface LiveRunState {
   tokensUsed: number;
   streamError: string | null;
   live: boolean;
+  /** True between a dropped stream and a successful resubscribe. */
+  reconnecting: boolean;
 }
 
 const TERMINAL: RunStatus[] = ["delivered", "blocked", "failed"];
+
+// Auto-reconnect tuning. The backend guarantees a FULL replay of the event
+// sequence on every resubscribe (BACKEND_INTEGRATION.md §4), so on each
+// (re)connect we reset the fold and rebuild from the replay — no duplication.
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 8000;
 
 const initialLiveState = (): LiveRunState => ({
   status: "queued",
@@ -208,7 +218,53 @@ const initialLiveState = (): LiveRunState => ({
   tokensUsed: 0,
   streamError: null,
   live: false,
+  reconnecting: false,
 });
+
+/** Fold one stream event into the live state. Unknown future event types are
+ *  ignored, so a new backend event can never break an older client. */
+function foldRunEvent(s: LiveRunState, event: RunEvent): LiveRunState {
+  switch (event.type) {
+    case "status":
+      return { ...s, status: event.status };
+    case "log":
+      return { ...s, log: [...s.log, event.entry] };
+    case "expert": {
+      const idx = s.experts.findIndex((e) => e.id === event.expert.id);
+      const experts =
+        idx >= 0
+          ? s.experts.map((e, i) => (i === idx ? event.expert : e))
+          : [...s.experts, event.expert];
+      return { ...s, experts };
+    }
+    case "sources":
+      return { ...s, sources: event.sources };
+    case "report_delta":
+      return { ...s, reportText: s.reportText + event.text };
+    case "report_done":
+      return { ...s, reportDone: true };
+    case "usage":
+      return { ...s, tokensUsed: event.tokensUsed };
+    default:
+      return s;
+  }
+}
+
+/** A sleep that resolves early when the run's stream is aborted (unmount/nav). */
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
 
 export function useLiveRun(run: Run | undefined): LiveRunState {
   // Only what the stream itself produced lives in state; everything
@@ -236,54 +292,57 @@ export function useLiveRun(run: Run | undefined): LiveRunState {
     if (startedFor.current === run.id) return;
     startedFor.current = run.id;
 
+    const runId = run.id;
     const controller = new AbortController();
+    let cancelled = false;
+    let attempt = 0;
 
     (async () => {
-      setState((s) => ({ ...s, live: true }));
-      try {
-        for await (const event of getClient().streamRun(run.id, controller.signal)) {
-          setState((s) => {
-            switch (event.type) {
-              case "status":
-                return { ...s, status: event.status };
-              case "log":
-                return { ...s, log: [...s.log, event.entry] };
-              case "expert": {
-                const idx = s.experts.findIndex((e) => e.id === event.expert.id);
-                const experts =
-                  idx >= 0
-                    ? s.experts.map((e, i) => (i === idx ? event.expert : e))
-                    : [...s.experts, event.expert];
-                return { ...s, experts };
-              }
-              case "sources":
-                return { ...s, sources: event.sources };
-              case "report_delta":
-                return { ...s, reportText: s.reportText + event.text };
-              case "report_done":
-                return { ...s, reportDone: true };
-              case "usage":
-                return { ...s, tokensUsed: event.tokensUsed };
-            }
-          });
-        }
-        setState((s) => ({ ...s, live: false }));
-        qc.invalidateQueries({ queryKey: queryKeys.run(run.id) });
-        qc.invalidateQueries({ queryKey: queryKeys.runs });
-        qc.invalidateQueries({ queryKey: queryKeys.memory });
-        qc.invalidateQueries({ queryKey: queryKeys.usage });
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") {
-          setState((s) => ({
-            ...s,
-            live: false,
-            streamError: "The live stream dropped. Refresh to reconnect.",
-          }));
+      while (!cancelled) {
+        // (Re)connect: reset the fold so the full replay rebuilds it cleanly —
+        // report_delta and log APPEND, and the server replays the whole sequence.
+        setState(() => ({ ...initialLiveState(), live: true, reconnecting: attempt > 0 }));
+        try {
+          for await (const event of getClient().streamRun(runId, controller.signal)) {
+            attempt = 0; // a delivered event proves the connection is healthy
+            setState((s) => ({ ...foldRunEvent(s, event), live: true, reconnecting: false }));
+          }
+          // Clean close = terminal: a full OR empty replay, then the sentinel.
+          // An empty replay on reconnect means the run finished and was evicted —
+          // treat it as done and let the refetch below supply the final state.
+          setState((s) => ({ ...s, live: false, reconnecting: false }));
+          qc.invalidateQueries({ queryKey: queryKeys.run(runId) });
+          qc.invalidateQueries({ queryKey: queryKeys.runs });
+          qc.invalidateQueries({ queryKey: queryKeys.memory });
+          qc.invalidateQueries({ queryKey: queryKeys.usage });
+          return;
+        } catch (e) {
+          if (cancelled || (e as Error).name === "AbortError") return;
+          // Network drop mid-run: back off and resubscribe (the replay rebuilds
+          // state). Fall back to the manual-refresh prompt only after exhausting.
+          attempt += 1;
+          if (attempt > MAX_RECONNECT_ATTEMPTS) {
+            setState((s) => ({
+              ...s,
+              live: false,
+              reconnecting: false,
+              streamError: "Couldn't reconnect to the live stream. Refresh to catch up.",
+            }));
+            return;
+          }
+          setState((s) => ({ ...s, live: false, reconnecting: true }));
+          await abortableDelay(
+            Math.min(RECONNECT_BASE_MS * 2 ** (attempt - 1), RECONNECT_MAX_MS),
+            controller.signal,
+          );
         }
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [run, qc]);
 
   if (!run) return state;

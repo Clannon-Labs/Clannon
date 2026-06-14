@@ -316,6 +316,16 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         </div>
       )}
 
+      {live.reconnecting && (
+        <p
+          role="status"
+          className="mt-4 flex items-center gap-2 rounded-md border border-warning/40 bg-memory-soft px-4 py-3 text-sm text-memory"
+        >
+          <span className="size-1.5 animate-pulse-dot rounded-full bg-memory" aria-hidden />
+          Connection lost — reconnecting…
+        </p>
+      )}
+
       {live.streamError && (
         <p role="alert" className="mt-4 rounded-md border border-warning/40 bg-memory-soft px-4 py-3 text-sm text-memory">
           {live.streamError}
