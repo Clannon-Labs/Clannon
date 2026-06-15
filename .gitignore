@@ -29,6 +29,9 @@ prompts.secure/
 security/vendors/
 
 demos/
+drafts/
+/benchmarks/        # anchored: root-level only, so docs/benchmarks/ stays tracked
+
 /memory/
 
 # Exclude SQLite and Temp Files
@@ -45,8 +48,7 @@ FUTURE_SELF_REVIEW_PLAN.md
 .architecture/*
 .judgments/
 
-# Documentation
-/docs/
+# Documentation  (docs/ is now TRACKED — it's the judgment moat)
 
 # Progress
 /progress/
@@ -70,7 +72,10 @@ llm_view_snapshot.json
 
 # Agents
 .codex/
-.claude
 .agents/
+# .claude/ is TRACKED (subagents, commands, shared settings are source).
+# Only personal/machine-local settings are ignored:
+.claude/settings.local.json
 
+static_analysis_semgrep_*
 static_analysis_semgrep_*/
