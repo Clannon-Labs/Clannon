@@ -34,6 +34,29 @@ from .utils.wiring import build_default_ports
 
 log = logging.getLogger(__name__)
 
+# Strong refs to in-flight background tasks (memory distillation). Without this the
+# event loop only holds a weak ref and the task can be GC'd mid-flight; the
+# done-callback discards it when finished.
+_BACKGROUND: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> None:
+    """Fire a best-effort coroutine off the critical path and keep a strong ref."""
+    try:
+        task = asyncio.ensure_future(coro)
+    except RuntimeError:  # no running loop (shouldn't happen in the pipeline) — skip
+        return
+    _BACKGROUND.add(task)
+    task.add_done_callback(_BACKGROUND.discard)
+
+
+async def _learn(ports, user_id: str, session_id: str, *, task: str, answer: str, findings: list[str]) -> None:
+    """Background distillation wrapper: a learning fault must never surface."""
+    try:
+        await ports.memory.learn(user_id, session_id, task=task, answer=answer, findings=findings)
+    except Exception as exc:  # noqa: BLE001 — best-effort, off the hot path
+        log.warning("memory learning dropped: %s", exc)
+
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
     """Pipeline entry point for orchestration."""
@@ -73,18 +96,18 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
             log.warning("memory write proposals dropped: %s", exc)
 
         # the memory agent distils semantic facts + procedural patterns from the
-        # turn (its own LLM call, behind the port). Only on substantive turns —
-        # a quick conversational reply has nothing durable to learn. Best-effort.
+        # turn (its own LLM call, behind the port). Only on substantive turns — a
+        # quick conversational reply has nothing durable to learn. Best-effort AND
+        # off the critical path: the answer already exists, so the distillation
+        # (a second LLM call) runs in the background and the stage returns
+        # immediately, instead of making the user wait on it before delivery.
         if flow.ctx.expert_findings or len(response.text) >= 240:
-            try:
-                await ports.memory.learn(
-                    flow.ctx.user_id, flow.ctx.session_id,
-                    task=normalized.content or "",
-                    answer=response.text,
-                    findings=[getattr(f, "full_content", "") for f in flow.ctx.expert_findings],
-                )
-            except Exception as exc:
-                log.warning("memory learning dropped: %s", exc)
+            _spawn_background(_learn(
+                ports, flow.ctx.user_id, flow.ctx.session_id,
+                task=normalized.content or "",
+                answer=response.text,
+                findings=[getattr(f, "full_content", "") for f in flow.ctx.expert_findings],
+            ))
 
         return flow.next(response, Origin.ORCHESTRATOR, started)
 

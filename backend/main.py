@@ -211,6 +211,11 @@ async def _repl(user_id: str) -> int:
 
 async def _main() -> int:
     user_id = os.getenv("VRAKSHA_USER_ID", "local-user")
+    # Warm the heavy lazy resources (embeddings, Qdrant, Presidio) in the background
+    # so the first turn isn't slowed by their cold start and memory is ready by the
+    # time the user submits. Best-effort; the local ref keeps it from being GC'd.
+    from core.warmup import warmup
+    _warm = asyncio.ensure_future(warmup())  # noqa: F841 — keep a strong ref
     if len(sys.argv) > 1:
         return await _one_shot(sys.argv[1], user_id)
     if not sys.stdin.isatty():

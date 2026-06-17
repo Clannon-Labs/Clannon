@@ -92,6 +92,18 @@ def _anonymizer():
     return AnonymizerEngine()
 
 
+def warm() -> bool:
+    """Build the Presidio engines now (they are expensive on first use) so the first
+    real input isn't slowed by their cold start. Best-effort; the lazy getters still
+    build them on demand if warmup is skipped. Returns True if both are ready."""
+    try:
+        _analyzer()
+        _anonymizer()
+        return True
+    except Exception:  # noqa: BLE001 — warmup never fails a run
+        return False
+
+
 def _normalize_text(text: str | bytes | bytearray | memoryview | object) -> str:
     """Convert supported text-like payloads into a Unicode string."""
     if isinstance(text, str):

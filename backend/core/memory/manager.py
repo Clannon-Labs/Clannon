@@ -85,6 +85,23 @@ def _recency(created_at: float) -> float:
     return _RECENCY_FLOOR + (1.0 - _RECENCY_FLOOR) * decay
 
 
+async def _embed_bounded(text: str) -> list[list[float]] | None:
+    """Embed the query under a hard read deadline (MEMORY_READ_TIMEOUT_S).
+
+    A cold or stalled embedding model must NOT hang the whole turn waiting on
+    memory: on timeout we return None and the turn proceeds without memory (the
+    worker thread keeps loading in the background, warming the model for the next
+    turn). Any embedding fault degrades the same way — memory never fails a run.
+    """
+    try:
+        return await asyncio.wait_for(
+            embeddings.embed([text]), timeout=constants.MEMORY_READ_TIMEOUT_S
+        )
+    except Exception as exc:  # noqa: BLE001 — TimeoutError or any embed fault → degrade, never raise
+        log.warning("memory embed degraded (%s); answering without it", exc)
+        return None
+
+
 class MemoryManager:
     """Qdrant-backed implementer of foundation.MemoryPort."""
 
@@ -110,7 +127,7 @@ class MemoryManager:
             if allowed is None or t in allowed
         ]
         embeddable = query_text.strip()
-        vectors = await embeddings.embed([query_text[:_MAX_CONTENT_CHARS]]) if embeddable and inferred else None
+        vectors = await _embed_bounded(query_text[:_MAX_CONTENT_CHARS]) if embeddable and inferred else None
 
         if embeddable and inferred and not vectors:
             # embeddings down — degrade, but still hand back any wiki we already have

@@ -61,6 +61,13 @@ def is_down() -> bool:
     return DISABLED or time.monotonic() < _down_until
 
 
+def healthcheck() -> bool:
+    """Open the Qdrant connection now (lazy client) so the first real turn doesn't
+    pay the connect. Best-effort: returns True if the client is reachable, False if
+    disabled/down. Called by the startup warmup."""
+    return _qdrant() is not None
+
+
 def _trip(exc: Exception) -> None:
     global _down_until
     log.warning("qdrant call failed (degrading for %ss): %s", _BREAKER_S, exc)

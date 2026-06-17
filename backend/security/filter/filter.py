@@ -65,6 +65,13 @@ def _grounding_view(response, findings: list, memory: list, tool_calls: list) ->
         })
     view = {
         "draft": getattr(response, "text", ""),
+        # The recipient is the SAME single authenticated user who made the request.
+        # Their OWN information — what they just provided or asked the assistant to
+        # remember — echoed back to them (confirming a saved name, preference, rate,
+        # or client detail) is NOT a third-party PII leak. PII/secret blocking is for
+        # data being exfiltrated to someone who should not see it, not for the user's
+        # own data returning to the user. Don't block memory-update confirmations.
+        "recipient": "the same single authenticated user who made this request",
         # whether this turn actually researched — via experts OR direct tool calls.
         # False ⇒ a direct/conversational answer, which groundedness does not apply to.
         "did_research": bool(evidence or tool_evidence),
