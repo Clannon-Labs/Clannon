@@ -5,6 +5,7 @@ import { useEffectivePlans, useMe } from "@/lib/api/hooks";
 import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/marketing/section-heading";
 import { Stagger, StaggerItem } from "@/components/motion";
+import { workspaceUrl } from "@/config/app.config";
 import { formatTokens } from "@/lib/utils";
 
 export function PricingSection() {
@@ -23,22 +24,31 @@ export function PricingSection() {
 
       {/* the rate card — one ledger, columns struck by hairlines, no floating cards */}
       <Stagger className="mt-12 grid grid-cols-1 gap-px overflow-hidden border border-border bg-border md:grid-cols-2 xl:grid-cols-4">
-        {PLANS.map((plan) => (
+        {PLANS.map((plan) => {
+          // signed in: your actual plan is the marked one; signed out: the free
+          // tier is where everyone starts
+          const isCurrent = user ? plan.id === user.plan : plan.monthlyUsd === 0;
+          const struck = isCurrent || plan.highlight;
+          return (
           <StaggerItem
             key={plan.id}
             className="relative flex h-full flex-col bg-surface p-6"
           >
             {/* the chosen column wears a struck rule, like a ledger's ruled total */}
-            {plan.highlight && (
+            {struck && (
               <span className="absolute inset-x-0 top-0 h-[3px] bg-primary" aria-hidden />
             )}
             <div className="flex items-center justify-between">
               <h3 className="tag-label text-muted-foreground">{plan.name}</h3>
-              {plan.highlight && (
+              {isCurrent ? (
+                <span className="tag-label rounded-full bg-primary-soft px-2.5 py-1 text-primary">
+                  {user ? "Current" : "You're here"}
+                </span>
+              ) : plan.highlight ? (
                 <span className="tag-label rounded-full bg-memory-soft px-2.5 py-1 text-memory">
                   Most useful
                 </span>
-              )}
+              ) : null}
             </div>
 
             <div className="mt-5 flex items-baseline gap-1.5">
@@ -66,8 +76,8 @@ export function PricingSection() {
 
             <div className="mt-auto pt-6">
               <ButtonLink
-                href={user ? "/app/settings?tab=billing" : "/signup"}
-                variant={plan.highlight ? "primary" : "outline"}
+                href={user ? workspaceUrl("/app/settings?tab=billing") : "/signup"}
+                variant={struck ? "primary" : "outline"}
                 className="w-full"
               >
                 {user
@@ -80,7 +90,8 @@ export function PricingSection() {
               </ButtonLink>
             </div>
           </StaggerItem>
-        ))}
+          );
+        })}
       </Stagger>
 
       <p className="mt-8 text-center text-[13px] text-faint">

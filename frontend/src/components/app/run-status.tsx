@@ -5,11 +5,15 @@ const STATUS_META: Record<RunStatus, { label: string; className: string; live?: 
   queued: { label: "Queued", className: "bg-muted text-muted-foreground", live: true },
   sanitizing: { label: "Sanitizing", className: "bg-log-tool/15 text-log-tool", live: true },
   verifying: { label: "Verifying", className: "bg-log-tool/15 text-log-tool", live: true },
-  orchestrating: { label: "Researching", className: "bg-primary-soft text-primary", live: true },
-  filtering: { label: "Quality filter", className: "bg-memory-soft text-memory", live: true },
+  // the work stage: the orchestrator drives experts + tools across whatever the
+  // task needs (research, code, analysis…) — not research-specific
+  orchestrating: { label: "Working", className: "bg-primary-soft text-primary", live: true },
+  filtering: { label: "Quality check", className: "bg-memory-soft text-memory", live: true },
   delivered: { label: "Delivered", className: "bg-primary-soft text-primary" },
   blocked: { label: "Blocked", className: "bg-destructive-soft text-destructive" },
   failed: { label: "Failed", className: "bg-destructive-soft text-destructive" },
+  // user-initiated stop — neutral, not an error
+  cancelled: { label: "Stopped", className: "bg-muted text-muted-foreground" },
 };
 
 export function RunStatusBadge({ status, className }: { status: RunStatus; className?: string }) {
@@ -30,12 +34,14 @@ export function RunStatusBadge({ status, className }: { status: RunStatus; class
   );
 }
 
-/** Ordered pipeline stages for the run-view stepper. */
+/** Ordered pipeline stages for the run-view stepper. Labels track the badge's
+ *  user-facing words (Research / Quality, not Orchestrate / Filter) so one stage
+ *  never goes by two names. */
 export const PIPELINE_STAGES: { key: RunStatus; label: string }[] = [
   { key: "sanitizing", label: "Sanitize" },
   { key: "verifying", label: "Verify" },
-  { key: "orchestrating", label: "Orchestrate" },
-  { key: "filtering", label: "Filter" },
+  { key: "orchestrating", label: "Work" },
+  { key: "filtering", label: "Quality" },
   { key: "delivered", label: "Deliver" },
 ];
 

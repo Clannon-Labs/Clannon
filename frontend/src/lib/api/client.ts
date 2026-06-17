@@ -50,6 +50,10 @@ export interface ClannonClient {
   downloadArtifact(runId: string, name: string): Promise<Blob>;
   /** Live events for a run. Ends when the run reaches a terminal state. */
   streamRun(id: string, signal: AbortSignal): AsyncGenerator<RunEvent>;
+  /** Request cooperative cancellation of an in-flight run. Idempotent — a no-op
+   *  on an already-terminal run. The authoritative `cancelled` arrives over the
+   *  stream, so this resolves without returning the new state. */
+  cancelRun(id: string): Promise<void>;
   /** Attach a thumbs rating (+ optional note) to a delivered run. */
   setRunFeedback(
     id: string,
@@ -66,6 +70,8 @@ export interface ClannonClient {
   ): Promise<{ id: string }>;
   /** Every turn of this run's session, oldest first — the conversation thread. */
   getRunThread(id: string): Promise<Run[]>;
+  /** Delete a whole conversation — the session and every turn in it. */
+  deleteSession(sessionId: string): Promise<void>;
 
   listMemory(): Promise<MemoryEntry[]>;
   saveMemoryEntry(

@@ -5,6 +5,8 @@
  * will be. Toggle visibility via appConfig.features.demo.
  */
 
+import { Swords, TrendingUp, Users, type LucideIcon } from "lucide-react";
+
 export interface DemoBrief {
   label: string;
   brief: string;
@@ -31,9 +33,35 @@ export const DEMO_BRIEFS: DemoBrief[] = [
 /** Characters of the report shown before the sign-up fade. */
 export const DEMO_REPORT_PREVIEW_CHARS = 1400;
 
-/** Example chips under the workspace brief composer. */
-export const WORKSPACE_EXAMPLES: string[] = [
-  "Market entry analysis: my client (US DTC skincare, ~$6M ARR) wants to expand to the UK in Q4. Regulatory path, market structure, recent comparable entrants, go/no-go with budget.",
-  "Competitor teardown of Notion, Coda, and Slite for a client positioning a docs tool for law firms.",
-  "Find and profile the 10 most active angel investors in climate-tech seed rounds in Europe this year.",
+/** Suggestion cards under the workspace composer: an icon + short label + a
+ *  one-line hint; clicking drops the full `brief` into the composer. */
+export interface WorkspaceExample {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  brief: string;
+}
+
+export const WORKSPACE_EXAMPLES: WorkspaceExample[] = [
+  {
+    icon: TrendingUp,
+    label: "Market entry analysis",
+    hint: "Regulation, structure, a go/no-go call",
+    brief:
+      "Market entry analysis: my client (US DTC skincare, ~$6M ARR) wants to expand to the UK in Q4. Regulatory path, market structure, recent comparable entrants, go/no-go with budget.",
+  },
+  {
+    icon: Swords,
+    label: "Competitor teardown",
+    hint: "Features, pricing, and the wedge",
+    brief:
+      "Competitor teardown of Notion, Coda, and Slite for a client positioning a docs tool for law firms.",
+  },
+  {
+    icon: Users,
+    label: "Source & profile leads",
+    hint: "Find, vet, and brief on prospects",
+    brief:
+      "Find and profile the 10 most active angel investors in climate-tech seed rounds in Europe this year.",
+  },
 ];

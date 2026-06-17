@@ -62,8 +62,8 @@ export default function LandingPage() {
         <PricingSection />
         <FaqSection />
 
-        {/* ---------- final CTA — the closing stage, mirroring the hero ---------- */}
-        <section className="stage hairline-t relative isolate overflow-hidden px-5 py-28 sm:py-36">
+        {/* ---------- final CTA — the closing stage, the dark bookend to the hero ---------- */}
+        <section className="stage dark relative isolate overflow-hidden px-5 py-28 text-foreground sm:py-36">
           <Reveal className="mx-auto max-w-3xl text-center">
             <Rule className="mx-auto mb-10 max-w-[6rem]" />
             <h2 className="display mx-auto max-w-3xl text-balance text-[2.6rem] leading-[0.98] sm:text-[4.2rem]">

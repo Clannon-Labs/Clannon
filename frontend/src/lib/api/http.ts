@@ -234,6 +234,19 @@ export class HttpClient implements ClannonClient {
     return request(appConfig.endpoints.runThread, { params: { id } });
   }
 
+  async deleteSession(sessionId: string): Promise<void> {
+    await request(appConfig.endpoints.session, {
+      method: "DELETE",
+      params: { id: sessionId },
+    });
+  }
+
+  async cancelRun(id: string): Promise<void> {
+    // 200 {status:"cancelling"} on a live run, 204 on an already-terminal one —
+    // both fine; the authoritative `cancelled` lands over the stream.
+    await request(appConfig.endpoints.runCancel, { method: "POST", params: { id } });
+  }
+
   /**
    * Consumes the backend's Server-Sent Events stream. Each `data:`
    * line is one JSON-encoded RunEvent.

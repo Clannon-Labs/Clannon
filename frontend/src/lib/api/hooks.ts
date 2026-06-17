@@ -99,6 +99,19 @@ export function useSetRunFeedback(runId: string) {
   });
 }
 
+/** Stop an in-flight run. Optimistically flips the cached status to a stopping
+ *  state; the stream delivers the authoritative `cancelled`. */
+export function useCancelRun(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => getClient().cancelRun(runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.run(runId) });
+      qc.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+  });
+}
+
 export function useCreateFollowUp(parentId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -108,6 +121,15 @@ export function useCreateFollowUp(parentId: string) {
       qc.invalidateQueries({ queryKey: queryKeys.runs });
       qc.invalidateQueries({ queryKey: ["runs", parentId, "thread"] });
     },
+  });
+}
+
+/** Delete a whole conversation (a session + all its turns) from history. */
+export function useDeleteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) => getClient().deleteSession(sessionId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
   });
 }
 
@@ -191,6 +213,9 @@ export interface LiveRunState {
   log: DecisionLogEntry[];
   experts: ExpertState[];
   sources: Source[];
+  /** The agent's conversational message (commentary), streamed live. */
+  message: string;
+  messageDone: boolean;
   reportText: string;
   reportDone: boolean;
   tokensUsed: number;
@@ -200,7 +225,7 @@ export interface LiveRunState {
   reconnecting: boolean;
 }
 
-const TERMINAL: RunStatus[] = ["delivered", "blocked", "failed"];
+const TERMINAL: RunStatus[] = ["delivered", "blocked", "failed", "cancelled"];
 
 // Auto-reconnect tuning. The backend guarantees a FULL replay of the event
 // sequence on every resubscribe (BACKEND_INTEGRATION.md §4), so on each
@@ -214,6 +239,8 @@ const initialLiveState = (): LiveRunState => ({
   log: [],
   experts: [],
   sources: [],
+  message: "",
+  messageDone: false,
   reportText: "",
   reportDone: false,
   tokensUsed: 0,
@@ -240,6 +267,10 @@ function foldRunEvent(s: LiveRunState, event: RunEvent): LiveRunState {
     }
     case "sources":
       return { ...s, sources: event.sources };
+    case "message_delta":
+      return { ...s, message: s.message + event.text };
+    case "message_done":
+      return { ...s, messageDone: true };
     case "report_delta":
       return { ...s, reportText: s.reportText + event.text };
     case "report_done":
@@ -356,6 +387,8 @@ export function useLiveRun(run: Run | undefined): LiveRunState {
     log: state.log.length ? state.log : run.decisionLog,
     experts: state.experts.length ? state.experts : run.experts,
     sources: state.sources.length ? state.sources : run.sources,
+    message: state.message || run.message || "",
+    messageDone: state.messageDone || Boolean(run.message),
     reportText: state.reportText || run.report || "",
     reportDone: state.reportDone || Boolean(run.report),
     tokensUsed: Math.max(state.tokensUsed, run.tokensUsed),

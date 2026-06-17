@@ -16,7 +16,10 @@ export type RunStatus =
   | "filtering"
   | "delivered"
   | "blocked"
-  | "failed";
+  | "failed"
+  /** User stopped the run before it finished (POST /runs/:id/cancel). Terminal,
+   *  but not a failure — partial work is kept, the conversation can continue. */
+  | "cancelled";
 
 export type DecisionKind =
   | "hydration"
@@ -96,7 +99,13 @@ export interface Run extends RunSummary {
   brief: string;
   decisionLog: DecisionLogEntry[];
   experts: ExpertState[];
-  /** Markdown. Only present once the output filter has cleared it. */
+  /**
+   * The agent talking to you — conversational framing, caveats, a clarifying
+   * question. Free commentary (NOT output-filtered), kept separate from the
+   * deliverable. A turn may have a message, a report, both, or neither.
+   */
+  message?: string;
+  /** Markdown deliverable. The grounded, output-filtered result. */
   report?: string;
   sources: Source[];
   /** Files this run delivered for download. Empty until an expert publishes one. */
@@ -123,6 +132,10 @@ export type RunEvent =
   | { type: "log"; entry: DecisionLogEntry }
   | { type: "expert"; expert: ExpertState }
   | { type: "sources"; sources: Source[] }
+  /** The orchestrator talking, live — can stream while experts work. Distinct
+   *  from `report_delta` (the deliverable) and `log` (structured ticks). */
+  | { type: "message_delta"; text: string }
+  | { type: "message_done" }
   | { type: "report_delta"; text: string }
   | { type: "report_done" }
   | { type: "usage"; tokensUsed: number };

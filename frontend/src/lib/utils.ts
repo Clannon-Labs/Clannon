@@ -49,3 +49,12 @@ export function formatClock(iso: string): string {
     second: "2-digit",
   });
 }
+
+/**
+ * True on devices whose primary pointer is precise (mouse/trackpad). Used to
+ * gate Enter-to-send: on a touch phone the return key should insert a newline,
+ * not fire the brief. Safe to call in an event handler (client-only).
+ */
+export function isFinePointer(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
+}

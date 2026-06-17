@@ -1,62 +1,170 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getClient } from "@/lib/api";
-import { LogOut } from "lucide-react";
+import {
+  BarChart3,
+  ChevronsUpDown,
+  CirclePlus,
+  CreditCard,
+  LogOut,
+  Menu,
+  MoreHorizontal,
+  Search,
+  Settings,
+  SquarePen,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Mark } from "@/components/brand/logo";
+import { openCommandPalette } from "@/components/app/command-palette";
 import { ThemeToggle } from "@/components/theme";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { InfoTip } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/toast";
 import { siteConfig } from "@/config/site.config";
 import { APP_NAV as NAV } from "@/config/nav.config";
-import { useEffectivePlan, useMe, useUsage } from "@/lib/api/hooks";
+import { useDeleteSession, useEffectivePlan, useMe, useRuns, useUsage } from "@/lib/api/hooks";
+import { groupBySession, type SessionEntry } from "@/lib/sessions";
 import { cn, formatTokens } from "@/lib/utils";
 
-export function Sidebar() {
+// the sections under New chat / Search. The new-chat home gets its own button,
+// and Settings lives inside the account menu (like ChatGPT/Claude).
+const SECTIONS = NAV.filter(
+  (item) => item.href !== "/app" && item.href !== "/app/settings",
+);
+
+/**
+ * The rail's interior — New chat, Search, sections, the full conversation
+ * history, plan/usage, account. Rendered in TWO places: the fixed desktop rail
+ * and the mobile slide-in drawer, so the layout is identical to what people
+ * already know from other AI apps; only the theme differs. `onNavigate` lets the
+ * drawer close itself when something is tapped.
+ */
+function RailBody({
+  onNavigate,
+  onRequestDelete,
+}: {
+  onNavigate?: () => void;
+  onRequestDelete?: (session: SessionEntry) => void;
+}) {
   const pathname = usePathname();
   const { data: user } = useMe();
   const { data: usage } = useUsage();
+  const { data: runs } = useRuns();
   const currentPlan = useEffectivePlan(user?.plan);
-
-  const isActive = (item: (typeof NAV)[number]) =>
-    item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const sessions = useMemo(() => groupBySession(runs), [runs]);
 
   const pct = usage ? Math.min(100, Math.round((usage.used / usage.budget) * 100)) : 0;
 
+  // per-conversation "⋯" menu — fixed-positioned (anchored to the clicked dots)
+  // so the scrolling history list can't clip it
+  const [rowMenu, setRowMenu] = useState<{ session: SessionEntry; x: number; y: number } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element;
+      if (rowMenuRef.current?.contains(t) || t.closest("[data-row-kebab]")) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    // a fixed menu detaches from its anchor on scroll — close it
+    window.addEventListener("scroll", close, { capture: true });
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, { capture: true });
+    };
+  }, [rowMenu]);
+
+  // the account menu — a popover holding Settings, Usage, Billing, theme, log out
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    onNavigate?.();
+  };
+  async function logout() {
+    // end the session, then hard-navigate: the full reload resets all client
+    // state and the auth guard can't race us to /login
+    await getClient().logout();
+    window.location.assign("/");
+  }
+  const menuItem =
+    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+
   return (
     <>
-      {/* desktop rail */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface md:flex">
-        <Link
-          href="/app"
-          className="flex items-center gap-2.5 px-5 py-5"
-          aria-label={`${siteConfig.name} workspace`}
-        >
-          <Mark className="size-6 text-primary" />
-          <span className="font-display text-lg font-medium tracking-tight">{siteConfig.name}</span>
-        </Link>
+      <Link
+        href="/app"
+        onClick={onNavigate}
+        className="flex items-center gap-2.5 px-5 py-5"
+        aria-label={`${siteConfig.name} workspace`}
+      >
+        <Mark className="size-6 text-primary" />
+        <span className="font-display text-lg font-medium tracking-tight">{siteConfig.name}</span>
+      </Link>
 
-        <button
-          type="button"
-          onClick={() =>
-            window.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "k", metaKey: true }),
-            )
-          }
-          className="mx-3 mb-2 flex cursor-pointer items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-[13px] text-faint transition-colors hover:border-border-strong hover:text-muted-foreground"
-        >
-          Quick actions
-          <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10.5px]">⌘K</kbd>
-        </button>
+      {/* New chat — the primary action, first thing, like ChatGPT/Claude */}
+      <Link
+        href="/app"
+        onClick={onNavigate}
+        className="mx-3 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+      >
+        <CirclePlus className="size-[18px] text-primary" aria-hidden />
+        New chat
+      </Link>
 
-        <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Workspace">
-          {NAV.map((item) => (
+      <button
+        type="button"
+        onClick={() => {
+          onNavigate?.();
+          openCommandPalette();
+        }}
+        className="mx-3 mt-1 flex items-center justify-between rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <span className="flex items-center gap-2.5">
+          <Search className="size-4" aria-hidden />
+          Search
+        </span>
+        <kbd className="hidden rounded border border-border px-1.5 py-0.5 font-mono text-[10.5px] md:block">
+          ⌘K
+        </kbd>
+      </button>
+
+      <nav className="mt-1 flex flex-col gap-0.5 px-3" aria-label="Sections">
+        {SECTIONS.map((item) => {
+          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+          return (
             <Link
               key={item.href}
               href={item.href}
-              aria-current={isActive(item) ? "page" : undefined}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
-                isActive(item)
+                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                active
                   ? "bg-primary-soft font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
@@ -64,95 +172,319 @@ export function Sidebar() {
               <item.icon className="size-4" aria-hidden />
               {item.label}
             </Link>
-          ))}
-        </nav>
+          );
+        })}
+      </nav>
 
-        {usage && user && (
-          <div className="mx-3 mb-3 rounded-md border border-border bg-background p-3.5">
-            <div className="flex items-center justify-between">
-              <span className="tag-label text-faint">{currentPlan?.name}</span>
+      {/* conversation history — the bulk of the rail, like every chat app */}
+      <div className="mt-5 flex min-h-0 flex-1 flex-col">
+        <p className="tag-label px-5 pb-1.5 text-faint">Recent</p>
+        {sessions.length === 0 ? (
+          <p className="px-5 text-[12px] leading-relaxed text-faint">
+            Your conversations show up here.
+          </p>
+        ) : (
+          <ul className="flex-1 space-y-px overflow-y-auto px-3 pb-2">
+            {sessions.map((session) => {
+              const active = pathname === `/app/runs/${session.latestId}`;
+              return (
+                <li key={session.sessionId} className="group relative">
+                  <Link
+                    href={`/app/runs/${session.latestId}`}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    title={session.title}
+                    className={cn(
+                      "block truncate rounded-md py-1.5 pl-3 pr-9 text-[13px] transition-colors",
+                      active
+                        ? "bg-primary-soft font-medium text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {session.title}
+                  </Link>
+                  {/* the "⋯" actions menu — revealed on hover (PC); always
+                      tappable at the right edge on mobile (the drawer is below md) */}
+                  <button
+                    type="button"
+                    data-row-kebab
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setRowMenu((cur) =>
+                        cur?.session.sessionId === session.sessionId
+                          ? null
+                          : { session, x: r.right, y: r.bottom },
+                      );
+                    }}
+                    aria-label={`Actions for “${session.title}”`}
+                    aria-haspopup="menu"
+                    aria-expanded={rowMenu?.session.sessionId === session.sessionId}
+                    className={cn(
+                      "absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:bg-muted hover:text-foreground",
+                      rowMenu?.session.sessionId === session.sessionId
+                        ? "opacity-100"
+                        : "opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:focus-within:opacity-100",
+                    )}
+                  >
+                    <MoreHorizontal className="size-4" aria-hidden />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* the "⋯" menu — fixed so the scrolling history can't clip it */}
+      {rowMenu && (
+        <div
+          ref={rowMenuRef}
+          role="menu"
+          style={{ position: "fixed", top: rowMenu.y + 4, left: rowMenu.x }}
+          className="z-[60] min-w-[8.5rem] -translate-x-full overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const s = rowMenu.session;
+              setRowMenu(null);
+              onRequestDelete?.(s);
+            }}
+            className="flex w-full items-center gap-2.5 rounded px-2.5 py-1.5 text-[13px] text-destructive transition-colors hover:bg-destructive-soft"
+          >
+            <Trash2 className="size-3.5" aria-hidden />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {usage && user && (
+        <div className="mx-3 mb-3 rounded-md border border-border bg-background p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="tag-label text-faint">{currentPlan?.name}</span>
+            <span className="flex items-center gap-1">
               <span className="text-[12px] text-muted-foreground tabular">
                 {formatTokens(usage.used)} / {formatTokens(usage.budget)}
               </span>
-            </div>
-            <div
-              role="progressbar"
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Token budget used"
-              className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-500",
-                  pct > 90 ? "bg-destructive" : pct > 75 ? "bg-memory" : "bg-primary",
-                )}
-                style={{ width: `${pct}%` }}
+              <InfoTip
+                align="end"
+                label="Your monthly token budget. A run stops cleanly at the limit — you're never charged mid-run."
               />
-            </div>
+            </span>
           </div>
-        )}
-
-        <div className="flex items-center justify-between gap-1 border-t border-border px-5 py-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium capitalize">{user?.name}</p>
-            <p className="truncate text-[12px] text-faint">{user?.email}</p>
-          </div>
-          <div className="flex shrink-0 items-center">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={async () => {
-                // end the session, then hard-navigate: the full reload
-                // resets all client state and the auth guard can't race
-                // us to /login
-                await getClient().logout();
-                window.location.assign("/");
-              }}
-              aria-label="Sign out"
-              className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="size-4" />
-            </button>
+          <div
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Token budget used"
+            className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={cn(
+                "h-full rounded-full transition-[width] duration-500",
+                pct > 90 ? "bg-destructive" : pct > 75 ? "bg-memory" : "bg-primary",
+              )}
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
+      )}
+
+      <div ref={menuRef} className="relative border-t border-border p-2">
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute inset-x-2 bottom-full mb-1 z-10 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-xl"
+          >
+            <p className="truncate px-3 py-1.5 text-[12px] text-faint">{user?.email}</p>
+            <div className="my-1 h-px bg-border" />
+            <Link href="/app/settings?tab=account" onClick={closeMenu} role="menuitem" className={menuItem}>
+              <Settings className="size-4 text-faint" aria-hidden /> Settings
+            </Link>
+            <Link href="/app/settings?tab=usage" onClick={closeMenu} role="menuitem" className={menuItem}>
+              <BarChart3 className="size-4 text-faint" aria-hidden /> Usage
+            </Link>
+            <Link href="/app/settings?tab=billing" onClick={closeMenu} role="menuitem" className={menuItem}>
+              <CreditCard className="size-4 text-faint" aria-hidden /> Billing
+            </Link>
+            <div className="my-1 h-px bg-border" />
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-muted-foreground">
+              <span>Theme</span>
+              <ThemeToggle />
+            </div>
+            <div className="my-1 h-px bg-border" />
+            <button type="button" onClick={logout} role="menuitem" className={cn(menuItem, "text-destructive hover:text-destructive")}>
+              <LogOut className="size-4" aria-hidden /> Log out
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+        >
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold uppercase text-primary"
+            aria-hidden
+          >
+            {user?.name?.trim()?.[0] ?? "?"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium capitalize">{user?.name}</p>
+            <p className="truncate text-[12px] text-faint">
+              {currentPlan?.name ? `${currentPlan.name} plan` : user?.email}
+            </p>
+          </div>
+          <ChevronsUpDown className="size-4 shrink-0 text-faint" aria-hidden />
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const toast = useToast();
+  const del = useDeleteSession();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<SessionEntry | null>(null);
+
+  function deleteSession() {
+    const session = confirmDelete;
+    if (!session) return;
+    del.mutate(session.sessionId, {
+      onSuccess: () => {
+        setConfirmDelete(null);
+        toast({ title: "Conversation deleted", tone: "success" });
+        // if you were viewing this conversation, drop back to the workspace
+        if (pathname === `/app/runs/${session.latestId}`) router.push("/app");
+      },
+    });
+  }
+
+  // close the drawer whenever the route changes (a backstop to the per-link
+  // onNavigate close) — render-time reset, no effect needed
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    setDrawerOpen(false);
+  }
+
+  // lock the background scroll while the drawer is open; close on Escape
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [drawerOpen]);
+
+  return (
+    <>
+      {/* desktop rail */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface md:flex">
+        <RailBody onRequestDelete={setConfirmDelete} />
       </aside>
 
-      {/* mobile top bar + bottom nav */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md md:hidden">
-        <Link href="/app" className="flex items-center gap-2" aria-label={`${siteConfig.name} workspace`}>
-          <Mark className="size-5 text-primary" />
-          <span className="font-display text-base font-medium">{siteConfig.name}</span>
-        </Link>
-        <div className="flex items-center gap-1.5">
-          {usage && (
-            <span className="text-[12px] text-muted-foreground tabular">
-              {formatTokens(usage.used)} / {formatTokens(usage.budget)}
-            </span>
-          )}
+      {/* mobile top bar — hamburger + brand, with New chat as the primary action */}
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface/90 px-3 backdrop-blur-md md:hidden">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            className="flex size-10 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Menu className="size-5" aria-hidden />
+          </button>
+          <Link href="/app" className="flex items-center gap-2" aria-label={`${siteConfig.name} workspace`}>
+            <Mark className="size-5 text-primary" />
+            <span className="font-display text-base font-medium">{siteConfig.name}</span>
+          </Link>
+        </div>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/app"
+            aria-label="New chat"
+            className="flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <SquarePen className="size-5" aria-hidden />
+          </Link>
           <ThemeToggle />
         </div>
       </header>
-      <nav
-        aria-label="Workspace"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+
+      {/* mobile slide-in drawer — the full rail (New chat + search + history + account) */}
+      <div
+        className={cn("fixed inset-0 z-50 md:hidden", !drawerOpen && "pointer-events-none")}
+        aria-hidden={!drawerOpen}
       >
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive(item) ? "page" : undefined}
-            className={cn(
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px]",
-              isActive(item) ? "text-primary" : "text-faint",
-            )}
+        <button
+          type="button"
+          tabIndex={drawerOpen ? 0 : -1}
+          aria-label="Close menu"
+          onClick={() => setDrawerOpen(false)}
+          className={cn(
+            "absolute inset-0 cursor-default bg-black/50 transition-opacity duration-300",
+            drawerOpen ? "opacity-100" : "opacity-0",
+          )}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          className={cn(
+            "absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-border bg-surface shadow-xl transition-transform duration-300 ease-out",
+            drawerOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Close menu"
+            className="absolute right-2 top-3.5 z-10 flex size-9 items-center justify-center rounded-md text-faint hover:bg-muted hover:text-foreground"
           >
-            <item.icon className="size-5" aria-hidden />
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+            <X className="size-4" aria-hidden />
+          </button>
+          <RailBody onNavigate={() => setDrawerOpen(false)} onRequestDelete={setConfirmDelete} />
+        </aside>
+      </div>
+
+      {/* confirm deleting a whole conversation */}
+      <Dialog
+        open={confirmDelete !== null}
+        onClose={() => setConfirmDelete(null)}
+        title="Delete this conversation?"
+      >
+        {confirmDelete && (
+          <div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              “{confirmDelete.title}” and all {confirmDelete.turnCount}{" "}
+              {confirmDelete.turnCount === 1 ? "turn" : "turns"} in it will be
+              permanently removed. This can&apos;t be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+                Keep it
+              </Button>
+              <Button variant="destructive" loading={del.isPending} onClick={deleteSession}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { ArrowDown } from "lucide-react";
 import type { DecisionKind, DecisionLogEntry } from "@/lib/api";
 import { cn, formatClock } from "@/lib/utils";
 import { EASE } from "@/components/motion";
@@ -107,16 +108,27 @@ export function DecisionLog({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  // mirror `pinned` into state so the "jump to live" affordance can render —
+  // it shows only when a live run is scrolled up away from the newest entry
+  const [atBottom, setAtBottom] = useState(true);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [entries.length]);
 
+  function jumpToLatest() {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    pinned.current = true;
+    setAtBottom(true);
+  }
+
   return (
     <section
       aria-label="Orchestrator decision log"
-      className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface", className)}
+      className={cn("relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface", className)}
     >
       {/* masthead — set, not labelled */}
       <header className="shrink-0 px-4 pt-3.5">
@@ -141,7 +153,9 @@ export function DecisionLog({
         ref={scrollRef}
         onScroll={(e) => {
           const el = e.currentTarget;
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+          const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+          pinned.current = nearBottom;
+          setAtBottom(nearBottom);
         }}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-2"
         aria-live="polite"
@@ -168,6 +182,18 @@ export function DecisionLog({
           </ol>
         )}
       </div>
+
+      {/* scrolled up while it's still streaming — one tap back to the newest line */}
+      {live && !atBottom && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border-strong bg-surface-raised px-3 py-1.5 text-[11.5px] font-medium text-foreground shadow-md transition-colors hover:border-primary"
+        >
+          <ArrowDown className="size-3.5 text-primary" aria-hidden />
+          Jump to live
+        </button>
+      )}
     </section>
   );
 }

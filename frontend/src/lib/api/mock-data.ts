@@ -66,12 +66,14 @@ Revenue estimates for private competitors are triangulated from Companies House 
 
 export interface ScriptStep {
   delay: number;
-  kind: "status" | "log" | "expert" | "sources" | "usage";
+  kind: "status" | "log" | "expert" | "sources" | "usage" | "message";
   status?: Run["status"];
   log?: { kind: DecisionKind; title: string; detail?: string; meta?: Record<string, string> };
   expert?: { id: string; name: string; domain: string; status: "spawned" | "working" | "summarizing" | "done"; summary?: string; toolCalls: number };
   sources?: Source[];
   tokensUsed?: number;
+  /** The orchestrator talking to the user (streamed as message_delta). */
+  message?: string;
 }
 
 /**
@@ -89,6 +91,7 @@ export function buildRunScript(): ScriptStep[] {
     { delay: 600, kind: "status", status: "orchestrating" },
     { delay: 900, kind: "log", log: { kind: "hydration", title: "Memory hydrated", detail: "2 wiki · 3 episodic · 1 procedural — 1.9k tokens injected", meta: { tiers: "wiki, episodic, procedural", budget: "1.9k / 4k" } } },
     { delay: 1300, kind: "log", log: { kind: "route", title: "Entropy routing", detail: "H = 1.38 over domain centroids — query spans market, regulatory, and competitive domains", meta: { entropy: "1.38", experts: "3" } } },
+    { delay: 500, kind: "message", message: "This spans three areas — market, regulatory, and competitive — so I'll bring in a specialist for each and synthesise as they report back." },
     { delay: 500, kind: "log", log: { kind: "expert_spawn", title: "Spawned web.research → market", detail: "Scope: market size, channel mix, pricing bands" } },
     { delay: 250, kind: "expert", expert: { id: "e1", name: "web.research", domain: "Market", status: "spawned", toolCalls: 0 } },
     { delay: 400, kind: "log", log: { kind: "expert_spawn", title: "Spawned web.research → regulatory", detail: "Scope: UK cosmetics compliance, post-Brexit divergence" } },
@@ -159,6 +162,8 @@ export const SEED_RUNS: Run[] = [
       { id: "e2", name: "web.research", domain: "Regulatory", status: "done", summary: "UK RP + SCPN notification required; 6–9 weeks lead time.", toolCalls: 3 },
       { id: "e3", name: "web.research", domain: "Competitive", status: "done", summary: "Three US entrants since 2024, none localized.", toolCalls: 5 },
     ],
+    message:
+      "Here's the UK entry analysis. Three specialists covered market, regulatory, and competitive in parallel — I flagged where the market-size figures disagreed and went with the newer source. The regulatory path is the main gating item, so the budget table sits up top of the report.",
     report: SAMPLE_REPORT,
     sources: SEED_SOURCES,
     inputs: [{ name: "meridian-financials.csv", modality: "text", size: 48_120 }],

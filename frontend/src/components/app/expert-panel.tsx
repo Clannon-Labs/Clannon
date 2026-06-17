@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const EXPERT_STATUS: Record<ExpertState["status"], { label: string; tone: string; live?: boolean }> = {
   spawned: { label: "Spawned", tone: "text-log-expert", live: true },
-  working: { label: "Researching", tone: "text-primary", live: true },
+  working: { label: "Working", tone: "text-primary", live: true },
   summarizing: { label: "Summarizing", tone: "text-memory", live: true },
   done: { label: "Done", tone: "text-muted-foreground" },
   failed: { label: "Failed", tone: "text-destructive" },

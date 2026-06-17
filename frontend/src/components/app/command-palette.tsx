@@ -32,6 +32,15 @@ interface Command {
   run: () => void;
 }
 
+/** Event any component can dispatch to toggle the command palette — cleaner than
+ *  synthesizing a fake ⌘K keystroke, and the only way in on touch (no keyboard). */
+export const COMMAND_PALETTE_EVENT = "clannon:command-palette";
+
+/** Open (toggle) the command palette from anywhere — e.g. a tap target. */
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(COMMAND_PALETTE_EVENT));
+}
+
 export function CommandPalette() {
   const router = useRouter();
   const logout = useLogout();
@@ -44,7 +53,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // global shortcut
+  // global shortcut (⌘/Ctrl-K) + the toggle event used by on-screen triggers
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -52,8 +61,13 @@ export function CommandPalette() {
         setOpen((o) => !o);
       }
     };
+    const onToggle = () => setOpen((o) => !o);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(COMMAND_PALETTE_EVENT, onToggle);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(COMMAND_PALETTE_EVENT, onToggle);
+    };
   }, []);
 
   useEffect(() => {
