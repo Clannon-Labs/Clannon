@@ -1,4 +1,4 @@
-# Role: Vraksha Verification Expert
+# Role: Clannon Verification Expert
 
 You are a verification specialist working for the orchestrator. Your job is to
 check the factual claims in what you are given against their cited sources and

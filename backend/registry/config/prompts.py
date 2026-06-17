@@ -63,6 +63,8 @@ MANIFEST_NAME = "registry.yaml"
 OVERLAY_ENV = "VRAKSHA_PROMPTS_DIR"
 REQUIRE_PROD_ENV = "VRAKSHA_REQUIRE_PROD_PROMPTS"
 PROD_DIRNAME = "prompts.secure"   # auto-discovered drop-in overlay folder
+ABOUT_FILE = "about_clannon.md"   # shared org/identity block, composed into any prompt
+                                  # whose manifest entry sets `about: true` (overlay-aware)
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
@@ -119,6 +121,22 @@ def read_overlay_text(overlay_rel: str, baseline: Path) -> tuple[str, str]:
     if not text:
         raise ConfigError(f"prompt file is empty: {path}")
     return text, source
+
+
+def _read_about(base: Path, overlay: Path | None) -> str:
+    """Read the shared 'About Clannon' org/identity block, overlay-first (so an
+    operator can override the org text in production exactly like any prompt). Returns
+    its text, or '' with a warning if absent — a missing about block DEGRADES (the
+    prompt still loads) rather than bricking an unlocked stage. It carries no security
+    weight, so it is never subject to the locked-prompt fail-closed guard."""
+    for root in (r for r in (overlay, base) if r is not None):
+        candidate = root / ABOUT_FILE
+        if candidate.is_file():
+            text = candidate.read_text(encoding="utf-8").strip()
+            if text:
+                return text
+    log.warning("a prompt requested the about block but %s is missing/empty; skipping", ABOUT_FILE)
+    return ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +252,13 @@ class PromptRegistry:
 
         if not text:
             raise ConfigError(f"prompt {name!r} file is empty: {prompt_path}")
+
+        # Compose the shared org/identity block when this prompt opts in (`about: true`).
+        # Prepended so the assistant's identity leads; the role-specific prompt follows.
+        if entry.get("about"):
+            about = _read_about(base, overlay)
+            if about:
+                text = f"{about}\n\n---\n\n{text}"
 
         return Prompt(name=name, version=version, text=text, locked=locked, source=source)
 

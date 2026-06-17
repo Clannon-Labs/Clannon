@@ -17,6 +17,11 @@
 # are NOT here: each expert co-locates its system.md beside its code under
 # core/orchestrator/experts/<name>/, loaded by the expert handler (an expert's
 # prompt is part of its self-contained, unlocked capability).
+#
+# `about: true` composes the shared org/identity block (prompts/about_clannon.md)
+# into a prompt at load time — edit that ONE file to change what the assistant knows
+# about Clannon and the org behind it. Default-on for the orchestrator (the
+# user-facing persona); leave it off for the security gates and internal agents.
 
 verifier:
   version: 2
@@ -24,9 +29,10 @@ verifier:
   locked: true
 
 orchestrator:
-  version: 2
+  version: 3
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
+  about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
 
 filter:
   version: 1
