@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import shutil
 from pathlib import Path
 
 from foundation import ArtifactRef, get_root
@@ -58,6 +59,15 @@ class LocalArtifactStore:
     async def get(self, artifact_id: str) -> bytes:
         run_id, _, name = str(artifact_id).partition("/")
         return (self._base / _safe_name(run_id) / _safe_name(name)).read_bytes()
+
+    def delete_run(self, run_id: str) -> None:
+        """Remove a run's entire artifact folder (best-effort, idempotent). Sync — file
+        removal needs no await; used by the session-delete cleanup to leave nothing on
+        disk when a conversation is deleted."""
+        try:
+            shutil.rmtree(self._base / _safe_name(run_id), ignore_errors=True)
+        except Exception:  # noqa: BLE001 — a bad name / missing dir is just a no-op
+            pass
 
     async def list(self, run_id: str) -> list[ArtifactRef]:
         d = self._base / _safe_name(run_id)

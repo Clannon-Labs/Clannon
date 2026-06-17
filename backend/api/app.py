@@ -191,7 +191,8 @@ async def create_run(
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
     run = runs.STORE.create(user.id, brief)
-    run.inputs = [f.as_dict() for f in input_files]
+    # persist the uploads so later turns in the session can re-read them (sets run.inputs)
+    await runs.persist_inputs(run, input_files)
     run.session_models = session_models
     # keep the task handle on the run so it can be cooperatively cancelled mid-flight.
     # Assigned synchronously here (before the task actually starts on the next loop
@@ -258,7 +259,8 @@ async def follow_up_run(
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
     run = runs.STORE.create_followup(user.id, ask, parent)
-    run.inputs = [f.as_dict() for f in input_files]
+    # persist the uploads so later turns in the session can re-read them (sets run.inputs)
+    await runs.persist_inputs(run, input_files)
     run.session_models = session_models
     run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}

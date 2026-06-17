@@ -23,6 +23,7 @@ from .run_store import RunStore, STORE
 from .run_driver import (
     build_model_overrides,
     execute,
+    persist_inputs,
     _build_conversation,
 )
 from .sse import sse_stream
@@ -33,6 +34,7 @@ __all__ = [
     "STORE",
     "build_model_overrides",
     "execute",
+    "persist_inputs",
     "_build_conversation",
     "sse_stream",
 ]

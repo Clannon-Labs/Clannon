@@ -24,16 +24,17 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from foundation import Flow
+from foundation import Flow, InputFile
 
 from core import pipeline
+from core.artifacts import LocalArtifactStore
 from core.llm import model_overrides, usage_scope
 
 from observability import DecisionLogSink
 
 from . import auth, config
 from .run_state import RunState, _now, _process_summary
-from .run_store import STORE
+from .run_store import STORE, INPUT_NS
 
 
 def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
@@ -54,50 +55,133 @@ def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -
     }
 
 
-# how many prior turns to replay as chat history — bounds the context the
-# orchestrator carries on a long-running session
-_MAX_HISTORY_TURNS = 8
+# The WHOLE session travels as chat history — the orchestrator should see everything
+# that happened. We only trim when a session grows genuinely huge, and then we drop the
+# OLDEST turns (keeping the recent ones whole), bounded by this character budget so the
+# context stays complete without growing without limit. Generous on purpose.
+_HISTORY_CHAR_BUDGET = 200_000
+
+
+def _turn_assistant_content(turn: RunState) -> str:
+    """One prior turn's assistant side, as the model should re-read it: the
+    conversational message AND/OR the delivered report (with a provenance note), or an
+    honest marker if the turn produced nothing."""
+    message = (turn.message or "").strip()
+    report = (turn.report or "").strip()
+    if report:
+        body = f"{message}\n\n{report}" if message else report
+        process = _process_summary(turn)
+        if process and not process.startswith("No experts"):
+            body += f"\n\n[How I produced this: {process}]"
+        return body
+    if message:
+        return message
+    note = {
+        "blocked": "was stopped by the security pipeline and no answer was delivered",
+        "failed": "did not complete due to a pipeline error",
+    }.get(turn.status, "produced no answer")
+    return f"[The previous turn {note}. Adjust and try again.]"
 
 
 def _build_conversation(run: RunState) -> list[dict]:
-    """Replay this session's earlier turns as neutral chat history (oldest first):
-    each delivered turn becomes a user message (the brief) and an assistant
-    message (the report, with a short note of which experts/tools produced it so
-    the model retains that provenance). Only turns BEFORE this one are included."""
+    """Replay this session's earlier turns as neutral chat history (oldest first), in
+    full: each prior turn becomes a user message (the brief, with a note of any files it
+    attached) and an assistant message (its conversational message and/or delivered
+    report). Only turns BEFORE this one are included. The whole session is kept; only a
+    really long one is trimmed from its OLDEST turns to fit `_HISTORY_CHAR_BUDGET`."""
     session = run.session_id or run.id
-    convo: list[dict] = []
-    for turn in STORE.session_turns(run.user_id, session):
+    prior = [
+        t for t in STORE.session_turns(run.user_id, session)
+        if t.id != run.id and t.created_at < run.created_at
+    ]
+    # one (chars, [user_msg, assistant_msg]) block per turn, oldest first
+    blocks: list[tuple[int, list[dict]]] = []
+    for turn in prior:
+        user_content = turn.brief
+        names = [f.get("name", "file") for f in (turn.inputs or []) if isinstance(f, dict)]
+        if names:
+            user_content += f"\n[attached file(s) this turn: {', '.join(names)}]"
+        msgs = [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": _turn_assistant_content(turn)},
+        ]
+        blocks.append((sum(len(m["content"]) for m in msgs), msgs))
+    # trim from the OLDEST until under budget, but always keep the most recent turn whole
+    total = sum(c for c, _ in blocks)
+    while total > _HISTORY_CHAR_BUDGET and len(blocks) > 1:
+        chars, _ = blocks.pop(0)
+        total -= chars
+    return [m for _, msgs in blocks for m in msgs]
+
+
+# Bounds on re-seeding a whole session's uploaded files, so a long session can't seed
+# unbounded data into the workspace.
+_MAX_SESSION_FILES = 30
+_MAX_SESSION_FILE_BYTES = 64 * 1024 * 1024
+# inputs are persisted under a namespace distinct from a run's OUTPUT artifacts, so the
+# two never collide and inputs are never served by the artifact download route.
+def _input_ns(run_id: str) -> str:
+    return f"{INPUT_NS}{run_id}"
+
+
+async def persist_inputs(run: RunState, input_files: list) -> None:
+    """Persist a turn's uploaded files (already malware-scanned) so LATER turns in the
+    session can re-read them, and record their store refs on `run.inputs`. Best-effort:
+    a file that fails to store is still admitted for THIS turn (it rides `input_files`),
+    it just won't survive to a follow-up."""
+    store = LocalArtifactStore()
+    entries: list[dict] = []
+    for f in input_files:
+        meta = f.as_dict()
+        try:
+            meta["id"] = (await store.put(_input_ns(run.id), f.name, f.data)).id
+        except Exception:  # noqa: BLE001 — storage hiccup must not fail the run
+            pass
+        entries.append(meta)
+    run.inputs = entries
+
+
+async def _gather_session_files(run: RunState, current: list | None) -> list:
+    """Every file uploaded across THIS session, so the orchestrator can read a file from
+    an earlier turn: the current turn's files (already in memory) plus prior turns'
+    persisted files, loaded from the store. Bounded by file count and total bytes; a
+    missing/unreadable prior file is skipped, never fatal."""
+    files = list(current or [])
+    seen = {getattr(f, "name", "") for f in files}
+    total = sum(int(getattr(f, "size", 0) or 0) for f in files)
+    store = LocalArtifactStore()
+    for turn in STORE.session_turns(run.user_id, run.session_id or run.id):
         if turn.id == run.id or turn.created_at >= run.created_at:
             continue
-        convo.append({"role": "user", "content": turn.brief})
-        report = (turn.report or "").strip()
-        if report:
-            process = _process_summary(turn)
-            assistant = report
-            if process and not process.startswith("No experts"):
-                assistant += f"\n\n[How I produced this: {process}]"
-            convo.append({"role": "assistant", "content": assistant})
-        else:
-            # a turn that produced no report still happened — tell the orchestrator
-            # it was blocked/failed so it can recover (e.g. on a "try again")
-            note = {
-                "blocked": "was stopped by the security pipeline and no answer was delivered",
-                "failed": "did not complete due to a pipeline error",
-            }.get(turn.status, "produced no answer")
-            convo.append({
-                "role": "assistant",
-                "content": f"[The previous turn {note}. Adjust and try again.]",
-            })
-    # keep the most recent turns if the session is long (2 messages per turn)
-    return convo[-(_MAX_HISTORY_TURNS * 2):]
+        for meta in (turn.inputs or []):
+            if not isinstance(meta, dict):
+                continue
+            name, aid = meta.get("name"), meta.get("id")
+            if not name or not aid or name in seen:
+                continue
+            if len(files) >= _MAX_SESSION_FILES or total >= _MAX_SESSION_FILE_BYTES:
+                return files
+            try:
+                data = await store.get(aid)
+            except Exception:  # noqa: BLE001
+                continue
+            files.append(InputFile(
+                name=name, modality=meta.get("modality", "text"), data=data, size=len(data),
+            ))
+            seen.add(name)
+            total += len(data)
+    return files
 
 
 async def execute(run: RunState, input_files: list | None = None) -> None:
     """Drive the real pipeline for one run, emitting events as it goes.
 
-    `input_files` are uploaded, already-malware-scanned foundation.InputFile objects
-    (admitted at the HTTP boundary); they ride on the context and are seeded into a
-    file-capable expert's workspace. The brief itself still crosses the full pipeline."""
+    `input_files` are this turn's uploaded, already-malware-scanned foundation.InputFile
+    objects. They are combined with the files uploaded EARLIER in the session (re-loaded
+    from the store) so the orchestrator can read any file from any turn, then seeded into
+    a file-capable expert's workspace. The brief itself still crosses the full pipeline."""
+    session_files = await _gather_session_files(run, input_files)
+
     def _prepare(flow: Flow[Any]) -> None:
         """Seed the context the API owns, before any stage runs."""
         # replay this session's earlier turns as real chat history — the orchestrator
@@ -105,8 +189,9 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         flow.ctx.conversation = _build_conversation(run)
         # the user's wiki — the highest-trust memory tier, loaded as text at hydration
         flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id)
-        # uploaded input files for this run — seeded into the expert workspace downstream
-        flow.ctx.input_files = input_files or []
+        # every file uploaded this SESSION (this turn + earlier turns), seeded into the
+        # expert workspace downstream so a file from an earlier message is still readable
+        flow.ctx.input_files = session_files
 
     def _on_stage(stage) -> None:
         """Before each stage: surface its coarse phase status (deduped — consecutive

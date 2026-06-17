@@ -19,6 +19,27 @@ from typing import Any
 from . import auth
 from .run_state import RunState, TERMINAL_STATUSES
 
+# Uploaded input files are stored in the artifact store under a "<INPUT_NS><run_id>"
+# namespace, distinct from a run's OUTPUT artifacts (stored under "<run_id>"). run_driver
+# seeds them under the same prefix; the session-delete cleanup purges both.
+INPUT_NS = "in_"
+
+
+def _purge_run_files(run_ids: set[str]) -> None:
+    """Best-effort: remove every deleted run's stored files (uploaded inputs AND output
+    artifacts) from disk. Never raises — disk cleanup must not fail a delete."""
+    if not run_ids:
+        return
+    try:
+        from core.artifacts import LocalArtifactStore
+
+        store = LocalArtifactStore()
+        for rid in run_ids:
+            store.delete_run(rid)                 # output artifacts
+            store.delete_run(f"{INPUT_NS}{rid}")  # uploaded inputs
+    except Exception:  # noqa: BLE001
+        pass
+
 
 class RunStore:
     """
@@ -114,11 +135,13 @@ class RunStore:
 
         Live runs are marked `deleted` (so their execute() finally won't re-persist the
         row this just removed) and any in-flight task is cancelled, then dropped from the
-        cache; persisted rows are deleted from SQLite. The conversation and its turns are
-        removed; the assistant's learned, cross-session memory is RETAINED — it is user
-        knowledge, not tied to one conversation.
+        cache; persisted rows are deleted from SQLite; and each deleted run's stored files
+        (uploaded inputs AND output artifacts) are purged from disk so a deleted
+        conversation leaves nothing behind. The assistant's learned, cross-session memory
+        is RETAINED — it is user knowledge, not tied to one conversation.
         """
         removed = 0
+        run_ids: set[str] = set()
         for rid, run in list(self._runs.items()):
             if run.user_id == user_id and (run.session_id or run.id) == session_id:
                 run.deleted = True
@@ -126,12 +149,19 @@ class RunStore:
                 if task is not None and not task.done():
                     task.cancel()
                 self._runs.pop(rid, None)
+                run_ids.add(rid)
                 removed += 1
         with auth._db() as db:
+            run_ids.update(
+                r["id"] for r in db.execute(
+                    "SELECT id FROM runs WHERE user_id=? AND session_id=?", (user_id, session_id)
+                ).fetchall()
+            )
             cur = db.execute(
                 "DELETE FROM runs WHERE user_id=? AND session_id=?", (user_id, session_id)
             )
             removed += cur.rowcount or 0
+        _purge_run_files(run_ids)
         return removed
 
     def persist(self, run: RunState) -> None:
