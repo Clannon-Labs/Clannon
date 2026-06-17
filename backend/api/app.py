@@ -30,7 +30,7 @@ configure_logging()
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
@@ -193,7 +193,10 @@ async def create_run(
     run = runs.STORE.create(user.id, brief)
     run.inputs = [f.as_dict() for f in input_files]
     run.session_models = session_models
-    asyncio.get_running_loop().create_task(runs.execute(run, input_files))
+    # keep the task handle on the run so it can be cooperatively cancelled mid-flight.
+    # Assigned synchronously here (before the task actually starts on the next loop
+    # tick) so a cancel can never race a not-yet-tracked task.
+    run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
 
@@ -203,6 +206,21 @@ def get_run(run_id: str, user: auth.User = Depends(auth.current_user)) -> dict:
     if run is None:
         raise HTTPException(404, "Run not found.")
     return run.full_json()
+
+
+@app.post("/runs/{run_id}/cancel")
+async def cancel_run(run_id: str, user: auth.User = Depends(auth.current_user)) -> Response:
+    """Cooperatively stop an in-flight run. Ownership-scoped (a run the caller doesn't
+    own is a 404, never revealed). Idempotent: cancelling an already-terminal run is a
+    no-op 204. For a live run, the task is signalled to stop and the authoritative
+    `cancelled` status arrives over the SSE stream — the 200 body is informational.
+    Cancel ≠ delete: the run stays in history with a `cancelled` status."""
+    outcome = runs.STORE.request_cancel(user.id, run_id)
+    if outcome == "notfound":
+        raise HTTPException(404, "Run not found.")
+    if outcome == "noop":
+        return Response(status_code=204)  # already terminal — idempotent success
+    return JSONResponse({"status": outcome}, status_code=200)  # "cancelling" | "cancelled"
 
 
 class FeedbackBody(BaseModel):
@@ -242,7 +260,7 @@ async def follow_up_run(
     run = runs.STORE.create_followup(user.id, ask, parent)
     run.inputs = [f.as_dict() for f in input_files]
     run.session_models = session_models
-    asyncio.get_running_loop().create_task(runs.execute(run, input_files))
+    run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
 

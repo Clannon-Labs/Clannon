@@ -12,9 +12,7 @@ import asyncio
 import json
 from typing import AsyncGenerator
 
-from .run_state import RunState
-
-_TERMINAL = {"delivered", "blocked", "failed"}
+from .run_state import RunState, TERMINAL_STATUSES
 
 
 async def sse_stream(run: RunState) -> AsyncGenerator[str, None]:
@@ -24,7 +22,13 @@ async def sse_stream(run: RunState) -> AsyncGenerator[str, None]:
     try:
         for event in list(run.events):
             yield f"data: {json.dumps(event)}\n\n"
-        if run.status in _TERMINAL and run.report is not None:
+        # A reconnect to a finished run has nothing more coming — replay, then close.
+        # The one exception is a `delivered` run still streaming its report (status
+        # flips to delivered while report stays None until the final delta): keep that
+        # stream open so a mid-report reconnect gets the rest. Every no-report terminal
+        # (blocked / failed / cancelled) closes cleanly here instead of hanging on the
+        # queue forever (the old `report is not None` guard never closed them).
+        if run.status in TERMINAL_STATUSES and not (run.status == "delivered" and run.report is None):
             return
         while True:
             event = await queue.get()

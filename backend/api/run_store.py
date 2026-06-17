@@ -17,7 +17,7 @@ import time
 from typing import Any
 
 from . import auth
-from .run_state import RunState
+from .run_state import RunState, TERMINAL_STATUSES
 
 
 class RunStore:
@@ -72,6 +72,41 @@ class RunStore:
                 (rating, comment, time.time(), rid, user_id),
             )
             return cur.rowcount > 0
+
+    def request_cancel(self, user_id: str, rid: str) -> str:
+        """Cooperatively cancel a run, scoped to its owner. Idempotent.
+
+        Returns one of:
+          - "notfound"   no such run for this user (→ 404),
+          - "noop"       already terminal (delivered/blocked/failed/cancelled) — a
+                         no-op success (→ 204),
+          - "cancelling" the in-flight task was signalled to stop; the authoritative
+                         `cancelled` status arrives over the SSE stream (→ 200),
+          - "cancelled"  finalized directly (no live task to interrupt — an edge).
+
+        Cancellation is cooperative: cancelling the run's asyncio task raises
+        CancelledError at the next await inside the pipeline, unwinding through the
+        stages' try/finally (so the Docker workspace and HTTP clients close), and
+        execute() converts that into the `cancelled` terminal state. No output-filter
+        delivery runs. Billing: any tokens already spent stay on the run (charged) —
+        consistent with the usage-based model.
+        """
+        run = self.get(user_id, rid)
+        if run is None:
+            return "notfound"
+        if run.status in TERMINAL_STATUSES:
+            return "noop"
+        run.cancel_requested = True
+        task = run.task
+        if task is not None and not task.done():
+            task.cancel()
+            return "cancelling"
+        # No live task to interrupt (e.g. the run is between scheduling and start, or
+        # already winding down). Finalize directly so the user still gets a clean stop.
+        run.on_status("cancelled")
+        run.finish()
+        self.persist(run)
+        return "cancelled"
 
     def persist(self, run: RunState) -> None:
         """Write-through on terminal state — one row per finished run."""

@@ -36,10 +36,11 @@ server and the TUI share this one driver instead of copying the stage loop.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from foundation import Flow
+from foundation import Flow, constants
 from core import intake, normalizer, verifier, orchestrator
 from security.sanitizers import runner as sanitizer
 from security.filter import run as output_filter_run
@@ -137,6 +138,10 @@ async def run(
                  decision stream (an observability.DecisionLogSink in practice).
     on_stage / on_stage_end  progress observers (see drive()).
 
+    On an output-filter rejection the orchestrator gets a bounded, fail-closed chance
+    to revise (the single shared `recover_from_filter_block`, narrated on the decision
+    log) before the run is treated as blocked — same recovery for CLI and web.
+
     Returns the final Flow; a blocked or failed stage short-circuits the remainder.
     """
     flow = Flow.new(raw_input, session_id, user_id=user_id, trace_id=trace_id)
@@ -144,9 +149,106 @@ async def run(
         flow.ctx.decision_log = decision_log
     if prepare is not None:
         prepare(flow)
-    return await drive(
+    return await _drive_with_revision(
         flow,
         stages if stages is not None else ACTIVE_STAGES,
         on_stage=on_stage,
         on_stage_end=on_stage_end,
     )
+
+
+def _split_at_filter(stages: list[Stage]):
+    """Locate the orchestrator→filter segment for the bounded revision loop.
+
+    Returns (pre, segment, post) when BOTH an `orchestrator` and a later `filter`
+    stage are present; otherwise None, so a custom or subset stage list (tests,
+    partial pipelines) runs as a plain linear drive with unchanged behaviour.
+    """
+    names = [s.name for s in stages]
+    if "orchestrator" not in names or "filter" not in names:
+        return None
+    o, f = names.index("orchestrator"), names.index("filter")
+    if f < o:
+        return None
+    return stages[:o], stages[o:f + 1], stages[f + 1:]
+
+
+async def recover_from_filter_block(flow: Flow) -> Flow:
+    """The single, shared, fail-closed output-filter recovery — used by BOTH the CLI
+    pipeline and the web run driver, so the revision logic lives in exactly one place.
+
+    The output filter rejected the orchestrator's DRAFT. Hand the rejection reason
+    back (`ctx.filter_feedback`) and let the orchestrator RE-REASON — re-running only
+    `run_loop`, NOT the whole orchestrator stage, so a rejected draft is never written
+    to memory — then let the filter adjudicate the new draft. Bounded by
+    `FILTER_MAX_REVISIONS`; after that the run stays blocked (fail closed — the filter
+    is always the final authority). Each attempt is narrated on the shared decision
+    log, so every surface (CLI feed, web SSE) sees the revision live.
+    """
+    from core.orchestrator.loop import run_loop
+    from core.orchestrator.schemas import DecisionLogEntry
+    from core.orchestrator.utils.wiring import build_default_ports
+
+    ctx = flow.ctx
+    while (
+        ctx.filter_blocked
+        and ctx.normalized_input is not None
+        and ctx.filter_retry_count < constants.FILTER_MAX_REVISIONS
+    ):
+        ctx.filter_retry_count += 1
+        ctx.decision_log.append(DecisionLogEntry(
+            kind="warning",
+            message=(
+                f"output filter rejected the draft — revising "
+                f"(attempt {ctx.filter_retry_count}/{constants.FILTER_MAX_REVISIONS})"
+            ),
+        ))
+        # hand the reason back and clear the block so the re-reasoned draft is judged fresh
+        ctx.filter_feedback = ctx.filter_block_reason
+        ctx.blocked = False
+        ctx.filter_blocked = False
+        ctx.filter_block_reason = None
+        try:
+            ports = build_default_ports(ctx)
+            revised = await asyncio.wait_for(
+                run_loop(ctx.normalized_input, ports, ctx),
+                timeout=constants.ORCHESTRATOR_TIMEOUT_S,
+            )
+        except Exception as exc:  # noqa: BLE001 — surface as a run failure, never crash
+            ctx.failed = True
+            ctx.failure_error = exc
+            return flow
+        ctx.orchestrator_response = revised
+        flow = await output_filter_run(flow)
+        ctx = flow.ctx
+    ctx.filter_feedback = None
+    return flow
+
+
+async def _drive_with_revision(
+    flow: Flow,
+    stages: list[Stage],
+    *,
+    on_stage: StageObserver | None = None,
+    on_stage_end: StageEndObserver | None = None,
+) -> Flow:
+    """Drive the pipeline, then give the orchestrator a BOUNDED chance to revise when
+    the output filter rejects its draft — via the shared `recover_from_filter_block`.
+
+    The filter remains the sole content gate and adjudicates every attempt; recovery
+    only turns a rejection from a silent dead-end into a feedback-driven retry, and
+    NEVER delivers content the filter hasn't accepted. A stage list without an
+    orchestrator+filter pair (tests/subsets) falls back to a plain linear drive.
+    """
+    split = _split_at_filter(stages)
+    if split is None or constants.FILTER_MAX_REVISIONS <= 0:
+        return await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
+
+    pre, segment, post = split
+    # input gates + the first orchestrator→filter pass
+    flow = await drive(flow, pre + segment, on_stage=on_stage, on_stage_end=on_stage_end)
+    if flow.ctx.filter_blocked:
+        flow = await recover_from_filter_block(flow)
+    if flow.should_stop:
+        return flow  # input-blocked, failed, or still filter-blocked after recovery
+    return await drive(flow, post, on_stage=on_stage, on_stage_end=on_stage_end)  # delivery

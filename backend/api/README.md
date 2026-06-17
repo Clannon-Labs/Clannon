@@ -13,6 +13,27 @@ table here.
 uvicorn api.app:app --port 8000 --reload
 ```
 
+To reach the server from another device on the LAN (e.g. test the frontend on
+a phone), use the launcher. It frees the port if a previous run is still on it,
+detects this machine's LAN IP, wires `FRONTEND_ORIGIN` for CORS, and binds to
+all interfaces — no env vars to remember, safe to re-run:
+
+```bash
+./dev.sh          # from backend/  (venv must exist at .venv/)
+```
+
+Equivalent by hand (`<LAN-IP>` = `hostname -I | awk '{print $1}'`):
+
+```bash
+FRONTEND_ORIGIN=http://<LAN-IP>:3000 \
+  uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+# if ufw is active, open the port once: sudo ufw allow 8000/tcp
+```
+
+`--host 0.0.0.0` is the part that matters — the default binds to `127.0.0.1`
+and is invisible off-box. `FRONTEND_ORIGIN` must exactly match the frontend's
+LAN origin or CORS rejects every request (see the table below).
+
 ## Environment
 
 Loads `.env` then `.env.local` from `backend/` (the working directory, same as
@@ -53,7 +74,8 @@ JSON keys are camelCase to match the frontend types in
 | `/runs` | POST | `multipart/form-data`: `brief` (text) + optional `files` (input files) + optional `models` (JSON object `role -> model`, per-session model choices) | `{id}`, starts the pipeline in the background. Each uploaded file is malware-scanned at the boundary (ClamAV/YARA) and seeded into the expert workspace with its original bytes — clean files are NOT redacted; a malicious/unsupported/oversized file is a 422. File scope: text, PDF, image, audio, video; max 10. `models` overrides the user's workspace defaults for this run only (422 on an unknown/locked role or an unavailable model) |
 | `/runs/:id` | GET | — | full `Run` (decisionLog, experts, report, sources, artifacts, inputs, feedbackRating, parentRunId, sessionId, blockStage) |
 | `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
-| `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage` |
+| `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `report_delta` / `report_done` / `usage`. Terminal `status` values: `delivered` / `blocked` / `failed` / `cancelled` — the stream closes after a terminal status, and a reconnect replays the buffered sequence ending in it |
+| `/runs/:id/cancel` | POST | — | Cooperatively stop an in-flight run. `204` if already terminal (idempotent); otherwise `200 {status:"cancelling"}` and the authoritative `cancelled` arrives over the SSE stream. Ownership-scoped (404 if not the caller's run). Cancel ≠ delete — the run stays in history with status `cancelled` (distinct from `failed`/`blocked`). Tokens spent up to the stop are charged (usage-based) |
 | `/runs/:id/feedback` | POST | `{rating: "up"\|"down"\|null, comment?}` | 204; thumbs rating on a delivered run |
 | `/runs/:id/followup` | POST | `multipart/form-data`: `brief` (text) + optional `files` + optional `models` | `{id}`, the next turn of the same session — inherits `sessionId` (`parentRunId` set). Carries input files AND per-session `models` exactly like `POST /runs`; the follow-up run's `inputs` lists the files. Prior turns are replayed to the orchestrator as real chat history (`message_history`), so only the new brief is sanitized/verified and the model genuinely continues the conversation. |
 | `/runs/:id/thread` | GET | — | `Run[]` — every turn of this run's session, oldest first (the conversation) |

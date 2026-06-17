@@ -11,8 +11,9 @@ The run subsystem was split into focused modules for modularity:
 
 This module is kept as a thin re-export surface so existing importers (e.g.
 `api.app` using `runs.STORE` / `runs.execute` / `runs.sse_stream`, and tests
-importing `RunState` / `build_model_overrides` / `_recover_from_filter_block`)
-keep working unchanged. Put new run logic in the module it belongs to, not here.
+importing `RunState` / `build_model_overrides`) keep working unchanged. Output-filter
+recovery now lives in `core.pipeline.recover_from_filter_block` (one shared loop for
+CLI + web). Put new run logic in the module it belongs to, not here.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ from .run_driver import (
     build_model_overrides,
     execute,
     _build_conversation,
-    _recover_from_filter_block,
 )
 from .sse import sse_stream
 
@@ -34,6 +34,5 @@ __all__ = [
     "build_model_overrides",
     "execute",
     "_build_conversation",
-    "_recover_from_filter_block",
     "sse_stream",
 ]

@@ -31,8 +31,7 @@ Sections:
 # ---------------------------------------------------------------------------
 
 PIPELINE_TIMEOUT_S          = 120.0   # max wall time for one full user turn
-MAX_OUTPUT_RETRIES          = 3       # times the filter can reject and re-send
-                                      # to orchestrator before giving up
+# Output-filter recovery budget — see FILTER_MAX_REVISIONS in the FILTER section.
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +166,12 @@ EXPERT_MAX_TURNS            = 8      # max tool rounds inside one expert's run
 FILTER_TIMEOUT_S            = 12.0   # >= 10s: Gemini rejects deadlines under 10s
 FILTER_MAX_TOKENS           = 512
 FILTER_MAX_RETRIES          = 2      # retries on malformed output before ERROR
+FILTER_MAX_REVISIONS        = 2      # THE single output-filter recovery budget (CLI + web): when the
+                                     # filter rejects a draft, the reason is fed back (ctx.filter_feedback)
+                                     # and the orchestrator re-reasons, up to this many times. The filter
+                                     # adjudicates every attempt and is always final; 0 disables recovery
+                                     # (hard block on first rejection). Implemented in
+                                     # core.pipeline.recover_from_filter_block.
 
 
 # ---------------------------------------------------------------------------

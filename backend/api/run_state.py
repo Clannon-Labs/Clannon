@@ -20,6 +20,12 @@ from typing import Any
 
 _REPORT_CHUNK_WORDS = 6
 
+# The statuses a run can END in — no further events will arrive. Shared by the SSE
+# transport (when to short-circuit a reconnect) and the cancel path (when a cancel
+# is an idempotent no-op). `cancelled` is the user-initiated stop, distinct from
+# `failed` (a system error) and `blocked` (a security gate).
+TERMINAL_STATUSES = frozenset({"delivered", "blocked", "failed", "cancelled"})
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -78,6 +84,13 @@ class RunState:
     # the bytes are passed to execute() and seeded into the expert workspace, never stored here)
     inputs: list[dict] = field(default_factory=list)
     subscribers: list[asyncio.Queue] = field(default_factory=list)
+    # live execution handle, set by the route right after the run's task is created;
+    # used to cooperatively cancel an in-flight run. Runtime-only — never persisted
+    # (excluded from repr/compare; the store writes explicit columns, not the object).
+    task: Any | None = field(default=None, repr=False, compare=False)
+    # set when the user requests cancellation, so the execute() coroutine can tell a
+    # user cancel apart from any other CancelledError (e.g. server shutdown).
+    cancel_requested: bool = False
     memory_writes: list[dict] = field(default_factory=list)
     feedback_rating: str | None = None       # "up" | "down" | None
     feedback_comment: str | None = None

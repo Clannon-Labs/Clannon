@@ -10,8 +10,11 @@ Event shapes mirror the frontend RunEvent union exactly.
 This module owns:
   - `build_model_overrides` — resolve per-run model overrides (workspace + session).
   - `_build_conversation` — replay a session's earlier turns as chat history.
-  - `_recover_from_filter_block` — bounded, fail-closed output-filter recovery.
   - `execute` — drive one run end-to-end, emit events, classify + persist.
+
+Output-filter recovery is NOT here: it's the single shared `recover_from_filter_block`
+in `core.pipeline`, run inside `pipeline.run` for both the CLI and the web path and
+narrated on the decision log this driver already streams.
 
 It reads/writes runs through the shared `STORE` and the `RunState` record.
 """
@@ -21,11 +24,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from foundation import Flow, constants
+from foundation import Flow
 
 from core import pipeline
 from core.llm import model_overrides
-from security.filter import run as _OUTPUT_FILTER
 
 from observability import DecisionLogSink
 
@@ -90,56 +92,6 @@ def _build_conversation(run: RunState) -> list[dict]:
     return convo[-(_MAX_HISTORY_TURNS * 2):]
 
 
-async def _recover_from_filter_block(flow: Flow[Any], run: RunState) -> Flow[Any]:
-    """Bounded output-filter recovery. ONLY the output filter — which rejects the
-    orchestrator's own DRAFT — is retriable here; input-side blocks (sanitize /
-    verify) reject the brief and need a new one from the user. On each retry the
-    filter's reason is handed back to the orchestrator, it produces a corrected
-    draft, and the filter adjudicates again. After MAX_OUTPUT_RETRIES we stop and
-    the run stays blocked — fail closed; the filter is always the final authority."""
-    from core.orchestrator.loop import run_loop
-    from core.orchestrator.utils.wiring import build_default_ports
-
-    ctx = flow.ctx
-    while (
-        ctx.filter_blocked
-        and ctx.normalized_input is not None
-        and ctx.filter_retry_count < constants.MAX_OUTPUT_RETRIES
-    ):
-        ctx.filter_retry_count += 1
-        run.on_log_entry(type("E", (), {
-            "kind": "warning",
-            "message": (
-                f"output filter rejected the draft — revising "
-                f"(attempt {ctx.filter_retry_count}/{constants.MAX_OUTPUT_RETRIES})"
-            ),
-            "detail": {},
-        })())
-        # hand the reason to the orchestrator and clear the block so stages re-run
-        ctx.filter_feedback = ctx.filter_block_reason
-        ctx.blocked = False
-        ctx.filter_blocked = False
-        ctx.filter_block_reason = None
-        run.on_status("orchestrating")
-        try:
-            ports = build_default_ports(ctx)
-            revised = await asyncio.wait_for(
-                run_loop(ctx.normalized_input, ports, ctx),
-                timeout=constants.ORCHESTRATOR_TIMEOUT_S,
-            )
-        except Exception as exc:  # noqa: BLE001 — surface as a run failure, never crash
-            ctx.failed = True
-            ctx.failure_error = exc
-            return flow
-        ctx.orchestrator_response = revised
-        run.on_experts_settled(ctx.expert_calls)
-        run.on_status("filtering")
-        flow = await _OUTPUT_FILTER(flow)
-        ctx = flow.ctx
-    ctx.filter_feedback = None
-    return flow
-
-
 async def execute(run: RunState, input_files: list | None = None) -> None:
     """Drive the real pipeline for one run, emitting events as it goes.
 
@@ -170,7 +122,9 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
     try:
         # user model preferences apply to every stage in this run. The pipeline is
         # the single end-to-end runner; the API only observes it (status, decision
-        # log, expert reconciliation) and owns the post-run recovery + classification.
+        # log, expert reconciliation) and owns the classification + delivery. Output-
+        # filter recovery lives INSIDE the pipeline now (one shared loop for CLI + web),
+        # narrated on the decision log we already stream.
         with model_overrides(build_model_overrides(run.user_id, run.session_models)):
             flow: Flow[Any] = await pipeline.run(
                 run.brief,
@@ -186,10 +140,10 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 on_stage_end=_on_stage_end,
             )
 
-            # if the output filter rejected the draft, let the orchestrator revise
-            # and retry (bounded, fail-closed) before we treat it as blocked
-            if flow.ctx.filter_blocked:
-                flow = await _recover_from_filter_block(flow, run)
+            # reconcile the FINAL expert state: a filter-recovery revision re-runs the
+            # reasoning without re-firing the orchestrator stage's on_stage_end, so
+            # bring the expert panel up to date with whatever the accepted draft used.
+            run.on_experts_settled(flow.ctx.expert_calls)
 
             ctx = flow.ctx
             run.memory_writes = [
@@ -237,6 +191,15 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 run.on_status("delivered")
                 await run.stream_report(str(text))
 
+    except asyncio.CancelledError:
+        # cooperative cancel via POST /runs/:id/cancel: the task was cancelled, which
+        # unwound the pipeline at its next await (no output-filter delivery ran). Mark
+        # the run `cancelled` and let `finally` finish the stream + persist. Only honor
+        # a cancel the USER asked for — any other CancelledError (e.g. server shutdown)
+        # is not a user stop, so re-raise it instead of mislabeling the run.
+        if not run.cancel_requested:
+            raise
+        run.on_status("cancelled")
     except Exception as exc:  # the web layer never lets a run take the server down
         run.on_log_entry(
             type("E", (), {"kind": "error", "message": f"pipeline error: {exc}", "detail": {}})()

@@ -1,16 +1,14 @@
-"""Bounded output-filter recovery: the orchestrator gets one or more chances to
-revise a rejected draft, but the filter is always the final authority and the
-loop fails closed after MAX_OUTPUT_RETRIES."""
+"""The single, shared, fail-closed output-filter recovery
+(`core.pipeline.recover_from_filter_block`): the orchestrator gets bounded chances
+to revise a rejected draft, but the filter is always the final authority and the
+loop fails closed after FILTER_MAX_REVISIONS. ONE loop — used by both the CLI
+pipeline and the web run driver — narrated on the shared decision log."""
 
 import asyncio
 from types import SimpleNamespace
 
 from foundation import VrakshaContext, constants
-# _OUTPUT_FILTER lives in the run driver module (runs.py is now a façade); patch
-# it there so _recover_from_filter_block (which reads run_driver's module global)
-# sees the stub. RunState + the recovery fn are still importable via the façade.
-import api.run_driver as driver_mod
-from api.runs import RunState, _recover_from_filter_block
+import core.pipeline as pipeline
 
 
 def _blocked_ctx() -> VrakshaContext:
@@ -29,40 +27,56 @@ class _FakeFlow:
 def _patch_orchestration(monkeypatch):
     async def fake_run_loop(normalized, ports, ctx):
         return SimpleNamespace(text="revised draft", confidence=0.9)
+    # the recovery imports these lazily from their modules, so patch them there
     monkeypatch.setattr("core.orchestrator.loop.run_loop", fake_run_loop)
     monkeypatch.setattr("core.orchestrator.utils.wiring.build_default_ports", lambda ctx: object())
 
 
-def test_retry_recovers_when_filter_passes(monkeypatch):
+def test_recovery_succeeds_when_filter_passes(monkeypatch):
     _patch_orchestration(monkeypatch)
 
-    # filter passes on the first revision
     async def fake_filter(flow):
-        flow.ctx.filter_blocked = False
+        flow.ctx.filter_blocked = False     # filter accepts the revised draft
         return flow
-    monkeypatch.setattr(driver_mod, "_OUTPUT_FILTER",fake_filter)
+    monkeypatch.setattr(pipeline, "output_filter_run", fake_filter)
 
     flow = _FakeFlow(_blocked_ctx())
-    run = RunState(id="r", user_id="u", title="t", brief="b")
-    out = asyncio.run(_recover_from_filter_block(flow, run))
+    out = asyncio.run(pipeline.recover_from_filter_block(flow))
 
-    assert out.ctx.filter_blocked is False          # recovered
-    assert out.ctx.filter_retry_count == 1          # one revision was enough
-    assert out.ctx.filter_feedback is None          # not left lingering
+    assert out.ctx.filter_blocked is False                # recovered
+    assert out.ctx.filter_retry_count == 1                # one revision was enough
+    assert out.ctx.filter_feedback is None                # not left lingering
+    assert out.ctx.orchestrator_response.text == "revised draft"
 
 
-def test_retry_is_bounded_and_fails_closed(monkeypatch):
+def test_recovery_is_bounded_and_fails_closed(monkeypatch):
     _patch_orchestration(monkeypatch)
 
-    # filter NEVER accepts — the loop must stop and stay blocked
+    async def always_block(flow):
+        flow.ctx.filter_blocked = True      # filter NEVER accepts
+        return flow
+    monkeypatch.setattr(pipeline, "output_filter_run", always_block)
+
+    flow = _FakeFlow(_blocked_ctx())
+    out = asyncio.run(pipeline.recover_from_filter_block(flow))
+
+    assert out.ctx.filter_retry_count == constants.FILTER_MAX_REVISIONS  # bounded
+    assert out.ctx.filter_blocked is True                               # fail closed
+
+
+def test_recovery_narrates_each_attempt_on_the_decision_log(monkeypatch):
+    _patch_orchestration(monkeypatch)
+
     async def always_block(flow):
         flow.ctx.filter_blocked = True
         return flow
-    monkeypatch.setattr(driver_mod, "_OUTPUT_FILTER",always_block)
+    monkeypatch.setattr(pipeline, "output_filter_run", always_block)
 
     flow = _FakeFlow(_blocked_ctx())
-    run = RunState(id="r", user_id="u", title="t", brief="b")
-    out = asyncio.run(_recover_from_filter_block(flow, run))
+    asyncio.run(pipeline.recover_from_filter_block(flow))
 
-    assert out.ctx.filter_retry_count == constants.MAX_OUTPUT_RETRIES  # bounded
-    assert out.ctx.filter_blocked is True                             # fail closed
+    notices = [
+        e for e in flow.ctx.decision_log
+        if getattr(e, "kind", "") == "warning" and "revising" in getattr(e, "message", "")
+    ]
+    assert len(notices) == constants.FILTER_MAX_REVISIONS  # one per attempt, on the shared log
