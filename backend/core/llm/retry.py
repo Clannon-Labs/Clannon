@@ -23,6 +23,7 @@ from pydantic_ai import Agent
 
 from foundation import constants
 
+from . import usage
 from .failures import is_transient as _is_transient
 
 
@@ -46,7 +47,9 @@ async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:
 
     for attempt in range(attempts):
         try:
-            return await agent.run(*args, **kwargs)
+            result = await agent.run(*args, **kwargs)
+            usage.accumulate(result)   # count this run's tokens into the active usage scope, if any
+            return result
         except Exception as exc:
             is_last = attempt == attempts - 1
             if is_last or not _is_transient(exc):

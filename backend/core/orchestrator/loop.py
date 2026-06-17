@@ -38,6 +38,15 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
             detail=event,
         ))
 
+    async def on_message(text: str) -> None:
+        """The orchestrator's conversational voice (`say`): accumulate it for the turn
+        AND stream it live as a `message` decision-log entry, so the user sees the agent
+        talking WHILE experts work. Free-form commentary — never the filtered deliverable."""
+        if not text:
+            return
+        ctx.assistant_message = (ctx.assistant_message or "") + text
+        await ports.log.emit(DecisionLogEntry(kind="message", message=text))
+
     answer: OrchestratorAnswer = await ports.caps.run_turn(
         system_prompt=get_prompt("orchestrator").text,
         # revision_feedback is set only on a bounded retry after the output filter
@@ -45,14 +54,17 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         user_prompt=build_user_prompt(normalized, hydration, ctx.filter_feedback, ctx.input_files),
         output_type=OrchestratorAnswer,
         on_event=on_event,
+        on_message=on_message,
         # prior turns of this session, fed as real chat history so a follow-up
         # continues the conversation instead of re-reading a summary blob
         conversation=ctx.conversation,
     )
 
     await ports.log.emit(DecisionLogEntry(kind="answer", message=answer.answer_text))
+    message, deliverable = _split_message_and_deliverable(answer, ctx)
     return OrchestratorResponse(
-        text=_resolve_deliverable(answer, ctx),
+        text=deliverable,
+        message=message,
         confidence=answer.confidence,
         finding_refs=[f.ref for f in ctx.expert_findings],
     )
@@ -66,6 +78,25 @@ def _resolve_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str
             if finding.ref == answer.deliverable_ref and finding.full_content:
                 return finding.full_content
     return answer.answer_text
+
+
+def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> tuple[str, str]:
+    """Split a turn into (conversational message, deliverable).
+
+    The message is whatever the orchestrator streamed via `say()` this turn. The
+    deliverable is the referenced expert artifact, or the model's own answer text.
+
+    Robustness fallback: a turn that produced NO artifact and ran NO research is the
+    orchestrator simply TALKING (a greeting, a clarifying question, a direct reply) —
+    treat its answer text as the chat message, not a deliverable card, even if it did
+    not explicitly call `say()`. A turn that DID research keeps its synthesized text as
+    the deliverable; the message is just the (optional) framing it streamed.
+    """
+    deliverable = _resolve_deliverable(answer, ctx)
+    message = ctx.assistant_message or ""
+    if not message and not answer.deliverable_ref and not ctx.expert_findings:
+        return deliverable, ""   # direct conversational turn: the answer IS the chat, no deliverable
+    return message, deliverable
 
 
 async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:

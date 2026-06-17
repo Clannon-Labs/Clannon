@@ -51,7 +51,7 @@ def _db() -> sqlite3.Connection:
             id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT NOT NULL,
             brief TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
             tokens_used INTEGER NOT NULL DEFAULT 0, log_json TEXT NOT NULL DEFAULT '[]',
-            experts_json TEXT NOT NULL DEFAULT '[]', report TEXT,
+            experts_json TEXT NOT NULL DEFAULT '[]', report TEXT, message TEXT,
             memory_writes_json TEXT NOT NULL DEFAULT '[]',
             feedback_rating TEXT, feedback_comment TEXT, feedback_at REAL,
             parent_run_id TEXT, session_id TEXT, block_stage TEXT,
@@ -71,6 +71,7 @@ def _db() -> sqlite3.Connection:
         ("block_stage", "TEXT"),
         ("artifacts_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("inputs_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("message", "TEXT"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")
@@ -145,8 +146,9 @@ def start_session(response: Response, user: User) -> None:
         token,
         max_age=config.SESSION_TTL_S,
         httponly=True,
-        samesite="lax",
+        samesite="lax",   # apex ↔ subdomain are the same site, so Lax carries the cookie on top-level nav
         secure=config.COOKIE_SECURE,
+        domain=config.COOKIE_DOMAIN,   # None = host-only (dev); ".clannon.com" = shared apex + subdomains
         path="/",
     )
 
@@ -156,7 +158,7 @@ def end_session(request: Request, response: Response) -> None:
     if token:
         with _db() as db:
             db.execute("DELETE FROM sessions WHERE token_hash=?", (_hash_token(token),))
-    response.delete_cookie(config.COOKIE_NAME, path="/")
+    response.delete_cookie(config.COOKIE_NAME, path="/", domain=config.COOKIE_DOMAIN)
 
 
 def current_user(request: Request) -> User:

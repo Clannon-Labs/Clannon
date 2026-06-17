@@ -262,11 +262,34 @@ def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str)
     return _make_wrapper(key, input_schema, description, invoke=invoke)
 
 
-def build_orchestrator_tools(tool_specs: list, expert_specs: list) -> list[Callable]:
+def _make_say_tool(on_message: Callable) -> Callable:
+    """The orchestrator's CONVERSATIONAL voice. `say(text)` hands `text` to the user
+    immediately (a live chat message), so the orchestrator can talk WHILE experts work."""
+
+    async def say(text: str) -> str:
+        await on_message(text)
+        return "shown to the user"
+
+    say.__name__ = "say"
+    say.__doc__ = (
+        "Say something to the user right now, live (a conversational chat message). Use it "
+        "to talk to the user while you work: briefly say what you are about to do before you "
+        "spawn experts, share a caveat, or give a status update. This is your conversational "
+        "voice and is shown to the user immediately. It is NOT the deliverable — put the "
+        "actual result/report in your final answer. Args: text (what to say)."
+    )
+    return say
+
+
+def build_orchestrator_tools(
+    tool_specs: list, expert_specs: list, on_message: Callable | None = None
+) -> list[Callable]:
     """Native tools for the orchestrator agent: every available tool + expert as a
-    guarded wrapper. The handler resolves the specs; support never imports the
-    registry."""
+    guarded wrapper, plus (when a message sink is wired) the `say` conversational tool.
+    The handler resolves the specs; support never imports the registry."""
     fns: list[Callable] = []
+    if on_message is not None:
+        fns.append(_make_say_tool(on_message))
     for spec in tool_specs:
         fns.append(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description))
     for spec in expert_specs:

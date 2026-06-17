@@ -12,11 +12,23 @@ import os
 VERSION = "0.1-dev"
 
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+# Origins allowed to call the API with credentials (the session cookie). Comma-
+# separated; defaults to the single FRONTEND_ORIGIN, so dev is unchanged. In
+# production set e.g. "https://clannon.com,https://app.clannon.com" so both the
+# marketing apex and the workspace subdomain can make authenticated XHR/SSE calls.
+CORS_ORIGINS = [
+    o.strip() for o in os.getenv("SERVER_CORS_ORIGINS", FRONTEND_ORIGIN).split(",") if o.strip()
+]
 # Plan assigned to new signups. "pro" is handy in local dev (unlocks all
 # memory tiers); production keeps "free" until Stripe drives upgrades.
 DEFAULT_PLAN = os.getenv("SERVER_DEFAULT_PLAN", "free")
 COOKIE_NAME = "clannon_session"
 COOKIE_SECURE = os.getenv("SERVER_COOKIE_SECURE", "0") == "1"
+# Cookie domain. Unset (default) → a host-only cookie (today's same-origin dev
+# behavior). Set to ".clannon.com" in production so ONE session cookie is valid for
+# the apex AND every subdomain (clannon.com ↔ app.clannon.com) — that is the whole
+# mechanism behind seamless, no-relogin auth when the workspace moves to app.clannon.com.
+COOKIE_DOMAIN = os.getenv("SERVER_COOKIE_DOMAIN") or None
 SESSION_TTL_S = 60 * 60 * 24 * 14  # 14 days
 DB_PATH = os.getenv("SERVER_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "clannon.db"))
 

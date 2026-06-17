@@ -42,7 +42,7 @@ app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.FRONTEND_ORIGIN],
+    allow_origins=config.CORS_ORIGINS,   # apex + workspace subdomain in prod; FRONTEND_ORIGIN by default
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -274,6 +274,17 @@ def run_thread(run_id: str, user: auth.User = Depends(auth.current_user)) -> lis
     return [t.full_json() for t in runs.STORE.session_turns(user.id, session_id)]
 
 
+@app.delete("/sessions/{session_id}", status_code=204)
+def delete_session(session_id: str, user: auth.User = Depends(auth.current_user)) -> Response:
+    """Permanently delete a whole conversation (every turn in the session), scoped to
+    its owner. Idempotent: a session with nothing left for this caller is a no-op 204 —
+    a session that isn't theirs simply has nothing to delete and is never revealed
+    (204, not 404). The conversation and its turns are removed; the assistant's learned
+    cross-session memory is retained."""
+    runs.STORE.delete_session(user.id, session_id)
+    return Response(status_code=204)
+
+
 @app.get("/runs/{run_id}/artifacts/{name}")
 async def download_artifact(
     run_id: str, name: str, user: auth.User = Depends(auth.current_user)
@@ -403,20 +414,28 @@ def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_user)) -
 
 @app.get("/usage")
 def usage(user: auth.User = Depends(auth.current_user)) -> dict:
-    # Token metering lands with the Redis budget system; until then the
-    # endpoint serves the plan budget with zero recorded spend.
+    """Real metered usage for the current period: the actual tokens this user's runs
+    spent (run.tokensUsed, summed over a trailing 30-day window) against their plan's
+    monthly budget. The Redis-atomic budget ENFORCEMENT (decrement + hard stop) lands
+    separately; this is the read-only view the sidebar meter and Settings render."""
     plan = next((p for p in config.PLANS if p["id"] == user.plan), config.PLANS[0])
     today = datetime.now(timezone.utc).date()
-    by_day = [
-        {"date": (today - timedelta(days=13 - i)).isoformat(), "tokens": 0}
-        for i in range(14)
-    ]
+    window = 30
+    start = today - timedelta(days=window - 1)
+    by_day = {(start + timedelta(days=i)).isoformat(): 0 for i in range(window)}
+    for r in runs.STORE.list_for(user.id):
+        try:
+            day = datetime.fromisoformat(r.created_at).astimezone(timezone.utc).date().isoformat()
+        except (TypeError, ValueError):
+            continue
+        if day in by_day:
+            by_day[day] += int(getattr(r, "tokens_used", 0) or 0)
     return {
-        "periodStart": by_day[0]["date"],
-        "periodEnd": (today + timedelta(days=16)).isoformat(),
+        "periodStart": start.isoformat(),
+        "periodEnd": today.isoformat(),
         "budget": plan["tokenBudget"],
-        "used": 0,
-        "byDay": by_day,
+        "used": sum(by_day.values()),
+        "byDay": [{"date": d, "tokens": t} for d, t in by_day.items()],
     }
 
 

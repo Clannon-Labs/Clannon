@@ -27,7 +27,7 @@ from typing import Any
 from foundation import Flow
 
 from core import pipeline
-from core.llm import model_overrides
+from core.llm import model_overrides, usage_scope
 
 from observability import DecisionLogSink
 
@@ -119,13 +119,16 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         if stage.name == "orchestrator":
             run.on_experts_settled(flow.ctx.expert_calls)
 
+    run_usage = None   # bound by usage_scope below; read in the except handlers too
     try:
         # user model preferences apply to every stage in this run. The pipeline is
         # the single end-to-end runner; the API only observes it (status, decision
         # log, expert reconciliation) and owns the classification + delivery. Output-
         # filter recovery lives INSIDE the pipeline now (one shared loop for CLI + web),
         # narrated on the decision log we already stream.
-        with model_overrides(build_model_overrides(run.user_id, run.session_models)):
+        # usage_scope meters the real tokens every LLM call in this turn spends, so
+        # run.tokens_used (and the /usage aggregate) reflect actual spend, not 0.
+        with model_overrides(build_model_overrides(run.user_id, run.session_models)), usage_scope() as run_usage:
             flow: Flow[Any] = await pipeline.run(
                 run.brief,
                 session_id=run.session_id or run.id,
@@ -140,12 +143,26 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 on_stage_end=_on_stage_end,
             )
 
+            # real metered tokens for this turn (every model call funnelled through
+            # core.llm.run_agent within the scope above). Charged on every outcome —
+            # delivered, blocked, or cancelled — since the models already ran.
+            run.tokens_used = run_usage.total_tokens
+
             # reconcile the FINAL expert state: a filter-recovery revision re-runs the
             # reasoning without re-firing the orchestrator stage's on_stage_end, so
             # bring the expert panel up to date with whatever the accepted draft used.
             run.on_experts_settled(flow.ctx.expert_calls)
 
             ctx = flow.ctx
+            # The conversational message (chat bubble). If the orchestrator streamed it
+            # live via say(), run.message is already built from message_delta events. If
+            # instead it returned its reply as the final answer (a direct turn that didn't
+            # call say()), surface that now so the bubble still shows + replays.
+            _resp = ctx.orchestrator_response
+            _final_msg = getattr(_resp, "message", "") if _resp is not None else ""
+            if _final_msg and not run.message:
+                run.message = _final_msg
+                run.emit({"type": "message_delta", "text": _final_msg})
             run.memory_writes = [
                 {
                     "content": getattr(w, "content", str(w)),
@@ -199,12 +216,22 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # is not a user stop, so re-raise it instead of mislabeling the run.
         if not run.cancel_requested:
             raise
+        # charge the tokens spent up to the stop (completed model calls accumulated
+        # before the cancel interrupted the in-flight one), per the usage-based model.
+        if run_usage is not None:
+            run.tokens_used = run_usage.total_tokens
         run.on_status("cancelled")
     except Exception as exc:  # the web layer never lets a run take the server down
+        if run_usage is not None:
+            run.tokens_used = run_usage.total_tokens
         run.on_log_entry(
             type("E", (), {"kind": "error", "message": f"pipeline error: {exc}", "detail": {}})()
         )
         run.on_status("failed")
     finally:
+        run.emit({"type": "message_done"})   # close the conversational channel for this turn
         run.finish()
-        STORE.persist(run)
+        # a run deleted mid-flight (its session was removed) must not be re-persisted
+        # by this finally — that would resurrect the row the delete just removed.
+        if not run.deleted:
+            STORE.persist(run)

@@ -76,3 +76,6 @@ class OrchestratorResponse:
     confidence: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
     finding_refs: list[str] = field(default_factory=list)   # -> ctx.expert_findings
+    message: str = ""   # the orchestrator's CONVERSATIONAL reply to the user (the chat
+                        # bubble), separate from `text` (the deliverable/report). May be set
+                        # with no `text` (pure conversation) or alongside it (note + deliverable).

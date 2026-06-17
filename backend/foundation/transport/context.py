@@ -251,6 +251,10 @@ class VrakshaContext:
 
     orchestrator_response: Any | None = None  # foundation.OrchestratorResponse
                                               # raw response before output filtering
+    assistant_message: str = ""               # the orchestrator's CONVERSATIONAL voice for
+                                              # this turn (what it `say()`s to the user, streamed
+                                              # live) — distinct from the deliverable/report that
+                                              # buffers through the output filter
 
     hydration_items: list[Any] = field(default_factory=list)
                                               # foundation.MemoryItem

@@ -57,6 +57,7 @@ class Capabilities:
         user_prompt: str,
         output_type: type,
         on_event: Callable[[dict], Awaitable[None]] | None = None,
+        on_message: Callable[[str], Awaitable[None]] | None = None,
         max_turns: int | None = None,
         max_output_tokens: int | None = None,
         model: Any | None = None,
@@ -93,7 +94,7 @@ class Capabilities:
             "orchestrator",
             output_type=output_type,
             system_prompt=system_prompt,
-            tools=build_orchestrator_tools(tool_specs, expert_specs),
+            tools=build_orchestrator_tools(tool_specs, expert_specs, on_message=on_message),
             deps_type=OrchestratorDeps,
         )
         try:

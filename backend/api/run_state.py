@@ -76,6 +76,10 @@ class RunState:
     log: list[dict] = field(default_factory=list)
     experts: dict[str, dict] = field(default_factory=dict)
     report: str | None = None
+    # the orchestrator's conversational message for this turn (the chat bubble), built
+    # live from `message_delta` events. Distinct from `report` (the deliverable). A turn
+    # may have a message and no report (pure conversation), both, or report only.
+    message: str | None = None
     tokens_used: int = 0
     # delivered output artifacts (ArtifactRef dicts) — files an expert produced
     # and published, captured out of its workspace to durable storage
@@ -91,6 +95,9 @@ class RunState:
     # set when the user requests cancellation, so the execute() coroutine can tell a
     # user cancel apart from any other CancelledError (e.g. server shutdown).
     cancel_requested: bool = False
+    # set when this run's session is deleted mid-flight, so execute()'s finally skips
+    # persisting it (which would resurrect the row the delete just removed).
+    deleted: bool = False
     memory_writes: list[dict] = field(default_factory=list)
     feedback_rating: str | None = None       # "up" | "down" | None
     feedback_comment: str | None = None
@@ -122,10 +129,20 @@ class RunState:
         self.emit({"type": "status", "status": status})
 
     def on_log_entry(self, entry: Any) -> None:
+        kind = getattr(entry, "kind", "observation")
+        if kind == "message":
+            # the orchestrator's conversational voice: a SEPARATE channel from the
+            # structured decision log. Stream it as a message_delta and accumulate the
+            # turn's chat bubble; it does not go into the decision log.
+            text = str(getattr(entry, "message", ""))
+            if text:
+                self.message = (self.message or "") + text
+                self.emit({"type": "message_delta", "text": text})
+            return
         mapped = {
             "id": f"log_{secrets.token_hex(6)}",
             "ts": _now(),
-            "kind": getattr(entry, "kind", "observation"),
+            "kind": kind,
             "title": getattr(entry, "message", str(entry)),
         }
         detail = getattr(entry, "detail", None) or {}
@@ -198,6 +215,7 @@ class RunState:
             "brief": self.brief,
             "decisionLog": self.log,
             "experts": list(self.experts.values()),
+            "message": self.message,   # the conversational chat bubble (separate from report)
             "report": self.report,
             "sources": [],  # structured sources arrive with the citation expert
             "artifacts": self.artifacts,

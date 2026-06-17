@@ -108,18 +108,44 @@ class RunStore:
         self.persist(run)
         return "cancelled"
 
+    def delete_session(self, user_id: str, session_id: str) -> int:
+        """Permanently delete every run in a session, scoped to its owner. Returns the
+        count removed (0 = nothing to delete — an idempotent no-op).
+
+        Live runs are marked `deleted` (so their execute() finally won't re-persist the
+        row this just removed) and any in-flight task is cancelled, then dropped from the
+        cache; persisted rows are deleted from SQLite. The conversation and its turns are
+        removed; the assistant's learned, cross-session memory is RETAINED — it is user
+        knowledge, not tied to one conversation.
+        """
+        removed = 0
+        for rid, run in list(self._runs.items()):
+            if run.user_id == user_id and (run.session_id or run.id) == session_id:
+                run.deleted = True
+                task = getattr(run, "task", None)
+                if task is not None and not task.done():
+                    task.cancel()
+                self._runs.pop(rid, None)
+                removed += 1
+        with auth._db() as db:
+            cur = db.execute(
+                "DELETE FROM runs WHERE user_id=? AND session_id=?", (user_id, session_id)
+            )
+            removed += cur.rowcount or 0
+        return removed
+
     def persist(self, run: RunState) -> None:
         """Write-through on terminal state — one row per finished run."""
         with auth._db() as db:
             db.execute(
                 "INSERT OR REPLACE INTO runs "
-                "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,memory_writes_json,"
+                "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,message,memory_writes_json,"
                 "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json,inputs_json) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id, run.user_id, run.title, run.brief, run.status,
                     run.created_at, run.tokens_used, json.dumps(run.log),
-                    json.dumps(list(run.experts.values())), run.report,
+                    json.dumps(list(run.experts.values())), run.report, run.message,
                     json.dumps(run.memory_writes),
                     run.feedback_rating, run.feedback_comment, run.parent_run_id,
                     run.session_id or run.id, run.block_stage, json.dumps(run.artifacts),
@@ -141,6 +167,7 @@ class RunStore:
         run.memory_writes = json.loads(row["memory_writes_json"])
         # columns added by later migrations — guard for rows/readers without them
         keys = row.keys()
+        run.message = row["message"] if "message" in keys else None
         run.feedback_rating = row["feedback_rating"] if "feedback_rating" in keys else None
         run.feedback_comment = row["feedback_comment"] if "feedback_comment" in keys else None
         run.parent_run_id = row["parent_run_id"] if "parent_run_id" in keys else None

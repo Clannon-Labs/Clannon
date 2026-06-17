@@ -39,6 +39,8 @@ class OrchestratorAnswer(BaseModel):
 DecisionLogKind = Literal[
     "hydration", "route", "expert_spawn", "tool_call",
     "observation", "answer", "warning", "error",
+    "message",   # the orchestrator's conversational voice — streamed live to the user as
+                 # a `message_delta`, distinct from the structured decision ticks above
 ]
 
 
