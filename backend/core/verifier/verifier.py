@@ -55,7 +55,10 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     started = time.monotonic()
 
     try:
-        normalized = await flow.load()
+        # coerce so the normalizer is optional: if it was removed from the
+        # pipeline the payload is raw (a str/bytes), and the verifier still gets a
+        # valid NormalizedInput to adjudicate. No-op when the normalizer ran.
+        normalized = NormalizedInput.coerce(await flow.load())
         flow.ctx.advance(PipelineStage.VERIFYING)
         result = verify_deterministic(flow, normalized)
 

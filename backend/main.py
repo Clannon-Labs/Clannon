@@ -35,20 +35,15 @@ load_dotenv(".env.local", override=True)
 if os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
     os.environ.pop("GEMINI_API_KEY", None)
 
+from observability import configure_logging, DecisionLogSink
+
+# Route every trace (module logs, provider HTTP calls, warnings, and the decision
+# log) to the one unified file before anything constructs a provider client.
+configure_logging()
+
 from core import pipeline
 
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vraksha.log")
-
-# display label per pipeline stage, in ACTIVE_STAGES order
-_STAGE_LABELS = [
-    "taking it in",
-    "scanning input",
-    "normalizing",
-    "verifying",
-    "working",
-    "checking the answer",
-    "delivering",
-]
 
 _KIND_GLYPH = {
     "hydration": "◈",
@@ -90,8 +85,11 @@ def _write_run_log(brief: str, session_id: str, user_id: str, flow, summary: dic
 
 
 async def _one_shot(brief: str, user_id: str) -> int:
-    # old behavior, scripts rely on it: delivery prints log + answer itself
-    flow = await pipeline.run(brief, session_id="cli", user_id=user_id)
+    # old behavior, scripts rely on it: delivery prints log + answer itself.
+    # A sink (no UI callback) mirrors the decision log into the unified file too.
+    flow = await pipeline.run(
+        brief, session_id="cli", user_id=user_id, decision_log=DecisionLogSink()
+    )
     summary = flow.summary()
     _write_run_log(brief, "cli", user_id, flow, summary)
     if flow.should_stop:
@@ -103,7 +101,6 @@ async def _one_shot(brief: str, user_id: str) -> int:
 
 
 async def _repl(user_id: str) -> int:
-    from foundation import Flow
     from rich.console import Console, Group
     from rich.live import Live
     from rich.markdown import Markdown
@@ -112,10 +109,6 @@ async def _repl(user_id: str) -> int:
     from rich.text import Text
 
     os.environ["VRAKSHA_CLI_QUIET"] = "1"  # the TUI renders the answer itself
-    logging.basicConfig(
-        filename=LOG_PATH, level=logging.WARNING,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
 
     console = Console()
     session_id = f"cli-{uuid.uuid4().hex[:8]}"
@@ -139,7 +132,7 @@ async def _repl(user_id: str) -> int:
             console.print("[dim]type a research brief and hit enter. /exit quits.[/]")
             continue
 
-        # ---- live run: stage chain with an observed decision log --------
+        # ---- live run: pipeline.run drives itself; the TUI only observes ----
         activity: list[Text] = []
         stage_label = ["starting"]
         spinner = Spinner("dots", text=Text("starting", style="dim"), style="green")
@@ -155,19 +148,27 @@ async def _repl(user_id: str) -> int:
             style = "red" if kind == "error" else ("yellow" if kind == "warning" else "dim")
             activity.append(Text(f"  {glyph} {message[:110]}", style=style))
 
+        log_sink = DecisionLogSink(_on_entry)
         started = time.monotonic()
-        flow = Flow.new(brief, session_id=session_id, user_id=user_id)
-        flow.ctx.decision_log = _ObservedLog(_on_entry)
+        flow = None
 
         try:
             with Live(_render(), console=console, refresh_per_second=10, transient=True) as live:
-                for stage, label in zip(pipeline.ACTIVE_STAGES, _STAGE_LABELS):
-                    if flow.should_stop:
-                        break
-                    stage_label[0] = label
+                def _on_stage(stage) -> None:        # before a stage runs: label it
+                    stage_label[0] = stage.label
                     live.update(_render())
-                    flow = await stage(flow)
+
+                def _on_stage_end(stage, _flow) -> None:  # after: refresh the feed
                     live.update(_render())
+
+                flow = await pipeline.run(
+                    brief,
+                    session_id=session_id,
+                    user_id=user_id,
+                    decision_log=log_sink,
+                    on_stage=_on_stage,
+                    on_stage_end=_on_stage_end,
+                )
         except KeyboardInterrupt:
             console.print("[yellow]run interrupted[/]\n")
             continue

@@ -6,7 +6,10 @@ import asyncio
 from types import SimpleNamespace
 
 from foundation import VrakshaContext, constants
-import api.runs as runs_mod
+# _OUTPUT_FILTER lives in the run driver module (runs.py is now a façade); patch
+# it there so _recover_from_filter_block (which reads run_driver's module global)
+# sees the stub. RunState + the recovery fn are still importable via the façade.
+import api.run_driver as driver_mod
 from api.runs import RunState, _recover_from_filter_block
 
 
@@ -37,7 +40,7 @@ def test_retry_recovers_when_filter_passes(monkeypatch):
     async def fake_filter(flow):
         flow.ctx.filter_blocked = False
         return flow
-    monkeypatch.setattr(runs_mod, "_OUTPUT_FILTER", fake_filter)
+    monkeypatch.setattr(driver_mod, "_OUTPUT_FILTER",fake_filter)
 
     flow = _FakeFlow(_blocked_ctx())
     run = RunState(id="r", user_id="u", title="t", brief="b")
@@ -55,7 +58,7 @@ def test_retry_is_bounded_and_fails_closed(monkeypatch):
     async def always_block(flow):
         flow.ctx.filter_blocked = True
         return flow
-    monkeypatch.setattr(runs_mod, "_OUTPUT_FILTER", always_block)
+    monkeypatch.setattr(driver_mod, "_OUTPUT_FILTER",always_block)
 
     flow = _FakeFlow(_blocked_ctx())
     run = RunState(id="r", user_id="u", title="t", brief="b")

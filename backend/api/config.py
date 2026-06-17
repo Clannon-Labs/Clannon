@@ -87,9 +87,35 @@ PLANS = [
 ]
 
 FEATURES = {"demo": True, "billing": True}
-# low floor on purpose: a message can be as short as "hi" — the workspace is a
-# conversation, not a form. The pipeline handles short and long inputs alike.
-LIMITS = {"briefMinChars": 2}
+
+# ---------------------------------------------------------------------------
+# Input limits — ONE backend source of truth. The security/quality-relevant
+# values live here (server-enforced) and are surfaced to the frontend via
+# /config.limits so the UI validates against the exact numbers the server
+# enforces, never a separate client-side copy that could drift or be bumped
+# from the browser. Bump a limit HERE and both server enforcement and the UI
+# follow. (briefMinChars floor is intentionally low: a message can be as short
+# as "hi" — the workspace is a conversation, not a form.)
+# ---------------------------------------------------------------------------
+BRIEF_MIN_CHARS = 2
+BRIEF_MAX_CHARS = 20_000          # run + follow-up brief length cap
+MAX_INPUT_FILES = 10              # files attachable to one run
+WIKI_UPLOAD_MAX_FILES = 10        # files per bulk wiki import
+WIKI_UPLOAD_MAX_BYTES = 512 * 1024
+WIKI_UPLOAD_EXTENSIONS = (".md", ".markdown", ".txt")
+
+LIMITS = {
+    "briefMinChars": BRIEF_MIN_CHARS,
+    "briefMaxChars": BRIEF_MAX_CHARS,
+    "maxInputFiles": MAX_INPUT_FILES,
+    "wikiUploadMaxFiles": WIKI_UPLOAD_MAX_FILES,
+    "wikiUploadMaxBytes": WIKI_UPLOAD_MAX_BYTES,
+    "wikiUploadExtensions": list(WIKI_UPLOAD_EXTENSIONS),
+}
+
+# Auth rate limit on credential endpoints (server-side only — not UI-relevant).
+AUTH_RATE_WINDOW_S = 60
+AUTH_RATE_MAX_ATTEMPTS = 10
 
 # ---------------------------------------------------------------------------
 # Model catalog — the single backend-editable source for what users see in

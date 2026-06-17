@@ -39,6 +39,32 @@ class NormalizedInput:
     required_capability: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def coerce(cls, payload: Any) -> "NormalizedInput":
+        """
+        Return `payload` unchanged if it is already a NormalizedInput, else
+        synthesize a trivial one from a raw payload.
+
+        This is what lets the normalizer be an OPTIONAL stage: the verifier and the
+        orchestrator call `coerce(await flow.load())`, so if the normalizer is
+        removed from the pipeline they receive an un-normalized-but-valid
+        NormalizedInput (text content for a str, a preserved native payload for
+        bytes) instead of crashing on a raw payload. When the normalizer is present
+        this is a no-op — its output is already a NormalizedInput.
+        """
+        if isinstance(payload, NormalizedInput):
+            return payload
+        if isinstance(payload, str):
+            return cls(modality="text", content_type="text/plain", content=payload)
+        if isinstance(payload, (bytes, bytearray)):
+            return cls(
+                modality="binary",
+                content_type="application/octet-stream",
+                native_payload=bytes(payload),
+                preserved_native=True,
+            )
+        return cls(modality="text", content_type="text/plain", content=str(payload))
+
 
 @dataclass(slots=True)
 class OrchestratorResponse:

@@ -72,17 +72,20 @@ loop before planning. Steps:
 
 1. **Scope check** — no `user_id` → empty package with a note. Fail closed.
 2. **Embed** the normalized query text (one embedding call, cached model).
-3. **Per-tier search** — each allowed tier, top-K (default 8), filtered
-   `user_id == request.user_id`. Tiers the caller's plan doesn't include are
-   simply not searched (`allowed_tiers` on the request; default: all).
+3. **Per-tier search** — each allowed tier, top-K (`MEMORY_SEARCH_TOP_K`, default
+   10), filtered `user_id == request.user_id`. Tiers the caller's plan doesn't
+   include are simply not searched (`allowed_tiers` on the request; default: all).
+   A **relevance floor** (`MEMORY_RELEVANCE_FLOOR`, default 0.30) drops hits below
+   that raw cosine *before* ranking, so weak neighbours never fill context.
 4. **Score** = cosine similarity × recency decay (half-life 30 days,
    floor 0.5) — old memories fade but never vanish.
 5. **Lagrangian budget allocation** across tiers (the root doc's model):
    maximize Σ relevance·tokens s.t. Σ tokens ≤ budget, tokens_tier ≥ min_tier.
    Implementation: water-filling — every non-empty tier gets its minimum
    floor (wiki 25%, others 15% of budget), the remainder goes to tiers in
-   proportion to their mean item relevance; items pack per-tier best-first
-   under ~4 chars/token estimation until the tier budget is spent.
+   proportion to their mean item relevance; items pack per-tier best-first under a
+   real `tiktoken` (cl100k_base) token count — char heuristic only as fallback —
+   until the tier budget is spent.
 6. **Assemble** `HydrationPackage` ordered by (trust desc, score desc) so the
    prompt renders wiki → semantic → episodic/procedural.
 

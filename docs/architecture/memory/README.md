@@ -30,6 +30,19 @@ This subsystem has **two authoritative documents** — read both:
 > is code-adjacent and referenced by path in the build instructions. Do not move
 > it; link to it.
 
+### Target design (roadmap, not yet shipped)
+
+3. **The robust target** — [`ROBUST_MEMORY_ARCHITECTURE.md`](ROBUST_MEMORY_ARCHITECTURE.md):
+   the proposed end-state — typed institutional knowledge, a bi-temporal
+   cross-media knowledge graph, hybrid reranked retrieval, the governance/curation
+   subsystem (write-gate, consolidation, forgetting, reconciliation), and
+   memory-layer poisoning defense — synthesised from the 2026 frontier and mapped
+   onto the two documents above. **Status: PROPOSED TARGET.** It is the
+   destination, not what runs today; the two docs above describe shipped reality.
+   A change there binds only after a ratifying ADR (founder owns memory policy).
+   Read it to understand where memory is going and why; read the two above to
+   understand what exists now.
+
 ## Why memory is its own tier of importance
 
 Per [../../vision/INVARIANTS.md](../../vision/INVARIANTS.md): memory is

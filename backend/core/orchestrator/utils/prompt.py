@@ -9,7 +9,22 @@ memory-hydration view. Capabilities are NOT listed here.
 
 from __future__ import annotations
 
+import time
+
 from foundation import HydrationPackage, NormalizedInput
+
+
+def _age(created_at: float) -> str:
+    """A short 'learned when' hint for a memory item — provenance the model can
+    use to weigh recency. Empty when unknown (text/wiki tier carries no ts)."""
+    if not created_at:
+        return ""
+    days = (time.time() - created_at) / 86_400
+    if days < 1:
+        return ", today"
+    if days < 2:
+        return ", yesterday"
+    return f", {int(days)}d ago"
 
 
 def build_user_prompt(
@@ -43,7 +58,10 @@ def build_user_prompt(
 
     if getattr(hydration, "items", None):
         parts.append("\nRelevant memory:")
-        parts.extend(f"- ({item.store.value}) {item.content}" for item in hydration.items)
+        parts.extend(
+            f"- ({item.store.value}{_age(getattr(item, 'created_at', 0.0))}) {item.content}"
+            for item in hydration.items
+        )
 
     if revision_feedback:
         parts.append(

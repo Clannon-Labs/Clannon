@@ -22,6 +22,8 @@ import ffmpeg
 
 from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
+from ._base import highest_threat, run_subworker
+
 
 @dataclass
 class VideoWorkerResult:
@@ -260,36 +262,6 @@ def _video_output_container(path: Path) -> tuple[str, str, dict[str, str]]:
     return "matroska", ".mkv", {}
 
 
-def _highest_threat(results: list[VideoWorkerResult]) -> ThreatLevel:
-    """Return the most severe threat level reported by video sub-workers."""
-    if not results:
-        return ThreatLevel.NONE
-
-    order = {
-        ThreatLevel.NONE: 0,
-        ThreatLevel.LOW: 1,
-        ThreatLevel.MEDIUM: 2,
-        ThreatLevel.HIGH: 3,
-        ThreatLevel.CRITICAL: 4,
-    }
-    return max((result.threat_level for result in results), key=order.__getitem__)
-
-
-def _run_worker(worker: VideoWorker, path: Path) -> VideoWorkerResult:
-    """Run one video sub-worker and wrap unexpected errors with context."""
-    try:
-        return worker(path)
-    except SanitizationError:
-        raise
-    except Exception as exc:
-        worker_name = worker.__name__.removeprefix("_").removesuffix("_worker")
-        raise SanitizationError(
-            f"Video sanitizer worker failed: {exc}",
-            modality="video",
-            worker=worker_name,
-        ) from exc
-
-
 def _scan_sync(video: Any) -> VideoScanResult:
     """
     Run all video sanitizer checks and aggregate their results synchronously.
@@ -304,12 +276,12 @@ def _scan_sync(video: Any) -> VideoScanResult:
         input_path.write_bytes(payload)
 
         results = [
-            _run_worker(_probe_worker, input_path),
-            _run_worker(_metadata_worker, input_path),
-            _run_worker(_sanitize_worker, input_path),
+            run_subworker(_probe_worker, input_path, modality="video", label="Video"),
+            run_subworker(_metadata_worker, input_path, modality="video", label="Video"),
+            run_subworker(_sanitize_worker, input_path, modality="video", label="Video"),
         ]
 
-    threat_level = _highest_threat(results)
+    threat_level = highest_threat(results)
     reasons = [result.reason for result in results if result.reason]
     sanitized_video = next(
         (result.sanitized_video for result in results if result.sanitized_video is not None),

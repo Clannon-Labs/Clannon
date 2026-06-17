@@ -1,5 +1,5 @@
 """
-Expert support: the tool-driving environment an expert runs in.
+Agent assembly: the tool-driving environments the expert and orchestrator run in.
 
 An expert is a real agent. Its model gets a `load_skill` tool plus thin wrappers
 over its granted tools, and decides for itself when to pull a skill or call a
@@ -13,137 +13,79 @@ The handler packs the run materials into `ExpertEnv`; `think()` assembles the
 agent from them. An expert that never calls `think()` (e.g. a test fake) builds
 no model and reads no prompt.
 
+The orchestrator is also a tool-driving agent (see below): its native tools are
+every available tool + expert, each a guarded wrapper built by the same factory.
+
+Skills + overlay resolution live in `skills.py` / `overlay.py`; the public skills
+names are re-exported here so existing importers keep working.
+
 This module intentionally does NOT use `from __future__ import annotations`: the
-granted-tool wrappers carry a dynamic per-tool argument type that pydantic-ai
-must introspect as a real type, not a deferred string.
+granted-tool wrappers carry a dynamic per-tool argument type that pydantic-ai must
+introspect as a real type (via get_type_hints), not a deferred string.
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Awaitable, Callable
 
 from foundation import MaxRetriesExceededError, ToolCallRecord, WorkspacePort, constants
 from core.llm import RunContext      # SDK types only via the core/llm boundary
 
 from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
+from .overlay import expert_overlay_rel as _expert_overlay_rel, overlaid as _overlaid
+from .skills import SkillBook, skills_hint
+
+# Re-exported so importers of `support` (handler/__init__) keep working unchanged.
+__all__ = [
+    "ScopedToolbox",
+    "ExpertDeps",
+    "ExpertEnv",
+    "SkillBook",
+    "skills_hint",
+    "load_skill",
+    "build_expert_tools",
+    "think",
+    "OrchestratorDeps",
+    "build_orchestrator_tools",
+]
 
 
 # ---------------------------------------------------------------------------
-# Prompt overlay — an expert's system.md and skills are co-located beside its
-# code (the committed baseline), but their production text can be supplied out of
-# git via the same overlay folder the registry prompts use. These helpers map an
-# expert file to its overlay-relative path and resolve overlay-first. (Imports are
-# local to dodge any package import-order edge.)
+# Tool-wrapper factory — the orchestrator and each expert expose their granted
+# capabilities to the model as thin async wrappers. All three wrapper kinds
+# (expert tool, orchestrator tool, orchestrator expert) are identical except for
+# the body that routes the call; that body is supplied as `invoke`. The model
+# calls the wrapper with the capability's own input_schema, so the schema MUST be
+# a real (non-deferred) annotation pydantic-ai can introspect.
 # ---------------------------------------------------------------------------
 
 
-def _expert_overlay_rel(module_dir: Path, *parts: str) -> str:
-    """Overlay-relative path for an expert file, mirroring its repo layout
-    (e.g. experts/web_research/system.md). Falls back to the bare dir name if the
-    module somehow sits outside the repo root."""
-    from registry.config.prompts import REPO_ROOT
+def _make_wrapper(
+    key: str,
+    input_schema: type,
+    description: str,
+    *,
+    invoke: Callable[[RunContext, object], Awaitable],
+) -> Callable:
+    """Build one model-facing tool wrapper. `invoke(ctx, args)` carries the only
+    varying part (routing the call); everything else — the real `args:
+    input_schema` annotation pydantic-ai introspects, the mangled tool name, and
+    the description as docstring — is set identically for every wrapper."""
 
-    try:
-        rel = module_dir.resolve().relative_to(REPO_ROOT)
-    except ValueError:
-        rel = Path(module_dir.name)
-    return rel.joinpath(*parts).as_posix()
+    async def wrapper(ctx: RunContext, args: input_schema):
+        return await invoke(ctx, args)
 
-
-def _overlaid(module_dir: Path, baseline: Path) -> Path:
-    """Resolve one expert file (system.md or a skill) through the prompt overlay:
-    the production text wins, the committed file is the fallback."""
-    from registry.config.prompts import resolve_overlay
-
-    rel = _expert_overlay_rel(module_dir, *baseline.relative_to(module_dir).parts)
-    path, _source = resolve_overlay(rel, baseline)
-    return path
+    # The dynamic per-tool schema must reach pydantic-ai as a real type (it reads
+    # __annotations__ via get_type_hints), so bind it explicitly on the wrapper.
+    wrapper.__annotations__["args"] = input_schema
+    wrapper.__name__ = key.replace(".", "_")
+    wrapper.__doc__ = description
+    return wrapper
 
 
 # ---------------------------------------------------------------------------
-# Skills — loaded on demand, never dumped into context
+# Expert run environment
 # ---------------------------------------------------------------------------
-
-@dataclass
-class _Skill:
-    """One resolved skill: its name, a short when-to-use description (from the
-    file's optional frontmatter), and its body (the full guide, handed over on
-    demand)."""
-    name: str
-    description: str
-    body: str
-
-
-def _parse_skill(path: Path) -> tuple[str, str]:
-    """Split a skill file into (description, body).
-
-    The description comes from an optional `---`-delimited frontmatter
-    `description:` line; it is surfaced up front so the expert can pick a skill
-    WITHOUT loading its body. The body is the full guide handed over only on
-    load_skill(). A file with no frontmatter has an empty description and is its
-    own body.
-    """
-    text = path.read_text(encoding="utf-8").strip()
-    if not text.startswith("---"):
-        return "", text
-    end = text.find("\n---", 3)
-    if end == -1:
-        return "", text
-    frontmatter, body = text[3:end], text[end + 4:].strip()
-    description = ""
-    for line in frontmatter.splitlines():
-        stripped = line.strip()
-        if stripped.lower().startswith("description:"):
-            description = stripped.split(":", 1)[1].strip().strip('"').strip("'")
-            break
-    return description, body
-
-
-class SkillBook:
-    """
-    The skills available to an expert, resolved beside its module.
-
-    Each entry in the expert's `skills=(...)` is a `.md` file or a folder (whose
-    `.md` files are all offered), located beside the expert. Progressive
-    disclosure: only each skill's name + short description is surfaced to the
-    expert up front (see skills_hint); the full body is handed over only when the
-    expert calls `load()`. This keeps context lean as the skill set grows.
-    """
-
-    def __init__(self, base_dir: Path, entries: tuple[str, ...]) -> None:
-        # The SET of skills is defined by the committed files beside the expert;
-        # each is then resolved through the prompt overlay (prod text wins, the
-        # committed file is the fallback), so the overlay can harden a skill but
-        # never introduce one. Each file is read once here to split its up-front
-        # description from its on-demand body — the body is NOT put in context now.
-        self._skills: dict[str, _Skill] = {}
-        for entry in entries:
-            path = base_dir / entry
-            if path.is_dir():
-                files = sorted(path.glob("*.md"))
-            elif path.is_file():
-                files = [path]
-            else:
-                files = []
-            for md in files:
-                description, body = _parse_skill(_overlaid(base_dir, md))
-                self._skills[md.stem] = _Skill(md.stem, description, body)
-
-    def names(self) -> list[str]:
-        """Skill names this expert may load."""
-        return sorted(self._skills)
-
-    def catalog(self) -> list[tuple[str, str]]:
-        """(name, description) per skill — what's surfaced up front so the expert
-        can choose a skill to load without seeing its body."""
-        return [(name, self._skills[name].description) for name in sorted(self._skills)]
-
-    def load(self, name: str) -> str:
-        """Return one skill's full body by name, or a clear not-found note."""
-        skill = self._skills.get(name)
-        if skill is None:
-            return f"[no skill named {name!r}; available: {', '.join(self.names()) or 'none'}]"
-        return skill.body
 
 
 class ScopedToolbox:
@@ -193,15 +135,13 @@ def _make_tool_fn(key: str, input_schema: type, description: str) -> Callable:
     calls it with the tool's own input schema; the call routes through the scoped
     handler (all guards apply). Returns the tool's structured result or an error."""
 
-    async def call_tool(ctx: RunContext[ExpertDeps], args: input_schema) -> dict:
+    async def invoke(ctx: RunContext[ExpertDeps], args) -> dict:
         if ctx.deps.tools is None:
             return {"error": "no tools granted to this expert"}
         record = await ctx.deps.tools.call(key, args.model_dump())
         return record.result if record.success else {"error": record.error}
 
-    call_tool.__name__ = key.replace(".", "_")
-    call_tool.__doc__ = description
-    return call_tool
+    return _make_wrapper(key, input_schema, description, invoke=invoke)
 
 
 def build_expert_tools(granted: list, skills: SkillBook) -> list[Callable]:
@@ -213,25 +153,6 @@ def build_expert_tools(granted: list, skills: SkillBook) -> list[Callable]:
     for spec in granted:
         tools.append(_make_tool_fn(spec.key, spec.input_schema, spec.description))
     return tools
-
-
-def skills_hint(skills: SkillBook) -> str:
-    """A short instruction appended to the system prompt so the expert knows which
-    skills exist and WHEN to pull each one. Only names + descriptions go here; the
-    full skill body is handed over on demand via load_skill (progressive
-    disclosure), so this stays small as the skill set grows."""
-    catalog = skills.catalog()
-    if not catalog:
-        return ""
-    listing = "\n".join(
-        f"- {name}: {desc}" if desc else f"- {name}" for name, desc in catalog
-    )
-    return (
-        "\n\nYou have loadable skills — reference guides that are NOT yet in your "
-        "context. Each is listed below as `name: when to use it`. Call "
-        "load_skill(name) to read a skill's full guide ONLY when it is relevant to "
-        "the current step; do not assume its contents otherwise:\n" + listing
-    )
 
 
 _EXPERT_FORCE_ANSWER = (
@@ -312,15 +233,13 @@ def _make_orchestrator_tool_fn(key: str, input_schema: type, description: str) -
     """Expose one tool to the orchestrator's model; routes through the guarded
     ToolHandler and records on ctx.tool_calls."""
 
-    async def call_tool(ctx: RunContext[OrchestratorDeps], args: input_schema) -> dict:
+    async def invoke(ctx: RunContext[OrchestratorDeps], args) -> dict:
         record = await ctx.deps.tools.call_tool(
             ToolRequest(key=key, arguments=args.model_dump()), ctx.deps.ctx
         )
         return record.result if record.success else {"error": record.error}
 
-    call_tool.__name__ = key.replace(".", "_")
-    call_tool.__doc__ = description
-    return call_tool
+    return _make_wrapper(key, input_schema, description, invoke=invoke)
 
 
 def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str) -> Callable:
@@ -329,7 +248,7 @@ def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str)
     always sends a real prompt. Full findings are buffered to ctx; the brief
     summary is returned to the model."""
 
-    async def spawn_expert(ctx: RunContext[OrchestratorDeps], args: input_schema) -> str:
+    async def invoke(ctx: RunContext[OrchestratorDeps], args) -> str:
         summaries = await ctx.deps.experts.run_experts(
             [ExpertRequest(key=key, arguments=args.model_dump())], ctx.deps.ctx
         )
@@ -340,9 +259,7 @@ def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str)
         # expert (finding_refs) or deliver it directly (deliverable_ref)
         return f"[finding_ref: {s.finding_ref}] {s.summary}" if s.finding_ref else s.summary
 
-    spawn_expert.__name__ = key.replace(".", "_")
-    spawn_expert.__doc__ = description
-    return spawn_expert
+    return _make_wrapper(key, input_schema, description, invoke=invoke)
 
 
 def build_orchestrator_tools(tool_specs: list, expert_specs: list) -> list[Callable]:

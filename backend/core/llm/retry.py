@@ -19,35 +19,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
 from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 
 from foundation import constants
 
-
-# Rate limiting plus transient server/gateway failures. Permanent 4xx codes
-# (400/401/403/404 — bad request, auth, missing model) are deliberately excluded:
-# retrying them only wastes time and hides the real fault.
-_TRANSIENT_STATUS = frozenset({408, 429, 500, 502, 503, 504})
-
-
-def _is_transient(exc: BaseException) -> bool:
-    """True for provider failures that a short backoff might clear."""
-    # A FallbackModel that exhausts its chain raises an ExceptionGroup of the
-    # per-model failures. If ANY of them is transient (a rate-limit window, a
-    # congestion spike), waiting and re-running the whole chain can succeed.
-    if isinstance(exc, BaseExceptionGroup):
-        return any(_is_transient(sub) for sub in exc.exceptions)
-    if isinstance(exc, ModelHTTPError):
-        return exc.status_code in _TRANSIENT_STATUS
-    # A ModelAPIError that is not an HTTP error is a transport/connection
-    # failure (no status code) — treat as transient and retry.
-    if isinstance(exc, ModelAPIError):
-        return True
-    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError, asyncio.TimeoutError)):
-        return True
-    return False
+from .failures import is_transient as _is_transient
 
 
 async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:

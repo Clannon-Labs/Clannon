@@ -20,11 +20,40 @@ from foundation import (
     MemoryItem,
     MemoryStore,
     MemoryWriteProposal,
+    constants,
 )
 
 from . import embeddings, store, writer
 
 log = logging.getLogger(__name__)
+
+# Real token counting for budget allocation. tiktoken's cl100k_base is not the
+# embedding/generation tokenizer, but it is a far better generic estimate than the
+# old len//4 heuristic — and budgeting is internal context pressure, not billing.
+# Lazy + fail-soft: if the encoder can't load, fall back to the char heuristic so
+# budgeting never breaks a turn (degrade-never-fail).
+_ENCODER = None
+_ENCODER_FAILED = False
+
+
+def _count_tokens(text: str) -> int:
+    global _ENCODER, _ENCODER_FAILED
+    if not text:
+        return 0
+    if _ENCODER is None and not _ENCODER_FAILED:
+        try:
+            import tiktoken
+
+            _ENCODER = tiktoken.get_encoding("cl100k_base")
+        except Exception as exc:  # noqa: BLE001 — never let token counting break a turn
+            log.warning("tiktoken unavailable, using char heuristic: %s", exc)
+            _ENCODER_FAILED = True
+    if _ENCODER is not None:
+        try:
+            return max(1, len(_ENCODER.encode(text)))
+        except Exception:  # noqa: BLE001
+            pass
+    return max(1, len(text) // _CHARS_PER_TOKEN)
 
 _TIER_TRUST = {
     MemoryStore.WIKI: 3,
@@ -40,7 +69,8 @@ _TIER_FLOOR = {
     MemoryStore.PROCEDURAL: 0.15,
 }
 _DEFAULT_BUDGET_TOKENS = 2000
-_SEARCH_K = 8
+_SEARCH_K = constants.MEMORY_SEARCH_TOP_K          # candidates per inferred tier
+_RELEVANCE_FLOOR = constants.MEMORY_RELEVANCE_FLOOR  # drop weak hits before ranking
 _RECENCY_HALF_LIFE_S = 30 * 86_400
 _RECENCY_FLOOR = 0.5
 _MIN_ACCEPT_CONFIDENCE = 0.6   # semantic/procedural acceptance bar
@@ -98,9 +128,14 @@ class MemoryManager:
                   for tier in inferred)
             )
             for tier, hits in zip(inferred, tier_hits):
+                # Relevance floor: drop weak hits on RAW cosine before recency
+                # weighting, so a stale-but-relevant memory is kept while a
+                # fresh-but-irrelevant one is not. Without this, the store always
+                # returns up to k even when every hit is weak (Phase 2 §C).
                 scored = [
                     {**h, "rank_score": h["score"] * _recency(float(h.get("created_at", 0)))}
                     for h in hits
+                    if h["score"] >= _RELEVANCE_FLOOR
                 ]
                 scored.sort(key=lambda h: h["rank_score"], reverse=True)
                 if scored:
@@ -119,7 +154,7 @@ class MemoryManager:
         if per_tier:
             # Lagrangian water-filling over what's left after wiki: floors first,
             # remainder ∝ mean relevance.
-            wiki_spent = sum(max(1, len(i.content) // _CHARS_PER_TOKEN) for i in items)
+            wiki_spent = sum(_count_tokens(i.content) for i in items)
             inferred_budget = max(0, budget - wiki_spent)
             floors = {t: int(inferred_budget * _TIER_FLOOR[t]) for t in per_tier}
             remainder = max(0, inferred_budget - sum(floors.values()))
@@ -130,13 +165,14 @@ class MemoryManager:
             for tier, hits in per_tier.items():
                 spent = 0
                 for hit in hits:
-                    cost = max(1, len(hit.get("content", "")) // _CHARS_PER_TOKEN)
+                    cost = _count_tokens(hit.get("content", ""))
                     if spent + cost > allocation[tier]:
                         break
                     spent += cost
                     items.append(MemoryItem(
                         store=tier, content=hit.get("content", ""),
                         score=hit["rank_score"], trust=_TIER_TRUST[tier],
+                        created_at=float(hit.get("created_at", 0.0)),  # provenance
                     ))
 
         items.sort(key=lambda i: (i.trust, i.score), reverse=True)
@@ -159,7 +195,7 @@ class MemoryManager:
         scored.sort(key=lambda s: s[0], reverse=True)  # most relevant first; ties keep order
         items, spent = [], 0
         for _overlap, text in scored:
-            cost = max(1, len(text) // _CHARS_PER_TOKEN)
+            cost = _count_tokens(text)
             if spent + cost > wiki_budget:
                 break
             spent += cost

@@ -117,6 +117,6 @@ def test_pii_worker_flags_and_anonymizes_personal_data(pii_text, raw_email):
     ],
 )
 def test_highest_threat_returns_most_severe_level(results, expected_threat):
-    result = text_worker._highest_threat(results)
+    result = text_worker.highest_threat(results)
     print("highest threat result:", result)
     assert result == expected_threat

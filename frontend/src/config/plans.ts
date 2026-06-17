@@ -1,6 +1,15 @@
 /**
- * Subscription plans — single source of truth for the pricing page,
- * settings/billing, and memory tier gating.
+ * Subscription plans — DISPLAY FALLBACK ONLY.
+ *
+ * The backend is the single source of truth for tiers, token budgets, prices,
+ * and memory-tier gating: `backend/api/config.py` (PLANS) serves them at
+ * GET /config, and the client OVERRIDES these values with that response when the
+ * backend is reachable (see lib/api/http.ts getRemoteConfig + the RemoteConfig
+ * type: "Overrides src/config/plans.ts when present"). These constants are only
+ * the offline/dev fallback used to render the pricing/settings pages when /config
+ * is unreachable — editing them in the browser cannot change anyone's real budget
+ * or entitlements, which are enforced server-side. Keep them loosely in sync with
+ * config.py for a sensible offline view, but treat the backend as authoritative.
  */
 
 export type PlanId = "free" | "starter" | "pro" | "agency";

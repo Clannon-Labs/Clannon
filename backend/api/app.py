@@ -12,8 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import secrets
-import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -23,6 +21,12 @@ from dotenv import load_dotenv
 # Same env bootstrap as main.py — before anything builds provider clients.
 load_dotenv(".env")
 load_dotenv(".env.local", override=True)
+
+from observability import configure_logging
+
+# Route every run's traces (module logs, provider HTTP, warnings, decision log)
+# to the one unified file, exactly like the CLI — before the pipeline imports below.
+configure_logging()
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,17 +61,15 @@ def get_config() -> dict:
 
 # Sliding-window rate limit on credential endpoints (per client IP):
 # blunts brute-force and signup flooding. In-memory is fine per-process;
-# Redis takes over when the cloud deployment lands.
-_AUTH_WINDOW_S = 60
-_AUTH_MAX_ATTEMPTS = 10
+# Redis takes over when the cloud deployment lands. Limits live in config.
 _auth_attempts: dict[str, list[float]] = {}
 
 
 def _auth_rate_limit(request: Request) -> None:
     ip = request.client.host if request.client else "unknown"
     now = time.time()
-    recent = [t for t in _auth_attempts.get(ip, []) if now - t < _AUTH_WINDOW_S]
-    if len(recent) >= _AUTH_MAX_ATTEMPTS:
+    recent = [t for t in _auth_attempts.get(ip, []) if now - t < config.AUTH_RATE_WINDOW_S]
+    if len(recent) >= config.AUTH_RATE_MAX_ATTEMPTS:
         raise HTTPException(429, "Too many attempts — wait a minute and try again.")
     recent.append(now)
     _auth_attempts[ip] = recent
@@ -125,8 +127,7 @@ def oauth_start(provider: str) -> RedirectResponse:
 # Run creation is multipart so a brief can carry optional input files (a CSV to
 # analyze, code to work on). Files are malware-scanned at this boundary and the
 # clean originals are seeded into the expert workspace; the brief still crosses
-# the full pipeline.
-_MAX_INPUT_FILES = 10
+# the full pipeline. Limits live in config (one source, surfaced via /config).
 
 
 def _parse_session_models(models: str) -> dict[str, str]:
@@ -160,8 +161,8 @@ async def _admit_uploads(files: list[UploadFile]) -> list:
     a readable reason — the run is never created with an unscanned file."""
     if not files:
         return []
-    if len(files) > _MAX_INPUT_FILES:
-        raise HTTPException(422, f"At most {_MAX_INPUT_FILES} files per run.")
+    if len(files) > config.MAX_INPUT_FILES:
+        raise HTTPException(422, f"At most {config.MAX_INPUT_FILES} files per run.")
     admitted = []
     for upload in files:
         data = await upload.read()
@@ -179,7 +180,7 @@ def list_runs(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 
 @app.post("/runs", status_code=201)
 async def create_run(
-    brief: str = Form(..., min_length=1, max_length=20_000),
+    brief: str = Form(..., min_length=1, max_length=config.BRIEF_MAX_CHARS),
     files: list[UploadFile] = File(default=[]),
     models: str = Form(default=""),
     user: auth.User = Depends(auth.current_user),
@@ -221,7 +222,7 @@ def set_run_feedback(
 @app.post("/runs/{run_id}/followup", status_code=201)
 async def follow_up_run(
     run_id: str,
-    brief: str = Form(..., min_length=1, max_length=20_000),
+    brief: str = Form(..., min_length=1, max_length=config.BRIEF_MAX_CHARS),
     files: list[UploadFile] = File(default=[]),
     models: str = Form(default=""),
     user: auth.User = Depends(auth.current_user),
@@ -301,25 +302,20 @@ class MemoryBody(BaseModel):
     content: str = Field(min_length=1, max_length=20_000)
 
 
-def _wiki_json(row: sqlite3.Row) -> dict:
+def _wiki_json(entry: dict) -> dict:
+    """Format a raw wiki entry (from the auth data layer) as the API shape."""
     return {
-        "id": row["id"],
+        "id": entry["id"],
         "tier": "wiki",
-        "title": row["title"],
-        "content": row["content"],
-        "updatedAt": datetime.fromtimestamp(row["updated_at"], tz=timezone.utc).isoformat(),
+        "title": entry["title"],
+        "content": entry["content"],
+        "updatedAt": datetime.fromtimestamp(entry["updated_at"], tz=timezone.utc).isoformat(),
     }
 
 
 @app.get("/memory")
 def list_memory(user: auth.User = Depends(auth.current_user)) -> list[dict]:
-    with auth._db() as db:
-        wiki = [
-            _wiki_json(row)
-            for row in db.execute(
-                "SELECT * FROM wiki_entries WHERE user_id=? ORDER BY updated_at DESC", (user.id,)
-            )
-        ]
+    wiki = [_wiki_json(entry) for entry in auth.wiki_list(user.id)]
     episodic = [
         {
             "id": f"{run.id}_m{i}",
@@ -339,33 +335,15 @@ def list_memory(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 def create_memory(body: MemoryBody, user: auth.User = Depends(auth.current_user)) -> dict:
     if body.tier != "wiki":
         raise HTTPException(403, "Only wiki memory is user-writable; other tiers are written by the pipeline.")
-    entry_id = f"m_{secrets.token_hex(6)}"
-    now = time.time()
-    with auth._db() as db:
-        db.execute(
-            "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
-            (entry_id, user.id, body.title, body.content, now),
-        )
-        row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
-    return _wiki_json(row)
+    return _wiki_json(auth.wiki_create(user.id, body.title, body.content))
 
 
 @app.put("/memory/{entry_id}")
 def update_memory(entry_id: str, body: MemoryBody, user: auth.User = Depends(auth.current_user)) -> dict:
-    with auth._db() as db:
-        updated = db.execute(
-            "UPDATE wiki_entries SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
-            (body.title, body.content, time.time(), entry_id, user.id),
-        ).rowcount
-        if not updated:
-            raise HTTPException(404, "Memory entry not found.")
-        row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
-    return _wiki_json(row)
-
-
-_UPLOAD_EXTENSIONS = {".md", ".markdown", ".txt"}
-_UPLOAD_MAX_BYTES = 512 * 1024
-_UPLOAD_MAX_FILES = 10
+    entry = auth.wiki_update(user.id, entry_id, body.title, body.content)
+    if entry is None:
+        raise HTTPException(404, "Memory entry not found.")
+    return _wiki_json(entry)
 
 
 @app.post("/memory/upload", status_code=201)
@@ -375,42 +353,30 @@ async def upload_memory(
     """Bulk wiki import: each uploaded markdown/text file becomes an entry."""
     if not files:
         raise HTTPException(422, "No files received.")
-    if len(files) > _UPLOAD_MAX_FILES:
-        raise HTTPException(422, f"At most {_UPLOAD_MAX_FILES} files per upload.")
-    created: list[dict] = []
-    with auth._db() as db:
-        for upload in files:
-            name = os.path.basename(upload.filename or "untitled.md")
-            stem, ext = os.path.splitext(name)
-            if ext.lower() not in _UPLOAD_EXTENSIONS:
-                raise HTTPException(422, f"{name}: only {', '.join(sorted(_UPLOAD_EXTENSIONS))} files are accepted.")
-            raw = await upload.read()
-            if len(raw) > _UPLOAD_MAX_BYTES:
-                raise HTTPException(422, f"{name}: larger than 512 KB.")
-            try:
-                content = raw.decode("utf-8").strip()
-            except UnicodeDecodeError:
-                raise HTTPException(422, f"{name}: not valid UTF-8 text.")
-            if not content:
-                raise HTTPException(422, f"{name}: file is empty.")
-            entry_id = f"m_{secrets.token_hex(6)}"
-            now = time.time()
-            db.execute(
-                "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
-                (entry_id, user.id, stem[:120] or "Untitled", content, now),
-            )
-            row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
-            created.append(_wiki_json(row))
-    return created
+    if len(files) > config.WIKI_UPLOAD_MAX_FILES:
+        raise HTTPException(422, f"At most {config.WIKI_UPLOAD_MAX_FILES} files per upload.")
+    entries: list[tuple[str, str]] = []
+    for upload in files:
+        name = os.path.basename(upload.filename or "untitled.md")
+        stem, ext = os.path.splitext(name)
+        if ext.lower() not in config.WIKI_UPLOAD_EXTENSIONS:
+            raise HTTPException(422, f"{name}: only {', '.join(config.WIKI_UPLOAD_EXTENSIONS)} files are accepted.")
+        raw = await upload.read()
+        if len(raw) > config.WIKI_UPLOAD_MAX_BYTES:
+            raise HTTPException(422, f"{name}: larger than {config.WIKI_UPLOAD_MAX_BYTES // 1024} KB.")
+        try:
+            content = raw.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            raise HTTPException(422, f"{name}: not valid UTF-8 text.")
+        if not content:
+            raise HTTPException(422, f"{name}: file is empty.")
+        entries.append((stem[:120] or "Untitled", content))
+    return [_wiki_json(e) for e in auth.wiki_bulk_create(user.id, entries)]
 
 
 @app.delete("/memory/{entry_id}", status_code=204)
 def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_user)) -> None:
-    with auth._db() as db:
-        deleted = db.execute(
-            "DELETE FROM wiki_entries WHERE id=? AND user_id=?", (entry_id, user.id)
-        ).rowcount
-    if not deleted:
+    if not auth.wiki_delete(user.id, entry_id):
         raise HTTPException(404, "Memory entry not found.")
 
 
@@ -450,11 +416,7 @@ def get_models(user: auth.User = Depends(auth.current_user)) -> list[dict]:
     per role (5 selectable + verifier/filter read-only). `model` is the user's choice or
     the role's default; `default` is the system default; `experts` lists what the role
     drives (informational)."""
-    with auth._db() as db:
-        prefs = {
-            row["layer"]: row["model"]
-            for row in db.execute("SELECT layer, model FROM model_prefs WHERE user_id=?", (user.id,))
-        }
+    prefs = auth.model_prefs_get(user.id)
     return [
         {
             "layer": entry["layer"],
@@ -484,12 +446,7 @@ def set_model(body: ModelBody, user: auth.User = Depends(auth.current_user)) -> 
         raise HTTPException(403, "This role is system-managed and cannot be changed.")
     if body.model not in entry["options"]:
         raise HTTPException(422, "Model not available for this role.")
-    with auth._db() as db:
-        db.execute(
-            "INSERT INTO model_prefs (user_id, layer, model) VALUES (?,?,?) "
-            "ON CONFLICT(user_id, layer) DO UPDATE SET model=excluded.model",
-            (user.id, body.layer, body.model),
-        )
+    auth.model_prefs_set(user.id, body.layer, body.model)
 
 
 # ---------- billing (Stripe lands post-checkpoint) ----------

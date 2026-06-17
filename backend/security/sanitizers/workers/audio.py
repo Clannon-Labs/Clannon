@@ -27,6 +27,8 @@ from mutagen import File as MutagenFile
 
 from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
+from ._base import highest_threat, run_subworker
+
 
 @dataclass
 class AudioWorkerResult:
@@ -261,36 +263,6 @@ def _audio_output_container(path: Path) -> tuple[str, str]:
     return "matroska", ".mka"
 
 
-def _highest_threat(results: list[AudioWorkerResult]) -> ThreatLevel:
-    """Return the most severe threat level reported by audio sub-workers."""
-    if not results:
-        return ThreatLevel.NONE
-
-    order = {
-        ThreatLevel.NONE: 0,
-        ThreatLevel.LOW: 1,
-        ThreatLevel.MEDIUM: 2,
-        ThreatLevel.HIGH: 3,
-        ThreatLevel.CRITICAL: 4,
-    }
-    return max((result.threat_level for result in results), key=order.__getitem__)
-
-
-def _run_worker(worker: AudioWorker, path: Path) -> AudioWorkerResult:
-    """Run one audio sub-worker and wrap unexpected errors with context."""
-    try:
-        return worker(path)
-    except SanitizationError:
-        raise
-    except Exception as exc:
-        worker_name = worker.__name__.removeprefix("_").removesuffix("_worker")
-        raise SanitizationError(
-            f"Audio sanitizer worker failed: {exc}",
-            modality="audio",
-            worker=worker_name,
-        ) from exc
-
-
 def _scan_sync(audio: Any) -> AudioScanResult:
     """
     Run all audio sanitizer checks and aggregate their results synchronously.
@@ -305,12 +277,12 @@ def _scan_sync(audio: Any) -> AudioScanResult:
         input_path.write_bytes(payload)
 
         results = [
-            _run_worker(_probe_worker, input_path),
-            _run_worker(_metadata_worker, input_path),
-            _run_worker(_sanitize_worker, input_path),
+            run_subworker(_probe_worker, input_path, modality="audio", label="Audio"),
+            run_subworker(_metadata_worker, input_path, modality="audio", label="Audio"),
+            run_subworker(_sanitize_worker, input_path, modality="audio", label="Audio"),
         ]
 
-    threat_level = _highest_threat(results)
+    threat_level = highest_threat(results)
     reasons = [result.reason for result in results if result.reason]
     sanitized_audio = next(
         (result.sanitized_audio for result in results if result.sanitized_audio is not None),

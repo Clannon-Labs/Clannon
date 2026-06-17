@@ -31,6 +31,8 @@ class MemoryItem:
     content: str
     score: float = 0.0          # per-query relevance
     trust: int = 0              # higher = more authoritative (wiki > inferred)
+    created_at: float = 0.0     # unix ts the memory was written — provenance
+                                # ("learned when"); 0 = unknown / text tier (wiki)
 
 
 @dataclass(frozen=True, slots=True)

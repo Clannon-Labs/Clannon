@@ -18,23 +18,14 @@ from __future__ import annotations
 
 from typing import Literal
 
+from core.llm import classify_failure as _classify_llm_failure
 from foundation import OrchestratorResponse, VrakshaContext
 
+# The user-facing degraded reasons the orchestrator can surface. Classification
+# (what KIND of failure this is) now lives in core/llm/failures.py — the single
+# source of truth shared with the retry wrapper. recovery keeps only the POLICY:
+# mapping a kind to its user-facing reason and building the degraded answer.
 FailureKind = Literal["rate_limit", "timeout", "error"]
-
-# markers that identify a provider rate-limit / quota-exhaustion anywhere in the
-# raised exception tree (FallbackExceptionGroup wraps one per model+key)
-_RATE_LIMIT_MARKERS = (
-    "429",
-    "resource_exhausted",
-    "rate limit",
-    "ratelimit",
-    "quota",
-    "exceeded your current quota",
-    "usage limits",
-    "overloaded",
-    "too many requests",
-)
 
 # how much of each partial finding to surface, and how many, so a degraded
 # answer stays legible (and well under the filter's input bounds)
@@ -42,30 +33,22 @@ _PER_FINDING_CHARS = 4000
 _MAX_FINDINGS = 6
 
 
-def _markers_in(exc: BaseException, seen: set[int]) -> bool:
-    """True if any rate-limit marker appears in this exception, its cause, or its
-    sub-exceptions (ExceptionGroup / FallbackExceptionGroup)."""
-    if id(exc) in seen:                      # guard against cyclic __cause__ chains
-        return False
-    seen.add(id(exc))
-    blob = f"{type(exc).__name__} {exc}".lower()
-    if getattr(exc, "status_code", None) == 429 or any(m in blob for m in _RATE_LIMIT_MARKERS):
-        return True
-    for sub in getattr(exc, "exceptions", ()) or ():     # ExceptionGroup members
-        if _markers_in(sub, seen):
-            return True
-    cause = exc.__cause__ or exc.__context__
-    return _markers_in(cause, seen) if cause is not None else False
-
-
 def classify_failure(exc: BaseException) -> FailureKind:
-    """Map a loop failure to the cause the user should hear about. Rate-limit wins
-    over timeout: a stalled run is most often a 429 storm retried into the wall clock."""
-    if _markers_in(exc, set()):
+    """Map a loop failure to the cause the user should hear about.
+
+    Delegates the actual classification to the shared core/llm classifier, then
+    collapses its richer kinds into the three reasons the user sees: a transient
+    non-rate-limit server/transport fault ("server_error") reads to the user as a
+    generic error, exactly as the old string-only classifier rendered it.
+    Rate-limit still wins over timeout (a stalled run is most often a 429 storm
+    retried into the wall clock) — that precedence is enforced in the shared
+    classifier."""
+    kind = _classify_llm_failure(exc)
+    if kind == "rate_limit":
         return "rate_limit"
-    if isinstance(exc, TimeoutError):        # asyncio.TimeoutError is an alias since 3.11
+    if kind == "timeout":
         return "timeout"
-    return "error"
+    return "error"          # "server_error" and "error" both surface as a generic error
 
 
 _REASONS: dict[FailureKind, str] = {

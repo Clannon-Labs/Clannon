@@ -41,7 +41,7 @@ def _worker_semaphore() -> asyncio.Semaphore:
     return semaphore
 
 
-async def _run_worker(scan_coro):
+async def _bounded_scan(scan_coro):
     """
     Run one modality worker under the global concurrency limit and a per-worker
     timeout. A worker that exceeds SANITIZER_TIMEOUT_WORKER_S raises TimeoutError,
@@ -50,6 +50,21 @@ async def _run_worker(scan_coro):
     async with _worker_semaphore():
         async with asyncio.timeout(constants.SANITIZER_TIMEOUT_WORKER_S):
             return await scan_coro
+
+
+# Maps an intake-detected modality to its sanitizer worker MODULE. The runner
+# schedules a bounded scan for each detected modality present here, in this
+# declaration order (preserved from the previous hardcoded dispatch). Mapping to
+# the module (not the already-bound `.scan`) keeps the entry point late-bound —
+# resolved at call time, exactly like the old `if "x" in modalities: x.scan(raw)`
+# ladder — so a worker swapped at runtime (or in a test) is honored.
+_MODALITY_WORKERS = {
+    "text": text,
+    "image": image,
+    "pdf": pdf,
+    "video": video,
+    "audio": audio,
+}
 
 
 async def run(flow: Flow) -> Flow:
@@ -82,16 +97,14 @@ async def run(flow: Flow) -> Flow:
                 started
             )
 
-        tasks = []
-
         # Workers are scheduled based on intake's modality detection. Each runs
         # under the global concurrency limit + a per-worker timeout, and all run
         # concurrently under the total sanitizer timeout below.
-        if "text" in modalities: tasks.append(_run_worker(text.scan(raw)))
-        if "image" in modalities: tasks.append(_run_worker(image.scan(raw)))
-        if "pdf" in modalities: tasks.append(_run_worker(pdf.scan(raw)))
-        if "video" in modalities: tasks.append(_run_worker(video.scan(raw)))
-        if "audio" in modalities: tasks.append(_run_worker(audio.scan(raw)))
+        tasks = [
+            _bounded_scan(worker.scan(raw))
+            for modality, worker in _MODALITY_WORKERS.items()
+            if modality in modalities
+        ]
         if not tasks:
             return flow.block(
                 BlockReason.UNSUPPORTED_MODALITY,

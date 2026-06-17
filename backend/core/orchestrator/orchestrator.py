@@ -21,6 +21,7 @@ from foundation import (
     Flow,
     MemoryStore,
     MemoryWriteProposal,
+    NormalizedInput,
     Origin,
     PipelineStage,
     constants,
@@ -38,7 +39,10 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
     """Pipeline entry point for orchestration."""
     started = time.monotonic()
     try:
-        normalized = await flow.load()
+        # coerce so the normalizer (and the whole input gate) is optional: a raw
+        # payload becomes a valid NormalizedInput here. No-op when an upstream
+        # stage already produced one.
+        normalized = NormalizedInput.coerce(await flow.load())
         flow.ctx.advance(PipelineStage.ORCHESTRATING)
         ports = build_default_ports(flow.ctx)
 

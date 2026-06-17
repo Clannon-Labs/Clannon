@@ -24,6 +24,8 @@ from typing import Any, Callable
 
 from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
+from ._base import highest_threat, run_subworker
+
 
 DANGEROUS_PDF_KEYS = {
     "/AA",            # additional actions
@@ -242,36 +244,6 @@ def _sanitize_worker(payload: bytes) -> PdfWorkerResult:
     )
 
 
-def _highest_threat(results: list[PdfWorkerResult]) -> ThreatLevel:
-    """Return the most severe threat level reported by PDF sub-workers."""
-    if not results:
-        return ThreatLevel.NONE
-
-    order = {
-        ThreatLevel.NONE: 0,
-        ThreatLevel.LOW: 1,
-        ThreatLevel.MEDIUM: 2,
-        ThreatLevel.HIGH: 3,
-        ThreatLevel.CRITICAL: 4,
-    }
-    return max((result.threat_level for result in results), key=order.__getitem__)
-
-
-def _run_worker(worker: PdfWorker, payload: bytes) -> PdfWorkerResult:
-    """Run one PDF sub-worker and wrap unexpected errors with context."""
-    try:
-        return worker(payload)
-    except SanitizationError:
-        raise
-    except Exception as exc:
-        worker_name = worker.__name__.removeprefix("_").removesuffix("_worker")
-        raise SanitizationError(
-            f"PDF sanitizer worker failed: {exc}",
-            modality="pdf",
-            worker=worker_name,
-        ) from exc
-
-
 def _scan_sync(pdf: Any) -> PdfScanResult:
     """
     Run all PDF sanitizer checks and aggregate their results synchronously.
@@ -282,12 +254,12 @@ def _scan_sync(pdf: Any) -> PdfScanResult:
     """
     payload = _payload_to_bytes(pdf)
     results = [
-        _run_worker(_structure_worker, payload),
-        _run_worker(_page_count_worker, payload),
-        _run_worker(_sanitize_worker, payload),
+        run_subworker(_structure_worker, payload, modality="pdf", label="PDF"),
+        run_subworker(_page_count_worker, payload, modality="pdf", label="PDF"),
+        run_subworker(_sanitize_worker, payload, modality="pdf", label="PDF"),
     ]
 
-    threat_level = _highest_threat(results)
+    threat_level = highest_threat(results)
     reasons = [result.reason for result in results if result.reason]
     sanitized_pdf = next(
         (result.sanitized_pdf for result in results if result.sanitized_pdf is not None),

@@ -25,7 +25,9 @@ import tempfile
 from typing import Callable
 import asyncio
 
-from foundation import SanitizationError, ThreatLevel
+from foundation import ThreatLevel
+
+from ._base import highest_threat, run_subworker
 
 
 @dataclass
@@ -161,34 +163,6 @@ def _secrets_worker(text: str) -> TextWorkerResult:
     )
 
 
-def _highest_threat(results: list[TextWorkerResult]) -> ThreatLevel:
-    """Return the most severe threat level reported by sub-workers."""
-    if not results:
-        return ThreatLevel.NONE
-
-    order = {
-        ThreatLevel.NONE: 0,
-        ThreatLevel.LOW: 1,
-        ThreatLevel.MEDIUM: 2,
-        ThreatLevel.HIGH: 3,
-        ThreatLevel.CRITICAL: 4,
-    }
-    return max((result.threat_level for result in results), key=order.__getitem__)
-
-
-def _run_worker(worker: TextWorker, text: str) -> TextWorkerResult:
-    """Run one sub-worker and wrap failures with sanitizer context."""
-    try:
-        return worker(text)
-    except Exception as exc:
-        worker_name = worker.__name__.removeprefix("_").removesuffix("_worker")
-        raise SanitizationError(
-            f"Text sanitizer worker failed: {exc}",
-            modality="text",
-            worker=worker_name,
-        ) from exc
-
-
 def _scan_sync(text: str) -> TextScanResult:
     """
     Run all text sanitizer sub-workers and aggregate their results synchronously.
@@ -201,10 +175,10 @@ def _scan_sync(text: str) -> TextScanResult:
     """
     normalized_text = _normalize_text(text)
     results = [
-        _run_worker(_secrets_worker, normalized_text),
-        _run_worker(_pii_worker, normalized_text),
+        run_subworker(_secrets_worker, normalized_text, modality="text", label="Text"),
+        run_subworker(_pii_worker, normalized_text, modality="text", label="Text"),
     ]
-    threat_level = _highest_threat(results)
+    threat_level = highest_threat(results)
     reasons = [result.reason for result in results if result.reason]
     sanitized_text = None
 

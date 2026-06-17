@@ -176,7 +176,10 @@ FILTER_MAX_RETRIES          = 2      # retries on malformed output before ERROR
 
 MEMORY_READ_TIMEOUT_S       = 5.0
 MEMORY_WRITE_TIMEOUT_S      = 10.0
-MEMORY_SEARCH_TOP_K         = 10     # max results from semantic search
+MEMORY_SEARCH_TOP_K         = 10     # candidates fetched per inferred tier at hydration
+MEMORY_RELEVANCE_FLOOR      = 0.30   # drop hits below this raw cosine before ranking;
+                                     # conservative for nomic-768 (related text >~0.4),
+                                     # tunable — see docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md L3
 MEMORY_MAX_ENTRY_CHARS      = 10_000 # single memory entry size cap
 MEMORY_WRITE_MAX_RETRIES    = 3      # retries on write failure before ERROR
 

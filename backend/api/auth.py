@@ -183,3 +183,93 @@ def fetch_wiki(user_id: str) -> list[dict]:
             (user_id,),
         ).fetchall()
     return [{"title": r["title"], "content": r["content"]} for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Data access — all persistence lives in this module (the one swapped for
+# Supabase). Routes/handlers call these typed functions; they never open the DB
+# or write SQL themselves. Functions return plain dicts of raw columns; the API
+# layer owns presentation (camelCase keys, ISO timestamps).
+# ---------------------------------------------------------------------------
+
+def _wiki_row(row: sqlite3.Row) -> dict:
+    return {"id": row["id"], "title": row["title"], "content": row["content"], "updated_at": row["updated_at"]}
+
+
+def wiki_list(user_id: str) -> list[dict]:
+    """All of a user's wiki entries, newest first (raw columns)."""
+    with _db() as db:
+        rows = db.execute(
+            "SELECT * FROM wiki_entries WHERE user_id=? ORDER BY updated_at DESC", (user_id,)
+        ).fetchall()
+    return [_wiki_row(r) for r in rows]
+
+
+def wiki_create(user_id: str, title: str, content: str) -> dict:
+    """Insert one wiki entry and return it."""
+    entry_id = f"m_{secrets.token_hex(6)}"
+    with _db() as db:
+        db.execute(
+            "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
+            (entry_id, user_id, title, content, time.time()),
+        )
+        row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
+    return _wiki_row(row)
+
+
+def wiki_update(user_id: str, entry_id: str, title: str, content: str) -> dict | None:
+    """Update one of the user's wiki entries; None if it does not exist / not theirs."""
+    with _db() as db:
+        updated = db.execute(
+            "UPDATE wiki_entries SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
+            (title, content, time.time(), entry_id, user_id),
+        ).rowcount
+        if not updated:
+            return None
+        row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
+    return _wiki_row(row)
+
+
+def wiki_delete(user_id: str, entry_id: str) -> bool:
+    """Delete one of the user's wiki entries; False if it did not exist."""
+    with _db() as db:
+        deleted = db.execute(
+            "DELETE FROM wiki_entries WHERE id=? AND user_id=?", (entry_id, user_id)
+        ).rowcount
+    return bool(deleted)
+
+
+def wiki_bulk_create(user_id: str, entries: list[tuple[str, str]]) -> list[dict]:
+    """Insert several wiki entries (title, content) in one transaction; return them."""
+    created: list[dict] = []
+    with _db() as db:
+        for title, content in entries:
+            entry_id = f"m_{secrets.token_hex(6)}"
+            db.execute(
+                "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
+                (entry_id, user_id, title, content, time.time()),
+            )
+            row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
+            created.append(_wiki_row(row))
+    return created
+
+
+def model_prefs_get(user_id: str) -> dict[str, str]:
+    """A user's saved per-role model choices, as {layer: model}."""
+    with _db() as db:
+        return {
+            row["layer"]: row["model"]
+            for row in db.execute(
+                "SELECT layer, model FROM model_prefs WHERE user_id=?", (user_id,)
+            )
+        }
+
+
+def model_prefs_set(user_id: str, layer: str, model: str) -> None:
+    """Upsert a user's workspace default model for one role."""
+    with _db() as db:
+        db.execute(
+            "INSERT INTO model_prefs (user_id, layer, model) VALUES (?,?,?) "
+            "ON CONFLICT(user_id, layer) DO UPDATE SET model=excluded.model",
+            (user_id, layer, model),
+        )
