@@ -82,7 +82,7 @@ export function MarketingHero() {
                 </ButtonLink>
               )}
               <ButtonLink
-                href={appConfig.features.demo ? "#demo" : "/login"}
+                href={appConfig.features.demo ? "/demo" : "/login"}
                 size="lg"
                 variant="ghost"
                 className="w-full sm:w-auto"

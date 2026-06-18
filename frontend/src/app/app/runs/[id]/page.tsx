@@ -8,8 +8,6 @@ import {
   Check,
   Copy,
   Download,
-  ChevronRight,
-  ListTree,
   Square,
   File,
   FileText,
@@ -23,9 +21,8 @@ import { useToast } from "@/components/ui/toast";
 import { Tooltip, InfoTip } from "@/components/ui/tooltip";
 import { useRun, useLiveRun, useRunThread, useDownloadArtifact, useCancelRun } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DecisionLog } from "@/components/app/decision-log";
-import { ExpertPanel, SourcesPanel } from "@/components/app/expert-panel";
 import { Report } from "@/components/app/report";
+import { RunActivity } from "@/components/app/run-activity";
 import { RunStatusBadge } from "@/components/app/run-status";
 import { Reveal } from "@/components/motion";
 import { RunComposer, ReportRating } from "@/components/app/run-feedback";
@@ -33,48 +30,8 @@ import { PriorTurns } from "@/components/app/prior-turns";
 import { UserMessage } from "@/components/app/thread";
 import { ArtifactPreview } from "@/components/app/artifact-preview";
 import { Mark } from "@/components/brand/logo";
-import type { Run, Artifact, DecisionLogEntry, RunStatus } from "@/lib/api";
-import { cn, formatBytes, formatTokens } from "@/lib/utils";
-
-/** A present-continuous verb for the live "working" indicator, derived from the
- *  newest decision-log entry (or the pipeline status before any logs arrive).
- *  Mirrors Claude/ChatGPT's collapsed "thinking" line. */
-function liveVerb(log: DecisionLogEntry[], status: RunStatus): string {
-  const last = log[log.length - 1];
-  if (last) {
-    switch (last.kind) {
-      case "hydration":
-        return "Hydrating memory";
-      case "route":
-        return "Routing the work";
-      case "expert_spawn":
-        return `Calling ${last.title.replace(/^spawn\s+/i, "")}`;
-      case "tool_call":
-        return "Searching sources";
-      case "observation":
-        return "Reviewing findings";
-      case "answer":
-        return "Writing the report";
-      case "warning":
-      case "error":
-        return last.title;
-    }
-  }
-  switch (status) {
-    case "queued":
-      return "Queued";
-    case "sanitizing":
-      return "Scanning your input";
-    case "verifying":
-      return "Verifying";
-    case "orchestrating":
-      return "Orchestrating";
-    case "filtering":
-      return "Quality-checking";
-    default:
-      return "Working";
-  }
-}
+import type { Run, Artifact } from "@/lib/api";
+import { formatBytes, formatTokens } from "@/lib/utils";
 
 /** Icon for an attached input file, picked by modality (text/pdf today;
  *  image/audio/video slot in as the backend's media support lands). */
@@ -146,17 +103,6 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const orderedThread = thread ?? [];
   const currentIndex = orderedThread.findIndex((t) => t.id === id);
   const priorTurns = currentIndex > 0 ? orderedThread.slice(0, currentIndex) : [];
-
-  // the activity (decision log, experts, sources) is COLLAPSED by default —
-  // like Claude/ChatGPT thinking. While live it shows a compact animated
-  // "working" line you can expand; once done it's a quiet "Show work" toggle.
-  // Reset to collapsed whenever you navigate to another run.
-  const [showProcess, setShowProcess] = useState(false);
-  const [decidedFor, setDecidedFor] = useState<string | null>(null);
-  if (run && decidedFor !== run.id) {
-    setDecidedFor(run.id);
-    setShowProcess(false);
-  }
 
   // the artifact being previewed inline (click a file to open it in the chat)
   const [preview, setPreview] = useState<Artifact | null>(null);
@@ -336,57 +282,17 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             </p>
           )}
 
-          {/* activity toggle — a live, animated "working" line while running
-              (collapsed by default, like Claude's thinking), a quiet toggle once
-              it's done. The full decision log expands below on click. */}
-          <div className="mt-4">
-            {!isTerminal && !showProcess ? (
-              <button
-                type="button"
-                onClick={() => setShowProcess(true)}
-                aria-expanded={false}
-                aria-label="Show the agent's work"
-                className="group inline-flex min-h-9 cursor-pointer items-center gap-2.5 text-[13px] transition-colors"
-              >
-                <Mark className="size-4 shrink-0 animate-pulse-dot text-primary" aria-hidden />
-                <span className="font-medium text-foreground">
-                  {liveVerb(live.log, live.status)}
-                  <span className="caret" />
-                </span>
-                <span className="text-faint transition-colors group-hover:text-muted-foreground">
-                  · Show work
-                </span>
-                <ChevronRight
-                  className="size-3.5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5"
-                  aria-hidden
-                />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowProcess((s) => !s)}
-                aria-expanded={showProcess}
-                className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ChevronRight
-                  className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", showProcess && "rotate-90")}
-                  aria-hidden
-                />
-                <ListTree className="size-3.5 shrink-0" aria-hidden />
-                {showProcess ? "Hide work" : "Show work"}
-              </button>
-            )}
-          </div>
-
-          {showProcess && (
-            <div className="mt-3 flex flex-col gap-4">
-              <DecisionLog entries={live.log} live={live.live} className="h-[360px]" />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ExpertPanel experts={live.experts} />
-                <SourcesPanel sources={live.sources} />
-              </div>
-            </div>
-          )}
+          {/* the agent's work — collapsed by default behind a live verb line.
+              Shared with the no-signup demo so the two are pixel-identical. */}
+          <RunActivity
+            log={live.log}
+            status={live.status}
+            experts={live.experts}
+            sources={live.sources}
+            live={live.live}
+            isTerminal={isTerminal}
+            resetKey={run.id}
+          />
 
           {/* report — the hero */}
           {showReport && (
