@@ -93,6 +93,8 @@ export interface RunSummary {
   expertCount: number;
   /** The session this turn belongs to — used to group turns into one thread. */
   sessionId?: string;
+  /** The project (client/body of work) this run belongs to. */
+  projectId?: string;
 }
 
 export interface Run extends RunSummary {
@@ -153,6 +155,21 @@ export interface MemoryEntry {
   source?: string;
   /** episodic tier */
   runId?: string;
+  /** The project (client/body of work) this memory belongs to. */
+  projectId?: string;
+}
+
+/**
+ * A project: a client or a body of work. Sessions (runs) and memory are scoped
+ * to one. "Current project" is client-side state — every scoped request carries
+ * the projectId. See the Projects proposal in conversation/proposal.md.
+ */
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+  /** A palette key for the project's dot/accent in the UI (not a raw color). */
+  color?: string;
 }
 
 /* ---------- account ---------- */

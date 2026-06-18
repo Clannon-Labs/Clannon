@@ -7,6 +7,7 @@ import {
   type Credentials,
   type LayerModelConfig,
   type MemoryEntry,
+  type Project,
   type RemoteConfig,
   type Run,
   type RunEvent,
@@ -24,6 +25,14 @@ function url(endpoint: string, params?: Record<string, string>): string {
     }
   }
   return `${appConfig.apiBaseUrl}${path}`;
+}
+
+/** Append a query string, skipping undefined values. `/runs` + {projectId} -> `/runs?projectId=x`. */
+function withQuery(endpoint: string, query: Record<string, string | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v) qs.set(k, v);
+  const s = qs.toString();
+  return s ? `${endpoint}?${s}` : endpoint;
 }
 
 /**
@@ -144,8 +153,31 @@ export class HttpClient implements ClannonClient {
     }
   }
 
-  listRuns(): Promise<RunSummary[]> {
-    return request(appConfig.endpoints.runs);
+  listProjects(): Promise<Project[]> {
+    return request(appConfig.endpoints.projects);
+  }
+
+  createProject(input: { name: string; seedFacts?: string }): Promise<Project> {
+    return request(appConfig.endpoints.projects, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  renameProject(id: string, name: string): Promise<Project> {
+    return request(appConfig.endpoints.project, {
+      method: "PATCH",
+      params: { id },
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await request(appConfig.endpoints.project, { method: "DELETE", params: { id } });
+  }
+
+  listRuns(projectId?: string): Promise<RunSummary[]> {
+    return request(withQuery(appConfig.endpoints.runs, { projectId }));
   }
 
   getRun(id: string): Promise<Run> {
@@ -156,6 +188,7 @@ export class HttpClient implements ClannonClient {
     brief: string,
     files: File[] = [],
     models: Record<string, string> = {},
+    projectId?: string,
   ): Promise<{ id: string }> {
     // multipart now (was JSON): brief + repeated "files" field. Let the
     // browser set the multipart boundary — the json request() helper can't.
@@ -163,6 +196,7 @@ export class HttpClient implements ClannonClient {
     form.append("brief", brief);
     for (const f of files) form.append("files", f, f.name); // field name MUST be "files"
     if (Object.keys(models).length) form.append("models", JSON.stringify(models)); // per-session overrides
+    if (projectId) form.append("projectId", projectId); // the project this run belongs to
     const res = await fetch(url(appConfig.endpoints.createRun), {
       method: "POST",
       credentials: appConfig.http.credentials,
@@ -290,12 +324,13 @@ export class HttpClient implements ClannonClient {
     }
   }
 
-  listMemory(): Promise<MemoryEntry[]> {
-    return request(appConfig.endpoints.memory);
+  listMemory(projectId?: string): Promise<MemoryEntry[]> {
+    return request(withQuery(appConfig.endpoints.memory, { projectId }));
   }
 
   saveMemoryEntry(
     entry: Pick<MemoryEntry, "tier" | "title" | "content"> & { id?: string },
+    projectId?: string,
   ): Promise<MemoryEntry> {
     if (entry.id) {
       return request(appConfig.endpoints.memoryEntry, {
@@ -306,15 +341,16 @@ export class HttpClient implements ClannonClient {
     }
     return request(appConfig.endpoints.memory, {
       method: "POST",
-      body: JSON.stringify(entry),
+      body: JSON.stringify({ ...entry, projectId }),
     });
   }
 
-  async uploadMemoryFiles(files: File[]): Promise<MemoryEntry[]> {
+  async uploadMemoryFiles(files: File[], projectId?: string): Promise<MemoryEntry[]> {
     // multipart: build FormData and let the browser set the boundary
     // header (the json request() helper would corrupt it)
     const form = new FormData();
     for (const file of files) form.append("files", file, file.name);
+    if (projectId) form.append("projectId", projectId);
     const res = await fetch(url(appConfig.endpoints.memoryUpload), {
       method: "POST",
       credentials: appConfig.http.credentials,

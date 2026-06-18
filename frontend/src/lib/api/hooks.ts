@@ -22,12 +22,52 @@ import type {
 export const queryKeys = {
   remoteConfig: ["remote-config"] as const,
   me: ["me"] as const,
+  projects: ["projects"] as const,
+  /** Base prefix — invalidating it sweeps every project-scoped run list AND
+   *  every run-by-id (React Query matches by key prefix). */
   runs: ["runs"] as const,
   run: (id: string) => ["runs", id] as const,
+  runList: (projectId?: string) => ["runs", "list", projectId ?? null] as const,
   memory: ["memory"] as const,
+  memoryList: (projectId?: string) => ["memory", projectId ?? null] as const,
   usage: ["usage"] as const,
   models: ["models"] as const,
 };
+
+export function useProjects() {
+  return useQuery({ queryKey: queryKeys.projects, queryFn: () => getClient().listProjects() });
+}
+
+export function useCreateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; seedFacts?: string }) => getClient().createProject(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.invalidateQueries({ queryKey: queryKeys.memory }); // seedFacts may add a wiki entry
+    },
+  });
+}
+
+export function useRenameProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => getClient().renameProject(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => getClient().deleteProject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.invalidateQueries({ queryKey: queryKeys.runs }); // cascade dropped its runs
+      qc.invalidateQueries({ queryKey: queryKeys.memory }); // and its memory
+    },
+  });
+}
 
 export function useMe() {
   return useQuery({ queryKey: queryKeys.me, queryFn: () => getClient().me() });
@@ -57,8 +97,11 @@ export function useEffectivePlan(id: PlanId | undefined): Plan | undefined {
   return id ? (plans.find((p) => p.id === id) ?? planById(id)) : undefined;
 }
 
-export function useRuns() {
-  return useQuery({ queryKey: queryKeys.runs, queryFn: () => getClient().listRuns() });
+export function useRuns(projectId?: string) {
+  return useQuery({
+    queryKey: queryKeys.runList(projectId),
+    queryFn: () => getClient().listRuns(projectId),
+  });
 }
 
 export function useRun(id: string) {
@@ -76,8 +119,12 @@ export function useRunThread(id: string) {
 export function useCreateRun() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { brief: string; files?: File[]; models?: Record<string, string> }) =>
-      getClient().createRun(vars.brief, vars.files, vars.models),
+    mutationFn: (vars: {
+      brief: string;
+      files?: File[];
+      models?: Record<string, string>;
+      projectId?: string;
+    }) => getClient().createRun(vars.brief, vars.files, vars.models, vars.projectId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
   });
 }
@@ -133,15 +180,21 @@ export function useDeleteSession() {
   });
 }
 
-export function useMemoryEntries() {
-  return useQuery({ queryKey: queryKeys.memory, queryFn: () => getClient().listMemory() });
+export function useMemoryEntries(projectId?: string) {
+  return useQuery({
+    queryKey: queryKeys.memoryList(projectId),
+    queryFn: () => getClient().listMemory(projectId),
+  });
 }
 
 export function useSaveMemory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (entry: Pick<MemoryEntry, "tier" | "title" | "content"> & { id?: string }) =>
-      getClient().saveMemoryEntry(entry),
+    mutationFn: ({
+      projectId,
+      ...entry
+    }: Pick<MemoryEntry, "tier" | "title" | "content"> & { id?: string; projectId?: string }) =>
+      getClient().saveMemoryEntry(entry, projectId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.memory }),
   });
 }
@@ -149,7 +202,8 @@ export function useSaveMemory() {
 export function useUploadMemory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (files: File[]) => getClient().uploadMemoryFiles(files),
+    mutationFn: (vars: { files: File[]; projectId?: string }) =>
+      getClient().uploadMemoryFiles(vars.files, vars.projectId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.memory }),
   });
 }

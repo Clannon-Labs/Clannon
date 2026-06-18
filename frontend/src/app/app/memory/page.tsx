@@ -10,6 +10,7 @@ import {
   useMemoryEntries,
   useSaveMemory,
 } from "@/lib/api/hooks";
+import { useCurrentProject, useCurrentProjectId } from "@/components/app/project-provider";
 import type { MemoryEntry } from "@/lib/api";
 import { TIER_LABELS, type MemoryTier } from "@/config/plans";
 import { ApiError } from "@/lib/api";
@@ -144,7 +145,9 @@ function EntryCard({
 
 export default function MemoryPage() {
   const { data: user } = useMe();
-  const { data: entries, isLoading } = useMemoryEntries();
+  const projectId = useCurrentProjectId();
+  const currentProject = useCurrentProject();
+  const { data: entries, isLoading } = useMemoryEntries(projectId);
   const save = useSaveMemory();
   const remove = useDeleteMemory();
   const upload = useUploadMemory();
@@ -185,7 +188,12 @@ export default function MemoryPage() {
           action: {
             label: "Undo",
             onClick: () =>
-              save.mutate({ tier: entry.tier, title: entry.title, content: entry.content }),
+              save.mutate({
+                tier: entry.tier,
+                title: entry.title,
+                content: entry.content,
+                projectId: entry.projectId,
+              }),
           },
         });
       },
@@ -196,13 +204,16 @@ export default function MemoryPage() {
     <div className="mx-auto max-w-4xl">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="tag-label text-memory">Memory</p>
+          <p className="tag-label text-memory">
+            Memory{currentProject ? ` · ${currentProject.name}` : ""}
+          </p>
           <h1 className="display mt-3 text-[2.4rem] leading-[1.0]">
             The archive
           </h1>
           <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-            Everything Clannon knows on your behalf, by tier. Wiki entries are
-            yours to write — and they outrank everything else.
+            {currentProject
+              ? `Everything Clannon knows for ${currentProject.name}, by tier. Wiki entries are yours to write — and they outrank everything else.`
+              : "Everything Clannon knows on your behalf, by tier. Wiki entries are yours to write — and they outrank everything else."}
           </p>
         </div>
       </header>
@@ -285,7 +296,9 @@ export default function MemoryPage() {
                             const files = Array.from(e.target.files ?? []);
                             e.target.value = ""; // allow re-selecting the same file
                             if (files.length === 0) return;
-                            upload.mutate(files, {
+                            upload.mutate(
+                              { files, projectId },
+                              {
                               onSuccess: (entries) =>
                                 toast({
                                   title: `${entries.length} ${entries.length === 1 ? "file" : "files"} imported to your wiki`,
@@ -367,6 +380,7 @@ export default function MemoryPage() {
                   tier: "wiki",
                   title: editing.title ?? "",
                   content: editing.content ?? "",
+                  projectId,
                 },
                 {
                   onSuccess: () => {

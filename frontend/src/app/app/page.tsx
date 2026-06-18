@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCreateRun, useMe } from "@/lib/api/hooks";
+import { useCurrentProjectId } from "@/components/app/project-provider";
 import { ApiError } from "@/lib/api";
 import { Mark } from "@/components/brand/logo";
 import { Composer } from "@/components/app/composer";
@@ -77,6 +78,7 @@ function pickGreeting(): string {
 export default function WorkspacePage() {
   const router = useRouter();
   const { data: user } = useMe();
+  const projectId = useCurrentProjectId();
   const createRun = useCreateRun();
   const [brief, setBrief] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +140,7 @@ export default function WorkspacePage() {
         </div>
 
         {/* the hydration moment — context surfaces before the brief is even sent */}
-        <HydrationPanel brief={brief} className="mt-12" />
+        <HydrationPanel brief={brief} projectId={projectId} className="mt-12" />
       </div>
 
       {/* docked composer — same control set as the run reply, same place too */}
@@ -153,7 +155,7 @@ export default function WorkspacePage() {
           onSubmit={(files, models) => {
             setError(null);
             createRun.mutate(
-              { brief, files, models },
+              { brief, files, models, projectId },
               {
                 onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
                 onError: (err) =>

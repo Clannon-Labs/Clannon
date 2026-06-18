@@ -221,9 +221,17 @@ function HydrationItem({
  * The hydration moment. Lives on the new-chat screen: rests as a colleague
  * recap, recedes to a chip the instant the user starts typing.
  */
-export function HydrationPanel({ brief, className }: { brief: string; className?: string }) {
+export function HydrationPanel({
+  brief,
+  projectId,
+  className,
+}: {
+  brief: string;
+  projectId?: string;
+  className?: string;
+}) {
   const reduce = useReducedMotion();
-  const { data: entries } = useMemoryEntries();
+  const { data: entries } = useMemoryEntries(projectId);
   const remove = useDeleteMemory();
   const toast = useToast();
 

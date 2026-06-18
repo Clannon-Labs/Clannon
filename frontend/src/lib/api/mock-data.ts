@@ -2,10 +2,18 @@ import type {
   DecisionKind,
   LayerModelConfig,
   MemoryEntry,
+  Project,
   Run,
   Source,
   UsageSummary,
 } from "./types";
+
+/** Seed projects (clients / bodies of work). Runs + memory below are tagged to these. */
+export const SEED_PROJECTS: Project[] = [
+  { id: "proj_meridian", name: "Meridian Skincare", createdAt: new Date(Date.now() - 30 * 3_600_000).toISOString(), color: "moss" },
+  { id: "proj_arch", name: "Studio PM teardown", createdAt: new Date(Date.now() - 49 * 3_600_000).toISOString(), color: "clay" },
+  { id: "proj_creator", name: "Creator benchmarks", createdAt: new Date(Date.now() - 73 * 3_600_000).toISOString(), color: "indigo" },
+];
 
 /* ------------------------------------------------------------------
    Seeds and scripts for the mock simulator. Nothing in here is
@@ -149,6 +157,7 @@ function buildSeedLog(startIso: string): Run["decisionLog"] {
 export const SEED_RUNS: Run[] = [
   {
     id: "run_seed_1",
+    projectId: "proj_meridian",
     title: "UK market entry — DTC skincare brand",
     brief:
       "Client is a US-based DTC skincare brand (~$6M ARR) considering UK expansion in Q4. Need: market size and structure, regulatory requirements post-Brexit, recent comparable entrants and how they performed, and a go/no-go recommendation with budget.",
@@ -174,6 +183,7 @@ export const SEED_RUNS: Run[] = [
   },
   {
     id: "run_seed_2",
+    projectId: "proj_arch",
     title: "Competitor teardown — PM software for architects",
     brief: "Deep teardown of Monograph and Programa for a client building vertical PM software for architecture studios.",
     status: "delivered",
@@ -192,6 +202,7 @@ export const SEED_RUNS: Run[] = [
   },
   {
     id: "run_seed_3",
+    projectId: "proj_creator",
     title: "Creator-economy pricing benchmarks",
     brief: "Benchmark pricing for mid-tier creator monetization platforms for an investor memo.",
     status: "blocked",
@@ -234,6 +245,7 @@ export const SEED_RUNS: Run[] = [
 export const SEED_MEMORY: MemoryEntry[] = [
   {
     id: "m1",
+    projectId: "proj_meridian",
     tier: "wiki",
     title: "Client: Meridian Skincare — context",
     content:
@@ -242,6 +254,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m2",
+    projectId: "proj_meridian",
     tier: "wiki",
     title: "Research style guide",
     content:
@@ -250,6 +263,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m3",
+    projectId: "proj_meridian",
     tier: "semantic",
     title: "UK cosmetics rules diverged from EU CPNP",
     content: "Post-Brexit, UK requires SCPN notification and a UK Responsible Person — EU CPNP registration is not valid.",
@@ -259,6 +273,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m4",
+    projectId: "proj_meridian",
     tier: "semantic",
     title: "Meridian's defensible UK price band is £22–£38",
     content: "Derived from market-structure analysis: clinical brands compress below £15, premium mass contested at £22–£38.",
@@ -268,6 +283,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m5",
+    projectId: "proj_meridian",
     tier: "episodic",
     title: "Delivered: UK market entry report",
     content: "3 experts, 312k tokens, 6 sources. Client accepted recommendation; follow-up on 3PL selection expected.",
@@ -276,6 +292,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m6",
+    projectId: "proj_creator",
     tier: "episodic",
     title: "Blocked: creator-economy benchmarks",
     content: "Run blocked at verifier — brief contained a pasted spreadsheet with unredacted emails. User notified, resubmission pending.",
@@ -284,6 +301,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m7",
+    projectId: "proj_meridian",
     tier: "procedural",
     title: "Market-entry briefs get a regulatory section",
     content: "Learned across 4 runs: when the brief involves selling into a new country, always spawn a regulatory expert even if not asked.",
@@ -291,6 +309,7 @@ export const SEED_MEMORY: MemoryEntry[] = [
   },
   {
     id: "m8",
+    projectId: "proj_arch",
     tier: "procedural",
     title: "Competitor tables sorted by estimated revenue",
     content: "User reorders tables this way when exporting — do it by default.",

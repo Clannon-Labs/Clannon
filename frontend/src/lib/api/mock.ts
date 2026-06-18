@@ -8,6 +8,7 @@ import {
   type DecisionLogEntry,
   type LayerModelConfig,
   type MemoryEntry,
+  type Project,
   type Run,
   type RunEvent,
   type RemoteConfig,
@@ -22,6 +23,7 @@ import {
   SAMPLE_REPORT,
   SEED_MEMORY,
   SEED_MODEL_CONFIG,
+  SEED_PROJECTS,
   SEED_RUNS,
 } from "./mock-data";
 
@@ -43,6 +45,9 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${++counter}`;
 
+// Palette keys a new project cycles through (the UI maps these to a dot color).
+const PROJECT_COLORS = ["moss", "clay", "indigo", "amber", "rose", "slate"];
+
 /** Map a picked file to its input modality, mirroring the backend's labels. */
 function modalityOf(file: File): string {
   if (file.type.startsWith("image/")) return "image";
@@ -58,6 +63,7 @@ function modalityOf(file: File): string {
  * difference — which is exactly the point.
  */
 export class MockClient implements ClannonClient {
+  private projects: Project[] = structuredClone(SEED_PROJECTS);
   private runs = new Map<string, Run>(SEED_RUNS.map((r) => [r.id, structuredClone(r)]));
   private memory: MemoryEntry[] = structuredClone(SEED_MEMORY);
   private usage: UsageSummary = buildSeedUsage();
@@ -137,13 +143,68 @@ export class MockClient implements ClannonClient {
     }
   }
 
+  /* ---------- projects (clients / bodies of work) ---------- */
+
+  async listProjects(): Promise<Project[]> {
+    await sleep(160);
+    // newest activity first; mirror the proposed server ordering
+    return structuredClone(this.projects).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createProject(input: { name: string; seedFacts?: string }): Promise<Project> {
+    await sleep(360);
+    const name = input.name.trim();
+    if (!name) throw new ApiError("A project needs a name.", 422);
+    const project: Project = {
+      id: nextId("proj"),
+      name,
+      createdAt: new Date().toISOString(),
+      color: PROJECT_COLORS[this.projects.length % PROJECT_COLORS.length],
+    };
+    this.projects.push(project);
+    // the "tell Clannon about this client" seed → a first wiki entry in the project
+    const facts = input.seedFacts?.trim();
+    if (facts) {
+      this.memory.unshift({
+        id: nextId("m"),
+        tier: "wiki",
+        title: `Client: ${name} — context`,
+        content: facts,
+        updatedAt: new Date().toISOString(),
+        projectId: project.id,
+      });
+    }
+    return structuredClone(project);
+  }
+
+  async renameProject(id: string, name: string): Promise<Project> {
+    await sleep(240);
+    const project = this.projects.find((p) => p.id === id);
+    if (!project) throw new ApiError("Project not found.", 404);
+    const trimmed = name.trim();
+    if (!trimmed) throw new ApiError("A project needs a name.", 422);
+    project.name = trimmed;
+    return structuredClone(project);
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await sleep(280);
+    this.projects = this.projects.filter((p) => p.id !== id);
+    // cascade: drop the project's runs and memory (same as delete-session)
+    for (const [runId, run] of this.runs) {
+      if (run.projectId === id) this.runs.delete(runId);
+    }
+    this.memory = this.memory.filter((m) => m.projectId !== id);
+  }
+
   /* ---------- runs ---------- */
 
-  async listRuns(): Promise<RunSummary[]> {
+  async listRuns(projectId?: string): Promise<RunSummary[]> {
     await sleep(280);
     return [...this.runs.values()]
+      .filter((r) => !projectId || r.projectId === projectId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(({ id, title, status, createdAt, tokensUsed, expertCount, sessionId }) => ({
+      .map(({ id, title, status, createdAt, tokensUsed, expertCount, sessionId, projectId: pid }) => ({
         id,
         title,
         status,
@@ -151,6 +212,7 @@ export class MockClient implements ClannonClient {
         tokensUsed,
         expertCount,
         sessionId,
+        projectId: pid,
       }));
   }
 
@@ -163,7 +225,12 @@ export class MockClient implements ClannonClient {
 
   // Note: the http client also passes per-session `models`, but the mock has no
   // Run field to reflect them, so it accepts only the args it can simulate.
-  async createRun(brief: string, files: File[] = []): Promise<{ id: string }> {
+  async createRun(
+    brief: string,
+    files: File[] = [],
+    _models?: Record<string, string>,
+    projectId?: string,
+  ): Promise<{ id: string }> {
     await sleep(450);
     const trimmed = brief.trim();
     if (trimmed.length < appConfig.limits.briefMinChars) {
@@ -190,6 +257,7 @@ export class MockClient implements ClannonClient {
       artifacts: [],
       inputs,
       sessionId: id, // a root turn opens its own session
+      projectId,
     });
     return { id };
   }
@@ -239,6 +307,8 @@ export class MockClient implements ClannonClient {
       child.parentRunId = id;
       // inherit the parent's session so the whole conversation is one thread
       child.sessionId = parent.sessionId ?? parent.id;
+      // and the parent's project — a follow-up stays in the same client space
+      child.projectId = parent.projectId;
     }
     return { id: newId };
   }
@@ -370,7 +440,7 @@ export class MockClient implements ClannonClient {
     run.report = assembled;
     yield { type: "report_done" };
 
-    // post-delivery memory writes, like the real pipeline
+    // post-delivery memory writes, like the real pipeline (scoped to the project)
     this.memory.unshift({
       id: nextId("m"),
       tier: "episodic",
@@ -378,6 +448,7 @@ export class MockClient implements ClannonClient {
       content: `${run.experts.length} experts, ${Math.round(run.tokensUsed / 1000)}k tokens, ${run.sources.length} sources.`,
       updatedAt: new Date().toISOString(),
       runId: run.id,
+      projectId: run.projectId,
     });
     this.usage.used += run.tokensUsed;
   }
@@ -399,13 +470,14 @@ export class MockClient implements ClannonClient {
 
   /* ---------- memory ---------- */
 
-  async listMemory(): Promise<MemoryEntry[]> {
+  async listMemory(projectId?: string): Promise<MemoryEntry[]> {
     await sleep(260);
-    return structuredClone(this.memory);
+    return structuredClone(this.memory.filter((m) => !projectId || m.projectId === projectId));
   }
 
   async saveMemoryEntry(
     entry: Pick<MemoryEntry, "tier" | "title" | "content"> & { id?: string },
+    projectId?: string,
   ): Promise<MemoryEntry> {
     await sleep(380);
     if (entry.id) {
@@ -422,12 +494,13 @@ export class MockClient implements ClannonClient {
       title: entry.title,
       content: entry.content,
       updatedAt: new Date().toISOString(),
+      projectId,
     };
     this.memory.unshift(created);
     return structuredClone(created);
   }
 
-  async uploadMemoryFiles(files: File[]): Promise<MemoryEntry[]> {
+  async uploadMemoryFiles(files: File[], projectId?: string): Promise<MemoryEntry[]> {
     await sleep(500);
     if (files.length === 0) throw new ApiError("No files received.", 422);
     if (files.length > 10) throw new ApiError("At most 10 files per upload.", 422);
@@ -445,6 +518,7 @@ export class MockClient implements ClannonClient {
         title: file.name.replace(/\.(md|markdown|txt)$/i, "").slice(0, 120) || "Untitled",
         content,
         updatedAt: new Date().toISOString(),
+        projectId,
       };
       this.memory.unshift(entry);
       created.push(structuredClone(entry));

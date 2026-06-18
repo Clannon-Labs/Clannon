@@ -30,6 +30,8 @@ import { useToast } from "@/components/ui/toast";
 import { siteConfig } from "@/config/site.config";
 import { APP_NAV as NAV } from "@/config/nav.config";
 import { useDeleteSession, useEffectivePlan, useMe, useRuns, useUsage } from "@/lib/api/hooks";
+import { ProjectSwitcher } from "@/components/app/project-switcher";
+import { useCurrentProjectId } from "@/components/app/project-provider";
 import { groupBySession, type SessionEntry } from "@/lib/sessions";
 import { cn, formatTokens } from "@/lib/utils";
 
@@ -59,7 +61,8 @@ function RailBody({
   const pathname = usePathname();
   const { data: user } = useMe();
   const { data: usage } = useUsage();
-  const { data: runs } = useRuns();
+  const projectId = useCurrentProjectId();
+  const { data: runs } = useRuns(projectId);
   const currentPlan = useEffectivePlan(user?.plan);
   const sessions = useMemo(() => groupBySession(runs), [runs]);
 
@@ -148,6 +151,9 @@ function RailBody({
           </button>
         )}
       </div>
+
+      {/* project switcher — scopes history, the home, and memory to one client */}
+      <ProjectSwitcher onNavigate={onNavigate} />
 
       {/* New chat — the primary action, first thing, like ChatGPT/Claude */}
       <Link

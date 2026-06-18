@@ -4,6 +4,7 @@ import type {
   Credentials,
   LayerModelConfig,
   MemoryEntry,
+  Project,
   RemoteConfig,
   Run,
   RunEvent,
@@ -37,14 +38,26 @@ export interface ClannonClient {
   logout(): Promise<void>;
   me(): Promise<User | null>;
 
-  listRuns(): Promise<RunSummary[]>;
+  /** The user's projects (clients / bodies of work), newest activity first. */
+  listProjects(): Promise<Project[]>;
+  /** Create a project. `seedFacts` (optional markdown) seeds a first wiki entry
+   *  in it — the "tell Clannon about this client" onboarding step. */
+  createProject(input: { name: string; seedFacts?: string }): Promise<Project>;
+  renameProject(id: string, name: string): Promise<Project>;
+  /** Delete a project AND cascade its runs + memory. Idempotent. */
+  deleteProject(id: string): Promise<void>;
+
+  /** Runs, optionally scoped to one project (omit for all of the user's runs). */
+  listRuns(projectId?: string): Promise<RunSummary[]>;
   getRun(id: string): Promise<Run>;
   /** Start a run. Optional input files + per-session model overrides ride along as
-   *  multipart. `models` is a sparse { role: modelId } applied to THIS run only. */
+   *  multipart. `models` is a sparse { role: modelId } applied to THIS run only.
+   *  `projectId` tags the run to a project (omit for the user's default scope). */
   createRun(
     brief: string,
     files?: File[],
     models?: Record<string, string>,
+    projectId?: string,
   ): Promise<{ id: string }>;
   /** Download one of a run's published artifacts as a Blob (auth via cookie). */
   downloadArtifact(runId: string, name: string): Promise<Blob>;
@@ -73,13 +86,17 @@ export interface ClannonClient {
   /** Delete a whole conversation — the session and every turn in it. */
   deleteSession(sessionId: string): Promise<void>;
 
-  listMemory(): Promise<MemoryEntry[]>;
+  /** Memory, optionally scoped to one project (omit for all of the user's memory). */
+  listMemory(projectId?: string): Promise<MemoryEntry[]>;
+  /** Save a wiki entry; `projectId` scopes a NEW entry to a project (edits keep
+   *  their existing scope). */
   saveMemoryEntry(
     entry: Pick<MemoryEntry, "tier" | "title" | "content"> & { id?: string },
+    projectId?: string,
   ): Promise<MemoryEntry>;
   deleteMemoryEntry(id: string): Promise<void>;
-  /** Bulk import: each .md/.txt file becomes a wiki entry. */
-  uploadMemoryFiles(files: File[]): Promise<MemoryEntry[]>;
+  /** Bulk import: each .md/.txt file becomes a wiki entry (scoped to `projectId`). */
+  uploadMemoryFiles(files: File[], projectId?: string): Promise<MemoryEntry[]>;
 
   getUsage(): Promise<UsageSummary>;
   getModelConfig(): Promise<LayerModelConfig[]>;

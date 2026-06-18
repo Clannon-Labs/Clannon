@@ -53,6 +53,10 @@ export const appConfig = {
      * httpOnly session cookie set.
      */
     oauthStart: "/auth/oauth/:provider",
+    /** Projects (clients / bodies of work). List/create at the collection,
+     *  rename (PATCH) / delete at the item. Runs + memory take a ?projectId filter. */
+    projects: "/projects",
+    project: "/projects/:id",
     runs: "/runs",
     run: "/runs/:id",
     createRun: "/runs",
