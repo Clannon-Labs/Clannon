@@ -51,24 +51,33 @@ function useProjectCtx(): ProjectCtx {
   return ctx;
 }
 
+/** Sentinel for the "All projects" scope — see everything across projects. */
+export const ALL_PROJECTS = "all";
+
 export function useSelectProject() {
   return useProjectCtx().selectProject;
 }
 
+/** True when the user has explicitly chosen the "All projects" scope. */
+export function useIsAllProjects(): boolean {
+  return useProjectCtx().selectedProjectId === ALL_PROJECTS;
+}
+
 /**
- * The EFFECTIVE current project id: the stored pick if it's still a real
- * project, otherwise the most recent one. `undefined` while projects are loading
- * or when the account has none (scoped queries then fall back to all data).
+ * The EFFECTIVE current project id used to scope requests. `undefined` means "no
+ * filter" — i.e. All projects (explicitly chosen, or no projects exist yet).
+ * Otherwise the stored pick if it's still real, else the most recent project.
  */
 export function useCurrentProjectId(): string | undefined {
   const { selectedProjectId } = useProjectCtx();
   const { data: projects } = useProjects();
   return useMemo(() => {
+    if (selectedProjectId === ALL_PROJECTS) return undefined; // explicit "all"
     if (!projects || projects.length === 0) return undefined;
     if (selectedProjectId && projects.some((p) => p.id === selectedProjectId)) {
       return selectedProjectId;
     }
-    return projects[0].id;
+    return projects[0].id; // default: the most recent project
   }, [projects, selectedProjectId]);
 }
 

@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronsUpDown, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, FolderPlus, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   useCreateProject,
   useDeleteProject,
   useProjects,
   useRenameProject,
 } from "@/lib/api/hooks";
-import { useCurrentProject, useCurrentProjectId, useSelectProject } from "@/components/app/project-provider";
+import {
+  ALL_PROJECTS,
+  useCurrentProject,
+  useCurrentProjectId,
+  useIsAllProjects,
+  useSelectProject,
+} from "@/components/app/project-provider";
 import type { Project } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -28,15 +34,17 @@ const DOT: Record<string, string> = {
 const dotClass = (color?: string) => (color && DOT[color]) || "bg-primary";
 
 /**
- * The project (client / body of work) switcher, at the top of the rail. Picking
- * a project scopes the rail's history, the home, and the memory browser to it.
- * Create / rename / delete live here too. Everything is client-side current-project
- * state; each scoped request carries the projectId (see project-provider).
+ * The project (client / body of work) switcher, at the top of the rail. Picking a
+ * project scopes the rail history, the home, and the memory browser to it; "All
+ * projects" clears the filter and shows everything. Create / rename / delete live
+ * here too. Current-project is client-side state; each scoped request carries the
+ * projectId (see project-provider).
  */
 export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   const { data: projects, isError } = useProjects();
   const current = useCurrentProject();
   const currentId = useCurrentProjectId();
+  const isAll = useIsAllProjects();
   const selectProject = useSelectProject();
   const createProject = useCreateProject();
   const renameProject = useRenameProject();
@@ -44,7 +52,6 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   const toast = useToast();
 
   const [open, setOpen] = useState(false);
-  const [rowActions, setRowActions] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
@@ -57,12 +64,9 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setRowActions(null);
-      }
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && (setOpen(false), setRowActions(null));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
     return () => {
@@ -74,7 +78,6 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   function pick(id: string) {
     selectProject(id);
     setOpen(false);
-    setRowActions(null);
     onNavigate?.();
   }
 
@@ -119,19 +122,19 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
     const fallback = projects?.find((p) => p.id !== deleting.id);
     deleteProject.mutate(deleting.id, {
       onSuccess: () => {
-        if (wasCurrent && fallback) selectProject(fallback.id);
+        // drop back to a remaining project, or to All projects if none are left
+        if (wasCurrent) selectProject(fallback ? fallback.id : ALL_PROJECTS);
         setDeleting(null);
         toast({ title: "Project deleted", description: "Its conversations and memory are gone.", tone: "success" });
       },
     });
   }
 
-  const rowMenu =
-    "flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-[13px] transition-colors";
+  const item = "flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-[13px] transition-colors";
 
   // Contract-first: if the backend doesn't serve /projects yet, render nothing
-  // rather than a non-working switcher. It appears automatically once projects
-  // load — in mock mode now, or against the real backend once it ships them.
+  // rather than a non-working switcher. Appears once projects load (mock now, or
+  // the real backend once it ships them).
   if (isError || !projects) return null;
 
   return (
@@ -143,11 +146,15 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         aria-expanded={open}
         className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-raised px-2.5 py-2 text-left transition-colors hover:border-border-strong"
       >
-        <span className={cn("size-2.5 shrink-0 rounded-full", dotClass(current?.color))} aria-hidden />
+        {current ? (
+          <span className={cn("size-2.5 shrink-0 rounded-full", dotClass(current.color))} aria-hidden />
+        ) : (
+          <Layers className="size-4 shrink-0 text-faint" aria-hidden />
+        )}
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] uppercase tracking-[0.14em] text-faint">Project</span>
           <span className="block truncate text-[13px] font-medium text-foreground">
-            {current?.name ?? "All work"}
+            {current?.name ?? "All projects"}
           </span>
         </span>
         <ChevronsUpDown className="size-4 shrink-0 text-faint" aria-hidden />
@@ -157,77 +164,90 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         <div
           ref={popRef}
           role="menu"
-          className="absolute inset-x-3 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-xl"
+          className="absolute inset-x-3 top-full z-50 mt-1 flex max-h-[min(60vh,26rem)] flex-col rounded-lg border border-border bg-surface-raised shadow-xl"
         >
-          <p className="px-2.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">Projects</p>
-          <ul className="max-h-[40vh] overflow-y-auto">
-            {(projects ?? []).map((p) => (
-              <li key={p.id} className="group/row relative">
+          {/* All projects — clears the filter */}
+          <div className="p-1">
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={isAll}
+              onClick={() => pick(ALL_PROJECTS)}
+              className={cn(item, "hover:bg-muted", isAll && "bg-muted")}
+            >
+              <Layers className="size-4 shrink-0 text-faint" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-foreground">All projects</span>
+              {isAll && <Check className="size-3.5 shrink-0 text-primary" aria-hidden />}
+            </button>
+          </div>
+
+          <div className="h-px bg-border" />
+          <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.14em] text-faint">
+            Projects {projects.length > 0 && <span className="tabular">· {projects.length}</span>}
+          </p>
+
+          {/* the scrollable list — every project + its rename/delete, always reachable */}
+          <ul className="min-h-0 flex-1 overflow-y-auto px-1">
+            {projects.map((p) => (
+              <li key={p.id} className="group/row flex items-center gap-1 rounded transition-colors hover:bg-muted">
                 <button
                   type="button"
                   role="menuitemradio"
                   aria-checked={p.id === currentId}
                   onClick={() => pick(p.id)}
-                  className={cn(rowMenu, "pr-8 hover:bg-muted", p.id === currentId && "bg-muted")}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-[13px]"
                 >
                   <span className={cn("size-2.5 shrink-0 rounded-full", dotClass(p.color))} aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-foreground">{p.name}</span>
-                  {p.id === currentId && <Check className="size-3.5 shrink-0 text-primary" aria-hidden />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRowActions((id) => (id === p.id ? null : p.id))}
-                  aria-label={`Actions for ${p.name}`}
-                  className={cn(
-                    "absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:bg-border hover:text-foreground",
-                    rowActions === p.id ? "opacity-100" : "opacity-0 group-hover/row:opacity-100",
+                  {p.id === currentId && (
+                    <Check className="size-3.5 shrink-0 text-primary group-hover/row:hidden" aria-hidden />
                   )}
-                >
-                  <MoreHorizontal className="size-3.5" aria-hidden />
                 </button>
-                {rowActions === p.id && (
-                  <div className="absolute right-1 top-full z-10 min-w-[8rem] overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRenaming(p);
-                        setName(p.name);
-                        setRowActions(null);
-                        setOpen(false);
-                      }}
-                      className={cn(rowMenu, "text-muted-foreground hover:bg-muted hover:text-foreground")}
-                    >
-                      <Pencil className="size-3.5" aria-hidden /> Rename
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeleting(p);
-                        setRowActions(null);
-                        setOpen(false);
-                      }}
-                      className={cn(rowMenu, "text-destructive hover:bg-destructive-soft")}
-                    >
-                      <Trash2 className="size-3.5" aria-hidden /> Delete
-                    </button>
-                  </div>
-                )}
+                {/* inline actions — no nested popup to clip; hover on desktop, always on touch */}
+                <span className="flex shrink-0 items-center gap-0.5 pr-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenaming(p);
+                      setName(p.name);
+                      setOpen(false);
+                    }}
+                    aria-label={`Rename ${p.name}`}
+                    className="flex size-7 items-center justify-center rounded text-faint transition-colors hover:bg-border hover:text-foreground"
+                  >
+                    <Pencil className="size-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleting(p);
+                      setOpen(false);
+                    }}
+                    aria-label={`Delete ${p.name}`}
+                    className="flex size-7 items-center justify-center rounded text-faint transition-colors hover:bg-destructive-soft hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
-          <div className="my-1 h-px bg-border" />
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              setName("");
-              setSeedFacts("");
-              setCreating(true);
-            }}
-            className={cn(rowMenu, "text-foreground hover:bg-muted")}
-          >
-            <FolderPlus className="size-4 text-primary" aria-hidden /> New project
-          </button>
+
+          <div className="h-px bg-border" />
+          <div className="p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setName("");
+                setSeedFacts("");
+                setCreating(true);
+              }}
+              className={cn(item, "text-foreground hover:bg-muted")}
+            >
+              <FolderPlus className="size-4 text-primary" aria-hidden /> New project
+            </button>
+          </div>
         </div>
       )}
 
