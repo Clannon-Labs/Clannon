@@ -131,7 +131,11 @@ export function Composer({
           />
           {/* model selector + send/stop, grouped on the right */}
           <div className="flex items-center gap-1">
-            <SessionModelPicker models={session.models} onSetRole={session.setRole} />
+            <SessionModelPicker
+              models={session.models}
+              onSetRole={session.setRole}
+              onSetAll={session.setAll}
+            />
             {busy && onStop ? (
               <Tooltip label="Stop" align="end">
                 <button

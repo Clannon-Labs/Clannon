@@ -169,21 +169,64 @@ export function ModelRoleList({
   );
 }
 
-/** Per-session model overrides — a sparse { role: modelId }. Setting a role back to
- *  its backend default drops the override, so we only ever send real changes. */
+const SESSION_MODELS_KEY = "clannon.session.models";
+
+function readSessionModels(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(SESSION_MODELS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The model choice for the conversation — a sparse { role: modelId } sent with each
+ * run. Persisted per browser so it carries across turns (the model you pick is the
+ * default for the whole session, not one run). `setAll` sets every applicable role
+ * at once (the common case: one model for the orchestrator AND every expert);
+ * `setRole` is the per-expert override. Lives behind RequireAuth, so reading storage
+ * in the initializer is safe.
+ */
 export function useSessionModels() {
-  const [models, setModels] = useState<Record<string, string>>({});
+  const [models, setModels] = useState<Record<string, string>>(readSessionModels);
+
+  const update = (fn: (m: Record<string, string>) => Record<string, string>) =>
+    setModels((m) => {
+      const next = fn(m);
+      try {
+        localStorage.setItem(SESSION_MODELS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable — the choice still holds in memory */
+      }
+      return next;
+    });
+
   return {
     models,
     count: Object.keys(models).length,
+    /** Override a single role (per-expert advanced control). */
     setRole: (layer: LayerModelConfig, model: string) =>
-      setModels((m) => {
+      update((m) => {
         const next = { ...m };
         if (layer.default && model === layer.default) delete next[layer.layer];
         else next[layer.layer] = model;
         return next;
       }),
-    reset: () => setModels({}),
+    /** One model for the whole conversation: set every non-locked role that can run
+     *  it, and clear any per-expert overrides. Roles that can't (e.g. a vision-only
+     *  media expert) keep their own model. */
+    setAll: (layers: LayerModelConfig[], model: string) =>
+      update(() => {
+        const next: Record<string, string> = {};
+        for (const l of layers) {
+          if (l.locked || !l.options.includes(model)) continue;
+          next[l.layer] = model;
+        }
+        return next;
+      }),
+    reset: () => update(() => ({})),
   };
 }
 
@@ -196,9 +239,11 @@ export function useSessionModels() {
 export function SessionModelPicker({
   models,
   onSetRole,
+  onSetAll,
 }: {
   models: Record<string, string>;
   onSetRole: (layer: LayerModelConfig, model: string) => void;
+  onSetAll: (layers: LayerModelConfig[], model: string) => void;
 }) {
   const { data: layers } = useModelConfig();
   // fixed popover anchored to the trigger, so the composer's overflow-hidden box
@@ -335,26 +380,48 @@ export function SessionModelPicker({
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           >
             {view === "main" ? (
-              // headline: the orchestrator model, then "More models" → experts
+              // one model for the WHOLE conversation — picking sets every role that
+              // can run it (orchestrator + experts). Per-expert overrides live behind
+              // "Customize by expert".
               <div className="flex flex-col">
-                <p className="px-3 pb-0.5 pt-2 tag-label text-faint">Orchestrator</p>
-                <button
-                  type="button"
-                  onClick={() => goTo(orchestrator.layer)}
-                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                <p className="px-3 pb-1 pt-2 tag-label text-faint">Model for this conversation</p>
+                <ul
+                  role="listbox"
+                  aria-label="Conversation model"
+                  className="overflow-y-auto overscroll-contain"
+                  style={{ maxHeight: listMaxH }}
                 >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {prettyModel(valueFor(orchestrator))}
-                    </span>
-                    {orchestrator.description && (
-                      <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
-                        {orchestrator.description}
-                      </span>
-                    )}
-                  </span>
-                  <Check className="size-4 shrink-0 text-primary" aria-hidden />
-                </button>
+                  {orchestrator.options.map((opt) => {
+                    const selected = valueFor(orchestrator) === opt;
+                    return (
+                      <li key={opt}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => {
+                            onSetAll(layers, opt);
+                            setAnchor(null);
+                          }}
+                          className={cn(
+                            "flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                            selected ? "bg-primary-soft" : "hover:bg-muted",
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className={cn("block truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
+                              {prettyModel(opt)}
+                            </span>
+                            {orchestrator.default === opt && (
+                              <span className="block text-[11px] text-faint">Recommended</span>
+                            )}
+                          </span>
+                          {selected && <Check className="size-4 shrink-0 text-primary" aria-hidden />}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
                 {experts.length > 0 && (
                   <>
                     <div className="mx-2 my-1 h-px bg-border" />
@@ -363,19 +430,18 @@ export function SessionModelPicker({
                       onClick={() => goTo("experts")}
                       className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
                     >
-                      <span className="text-sm font-medium text-foreground">More models</span>
+                      <span className="text-sm font-medium text-foreground">Customize by expert</span>
                       <span className="flex items-center gap-1 text-[12px] text-faint">
-                        experts
+                        advanced
                         <ChevronRight className="size-4 shrink-0" aria-hidden />
                       </span>
                     </button>
                   </>
                 )}
-                {overrides > 0 && (
-                  <p className="px-3 pb-1 pt-1.5 text-[11px] leading-relaxed text-faint">
-                    {overrides} {overrides === 1 ? "model" : "models"} set for this run.
-                  </p>
-                )}
+                <p className="px-3 pb-1 pt-1.5 text-[11px] leading-relaxed text-faint">
+                  Applies to the orchestrator and every expert that can run it, for this whole
+                  conversation.
+                </p>
               </div>
             ) : view === "experts" ? (
               // pick which specialist to set a model for
