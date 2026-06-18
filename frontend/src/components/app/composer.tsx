@@ -69,7 +69,7 @@ export function Composer({
       <div
         {...attach.dropZoneProps}
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary",
+          "relative overflow-hidden rounded-[1.7rem] border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary sm:rounded-3xl",
           attach.dragOver && "border-primary ring-2 ring-primary/30",
         )}
       >
@@ -104,18 +104,18 @@ export function Composer({
           }}
           placeholder={placeholder}
           rows={rows}
-          className="max-h-[280px] w-full resize-none overflow-y-auto bg-transparent px-4 py-3.5 text-base leading-relaxed placeholder:text-faint focus:outline-none sm:text-[15px]"
+          className="max-h-[280px] w-full resize-none overflow-y-auto bg-transparent px-5 py-4 text-base leading-relaxed placeholder:text-faint focus:outline-none sm:px-4 sm:py-3.5 sm:text-[15px]"
         />
         <AttachmentChips files={attach.files} onRemove={attach.removeFile} />
         <HeavyMediaNote show={attach.hasHeavyMedia} />
 
-        <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5">
+        <div className="flex items-center justify-between gap-2 px-3 pb-3 sm:px-2.5 sm:pb-2.5">
           <Tooltip label="Attach files" align="start">
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               aria-label="Attach files"
-              className="flex size-9 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:size-9"
             >
               <Plus className="size-4" aria-hidden />
             </button>
@@ -138,7 +138,7 @@ export function Composer({
                   type="button"
                   onClick={onStop}
                   aria-label="Stop the run"
-                  className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
+                  className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 sm:size-9"
                 >
                   <Square className="size-3 fill-current" aria-hidden />
                 </button>
@@ -151,7 +151,7 @@ export function Composer({
                   loading={pending}
                   disabled={tooShort}
                   aria-label="Send"
-                  className="size-9 rounded-full !px-0"
+                  className="size-10 rounded-full !px-0 sm:size-9"
                 >
                   {!pending && <ArrowUp className="size-4" aria-hidden />}
                 </Button>

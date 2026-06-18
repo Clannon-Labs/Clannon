@@ -92,8 +92,8 @@ export default function WorkspacePage() {
        sidebar, not here. */
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
       <div className="flex flex-1 flex-col">
-        <div className="pt-[7vh] sm:pt-[10vh]">
-          <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2rem] leading-[1.1] sm:text-[2.6rem]">
+        <div className="pt-[9vh] sm:pt-[10vh]">
+          <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2.15rem] leading-[1.1] sm:text-[2.6rem]">
             <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
             <span>
               {greet}
@@ -105,29 +105,34 @@ export default function WorkspacePage() {
               )}
             </span>
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
+          <p className="mx-auto mt-4 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
             Describe the work. I&apos;ll route it, run the research in parallel, and
             bring back something verified — carrying what I remember about your clients.
           </p>
         </div>
 
-        {/* starter cards — clicking loads the full brief into the composer */}
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+        {/* starter cards — clicking loads the full brief into the composer.
+            Compact rows on a phone, full cards on a wider screen. */}
+        <div className="mt-10 grid gap-2.5 sm:grid-cols-3 sm:gap-3">
           {EXAMPLE_BRIEFS.map((example) => (
             <button
               key={example.label}
               type="button"
               onClick={() => setBrief(example.brief)}
-              className="group flex flex-col gap-2.5 rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-muted"
+              className="group flex items-center gap-3.5 rounded-2xl border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-muted sm:flex-col sm:items-start sm:gap-2.5 sm:rounded-xl"
             >
               <example.icon
-                className="size-5 text-primary/70 transition-colors group-hover:text-primary"
+                className="size-5 shrink-0 text-primary/70 transition-colors group-hover:text-primary"
                 aria-hidden
               />
-              <span className="text-[13.5px] font-medium leading-snug text-foreground">
-                {example.label}
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[14px] font-medium leading-snug text-foreground sm:text-[13.5px]">
+                  {example.label}
+                </span>
+                <span className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground sm:mt-0 sm:text-[12px]">
+                  {example.hint}
+                </span>
               </span>
-              <span className="text-[12px] leading-snug text-muted-foreground">{example.hint}</span>
             </button>
           ))}
         </div>

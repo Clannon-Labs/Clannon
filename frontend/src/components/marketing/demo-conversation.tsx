@@ -151,7 +151,7 @@ export function DemoConversation() {
               experts working in parallel, the quality filter — start to finish.
             </p>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="mt-8 grid gap-2.5 sm:grid-cols-3 sm:gap-3">
               {DEMO_BRIEFS.map((brief, i) => {
                 const Icon = BRIEF_ICONS[i] ?? TrendingUp;
                 const active = selected === i;
@@ -162,14 +162,14 @@ export function DemoConversation() {
                     onClick={() => setSelected(i)}
                     aria-pressed={active}
                     className={cn(
-                      "flex flex-col gap-2.5 rounded-xl border p-4 text-left transition-colors",
+                      "flex items-center gap-3.5 rounded-2xl border p-4 text-left transition-colors sm:flex-col sm:items-start sm:gap-2.5 sm:rounded-xl",
                       active
                         ? "border-primary bg-primary-soft"
                         : "border-border bg-surface hover:border-border-strong hover:bg-muted",
                     )}
                   >
-                    <Icon className={cn("size-5", active ? "text-primary" : "text-primary/70")} aria-hidden />
-                    <span className="text-[13.5px] font-medium leading-snug text-foreground">
+                    <Icon className={cn("size-5 shrink-0", active ? "text-primary" : "text-primary/70")} aria-hidden />
+                    <span className="text-[14px] font-medium leading-snug text-foreground sm:text-[13.5px]">
                       {brief.label}
                     </span>
                   </button>
@@ -308,7 +308,7 @@ export function DemoConversation() {
 
         <div
           className={cn(
-            "flex items-center gap-2 rounded-2xl border bg-surface-raised px-4 py-3 transition-colors",
+            "flex items-center gap-2 rounded-[1.7rem] border bg-surface-raised px-5 py-4 transition-colors sm:rounded-3xl sm:px-4 sm:py-3.5",
             selected !== null ? "border-border-strong" : "border-border",
           )}
         >
@@ -328,7 +328,7 @@ export function DemoConversation() {
               onClick={() => selected !== null && run(selected)}
               disabled={selected === null || running}
               aria-label="Send the selected starter"
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40 sm:size-9"
             >
               {running ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden />
