@@ -103,15 +103,19 @@ VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
 # bounded; on exhaustion the original error is re-raised so callers fail closed.
 # ---------------------------------------------------------------------------
 
-LLM_TRANSIENT_MAX_RETRIES   = 4      # extra attempts after the first, on a single-model transient error
+LLM_TRANSIENT_MAX_RETRIES   = 2      # extra attempts after the first, on a SINGLE-model transient error.
+                                     # Was 4 (2+4+8+16s ~= 30s of backoff) — a real interactive latency
+                                     # blow-up nested inside the expert/orchestrator loops (W9). Sustained
+                                     # rate-limits are handled by ROTATING providers/keys in the
+                                     # FallbackModel chain, not by a single model backing off for 30s, so
+                                     # 2 (2+4s ~= 6s) rides out a brief 429/503 blip and then rotates.
 LLM_FALLBACK_MAX_RETRIES    = 1      # extra whole-chain re-runs when a FallbackModel exhausts EVERY
                                      # provider: each re-run costs N provider attempts, so cap it hard
                                      # (1) and fail fast to graceful degradation instead of spinning to
                                      # the expert/orchestrator timeout when all providers are rate-limited
 LLM_RETRY_BASE_DELAY_S      = 2.0    # first backoff delay; doubles each retry
-LLM_RETRY_MAX_DELAY_S       = 30.0   # per-attempt backoff cap; ~30s total rides out a
-                                     # per-minute rate-limit window (parallel experts on
-                                     # one provider WILL burst past tier-1 TPM caps)
+LLM_RETRY_MAX_DELAY_S       = 30.0   # per-attempt backoff cap (won't bind at 2 retries; guards a future
+                                     # raise of LLM_TRANSIENT_MAX_RETRIES from running away)
 
 
 # ---------------------------------------------------------------------------
