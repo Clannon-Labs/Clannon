@@ -21,7 +21,7 @@ import {
 import { Mark } from "@/components/brand/logo";
 import { openCommandPalette } from "@/components/app/command-palette";
 import { ThemeToggle } from "@/components/theme";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { InfoTip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
@@ -59,6 +59,11 @@ function RailBody({
   const sessions = useMemo(() => groupBySession(runs), [runs]);
 
   const pct = usage ? Math.min(100, Math.round((usage.used / usage.budget) * 100)) : 0;
+  const remaining = usage ? Math.max(0, usage.budget - usage.used) : 0;
+  const exhausted = !!usage && usage.used >= usage.budget;
+  const resetDate = usage
+    ? new Date(usage.periodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "";
 
   // per-conversation "⋯" menu — fixed-positioned (anchored to the clicked dots)
   // so the scrolling history list can't clip it
@@ -262,11 +267,16 @@ function RailBody({
       )}
 
       {usage && user && (
-        <div className="mx-3 mb-3 rounded-md border border-border bg-background p-3.5">
+        <div
+          className={cn(
+            "mx-3 mb-3 rounded-md border p-3.5",
+            exhausted ? "border-destructive/40 bg-destructive-soft" : "border-border bg-background",
+          )}
+        >
           <div className="flex items-center justify-between">
             <span className="tag-label text-faint">{currentPlan?.name}</span>
             <span className="flex items-center gap-1">
-              <span className="text-[12px] text-muted-foreground tabular">
+              <span className={cn("text-[12px] tabular", exhausted ? "text-destructive" : "text-muted-foreground")}>
                 {formatTokens(usage.used)} / {formatTokens(usage.budget)}
               </span>
               <InfoTip
@@ -275,22 +285,52 @@ function RailBody({
               />
             </span>
           </div>
-          <div
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Token budget used"
-            className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className={cn(
-                "h-full rounded-full transition-[width] duration-500",
-                pct > 90 ? "bg-destructive" : pct > 75 ? "bg-memory" : "bg-primary",
-              )}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+
+          {exhausted ? (
+            /* the budget-exhausted state (UI_SPEC §1, §13) — blocking, but calm:
+               work pauses, nothing is lost, and the way forward is one tap away */
+            <>
+              <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+                You&apos;re out of tokens this period. Work pauses cleanly — nothing is
+                lost. Resets {resetDate}.
+              </p>
+              <ButtonLink
+                href="/app/settings?tab=billing"
+                size="sm"
+                onClick={onNavigate}
+                className="mt-2.5 w-full"
+              >
+                Upgrade to continue
+              </ButtonLink>
+            </>
+          ) : (
+            <>
+              <div
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Token budget used"
+                className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-500",
+                    pct > 90 ? "bg-destructive" : pct > 75 ? "bg-memory" : "bg-primary",
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p
+                className={cn(
+                  "mt-2 text-[11px] tabular",
+                  pct > 90 ? "text-memory" : "text-faint",
+                )}
+              >
+                {formatTokens(remaining)} left · resets {resetDate}
+              </p>
+            </>
+          )}
         </div>
       )}
 
