@@ -86,30 +86,64 @@ export default function WorkspacePage() {
   const firstName = user?.name.split(" ")[0] ?? "";
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col">
-      {/* the new-chat screen — greeting, composer, prompts, then the hydration
-          moment (our signature). History lives in the sidebar, not here. */}
-      <div className="pt-[7vh] sm:pt-[11vh]">
-        <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2rem] leading-[1.1] sm:text-[2.6rem]">
-          <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
-          <span>
-            {greet}
-            {firstName && (
-              <>
-                {", "}
-                <span className="capitalize">{firstName}</span>
-              </>
-            )}
-          </span>
-        </h1>
+    /* the new-chat screen — laid out like a run (and the demo): a centered
+       hero, starter cards, the hydration moment, then a docked composer that
+       carries the full control set (model picker, attach). History is in the
+       sidebar, not here. */
+    <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
+      <div className="flex flex-1 flex-col">
+        <div className="pt-[7vh] sm:pt-[10vh]">
+          <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2rem] leading-[1.1] sm:text-[2.6rem]">
+            <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
+            <span>
+              {greet}
+              {firstName && (
+                <>
+                  {", "}
+                  <span className="capitalize">{firstName}</span>
+                </>
+              )}
+            </span>
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
+            Describe the work. I&apos;ll route it, run the research in parallel, and
+            bring back something verified — carrying what I remember about your clients.
+          </p>
+        </div>
 
+        {/* starter cards — clicking loads the full brief into the composer */}
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          {EXAMPLE_BRIEFS.map((example) => (
+            <button
+              key={example.label}
+              type="button"
+              onClick={() => setBrief(example.brief)}
+              className="group flex flex-col gap-2.5 rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-muted"
+            >
+              <example.icon
+                className="size-5 text-primary/70 transition-colors group-hover:text-primary"
+                aria-hidden
+              />
+              <span className="text-[13.5px] font-medium leading-snug text-foreground">
+                {example.label}
+              </span>
+              <span className="text-[12px] leading-snug text-muted-foreground">{example.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* the hydration moment — context surfaces before the brief is even sent */}
+        <HydrationPanel brief={brief} className="mt-12" />
+      </div>
+
+      {/* docked composer — same control set as the run reply, same place too */}
+      <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         <Composer
-          className="mt-7"
           value={brief}
           onChange={setBrief}
           pending={createRun.isPending}
           submitError={error}
-          rows={3}
+          rows={2}
           placeholder="How can I help you today?"
           onSubmit={(files, models) => {
             setError(null);
@@ -125,26 +159,7 @@ export default function WorkspacePage() {
             );
           }}
         />
-
-        {/* suggestion chips — clicking drops the full brief into the composer */}
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {EXAMPLE_BRIEFS.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => setBrief(example.brief)}
-              title={example.hint}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2 text-[13px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-            >
-              <example.icon className="size-3.5 text-primary/70" aria-hidden />
-              {example.label}
-            </button>
-          ))}
-        </div>
       </div>
-
-      {/* the hydration moment — context surfaces before the brief is even sent */}
-      <HydrationPanel brief={brief} className="mt-14" />
     </div>
   );
 }

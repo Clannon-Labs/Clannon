@@ -12,6 +12,8 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   SquarePen,
@@ -47,9 +49,12 @@ const SECTIONS = NAV.filter(
 function RailBody({
   onNavigate,
   onRequestDelete,
+  onCollapse,
 }: {
   onNavigate?: () => void;
   onRequestDelete?: (session: SessionEntry) => void;
+  /** Desktop only — collapses the rail. Absent in the mobile drawer. */
+  onCollapse?: () => void;
 }) {
   const pathname = usePathname();
   const { data: user } = useMe();
@@ -121,15 +126,28 @@ function RailBody({
 
   return (
     <>
-      <Link
-        href="/app"
-        onClick={onNavigate}
-        className="flex items-center gap-2.5 px-5 py-5"
-        aria-label={`${siteConfig.name} workspace`}
-      >
-        <Mark className="size-6 text-primary" />
-        <span className="font-display text-lg font-medium tracking-tight">{siteConfig.name}</span>
-      </Link>
+      <div className="flex items-center justify-between gap-1 px-3 py-4">
+        <Link
+          href="/app"
+          onClick={onNavigate}
+          className="flex items-center gap-2.5 px-2"
+          aria-label={`${siteConfig.name} workspace`}
+        >
+          <Mark className="size-6 text-primary" />
+          <span className="font-display text-lg font-medium tracking-tight">{siteConfig.name}</span>
+        </Link>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            className="hidden size-8 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground md:flex"
+          >
+            <PanelLeftClose className="size-4" aria-hidden />
+          </button>
+        )}
+      </div>
 
       {/* New chat — the primary action, first thing, like ChatGPT/Claude */}
       <Link
@@ -388,7 +406,7 @@ function RailBody({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const toast = useToast();
@@ -432,9 +450,27 @@ export function Sidebar() {
 
   return (
     <>
+      {/* floating reopen handle — shown only while the rail is collapsed (desktop) */}
+      {collapsed && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Open sidebar"
+          title="Open sidebar"
+          className="fixed left-3 top-3 z-40 hidden size-9 cursor-pointer items-center justify-center rounded-md border border-border bg-surface/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground md:flex"
+        >
+          <PanelLeftOpen className="size-4" aria-hidden />
+        </button>
+      )}
+
       {/* desktop rail */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface md:flex">
-        <RailBody onRequestDelete={setConfirmDelete} />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface md:flex",
+          collapsed && "md:hidden",
+        )}
+      >
+        <RailBody onRequestDelete={setConfirmDelete} onCollapse={onToggle} />
       </aside>
 
       {/* mobile top bar — hamburger + brand, with New chat as the primary action */}
