@@ -9,7 +9,7 @@ defaults:
   orchestrator: anthropic
   filter: anthropic
   planner: anthropic
-  research: anthropic   # the research expert's REASONING model; grounded search is the separate `search` role
+  research: openai   # the research expert's REASONING model; grounded search is the separate `search` role
   search: google        # Gemini-only capability — the one job on the free Gemini quota
   media_expert: google  # multimodal understanding stays on Gemini
 
