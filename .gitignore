@@ -79,3 +79,4 @@ llm_view_snapshot.json
 
 static_analysis_semgrep_*
 static_analysis_semgrep_*/
+conversation/
