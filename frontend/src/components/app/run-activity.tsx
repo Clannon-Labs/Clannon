@@ -20,11 +20,11 @@ export function liveVerb(log: DecisionLogEntry[], status: RunStatus): string {
       case "route":
         return "Routing the work";
       case "expert_spawn":
-        return `Calling ${last.title.replace(/^spawn\s+/i, "")}`;
+        return "Calling experts";
       case "tool_call":
         return last.meta?.tool === "recall" || /\brecall\b/i.test(last.title)
           ? "Looking back at earlier"
-          : "Searching sources";
+          : "Calling a tool";
       case "observation":
         return "Reviewing findings";
       case "answer":
