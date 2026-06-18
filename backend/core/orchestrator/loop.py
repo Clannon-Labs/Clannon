@@ -35,11 +35,13 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     hydration = await _hydrate(normalized, ports, ctx)
 
     async def on_event(event: dict) -> None:
-        """Stream each capability call to the decision-log sink, live — EXCEPT memory.
-        The orchestrator's memory tool is INVISIBLE to the user: memory must feel like the
-        assistant simply knowing things, never like it is 'running a memory tool'."""
+        """Stream each capability call to the decision-log sink, live — EXCEPT internal
+        plumbing. The orchestrator's memory tool is INVISIBLE (memory must feel like the
+        assistant simply knowing things, never like it is 'running a memory tool'), and
+        `search_tools` is the framework's own capability-discovery step for deferred
+        loading (W2) — neither is a user-meaningful action, so both stay out of the stream."""
         tool = str(event.get("tool", "?"))
-        if tool.startswith("memory."):
+        if tool.startswith("memory.") or tool == "search_tools":
             return
         await ports.log.emit(DecisionLogEntry(kind="tool_call", message=f"calling {tool}", detail=event))
 

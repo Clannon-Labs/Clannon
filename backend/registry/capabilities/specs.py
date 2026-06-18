@@ -41,6 +41,12 @@ class CapabilitySpec:
     permission: PermissionLevel = PermissionLevel.READ
     input_schema: type[BaseModel] | None = None
     output_schema: type[BaseModel] | None = None
+    eager: bool = False                         # hot-path: offered to the orchestrator up
+                                                # front. The default (False) defers a
+                                                # capability behind tool search, so it only
+                                                # enters the request once the model looks for
+                                                # it — this is what keeps the eager prompt +
+                                                # cached prefix flat as the roster grows (W2).
     status: CapabilityStatus = CapabilityStatus.OK
     reason: str | None = None
 

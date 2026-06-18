@@ -33,6 +33,7 @@ class WriterExpert:
     tools = ("memory.search",) # mostly reasons over what it's given; memory.search recalls the user's context/preferences/style
     model_role = "planner"
     tags = ("report", "writing", "citations")
+    eager = True               # hot path: the synthesis step of nearly every research turn (W2)
 
     async def run(self, args: WriteIn, env: ExpertEnv) -> ExpertOutput:
         return await think(env, _task(args, env))

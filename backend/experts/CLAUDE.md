@@ -21,6 +21,11 @@ work. Drop a `@expert`-decorated package here and it self-registers — no wirin
 - Metadata on the class: `name`, `domain`, `description`, `input_schema`,
   `output_schema=ExpertOutput`, `skills`, `tools`, `model_role`, `permission`, `tags`.
   `run()` builds the per-call task, then calls `think(env, task)`.
+- Optional `eager = True` puts the expert on the orchestrator's **hot path** (offered
+  up front, every turn). Omit it (the default) and the expert **defers** behind tool
+  search — it costs nothing until the orchestrator searches for it, which is what keeps
+  the orchestrator's context flat as the roster grows. Reserve `eager` for capabilities
+  genuinely needed on most turns (today: only web research + the writer).
 - `system.md` + skills resolve overlay-first (`prompts.secure/experts/<name>/…`);
   the committed copies are baselines (expert prompts are UNLOCKED). Skills use
   progressive disclosure — only name + description up front, body via `load_skill`.

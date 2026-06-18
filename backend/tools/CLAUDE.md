@@ -25,6 +25,11 @@ Each tool is a `@tool`-decorated class that does one concrete thing and returns 
 - Metadata on the class: `name`, `domain`, `description`, `input_schema`,
   `output_schema`, `permission` (default READ), `tags`, optional `timeout_s`.
   Identity key = `f"{domain}.{name}"`. Shared HTTP primitives live in `_net.py`.
+- Optional `eager = True` puts the tool on the orchestrator's **hot path** (offered up
+  front). Omit it (the default) and the tool **defers** behind tool search — discovered
+  on demand, kept out of context until then. Reserve `eager` for the few tools used on
+  most turns (today: only web search); situational tools (calculator, fetch, http, etc.)
+  stay deferred.
 - The handler enforces grants/permission/timeout/cap/sanitize — the tool just does
   the work. Permission levels: READ < NETWORK < WRITE … (see `foundation.PermissionLevel`).
 

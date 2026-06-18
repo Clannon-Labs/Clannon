@@ -36,7 +36,7 @@ from foundation import (
     WorkspacePort,
     constants,
 )
-from core.llm import RunContext      # SDK types only via the core/llm boundary
+from core.llm import RunContext, Tool      # SDK types only via the core/llm boundary
 
 from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
 from .overlay import expert_overlay_rel as _expert_overlay_rel, overlaid as _overlaid
@@ -320,18 +320,35 @@ def _make_remember_tool() -> Callable:
     return remember
 
 
+def _offer(fn: Callable, spec) -> "Callable | Tool":
+    """Offer one capability to the orchestrator. A hot-path capability (`eager`) is
+    passed as a bare function — in context from turn one. The long tail is wrapped as a
+    deferred `Tool`: it stays OUT of the prompt (and out of the cached tool prefix) until
+    the model discovers it via tool search, then becomes callable. Default is deferred,
+    so the eager surface stays flat as the roster grows (W2)."""
+    if getattr(spec, "eager", False):
+        return fn
+    return Tool(fn, defer_loading=True)
+
+
 def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None
-) -> list[Callable]:
+) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the `remember` long-term-memory tool and (when a message sink
     is wired) the `say` conversational tool. The handler resolves the specs; support
-    never imports the registry."""
-    fns: list[Callable] = [_make_remember_tool()]
+    never imports the registry.
+
+    `remember`/`say` and the hot-path (`eager`) capabilities load up front; the long
+    tail is deferred behind tool search (W2). The framework auto-adds a `search_tools`
+    function whenever any deferred capability is present, and the model pulls a
+    capability into context only when it looks for one. Either way, every call still
+    routes through the guarded handler on execution."""
+    fns: list = [_make_remember_tool()]
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
     for spec in tool_specs:
-        fns.append(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description))
+        fns.append(_offer(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description), spec))
     for spec in expert_specs:
-        fns.append(_make_orchestrator_expert_fn(spec.key, spec.input_schema, spec.description))
+        fns.append(_offer(_make_orchestrator_expert_fn(spec.key, spec.input_schema, spec.description), spec))
     return fns

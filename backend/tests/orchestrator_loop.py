@@ -64,19 +64,55 @@ def _caps():
     return Capabilities.open(VrakshaContext.new("s"))
 
 
-def test_run_turn_routes_tool_through_guard_and_answers():
-    from pydantic_ai.models.test import TestModel
+def test_run_turn_routes_a_tool_call_through_the_guard():
+    # a native tool call still routes through the guarded handler and is recorded. Driven
+    # by FunctionModel, which advertises native tool search, so the full roster (incl. the
+    # deferred calculator) is directly callable — no discovery step needed to exercise the guard.
+    from pydantic_ai import ModelResponse
+    from pydantic_ai.messages import ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+
+    called = {"done": False}
+
+    def fn(messages, info):
+        names = {t.name for t in info.function_tools}
+        if "math_calculator" in names and not called["done"]:
+            called["done"] = True
+            return ModelResponse(parts=[ToolCallPart(tool_name="math_calculator", args={"expression": "2+2"})])
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "4", "confidence": 0.9})])
 
     caps = _caps()
     ans = asyncio.run(caps.run_turn(
         system_prompt="orchestrate",
         user_prompt="compute 2+2",
         output_type=OrchestratorAnswer,
-        model=TestModel(call_tools=["math_calculator"]),
+        model=FunctionModel(fn),
     ))
     assert isinstance(ans, OrchestratorAnswer)
-    # the model's native tool call routed through the guarded handler + recorded
-    assert [r.tool_name for r in caps.ctx.tool_calls] == ["math.calculator"]
+    assert [r.tool_name for r in caps.ctx.tool_calls] == ["math.calculator"]   # routed + recorded
+
+
+def test_run_turn_defers_the_long_tail_behind_tool_search():
+    # W2: only the hot path (+ remember) is offered up front; the long tail is hidden behind
+    # tool search until the model looks for it. Driven by TestModel, which has no native tool
+    # search, so it uses the local `search_tools` fallback that actually hides deferred tools;
+    # call_tools=[] so none of the (network/LLM-backed) hot tools actually fire.
+    from pydantic_ai.models.test import TestModel
+
+    tm = TestModel(call_tools=[])
+    caps = _caps()
+    asyncio.run(caps.run_turn(
+        system_prompt="orchestrate",
+        user_prompt="x",
+        output_type=OrchestratorAnswer,
+        model=tm,
+    ))
+    offered = {t.name for t in tm.last_model_request_parameters.function_tools}
+    assert {"remember", "search_web"} <= offered      # hot path + remember are eager, up front
+    assert "search_tools" in offered                  # discovery is available
+    assert "math_calculator" not in offered           # the long tail is hidden until discovered
+    assert "media_analyst" not in offered
 
 
 def test_run_turn_graceful_forced_answer_at_cap():
@@ -85,10 +121,11 @@ def test_run_turn_graceful_forced_answer_at_cap():
     from pydantic_ai.models.function import FunctionModel
 
     def fn(messages, info):
-        # call a tool while any are offered; once tools are withheld, answer.
-        if info.function_tools:
+        # call an always-eager tool while any are offered; once tools are withheld, answer.
+        names = {t.name for t in info.function_tools}
+        if "remember" in names:
             return ModelResponse(parts=[ToolCallPart(
-                tool_name=info.function_tools[0].name, args={"expression": "2+2"})])
+                tool_name="remember", args={"content": "note"})])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
             tool_name=out.name, args={"answer_text": "forced", "confidence": 0.4})])
@@ -172,3 +209,31 @@ def test_degraded_package_is_silent():
     asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
     # a degraded package is invisible — no "unavailable" notice in the decision log
     assert not any("unavailable" in str(e.message) for e in ctx.decision_log)
+
+
+# --- W2 deferred loading: hot path eager, long tail behind tool search ---------
+
+def test_build_orchestrator_tools_defers_the_long_tail():
+    from core.llm import Tool
+    from registry.capabilities import CapabilityKind
+    from registry.capabilities import registry as reg
+    from registry.capabilities.handler.support import build_orchestrator_tools
+
+    discover()
+    tool_specs = [reg.get_tool(c["key"]) for c in reg.cards(CapabilityKind.TOOL)]
+    tool_specs = [s for s in tool_specs if s and not getattr(s.impl, "wants_workspace", False)]
+    expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
+
+    fns = build_orchestrator_tools(tool_specs, expert_specs, on_message=None)
+    eager = [f for f in fns if not isinstance(f, Tool)]
+    deferred = [f for f in fns if isinstance(f, Tool) and f.defer_loading]
+
+    eager_names = {getattr(f, "__name__", "") for f in eager}
+    # remember is always eager; the hot path (web search + research + writer) is eager
+    assert "remember" in eager_names
+    assert "search_web" in eager_names
+    assert {"web_research", "synthesis_writer"} <= eager_names
+    # the long tail (media/code/data/verification/... + calculator/fetch/http/python/memory)
+    # defers, and there's a lot of it — this is what keeps the eager surface flat
+    assert len(deferred) >= 5
+    assert len(deferred) > len(eager)

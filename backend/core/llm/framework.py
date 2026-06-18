@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Generic, TypeVar
 
-from pydantic_ai import Agent, BinaryContent, FunctionToolCallEvent, RunContext
+from pydantic_ai import Agent, BinaryContent, FunctionToolCallEvent, RunContext, Tool
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import (
     ModelRequest,

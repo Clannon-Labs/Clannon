@@ -1,6 +1,8 @@
 # Orchestration — Weaknesses & Evolution
 
-**Status:** analysis + forward plan (not canonical architecture). No implementation yet.
+**Status:** analysis + forward plan (not canonical architecture). **Implemented so far (June 2026):**
+W1 control-center self-routing, W3 prompt caching, W2 deferred tool loading (the M0/M1 efficiency set). The
+rest below is still forward plan.
 **Canonical design lives in** [`../SYSTEM_ARCHITECTURE.md`](../SYSTEM_ARCHITECTURE.md) → Orchestrator, and
 [`../agents/EXPERTS_AND_TOOLS.md`](../agents/EXPERTS_AND_TOOLS.md). This document does **not** redefine the
 architecture; it critiques the current implementation and proposes a phased evolution.
@@ -117,12 +119,18 @@ that hydrate/learn run around even the one-turn turns (W6, mostly fixed). **Fix 
 reinforce control-center self-routing in the prompt (cheap, §6.1), then cache the prefix (W3) and defer the
 long-tail catalog (W2). A separate pre-classifier is explicitly **not** the fix (see §0 design note + §6.1).
 
-### W2 — Tool/expert schemas resent on every turn  ·  Cost  ·  **High**
-`build_orchestrator_tools` (`handler/support.py:348`) hands the agent **every** tool + expert as a native
-tool; `Capabilities.run_turn` (`handler/capability.py:84-96`) rebuilds that full set each turn. At 20 turns
-the same multi-thousand-token catalog is re-billed 20×. No `defer_loading`, no `search_tools`, no
-per-request subsetting. Cost grows **linearly with both turns and roster size** — and §7 is about to grow
-the roster from ~9 experts to ~14+.
+### W2 — Tool/expert schemas resent on every turn  ·  Cost  ·  **High**  ·  **DONE (June 2026)**
+`build_orchestrator_tools` (`handler/support.py`) used to hand the agent **every** tool + expert as a native
+tool, so the same multi-thousand-token catalog was re-billed every turn — cost growing linearly with turns
+and roster size, right as §7 grows the roster from ~9 experts to ~14+.
+
+**Fixed:** capabilities now carry an `eager` flag (default **False**). Only the hot path (`web.research`,
+`synthesis.writer`, `search.web`, plus the always-on `say`/`remember`) is offered up front; everything else
+is wrapped as a deferred `Tool(defer_loading=True)` and hidden behind tool search until the model looks for
+it. On Anthropic (tool search GA on Haiku 4.5+) the deferred defs stay out of context until discovered; on
+providers without native search the framework's local `search_tools` fallback does the same. Net: the eager
+surface (and the W3-cached prefix) stays flat as the roster grows — a new expert defaults to deferred and
+costs nothing until needed. See §6.3.
 
 ### W3 — No prompt caching  ·  Cost  ·  **High**
 Confirmed: no `cache_control` / cache-point plumbing anywhere in `backend/` (only vendored libs).
@@ -358,14 +366,30 @@ Guardrail unchanged: routing is the orchestrator's own decision among paths that
 verifier (upstream, already done) and the output filter (downstream) and the guarded handler. Self-routing
 never bypasses a security gate — it only decides how much work to do.
 
-### 6.2 Prompt caching (W3) — in `build_tool_agent`
-Mark the stable prefix (system prompt + tool catalog) as a cache breakpoint so all 20 turns + the session
-reuse it. Keep deferred tools (6.3) *out* of the cached prefix so a mid-run load doesn't invalidate it.
+### 6.2 Prompt caching (W3) — in `model_settings_for_layer` · **DONE**
+`model_settings_for_layer` sets `anthropic_cache_instructions` + `anthropic_cache_tool_definitions` for every
+layer, marking the stable prefix (system prompt + tool catalog) cacheable so all the turns of a run + bursty
+same-prompt requests reuse it (~1.25x write once, ~0.1x reads after). Keys are Anthropic-namespaced (other
+providers in a fallback chain ignore them); deferred tools (6.3) are auto-excluded from the cached block so a
+mid-run discovery doesn't invalidate it.
 
-### 6.3 Deferred / on-demand capabilities (W2, W3) — in `build_orchestrator_tools`
-Keep the hot path eager (research, writer, search); defer the long tail (`@tool_plain(defer_loading=True)` +
-`search_tools`, or bundle-level `load_capability`). Use triage's routing hint to pick the eager set per
-request. **This is what keeps context flat as §7 adds experts.**
+### 6.3 Deferred / on-demand capabilities (W2) — in `build_orchestrator_tools` · **DONE**
+Implemented as tool-level deferral driven by capability metadata, not a per-request hint:
+- `CapabilitySpec.eager: bool = False` — a new field the `@tool`/`@expert` decorators read off the class.
+  The hot path opts in (`eager = True` on `web.research`, `synthesis.writer`, `search.web`); the default-False
+  long tail (media/code/data/verification/summarization/documentation/notification experts + the situational
+  utility tools) defers automatically.
+- `build_orchestrator_tools` wraps each non-eager wrapper in `Tool(defer_loading=True)` (the `Tool` type is
+  re-exported through the `core/llm` boundary so capability code never imports the SDK directly). The
+  framework auto-injects `search_tools` whenever a deferred capability exists; on Anthropic it uses the native
+  GA tool search (bm25/regex), elsewhere the local `search_tools` fallback. Both keep deferred defs out of the
+  prompt until the model discovers them.
+- `say`/`remember` stay eager; the orchestrator prompt (§3.5) tells the model to `search_tools` for anything
+  not in front of it rather than assume it's unavailable; the loop hides the `search_tools` step from the
+  decision log (internal plumbing, like memory).
+- Composes with W3: deferred tools are auto-excluded from the cached tool block, so growth doesn't bloat the
+  cached prefix either. **This is what keeps context flat as §7 adds experts** — a new expert costs nothing
+  until needed.
 
 ### 6.4 Plan-then-parallel (W4, W5) — top of `run_loop`
 One cheap planning pass → subtasks tagged independent/dependent → independent ones spawn in a single
@@ -477,8 +501,8 @@ build-time pain, and the memory workstream runs in parallel against a known cont
 
 | Milestone | Work | Unblocks | Effort | Depends on |
 |-----------|------|----------|--------|-----------|
-| **M0 — cheap wins** | 6.2 caching · 6.5 background learn + history · 6.6 search fix · **7.E** security observability | latency/cost now; CB5 → pass | S | — |
-| **M1 — make growth affordable** | 6.3 deferred loading · 6.1 control-center self-routing (prompt) | W2/W1; prerequisite for a bigger roster | S–M | M0 |
+| **M0 — cheap wins** | **6.2 caching ✓** · 6.5 background learn ✓ + history · 6.6 search fix · **7.E** security observability | latency/cost now; CB5 → pass | S | — |
+| **M1 — make growth affordable** | **6.3 deferred loading ✓** · **6.1 control-center self-routing ✓** | W2/W1; prerequisite for a bigger roster | S–M | M0 |
 | **M2 — CB2 (longest)** | **7.C** repository intelligence (ingest/index + 4 tools + `repo.navigator`) · 6.4 plan-then-parallel · 6.7 deadlines | CB2 | L | M1 |
 | **M3 — CB3/Exc3** | **7.B** cross-media KG (2 tools + `knowledge.graph`; media→graph→writer rewire) | CB3, Exc3 | M–L | M1 |
 | **M4 — CB4/CB6** | **7.D** deliberation mode + `consistency.verifier` (on the 6.4 substrate) | CB4, CB6 | M–L | M2/M3 substrate, **7.A** |

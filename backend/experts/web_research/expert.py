@@ -31,6 +31,7 @@ class WebResearchExpert:
     model_role = "research"
     permission = PermissionLevel.NETWORK
     tags = ("open-web", "sources", "citations")
+    eager = True               # hot path: the orchestrator's core research tool, offered up front (W2)
 
     async def run(self, args: ResearchIn, env: ExpertEnv) -> ExpertOutput:
         return await think(env, _task(args, env))

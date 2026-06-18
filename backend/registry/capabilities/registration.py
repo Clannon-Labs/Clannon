@@ -43,6 +43,7 @@ def tool(cls: type | None = None, *, enabled: bool = True) -> type:
             permission=getattr(target, "permission", PermissionLevel.READ),
             input_schema=getattr(target, "input_schema", None),
             output_schema=getattr(target, "output_schema", None),
+            eager=getattr(target, "eager", False),
             timeout_s=getattr(target, "timeout_s", None),
         )
         registry.register(spec, validate(spec))
@@ -75,6 +76,7 @@ def expert(cls: type | None = None, *, enabled: bool = True) -> type:
             permission=getattr(target, "permission", PermissionLevel.READ),
             input_schema=getattr(target, "input_schema", None),
             output_schema=getattr(target, "output_schema", None),
+            eager=getattr(target, "eager", False),
             model_role=getattr(target, "model_role", "research"),
             tool_grants=tuple(getattr(target, "tools", ())),
             skills=tuple(getattr(target, "skills", ())),
