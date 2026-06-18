@@ -1,113 +1,124 @@
 "use client";
 
-import { useState } from "react";
-import { Cpu, ShieldCheck, ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motion } from "motion/react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Cpu, ShieldCheck } from "lucide-react";
 import { useModelConfig } from "@/lib/api/hooks";
 import type { LayerModelConfig } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** A model `<select>` styled as a clean dropdown button — the native arrow is
- *  removed (appearance-none) and replaced with a consistent chevron, so it looks
- *  the same in every browser. Still a real select: keyboard + mobile friendly. */
-function ModelSelect({
-  layer,
+/** A friendlier display name for a model id — "gemini-2.5-flash" → "Gemini 2.5
+ *  Flash", "claude-opus-4-8" → "Claude Opus 4.8". Display only; the raw id is
+ *  always what gets sent. */
+function prettyModel(id: string): string {
+  return id
+    .split("-")
+    .filter((p) => !/^\d{5,}$/.test(p)) // drop date-like groups (e.g. 20251001)
+    .map((p) => (/^\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .join(" ")
+    .replace(/(\b\d) (\d\b)/g, "$1.$2"); // "4 8" → "4.8"
+}
+
+/**
+ * A themed model dropdown for the Settings page — a real menu in OUR styling,
+ * not a native <select> (whose option list can't be themed). Expands in place.
+ */
+function ModelDropdown({
   value,
-  onSelect,
-  pending,
-  compact,
+  options,
+  onChange,
+  disabled,
+  label,
 }: {
-  layer: LayerModelConfig;
   value: string;
-  onSelect: (layer: LayerModelConfig, model: string) => void;
-  pending?: boolean;
-  compact?: boolean;
+  options: string[];
+  onChange: (model: string) => void;
+  disabled?: boolean;
+  label: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
   return (
-    <div className="relative">
-      <label className="sr-only" htmlFor={`model-${layer.layer}`}>
-        Model for {layer.label}
-      </label>
-      <select
-        id={`model-${layer.layer}`}
-        value={value}
-        disabled={pending}
-        onChange={(e) => onSelect(layer, e.target.value)}
-        className={cn(
-          "w-full cursor-pointer appearance-none rounded-md border border-border-strong bg-surface-raised font-mono text-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 disabled:opacity-50",
-          compact ? "h-9 pl-2.5 pr-8 text-base sm:text-[12.5px]" : "h-10 pl-3 pr-9 text-base sm:min-w-[13rem] sm:text-[13px]",
-        )}
+    <div ref={ref} className="relative sm:min-w-[13rem]">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Model for ${label}`}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border-strong bg-surface-raised px-3 py-2 font-mono text-[13px] text-foreground transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 disabled:opacity-50"
       >
-        {layer.options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        className={cn(
-          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-faint",
-          compact ? "right-2 size-3.5" : "right-2.5 size-4",
-        )}
-        aria-hidden
-      />
+        <span className="truncate">{value}</span>
+        <ChevronDown
+          className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", open && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-20 mt-1 flex max-h-64 w-full flex-col gap-0.5 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-lg"
+        >
+          {options.map((option) => {
+            const selected = option === value;
+            return (
+              <li key={option}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    onChange(option);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left font-mono text-[12.5px] transition-colors",
+                    selected ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <span className="truncate">{option}</span>
+                  {selected && <Check className="size-3.5 shrink-0" aria-hidden />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
 
 /**
- * The per-role model list, shared by Settings (workspace defaults) and the
- * composer (per-session overrides) — one control, two sinks. It renders whatever
- * roles the backend sends, so a new role appears with no code change; locked
- * roles (verifier, filter) show read-only.
+ * The Settings → Models list: one bordered card, roles as divided rows. Renders
+ * whatever roles the backend sends; locked roles (verifier, filter) show
+ * read-only.
  */
 export function ModelRoleList({
   layers,
   valueFor,
   onSelect,
   pending = false,
-  compact = false,
   includeLocked = true,
 }: {
   layers: LayerModelConfig[];
   valueFor: (layer: LayerModelConfig) => string;
   onSelect: (layer: LayerModelConfig, model: string) => void;
   pending?: boolean;
-  compact?: boolean;
   includeLocked?: boolean;
 }) {
   const shown = includeLocked ? layers : layers.filter((l) => !l.locked);
-
-  // composer: a tight stack of rows
-  if (compact) {
-    return (
-      <div className="flex flex-col gap-1">
-        {shown.map((layer) => (
-          <div
-            key={layer.layer}
-            className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-1.5"
-          >
-            <p className="flex min-w-0 items-center gap-2 text-[13px] font-medium">
-              {layer.locked ? (
-                <ShieldCheck className="size-3.5 shrink-0 text-memory" aria-hidden />
-              ) : (
-                <Cpu className="size-3.5 shrink-0 text-primary" aria-hidden />
-              )}
-              <span className="truncate">{layer.label}</span>
-            </p>
-            {layer.locked ? (
-              <span className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 font-mono text-[12px] text-muted-foreground">
-                {layer.model}
-              </span>
-            ) : (
-              <ModelSelect layer={layer} value={valueFor(layer)} onSelect={onSelect} pending={pending} compact />
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // settings: one bordered card, roles as divided rows (a clean settings list)
   return (
     <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
       {shown.map((layer) => (
@@ -143,7 +154,13 @@ export function ModelRoleList({
                 {layer.model}
               </span>
             ) : (
-              <ModelSelect layer={layer} value={valueFor(layer)} onSelect={onSelect} pending={pending} />
+              <ModelDropdown
+                value={valueFor(layer)}
+                options={layer.options}
+                onChange={(m) => onSelect(layer, m)}
+                disabled={pending}
+                label={layer.label}
+              />
             )}
           </div>
         </li>
@@ -171,9 +188,10 @@ export function useSessionModels() {
 }
 
 /**
- * A collapsible per-session model picker for the composers. Choices go into the
- * `models` form field on the run POST (this run only); default-collapsed so it
- * never clutters the composer.
+ * The composer's per-run model control. The trigger is seamless text showing the
+ * orchestrator's model + a chevron; clicking opens a menu that drills from the
+ * roles (orchestrator, experts…) into each role's model list — a real, themed
+ * menu, not a boxy native select. Choices ride on the run POST (this run only).
  */
 export function SessionModelPicker({
   models,
@@ -183,41 +201,274 @@ export function SessionModelPicker({
   onSetRole: (layer: LayerModelConfig, model: string) => void;
 }) {
   const { data: layers } = useModelConfig();
-  const [open, setOpen] = useState(false);
+  // fixed popover anchored to the trigger, so the composer's overflow-hidden box
+  // can't clip it. It opens toward whichever side has more room (`up`), and
+  // `view`/`dir` drive the drill-in from the role list into one role's models.
+  const [anchor, setAnchor] = useState<{
+    right: number;
+    top?: number;
+    bottom?: number;
+    up: boolean;
+    maxH: number;
+  } | null>(null);
+  const [view, setView] = useState<string>("main"); // "main" | "experts" | a layer key
+  const [dir, setDir] = useState(1);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!anchor) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
+      setAnchor(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAnchor(null);
+    // close when the PAGE scrolls (the fixed popover would detach) — but not when
+    // the menu's own list scrolls
+    const onScroll = (e: Event) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      setAnchor(null);
+    };
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, { capture: true });
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+    };
+  }, [anchor]);
+
   if (!layers) return null;
-  const count = Object.keys(models).length;
+
+  const roles = layers.filter((l) => !l.locked);
+  const orchestrator = roles.find((l) => l.layer === "orchestrator") ?? roles[0];
+  if (!orchestrator) return null;
+  const valueFor = (l: LayerModelConfig) => models[l.layer] ?? l.model;
+  const overrides = Object.keys(models).length;
+  const experts = roles.filter((l) => l.layer !== orchestrator.layer);
+  const current = roles.find((l) => l.layer === view); // a role's options view
+  const parentOf = (role: LayerModelConfig) => (role.layer === orchestrator.layer ? "main" : "experts");
+
+  const goTo = (v: string) => {
+    setDir(1);
+    setView(v);
+  };
+  const back = (target = "main") => {
+    setDir(-1);
+    setView(target);
+  };
+
+  function toggle() {
+    if (anchor) {
+      setAnchor(null);
+      return;
+    }
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setView("main");
+    setDir(1);
+    // prefer opening UP (right above the arrow); fall back to down only if there
+    // genuinely isn't room. Either way cap the height to the gap so it can't clip.
+    // Use the layout viewport (clientWidth/Height) — it excludes the scrollbar, so
+    // a page with a scrollbar (a run thread) doesn't shift the menu left.
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const above = r.top - 8;
+    const below = vh - r.bottom - 8;
+    const up = above >= 220 || above >= below;
+    setAnchor({
+      right: vw - r.right,
+      up,
+      maxH: Math.max(150, (up ? above : below) - 8),
+      ...(up ? { bottom: vh - r.top + 8 } : { top: r.bottom + 8 }),
+    });
+  }
+
+  // cap the scrolling list so the whole menu fits in the gap (room minus the
+  // header/back-row above the list)
+  const listMaxH = anchor ? Math.max(120, anchor.maxH - 104) : 280;
+
   return (
-    <div className="mt-3">
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        onClick={toggle}
+        aria-haspopup="dialog"
+        aria-expanded={anchor !== null}
+        title="Models for this run"
+        className="flex min-w-0 max-w-[9.5rem] shrink cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[15rem]"
       >
-        <ChevronRight
-          className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", open && "rotate-90")}
+        <span className="truncate">{prettyModel(valueFor(orchestrator))}</span>
+        {overrides > 0 && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />}
+        <ChevronDown
+          className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", anchor && "rotate-180")}
           aria-hidden
         />
-        <Cpu className="size-3.5 shrink-0" aria-hidden />
-        Models
-        <span className="font-normal text-faint">
-          {count > 0 ? `· ${count} set for this run` : "· workspace defaults"}
-        </span>
       </button>
-      {open && (
-        <div className="mt-2">
-          <ModelRoleList
-            layers={layers}
-            includeLocked={false}
-            compact
-            valueFor={(l) => models[l.layer] ?? l.model}
-            onSelect={onSetRole}
-          />
-          <p className="mt-2 px-1 text-[11.5px] text-faint">
-            Applies to this run only. Set your standing defaults in Settings → Models.
-          </p>
-        </div>
-      )}
-    </div>
+
+      {anchor &&
+        createPortal(
+          <motion.div
+            ref={popRef}
+            role="dialog"
+            aria-label="Models for this run"
+          initial={{ opacity: 0, scale: 0.96, y: anchor.up ? 6 : -6 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: "fixed",
+            right: anchor.right,
+            top: anchor.top,
+            bottom: anchor.bottom,
+            maxHeight: anchor.maxH,
+            transformOrigin: anchor.up ? "bottom right" : "top right",
+          }}
+          className="z-50 flex w-[min(19rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface-raised p-1.5 shadow-2xl"
+        >
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, x: dir > 0 ? 16 : -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {view === "main" ? (
+              // headline: the orchestrator model, then "More models" → experts
+              <div className="flex flex-col">
+                <p className="px-3 pb-0.5 pt-2 tag-label text-faint">Orchestrator</p>
+                <button
+                  type="button"
+                  onClick={() => goTo(orchestrator.layer)}
+                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {prettyModel(valueFor(orchestrator))}
+                    </span>
+                    {orchestrator.description && (
+                      <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
+                        {orchestrator.description}
+                      </span>
+                    )}
+                  </span>
+                  <Check className="size-4 shrink-0 text-primary" aria-hidden />
+                </button>
+                {experts.length > 0 && (
+                  <>
+                    <div className="mx-2 my-1 h-px bg-border" />
+                    <button
+                      type="button"
+                      onClick={() => goTo("experts")}
+                      className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="text-sm font-medium text-foreground">More models</span>
+                      <span className="flex items-center gap-1 text-[12px] text-faint">
+                        experts
+                        <ChevronRight className="size-4 shrink-0" aria-hidden />
+                      </span>
+                    </button>
+                  </>
+                )}
+                {overrides > 0 && (
+                  <p className="px-3 pb-1 pt-1.5 text-[11px] leading-relaxed text-faint">
+                    {overrides} {overrides === 1 ? "model" : "models"} set for this run.
+                  </p>
+                )}
+              </div>
+            ) : view === "experts" ? (
+              // pick which specialist to set a model for
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => back("main")}
+                  className="flex items-center gap-1 rounded-lg px-2 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                >
+                  <ChevronLeft className="size-4 shrink-0 text-faint" aria-hidden />
+                  More models
+                </button>
+                <p className="px-3 pb-1 text-[11.5px] leading-relaxed text-faint">
+                  The specialists the orchestrator can spawn — pick one to set its model.
+                </p>
+                <div className="mx-1 mb-1 h-px bg-border" />
+                <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: listMaxH }}>
+                  {experts.map((role) => (
+                    <button
+                      key={role.layer}
+                      type="button"
+                      onClick={() => goTo(role.layer)}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-foreground">{role.label}</span>
+                        <span className="block truncate text-[12px] text-muted-foreground">
+                          {prettyModel(valueFor(role))}
+                        </span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-faint" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : current ? (
+              // a role's model options (the orchestrator or one expert)
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => back(parentOf(current))}
+                  className="flex items-center gap-1 rounded-lg px-2 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                >
+                  <ChevronLeft className="size-4 shrink-0 text-faint" aria-hidden />
+                  {current.label}
+                </button>
+                {current.description && (
+                  <p className="px-3 pb-1 text-[11.5px] leading-relaxed text-faint">{current.description}</p>
+                )}
+                <div className="mx-1 mb-1 h-px bg-border" />
+                <ul
+                  className="overflow-y-auto overscroll-contain"
+                  style={{ maxHeight: listMaxH }}
+                  role="listbox"
+                  aria-label={`${current.label} model`}
+                >
+                  {current.options.map((opt) => {
+                    const selected = valueFor(current) === opt;
+                    return (
+                      <li key={opt}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => {
+                            onSetRole(current, opt);
+                            back(parentOf(current));
+                          }}
+                          className={cn(
+                            "flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                            selected ? "bg-primary-soft" : "hover:bg-muted",
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className={cn("block truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
+                              {prettyModel(opt)}
+                            </span>
+                            {current.default === opt && (
+                              <span className="block text-[11px] text-faint">Recommended</span>
+                            )}
+                          </span>
+                          {selected && <Check className="size-4 shrink-0 text-primary" aria-hidden />}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+          </motion.div>
+          </motion.div>,
+          document.body,
+        )}
+    </>
   );
 }

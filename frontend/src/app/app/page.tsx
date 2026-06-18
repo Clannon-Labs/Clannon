@@ -9,13 +9,69 @@ import { Composer } from "@/components/app/composer";
 import { HydrationPanel } from "@/components/app/hydration-panel";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
 
-/** Time-of-day greeting, like Claude's "Good evening". Client-only (the page
- *  renders behind the auth gate), so `new Date()` won't cause a hydration skew. */
+// Greetings that read fine in front of ", <name>" (and standalone, when there's
+// no name). Time-aware lines respect the clock; the rest are just for fun.
+const ANYTIME_GREETINGS = [
+  "Welcome back",
+  "Look who's back",
+  "Back at it",
+  "Good to see you",
+  "Ready when you are",
+  "Let's make something good",
+  "The archive missed you",
+  "Fancy seeing you here",
+  "Let's get into it",
+  "Right on time",
+  "There you are",
+  "Let's dig in",
+];
+
+function timeGreetings(hour: number): string[] {
+  if (hour < 5) return ["Burning the midnight oil", "Still up", "Working the night shift"];
+  if (hour < 8) return ["Up with the sun", "Bright and early", "Good morning"];
+  if (hour < 12) return ["Good morning", "Morning", "Rise and grind"];
+  if (hour < 17) return ["Good afternoon", "Afternoon"];
+  if (hour < 21) return ["Good evening", "Evening"];
+  return ["Good evening", "Winding down for the night", "One more before bed"];
+}
+
+/**
+ * A greeting for the new-chat screen — different (mostly) each call. Time-of-day
+ * lines are kept honest to the clock; everything else is just for flavour. Called
+ * once per page load (see `greet` below) so it doesn't reshuffle as you type.
+ * Client-only (the page renders behind the auth gate), so `new Date()` is safe.
+ */
 function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  const pool = [...timeGreetings(new Date().getHours()), ...ANYTIME_GREETINGS];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const GREETING_KEY = "clannon.greeting";
+const GREETING_MAX_AGE = 30 * 60 * 1000; // reshuffle after 30 min, or a new session
+
+/**
+ * Pick a greeting but keep it stable across refreshes — it only reshuffles when
+ * you come back later (a fresh tab session clears sessionStorage) or after 30
+ * minutes. Cheap, and stops the line flickering on every reload.
+ */
+function pickGreeting(): string {
+  if (typeof window === "undefined") return greeting();
+  try {
+    const raw = sessionStorage.getItem(GREETING_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as { value: string; ts: number };
+      if (saved.value && Date.now() - saved.ts < GREETING_MAX_AGE) return saved.value;
+    }
+  } catch {
+    /* storage unavailable — just pick a fresh one */
+  }
+  const value = greeting();
+  try {
+    sessionStorage.setItem(GREETING_KEY, JSON.stringify({ value, ts: Date.now() }));
+  } catch {
+    /* ignore */
+  }
+  return value;
 }
 
 export default function WorkspacePage() {
@@ -24,6 +80,8 @@ export default function WorkspacePage() {
   const createRun = useCreateRun();
   const [brief, setBrief] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // pick a greeting once per load (re-rendering on every keystroke must not reshuffle it)
+  const [greet] = useState(pickGreeting);
 
   const firstName = user?.name.split(" ")[0] ?? "";
 
@@ -35,10 +93,11 @@ export default function WorkspacePage() {
         <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2rem] leading-[1.1] sm:text-[2.6rem]">
           <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
           <span>
-            {greeting()}
+            {greet}
             {firstName && (
               <>
-                , <span className="capitalize">{firstName}</span>
+                {", "}
+                <span className="capitalize">{firstName}</span>
               </>
             )}
           </span>

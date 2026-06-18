@@ -129,35 +129,36 @@ export function Composer({
             aria-label="Attach files — text, PDF, image, audio, or video"
             onChange={attach.handlePicked}
           />
-          {busy && onStop ? (
-            <Tooltip label="Stop" align="end">
-              <button
-                type="button"
-                onClick={onStop}
-                aria-label="Stop the run"
-                className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
-              >
-                <Square className="size-3 fill-current" aria-hidden />
-              </button>
-            </Tooltip>
-          ) : (
-            <Tooltip label="Send" align="end">
-              <Button
-                type="submit"
-                size="sm"
-                loading={pending}
-                disabled={tooShort}
-                aria-label="Send"
-                className="size-9 rounded-full !px-0"
-              >
-                {!pending && <ArrowUp className="size-4" aria-hidden />}
-              </Button>
-            </Tooltip>
-          )}
+          {/* model selector + send/stop, grouped on the right */}
+          <div className="flex items-center gap-1">
+            <SessionModelPicker models={session.models} onSetRole={session.setRole} />
+            {busy && onStop ? (
+              <Tooltip label="Stop" align="end">
+                <button
+                  type="button"
+                  onClick={onStop}
+                  aria-label="Stop the run"
+                  className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
+                >
+                  <Square className="size-3 fill-current" aria-hidden />
+                </button>
+              </Tooltip>
+            ) : (
+              <Tooltip label="Send" align="end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  loading={pending}
+                  disabled={tooShort}
+                  aria-label="Send"
+                  className="size-9 rounded-full !px-0"
+                >
+                  {!pending && <ArrowUp className="size-4" aria-hidden />}
+                </Button>
+              </Tooltip>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="px-1">
-        <SessionModelPicker models={session.models} onSetRole={session.setRole} />
       </div>
       {(submitError || attach.error) && (
         <p role="alert" className="mt-2 px-1 text-sm text-destructive">
