@@ -8,12 +8,12 @@ The **canonical** orchestrator design lives in
 [`../agents/EXPERTS_AND_TOOLS.md`](../agents/EXPERTS_AND_TOOLS.md). Docs here do not
 redefine it — they critique the implementation and propose changes.
 
-- [`ORCHESTRATION_ANALYSIS.md`](ORCHESTRATION_ANALYSIS.md) — start here. Two tracks:
-  **(A) efficiency** — weaknesses in speed, cost, quality, robustness (with `file:line`
-  evidence) and a PydanticAI-native fix plan; **(B) the V1 capability gate** — where the
-  orchestration/experts/tools layer fails [`../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md`](../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md)
-  and a spec-level gate-closure plan (new experts/tools/patterns; memory layer scoped out
-  as a separate workstream). Ends with a reconciled, gate-first roadmap.
+- [`ORCHESTRATION_ANALYSIS.md`](ORCHESTRATION_ANALYSIS.md) — start here. Now a **forward build
+  plan**: the **Track-A efficiency set is done** (kept as a one-line reference table), and the
+  doc focuses on **what's left** — two deferred efficiency items (plan-then-parallel,
+  programmatic tool calling) and the **Track-B V1 capability gate** (the spec-level plan for the
+  new experts/tools/patterns that close [`../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md`](../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md);
+  memory layer scoped out as a separate workstream). Ends with a gate-first roadmap.
 - [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) — the "drop-in kit": the single place that
   says exactly where each future gate capability plugs in, so you never scan the codebase.
   Most experts/tools are already drop-in (self-registration); three small one-time infra

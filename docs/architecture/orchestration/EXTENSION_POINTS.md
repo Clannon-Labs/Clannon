@@ -8,8 +8,8 @@ when you (or a future agent) get the code for a gate capability and need to know
 
 ## The point of this doc
 
-The §9 decisions in `ORCHESTRATION_ANALYSIS.md` (repo source, KG persistence, consistency-verifier origin,
-poisoning-scan location) **do not need answering yet.** Every seam below is **decision-agnostic**: each
+The §5 (gate) decisions in `ORCHESTRATION_ANALYSIS.md` (repo source, KG persistence, consistency-verifier
+origin, poisoning-scan location) **do not need answering yet.** Every seam below is **decision-agnostic**: each
 unanswered choice becomes a detail *inside* a plugged-in implementation, never a change to the seam itself.
 Stand up the seams once; after that, each capability is a drop-in.
 
