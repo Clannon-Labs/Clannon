@@ -47,3 +47,18 @@ def test_foundation_error_propagates_unchanged():
         assert False, "config fault must not be masked as a model outage"
     except ConfigError:
         pass
+
+
+# --- W3 prompt caching: the stable prefix (system prompt + tool catalog) is
+# marked cacheable on every layer, so a multi-turn run pays the prefix once ----
+
+def test_layer_settings_mark_the_cacheable_prefix():
+    from core.llm.registry import model_settings_for_layer
+
+    # a tool-driving layer (big system prompt + full tool catalog) and a one-shot
+    # security gate both get the cache breakpoints — system instructions always,
+    # tool definitions where tools exist (a no-op when there are none).
+    for layer in ("orchestrator", "filter"):
+        settings = model_settings_for_layer(layer)
+        assert settings.get("anthropic_cache_instructions") is True, layer
+        assert settings.get("anthropic_cache_tool_definitions") is True, layer

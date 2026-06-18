@@ -177,6 +177,20 @@ def model_settings_for_layer(layer: str) -> ModelSettings:
         settings.setdefault("max_tokens", constants.VERIFIER_MAX_TOKENS)
         settings.setdefault("timeout", constants.VERIFIER_TIMEOUT_S)
 
+    # Prompt caching (W3 — the single biggest cost lever). Every call's stable
+    # prefix — the large hardened system prompt, plus the full tool/expert catalog
+    # for tool-driving layers — is byte-identical across the turns of one run AND
+    # across same-prompt requests inside Anthropic's 5-min cache window. Marking it
+    # cacheable turns the dominant input cost from "re-bill the whole prefix on every
+    # turn" into a one-time write (~1.25x) followed by cheap reads (~0.1x): a 20-turn
+    # orchestrator run pays the prefix once, not 20×. The keys are Anthropic-namespaced,
+    # so any other provider in a fallback chain ignores them; an empty tool list is a
+    # no-op; below-threshold blocks simply don't cache; and deferred tools (W2, later)
+    # are auto-excluded from the cached block. A models.yaml `settings:` entry can turn
+    # either off per role.
+    settings.setdefault("anthropic_cache_instructions", True)
+    settings.setdefault("anthropic_cache_tool_definitions", True)
+
     return ModelSettings(**settings)
 
 
