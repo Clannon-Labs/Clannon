@@ -27,17 +27,29 @@ roster. The reconciled sequence is §8.
 The topology is right — a lead orchestrator over parallel domain experts is what Anthropic's own research
 system converged on. But "right shape" is not "passes the bar":
 
-- **Efficiency (Track A):** we run the full multi-agent topology for *every* request, as pure reactive
-  ReAct, with every tool schema resent on every turn, unbounded history, and no prompt caching. Those four
-  facts are the cost/latency multipliers. Five changes recover most of it:
+- **Efficiency (Track A):** the orchestrator is *already* a tool-driving agent that self-triages — handed
+  "hi", a capable model just answers; it does not boot a 20-turn fan-out. So the cost/latency multipliers are
+  not "we run the full topology for every request" — they are that **every turn re-sends the full system
+  prompt + tool catalog**, with unbounded history and no prompt caching, plus hydrate/learn running around
+  every turn. Recover most of it WITHOUT a separate pre-classifier:
 
   | # | Change | Primary win | Effort |
   |---|--------|-------------|--------|
-  | 1 | **Triage router / fast path** — most requests skip the orchestrator loop | speed + cost (biggest) | M |
+  | 1 | **Control-center self-routing** — reinforce (in the prompt) that the orchestrator answers simple turns directly; no separate router LLM hop | speed + cost | S |
   | 2 | **Prompt caching** of system prompt + tool schemas across turns/session | cost (biggest single lever) | S |
   | 3 | **Deferred tool loading** — stop sending all schemas every turn | cost + scales with roster | M |
   | 4 | **Plan-then-parallel** — one upfront plan, independent experts batched | speed + cost + quality | M–L |
   | 5 | **`memory.learn` off the critical path**; bound history; fix search double-summary | speed | S |
+
+  > **Design note (June 2026): no separate triage router.** An earlier draft of this doc proposed a
+  > rule→semantic→LLM classifier in front of the orchestrator. We rejected it. The orchestrator already
+  > decides, on turn one, whether to answer directly or reach for a tool/expert, so a pre-classifier mostly
+  > adds a **serial LLM hop** (the very latency we're cutting) plus its own model/prompt/fallback to maintain —
+  > and it can misroute just like a cheap model can. The one thing a router claims (don't ship the big catalog
+  > on simple turns) is delivered better by **prompt caching (W3)** + **deferred loading (W2)** with no extra
+  > hop. Revisit a real router only at a scale where a much cheaper router model + a very large roster make the
+  > hop pay for itself. W1 below is therefore a *prompt* change (make the existing self-routing explicit and
+  > reliable), not a new stage.
 
 - **Capability gate (Track B):** the V1 benchmark needs **all 6 critical + ≥1 exceptional**. The
   orchestration/experts/tools layer scores roughly **1 near-pass, 2 partial, 6 fail** (§3). The misses are
@@ -95,12 +107,15 @@ Key constants (`foundation/vocab/constants.py`):
 
 Each item: evidence → impact → axis (Speed / Cost / Quality / Robustness) → severity.
 
-### W1 — No triage: every request pays full orchestration  ·  Speed+Cost  ·  **High**
-`orchestrator.py:37-85` runs the same path for everything: hydrate → full tool-driving agent with the
-entire capability surface → `memory.learn`. A "rephrase this", a one-line follow-up, and a 10-source
-research brief all boot the same 20-turn agent with ~13 capabilities in context. No cheap classifier
-answers a conversational turn directly or routes a single-domain task to one expert. **Largest source of
-wasted tokens** — most real traffic is simple.
+### W1 — Every turn carries the full capability surface (self-routing is fine; the *payload* isn't)  ·  Cost  ·  **High**
+`orchestrator.py` runs the same *scaffold* for everything: hydrate → tool-driving agent with the entire
+capability surface offered → `memory.learn`. But the agent itself already self-triages — a "rephrase this" or
+a one-line follow-up resolves in **one** turn (the model just answers; it does not spawn experts), while a
+10-source brief uses many. So the waste is **not** "a 20-turn agent boots for every request." The waste is
+that **every one of those turns re-sends the full system prompt + all ~13 capability schemas** (W2/W3), and
+that hydrate/learn run around even the one-turn turns (W6, mostly fixed). **Fix the payload, not the routing:**
+reinforce control-center self-routing in the prompt (cheap, §6.1), then cache the prefix (W3) and defer the
+long-tail catalog (W2). A separate pre-classifier is explicitly **not** the fix (see §0 design note + §6.1).
 
 ### W2 — Tool/expert schemas resent on every turn  ·  Cost  ·  **High**
 `build_orchestrator_tools` (`handler/support.py:348`) hands the agent **every** tool + expert as a native
@@ -255,7 +270,10 @@ What the field settled on this past year, mapped to the gaps each addresses.
   6.7× cost, +9% accuracy** vs ReAct. → W4, W5.
   ([LangChain plan-execute](https://www.langchain.com/blog/planning-agents),
   [LLMCompiler](https://arxiv.org/pdf/2312.04511))
-- **Routing / cascades (FrugalGPT → 3-tier rule→semantic→LLM).** Most requests exit cheaply. → W1, W10.
+- **Routing / cascades (FrugalGPT → 3-tier rule→semantic→LLM).** Most requests exit cheaply. The pattern fits
+  a responder that *can't* cheaply opt out of work; our orchestrator already opts out on turn one, so we take
+  the *spirit* (cheap path for simple turns) via control-center self-routing + caching rather than a separate
+  classifier stage. A model **cascade** (cheap orchestrator model, escalate on complexity) is still live → W10.
   ([3-tier cascade](https://blog.meganova.ai/the-3-tier-routing-cascade-rule-based-semantic-llm/))
 - **Prompt caching** — table stakes for a fixed prefix + tool catalog across a multi-turn loop. → W3.
 
@@ -280,10 +298,12 @@ disclosure + caching underneath), and an **expanded capability surface** on the 
 request
   │
   ▼
-┌──────────────┐   chat / trivial ──────────────► direct answer (no experts, no hydrate, no learn)
-│  TRIAGE      │   single-domain ───────────────► ONE expert, skip the orchestrator loop
-│ rule→sem→LLM │   complex/breadth-first ───────► full orchestration ▼
-└──────────────┘   decision/debate ─────────────► DELIBERATION mode (§7.D) ▼
+┌──────────────────────┐  the ORCHESTRATOR itself decides, on turn one (no separate classifier):
+│  ORCHESTRATOR        │   simple / conversational ─► answer directly (no experts; hydrate is parallel + cheap)
+│  (control center,    │   needs a fact / compute ──► one or two utility tools, then answer
+│   self-routes via    │   research-shaped ─────────► spawn experts in parallel ▼
+│   its system prompt) │   decision / debate ───────► DELIBERATION mode (§7.D) ▼
+└──────────────────────┘
                           │
                    PLAN (one cheap call): subtasks + which are independent → spawn count (entropy)
                           │
@@ -303,9 +323,10 @@ Capability surface after the gate (new = §7):
             + kg.extract / kg.contradictions(B) · code.search / code.symbols / code.dependents / code.structure(C)
 ```
 
-The orchestrator loop still exists for genuinely complex turns — we just stop entering it for most
-requests, plan once and fan out instead of discovering shape turn-by-turn, and gain three new experts +
-a deliberation mode to clear the gate.
+The orchestrator loop still runs every turn — but for a simple turn it's a single answer (the prompt makes
+that the default), and carrying the catalog is made cheap by caching rather than avoided by a pre-classifier.
+For complex turns we plan once and fan out instead of discovering shape turn-by-turn, and gain three new
+experts + a deliberation mode to clear the gate.
 
 ---
 
@@ -314,19 +335,28 @@ a deliberation mode to clear the gate.
 All SDK use stays behind `core/llm` (invariant §III.12). Snippets are design sketches (PydanticAI 1.x), not
 the implementation.
 
-### 6.1 Triage router (W1, W10) — front of `orchestrator.run`
-A cheap structured classifier; tier-1 rules catch the obvious, only the ambiguous middle pays a small call.
-Chat/single-expert paths skip the loop, the hydrate, and the learn. Adds a `decision/debate` route into the
-§7.D deliberation mode.
+### 6.1 Control-center self-routing (W1) — in the orchestrator system prompt, not a new stage
+No separate classifier. The orchestrator is already a tool-driving agent that, on turn one, chooses whether to
+answer directly, call a tool, or spawn experts. We make that choice *explicit and reliable* in the system
+prompt: it leads with a control-center stance ("you decide whether a turn needs a tool, an expert, or just a
+direct reply; most turns are simple — don't reach for tools/experts unless the task needs a capability you
+lack") and keeps the existing §5.1 "can you answer with no tools?" gate. A direct answer already maps cleanly
+to the conversational `message` channel (`loop._split_message_and_deliverable`), so a simple turn is one
+cached call with no deliverable — nothing else to build.
 
-```python
-class Triage(BaseModel):
-    mode: Literal["chat", "single_expert", "orchestrate", "deliberate"]
-    expert_key: str | None = None
-    complexity: Literal["low", "medium", "high"]   # drives spawn budget + planner model
-```
+What this deliberately does NOT add: a rule→semantic→LLM pre-classifier. That would put a **serial LLM hop in
+front of every request** (the latency we're cutting), needs its own locked model/prompt/fallback, and can
+misroute exactly as a cheap model can. The thing a router would save — not shipping the full catalog on a
+simple turn — is delivered by **W3 prompt caching** (the catalog becomes a ~free cached prefix) and **W2
+deferred loading** (the long tail isn't sent at all), with no extra hop. See the §0 design note.
 
-Guardrail: triage chooses a *route*, never bypasses verifier/filter or the guarded handler.
+The remaining signal a router would have carried — *complexity → spawn budget / model tier* — still has a home:
+the prompt already gates spawn count on how multi-faceted the request is (§5.3), and a **model cascade** (W10)
+can escalate the orchestrator model on genuinely hard turns. Neither needs a pre-classifier.
+
+Guardrail unchanged: routing is the orchestrator's own decision among paths that **all** still pass through the
+verifier (upstream, already done) and the output filter (downstream) and the guarded handler. Self-routing
+never bypasses a security gate — it only decides how much work to do.
 
 ### 6.2 Prompt caching (W3) — in `build_tool_agent`
 Mark the stable prefix (system prompt + tool catalog) as a cache breakpoint so all 20 turns + the session
@@ -418,7 +448,8 @@ Navigate repos larger than context by **traversing an index**, never ingesting t
 ### 7.D Deliberation + consistency  → CB4, CB6
 Two related capabilities on the **plan-then-parallel substrate (W4/W5)** plus one critique round.
 
-- **Deliberation orchestration mode** (entered via triage `deliberate`, 6.1) — spawn N positions on a
+- **Deliberation orchestration mode** (the orchestrator routes a decision/debate turn here itself per its
+  prompt — no separate classifier; 6.1) — spawn N positions on a
   decision, run ≥1 round where each sees the others' positions (vs today's blind `gather`), converge to a
   recorded decision. A lightweight **moderator** role manages rounds and writes the outcome — *decision +
   reasoning + tradeoffs + participants* — as a structured memory record (depends on **7.A**). Token-heavy →
@@ -447,7 +478,7 @@ build-time pain, and the memory workstream runs in parallel against a known cont
 | Milestone | Work | Unblocks | Effort | Depends on |
 |-----------|------|----------|--------|-----------|
 | **M0 — cheap wins** | 6.2 caching · 6.5 background learn + history · 6.6 search fix · **7.E** security observability | latency/cost now; CB5 → pass | S | — |
-| **M1 — make growth affordable** | 6.3 deferred loading · 6.1 triage (incl. `deliberate` route) | W2/W1; prerequisite for a bigger roster | M | M0 |
+| **M1 — make growth affordable** | 6.3 deferred loading · 6.1 control-center self-routing (prompt) | W2/W1; prerequisite for a bigger roster | S–M | M0 |
 | **M2 — CB2 (longest)** | **7.C** repository intelligence (ingest/index + 4 tools + `repo.navigator`) · 6.4 plan-then-parallel · 6.7 deadlines | CB2 | L | M1 |
 | **M3 — CB3/Exc3** | **7.B** cross-media KG (2 tools + `knowledge.graph`; media→graph→writer rewire) | CB3, Exc3 | M–L | M1 |
 | **M4 — CB4/CB6** | **7.D** deliberation mode + `consistency.verifier` (on the 6.4 substrate) | CB4, CB6 | M–L | M2/M3 substrate, **7.A** |
@@ -463,10 +494,13 @@ set — so M0–M4 plus the memory workstream **is** the outreach critical path.
 ## 9. Open decisions
 
 **Efficiency (Track A):**
-1. **Triage model** — reuse `verifier`/`orchestrator` role, or a dedicated locked `router` role? (Recommend
-   dedicated: it's a security-adjacent routing decision deserving its own pinned prompt + fallback chain.)
-2. **Single-expert fast path** — still goes through the output filter (must). Also skip `hydrate`, or hydrate
-   only when triage marks the task memory-relevant? (Recommend the latter.)
+1. ~~Triage model — dedicated `router` role vs reuse?~~ **Resolved (June 2026): no separate router.** The
+   orchestrator self-routes via its prompt; the catalog cost is handled by caching (W3) + deferred loading
+   (W2). Revisit only at a scale where a much cheaper router model pays for the extra hop.
+2. **Hydrate on every turn?** Hydration is prefetched in parallel with the verifier and is a cheap Qdrant
+   query (no LLM), so a simple self-routed turn doesn't really pay for it on the critical path. Making it
+   lazy/tool-driven would force the model to *decide* to look — which breaks "it just knows things." Keep it
+   prefetched + invisible; revisit only if profiling shows the Qdrant round-trip matters.
 3. **Interactive vs batch budgets** — split `ORCHESTRATOR_TIMEOUT_S`/retry counts into two profiles?
 
 **Gate (Track B):**
