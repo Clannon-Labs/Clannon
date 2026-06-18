@@ -43,7 +43,14 @@ def _db() -> sqlite3.Connection:
     conn.execute(
         """CREATE TABLE IF NOT EXISTS wiki_entries (
             id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT NOT NULL,
-            content TEXT NOT NULL, updated_at REAL NOT NULL
+            content TEXT NOT NULL, updated_at REAL NOT NULL, project_id TEXT
+        )"""
+    )
+    # A project = a client or body of work; its runs + memory are scoped to it.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL,
+            color TEXT, created_at REAL NOT NULL
         )"""
     )
     conn.execute(
@@ -56,7 +63,7 @@ def _db() -> sqlite3.Connection:
             feedback_rating TEXT, feedback_comment TEXT, feedback_at REAL,
             parent_run_id TEXT, session_id TEXT, block_stage TEXT,
             artifacts_json TEXT NOT NULL DEFAULT '[]',
-            inputs_json TEXT NOT NULL DEFAULT '[]'
+            inputs_json TEXT NOT NULL DEFAULT '[]', project_id TEXT
         )"""
     )
     # self-healing migration: add columns missing on databases created before
@@ -72,9 +79,12 @@ def _db() -> sqlite3.Connection:
         ("artifacts_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("inputs_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("message", "TEXT"),
+        ("project_id", "TEXT"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")
+    if "project_id" not in {r[1] for r in conn.execute("PRAGMA table_info(wiki_entries)")}:
+        conn.execute("ALTER TABLE wiki_entries ADD COLUMN project_id TEXT")
     # backfill: pre-session rows become their own single-turn session
     conn.execute("UPDATE runs SET session_id = id WHERE session_id IS NULL OR session_id = ''")
     conn.execute(
@@ -176,14 +186,19 @@ def current_user(request: Request) -> User:
     return User(row["id"], row["email"], row["name"], row["plan"])
 
 
-def fetch_wiki(user_id: str) -> list[dict]:
+def fetch_wiki(user_id: str, project_id: str | None = None) -> list[dict]:
     """A user's wiki entries (title + content), newest first. Handed to the
-    pipeline so the memory manager can load the wiki tier as text at hydration."""
+    pipeline so the memory manager can load the wiki tier as text at hydration.
+    Scoped to one project when `project_id` is given (a project's runs only see that
+    project's wiki); the whole account's wiki when it is None (a run with no project)."""
+    sql = "SELECT title, content FROM wiki_entries WHERE user_id=?"
+    params: tuple = (user_id,)
+    if project_id is not None:
+        sql += " AND project_id=?"
+        params += (project_id,)
+    sql += " ORDER BY updated_at DESC"
     with _db() as db:
-        rows = db.execute(
-            "SELECT title, content FROM wiki_entries WHERE user_id=? ORDER BY updated_at DESC",
-            (user_id,),
-        ).fetchall()
+        rows = db.execute(sql, params).fetchall()
     return [{"title": r["title"], "content": r["content"]} for r in rows]
 
 
@@ -195,25 +210,34 @@ def fetch_wiki(user_id: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _wiki_row(row: sqlite3.Row) -> dict:
-    return {"id": row["id"], "title": row["title"], "content": row["content"], "updated_at": row["updated_at"]}
+    return {
+        "id": row["id"], "title": row["title"], "content": row["content"],
+        "updated_at": row["updated_at"],
+        "project_id": (row["project_id"] if "project_id" in row.keys() else None),
+    }
 
 
-def wiki_list(user_id: str) -> list[dict]:
-    """All of a user's wiki entries, newest first (raw columns)."""
+def wiki_list(user_id: str, project_id: str | None = None) -> list[dict]:
+    """A user's wiki entries, newest first (raw columns). Scoped to one project when
+    `project_id` is given; the whole account when None."""
+    sql = "SELECT * FROM wiki_entries WHERE user_id=?"
+    params: tuple = (user_id,)
+    if project_id is not None:
+        sql += " AND project_id=?"
+        params += (project_id,)
+    sql += " ORDER BY updated_at DESC"
     with _db() as db:
-        rows = db.execute(
-            "SELECT * FROM wiki_entries WHERE user_id=? ORDER BY updated_at DESC", (user_id,)
-        ).fetchall()
+        rows = db.execute(sql, params).fetchall()
     return [_wiki_row(r) for r in rows]
 
 
-def wiki_create(user_id: str, title: str, content: str) -> dict:
-    """Insert one wiki entry and return it."""
+def wiki_create(user_id: str, title: str, content: str, project_id: str | None = None) -> dict:
+    """Insert one wiki entry (optionally scoped to a project) and return it."""
     entry_id = f"m_{secrets.token_hex(6)}"
     with _db() as db:
         db.execute(
-            "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
-            (entry_id, user_id, title, content, time.time()),
+            "INSERT INTO wiki_entries (id,user_id,title,content,updated_at,project_id) VALUES (?,?,?,?,?,?)",
+            (entry_id, user_id, title, content, time.time(), project_id),
         )
         row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
     return _wiki_row(row)
@@ -241,19 +265,93 @@ def wiki_delete(user_id: str, entry_id: str) -> bool:
     return bool(deleted)
 
 
-def wiki_bulk_create(user_id: str, entries: list[tuple[str, str]]) -> list[dict]:
-    """Insert several wiki entries (title, content) in one transaction; return them."""
+def wiki_bulk_create(user_id: str, entries: list[tuple[str, str]], project_id: str | None = None) -> list[dict]:
+    """Insert several wiki entries (title, content) in one transaction (optionally scoped
+    to a project); return them."""
     created: list[dict] = []
     with _db() as db:
         for title, content in entries:
             entry_id = f"m_{secrets.token_hex(6)}"
             db.execute(
-                "INSERT INTO wiki_entries (id,user_id,title,content,updated_at) VALUES (?,?,?,?,?)",
-                (entry_id, user_id, title, content, time.time()),
+                "INSERT INTO wiki_entries (id,user_id,title,content,updated_at,project_id) VALUES (?,?,?,?,?,?)",
+                (entry_id, user_id, title, content, time.time(), project_id),
             )
             row = db.execute("SELECT * FROM wiki_entries WHERE id=?", (entry_id,)).fetchone()
             created.append(_wiki_row(row))
     return created
+
+
+# ---------------------------------------------------------------------------
+# Projects — a project = a client or body of work; runs + memory scope to it.
+# ---------------------------------------------------------------------------
+
+def _project_row(row: sqlite3.Row) -> dict:
+    keys = row.keys()
+    return {
+        "id": row["id"], "name": row["name"],
+        "color": (row["color"] if "color" in keys else None),
+        "created_at": row["created_at"],
+        "last_activity": (row["last_activity"] if "last_activity" in keys else None),
+    }
+
+
+def project_list(user_id: str) -> list[dict]:
+    """A user's projects, **newest activity first** — ordered by the most recent run in
+    each project, then by creation time for projects with no runs yet."""
+    with _db() as db:
+        rows = db.execute(
+            """SELECT p.*, MAX(r.created_at) AS last_activity
+               FROM projects p
+               LEFT JOIN runs r ON r.project_id = p.id AND r.user_id = p.user_id
+               WHERE p.user_id = ?
+               GROUP BY p.id
+               ORDER BY (last_activity IS NULL), last_activity DESC, p.created_at DESC""",
+            (user_id,),
+        ).fetchall()
+    return [_project_row(r) for r in rows]
+
+
+def project_get(user_id: str, project_id: str) -> dict | None:
+    """One project, scoped to its owner (the ownership check for any projectId a request
+    carries — NEVER trust a projectId without it). None if it isn't this user's."""
+    with _db() as db:
+        row = db.execute(
+            "SELECT * FROM projects WHERE id=? AND user_id=?", (project_id, user_id)
+        ).fetchone()
+    return _project_row(row) if row else None
+
+
+def project_create(user_id: str, name: str, color: str | None = None) -> dict:
+    """Insert one project and return it."""
+    pid = f"proj_{secrets.token_hex(6)}"
+    with _db() as db:
+        db.execute(
+            "INSERT INTO projects (id,user_id,name,color,created_at) VALUES (?,?,?,?,?)",
+            (pid, user_id, name, color, time.time()),
+        )
+        row = db.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    return _project_row(row)
+
+
+def project_rename(user_id: str, project_id: str, name: str) -> dict | None:
+    """Rename one of the user's projects; None if it does not exist / not theirs."""
+    with _db() as db:
+        updated = db.execute(
+            "UPDATE projects SET name=? WHERE id=? AND user_id=?", (name, project_id, user_id)
+        ).rowcount
+        if not updated:
+            return None
+        row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+    return _project_row(row)
+
+
+def project_delete_row(user_id: str, project_id: str) -> None:
+    """Delete a project row AND its wiki entries, scoped to the owner. The cascade of its
+    RUNS (live tasks + persisted rows + stored files) is run_store's job — it calls this
+    after evicting them. Best-effort/idempotent: deleting nothing is fine."""
+    with _db() as db:
+        db.execute("DELETE FROM wiki_entries WHERE user_id=? AND project_id=?", (user_id, project_id))
+        db.execute("DELETE FROM projects WHERE id=? AND user_id=?", (project_id, user_id))
 
 
 def model_prefs_get(user_id: str) -> dict[str, str]:

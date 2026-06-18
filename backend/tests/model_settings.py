@@ -23,9 +23,10 @@ def test_catalog_is_per_role_not_gemini_everywhere():
     # the five selectable reasoning/media roles + the two locked security gates
     assert config.SELECTABLE_ROLES == {"orchestrator", "research", "planner", "code", "media_expert"}
     assert config.LOCKED_ROLES == {"verifier", "filter"}
-    # reasoning roles default to Claude (best-for-task), NOT a hardcoded Gemini
+    # reasoning roles default to a BEST-FOR-TASK model (Claude/GPT/...), never a hardcoded
+    # "Gemini everywhere" — the actual provider per role is a models.yaml config choice
     for role in ("orchestrator", "research", "planner", "code"):
-        assert by_role[role]["default"].startswith("claude-"), f"{role} default should be Claude"
+        assert not by_role[role]["default"].startswith("gemini-"), f"{role} default should not be Gemini"
     # media defaults to Gemini (the only one that reads audio/video + PDFs natively)
     assert by_role["media_expert"]["default"].startswith("gemini-")
 
@@ -92,19 +93,25 @@ def test_parse_session_models_empty_is_no_overrides():
     assert _parse_session_models("{}") == {}
 
 
-def test_parse_session_models_rejects_bad_input():
+def test_parse_session_models_rejects_malformed_body():
+    # a structurally broken body is still a 422 (a real client error, not a picker choice)
     with pytest.raises(HTTPException):       # not JSON
         _parse_session_models("not json")
     with pytest.raises(HTTPException):       # not an object
         _parse_session_models('["claude-opus-4-8"]')
-    with pytest.raises(HTTPException):       # locked role
-        _parse_session_models('{"verifier": "claude-haiku-4-5"}')
-    with pytest.raises(HTTPException):       # unknown role
-        _parse_session_models('{"nope": "claude-opus-4-8"}')
-    with pytest.raises(HTTPException):       # model not offered for the role
-        _parse_session_models('{"orchestrator": "not-a-real-model"}')
-    with pytest.raises(HTTPException):       # text model on the media role
-        _parse_session_models('{"media_expert": "claude-haiku-4-5"}')
+
+
+def test_parse_session_models_drops_invalid_entries_never_fails():
+    # an entry that doesn't validate is DROPPED (the role falls back to its default), never a
+    # 422 — so the per-conversation model picker can never break a run.
+    assert _parse_session_models('{"verifier": "claude-haiku-4-5"}') == {}      # locked role
+    assert _parse_session_models('{"nope": "claude-opus-4-8"}') == {}           # unknown role
+    assert _parse_session_models('{"orchestrator": "not-a-real-model"}') == {}  # model not offered
+    assert _parse_session_models('{"media_expert": "claude-haiku-4-5"}') == {}  # text model on the media role
+    # a valid entry alongside an invalid one keeps the valid and drops the invalid
+    assert _parse_session_models(
+        '{"orchestrator": "claude-opus-4-8", "nope": "x"}'
+    ) == {"orchestrator": "claude-opus-4-8"}
 
 
 # ---- resilience: media + code now have cross-provider fallback chains -------

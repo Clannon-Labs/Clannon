@@ -243,8 +243,11 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # alongside so the `recall` tool can pull any earlier turn back verbatim (W8).
         flow.ctx.conversation = _build_conversation(run)
         flow.ctx.session_transcript = _build_transcript(run)
-        # the user's wiki — the highest-trust memory tier, loaded as text at hydration
-        flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id)
+        # the user's wiki — the highest-trust memory tier, loaded as text at hydration.
+        # Scoped to the run's project so a client's wiki doesn't bleed across projects;
+        # account-wide when the run has no project. (The learned Qdrant tiers are still
+        # account-scoped — project-scoping those is the memory workstream's.)
+        flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id, run.project_id)
         # every file uploaded this SESSION (this turn + earlier turns), seeded into the
         # expert workspace downstream so a file from an earlier message is still readable
         flow.ctx.input_files = session_files

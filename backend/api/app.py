@@ -121,6 +121,81 @@ def oauth_start(provider: str) -> RedirectResponse:
     return RedirectResponse(f"{config.FRONTEND_ORIGIN}/login?error=oauth_unavailable")
 
 
+# ---------- projects ----------
+
+# A project = a client or body of work. Runs and memory are scoped to it. The
+# "current project" is CLIENT-side state — the frontend sends `projectId` per request;
+# there is no server-side "active project".
+
+
+class ProjectCreateBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    color: str | None = Field(default=None, max_length=24)
+    # optional onboarding: when present, also seed a first WIKI entry in this project
+    # (the "tell Clannon about this client" step), titled "Client: <name> — context".
+    seedFacts: str | None = Field(default=None, max_length=20_000)
+
+
+class ProjectRenameBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+def _project_json(p: dict) -> dict:
+    return {
+        "id": p["id"],
+        "name": p["name"],
+        "color": p.get("color"),
+        "createdAt": datetime.fromtimestamp(p["created_at"], tz=timezone.utc).isoformat(),
+    }
+
+
+def _require_project(user_id: str, project_id: str | None) -> str | None:
+    """A `projectId` from a request is trusted ONLY after the ownership row confirms it
+    (never trust an id from the body/query). Empty/None -> None (no project). An id that
+    isn't this user's -> 422, so a client can't tag its data into someone else's project."""
+    pid = (project_id or "").strip()
+    if not pid:
+        return None
+    if auth.project_get(user_id, pid) is None:
+        raise HTTPException(422, "Unknown project.")
+    return pid
+
+
+@app.get("/projects")
+def list_projects(user: auth.User = Depends(auth.current_user)) -> list[dict]:
+    """The user's projects, newest activity first."""
+    return [_project_json(p) for p in auth.project_list(user.id)]
+
+
+@app.post("/projects", status_code=201)
+def create_project(body: ProjectCreateBody, user: auth.User = Depends(auth.current_user)) -> dict:
+    name = body.name.strip()
+    project = auth.project_create(user.id, name, body.color)
+    seed = (body.seedFacts or "").strip()
+    if seed:
+        auth.wiki_create(user.id, f"Client: {name} — context", seed, project_id=project["id"])
+    return _project_json(project)
+
+
+@app.patch("/projects/{project_id}")
+def rename_project(
+    project_id: str, body: ProjectRenameBody, user: auth.User = Depends(auth.current_user)
+) -> dict:
+    project = auth.project_rename(user.id, project_id, body.name.strip())
+    if project is None:
+        raise HTTPException(404, "Project not found.")
+    return _project_json(project)
+
+
+@app.delete("/projects/{project_id}", status_code=204)
+def remove_project(project_id: str, user: auth.User = Depends(auth.current_user)) -> Response:
+    """Cascade-delete a project AND its runs (+ stored files) AND its wiki/memory scope,
+    owner-scoped. Idempotent: a project with nothing left for this caller (or not theirs)
+    is a no-op 204, never revealed — same semantics as delete-session."""
+    runs.STORE.delete_project(user.id, project_id)
+    return Response(status_code=204)
+
+
 # ---------- runs ----------
 
 
@@ -131,10 +206,13 @@ def oauth_start(provider: str) -> RedirectResponse:
 
 
 def _parse_session_models(models: str) -> dict[str, str]:
-    """Parse the optional per-session `models` form field (a JSON object role -> bare
-    model id) and validate each choice against the catalog. A malformed body, an unknown
-    or locked role, or a model not offered for that role is a 422 — never silently dropped.
-    Empty/absent -> no per-session overrides (the run uses the user's workspace defaults)."""
+    """Parse the optional per-conversation `models` form field (a JSON object role -> bare
+    model id). The picker now sends every role the chosen model is valid for, so parsing is
+    BEST-EFFORT: a structurally malformed body (not a JSON object) is a 422, but an individual
+    entry that doesn't validate — an unknown or system-managed (locked) role, or a model
+    outside that role's capability set — is **dropped** (the role falls back to its default),
+    NEVER failing the run over the model picker. The valid subset is applied to the turn;
+    empty/absent -> no overrides (the user's workspace defaults)."""
     if not models or not models.strip():
         return {}
     try:
@@ -148,9 +226,9 @@ def _parse_session_models(models: str) -> dict[str, str]:
     for role, model in raw.items():
         entry = by_role.get(role)
         if entry is None or entry["locked"]:
-            raise HTTPException(422, f"Unknown or system-managed role: {role}")
+            continue                          # unknown or system-managed role -> ignore, don't fail
         if model not in entry["options"]:
-            raise HTTPException(422, f"Model '{model}' is not available for role '{role}'.")
+            continue                          # model outside this role's capability set -> fall back to default
         chosen[role] = model
     return chosen
 
@@ -174,8 +252,12 @@ async def _admit_uploads(files: list[UploadFile]) -> list:
 
 
 @app.get("/runs")
-def list_runs(user: auth.User = Depends(auth.current_user)) -> list[dict]:
-    return [r.summary_json() for r in runs.STORE.list_for(user.id)]
+def list_runs(
+    projectId: str | None = None, user: auth.User = Depends(auth.current_user)
+) -> list[dict]:
+    """The user's runs, newest first — filtered to one project when `projectId` is given,
+    all of them when omitted (backward-compatible)."""
+    return [r.summary_json() for r in runs.STORE.list_for(user.id, projectId)]
 
 
 @app.post("/runs", status_code=201)
@@ -183,14 +265,16 @@ async def create_run(
     brief: str = Form(..., min_length=1, max_length=config.BRIEF_MAX_CHARS),
     files: list[UploadFile] = File(default=[]),
     models: str = Form(default=""),
+    projectId: str = Form(default=""),
     user: auth.User = Depends(auth.current_user),
 ) -> dict:
     brief = brief.strip()
     if len(brief) < config.LIMITS["briefMinChars"]:
         raise HTTPException(422, "Say a little more to get started.")
+    project_id = _require_project(user.id, projectId)
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
-    run = runs.STORE.create(user.id, brief)
+    run = runs.STORE.create(user.id, brief, project_id)
     # persist the uploads so later turns in the session can re-read them (sets run.inputs)
     await runs.persist_inputs(run, input_files)
     run.session_models = session_models
@@ -331,6 +415,7 @@ class MemoryBody(BaseModel):
     tier: str
     title: str = Field(min_length=1, max_length=120)
     content: str = Field(min_length=1, max_length=20_000)
+    projectId: str | None = None
 
 
 def _wiki_json(entry: dict) -> dict:
@@ -341,12 +426,17 @@ def _wiki_json(entry: dict) -> dict:
         "title": entry["title"],
         "content": entry["content"],
         "updatedAt": datetime.fromtimestamp(entry["updated_at"], tz=timezone.utc).isoformat(),
+        "projectId": entry.get("project_id"),
     }
 
 
 @app.get("/memory")
-def list_memory(user: auth.User = Depends(auth.current_user)) -> list[dict]:
-    wiki = [_wiki_json(entry) for entry in auth.wiki_list(user.id)]
+def list_memory(
+    projectId: str | None = None, user: auth.User = Depends(auth.current_user)
+) -> list[dict]:
+    """The user's memory (wiki + episodic), filtered to one project when `projectId` is
+    given, all of it when omitted."""
+    wiki = [_wiki_json(entry) for entry in auth.wiki_list(user.id, projectId)]
     episodic = [
         {
             "id": f"{run.id}_m{i}",
@@ -355,8 +445,9 @@ def list_memory(user: auth.User = Depends(auth.current_user)) -> list[dict]:
             "content": write["content"],
             "updatedAt": write["ts"],
             "runId": run.id,
+            "projectId": run.project_id,
         }
-        for run in runs.STORE.list_for(user.id)
+        for run in runs.STORE.list_for(user.id, projectId)
         for i, write in enumerate(run.memory_writes)
     ]
     return wiki + episodic
@@ -366,7 +457,8 @@ def list_memory(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 def create_memory(body: MemoryBody, user: auth.User = Depends(auth.current_user)) -> dict:
     if body.tier != "wiki":
         raise HTTPException(403, "Only wiki memory is user-writable; other tiers are written by the pipeline.")
-    return _wiki_json(auth.wiki_create(user.id, body.title, body.content))
+    project_id = _require_project(user.id, body.projectId)
+    return _wiki_json(auth.wiki_create(user.id, body.title, body.content, project_id))
 
 
 @app.put("/memory/{entry_id}")
@@ -379,9 +471,17 @@ def update_memory(entry_id: str, body: MemoryBody, user: auth.User = Depends(aut
 
 @app.post("/memory/upload", status_code=201)
 async def upload_memory(
-    files: list[UploadFile], user: auth.User = Depends(auth.current_user)
+    request: Request,
+    files: list[UploadFile] = File(...),
+    projectId: str = Form(default=""),
+    user: auth.User = Depends(auth.current_user),
 ) -> list[dict]:
-    """Bulk wiki import: each uploaded markdown/text file becomes an entry."""
+    """Bulk wiki import: each uploaded markdown/text file becomes an entry. Scoped to the project
+    given as EITHER the `projectId` multipart form field OR a `?projectId=` query param — so it
+    scopes however the frontend sends it (its other scoped calls use the query string). An
+    unknown/other-user project is a 422; absent -> unscoped / account default."""
+    pid = (projectId or request.query_params.get("projectId") or "").strip()
+    project_id = _require_project(user.id, pid)
     if not files:
         raise HTTPException(422, "No files received.")
     if len(files) > config.WIKI_UPLOAD_MAX_FILES:
@@ -402,11 +502,16 @@ async def upload_memory(
         if not content:
             raise HTTPException(422, f"{name}: file is empty.")
         entries.append((stem[:120] or "Untitled", content))
-    return [_wiki_json(e) for e in auth.wiki_bulk_create(user.id, entries)]
+    return [_wiki_json(e) for e in auth.wiki_bulk_create(user.id, entries, project_id)]
 
 
 @app.delete("/memory/{entry_id}", status_code=204)
 def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_user)) -> None:
+    """Delete a memory entry, owner-scoped. A WIKI entry (id ``m_…``) is removed from the store;
+    an EPISODIC entry (id ``<run_id>_m<i>``, a pipeline-written recollection) is dropped from its
+    run so it stops appearing — the user's "that's outdated" action. 404 if neither matches."""
+    if runs.STORE.forget_memory_write(user.id, entry_id):
+        return
     if not auth.wiki_delete(user.id, entry_id):
         raise HTTPException(404, "Memory entry not found.")
 

@@ -109,6 +109,9 @@ class RunState:
     # the session this turn belongs to. Root turns own their session (= id);
     # follow-ups inherit the parent's, so the whole chat is one session.
     session_id: str = ""
+    # the project (client / body of work) this run belongs to, or None for an
+    # unscoped run. Follow-ups inherit the parent's project.
+    project_id: str | None = None
     # per-session model choices for THIS run (role -> bare model id), layered over
     # the user's workspace defaults at execute time. Empty = use workspace defaults.
     session_models: dict[str, str] = field(default_factory=dict)
@@ -207,6 +210,7 @@ class RunState:
             "tokensUsed": self.tokens_used,
             "expertCount": len(self.experts),
             "sessionId": self.session_id or self.id,
+            "projectId": self.project_id,
         }
 
     def full_json(self) -> dict:
