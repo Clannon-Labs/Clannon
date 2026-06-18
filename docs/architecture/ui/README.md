@@ -12,12 +12,12 @@
 
 ## Contents
 
-- **[UI_SPEC.md](UI_SPEC.md)** — the complete UI/UX specification: global shell,
-  marketing + demo, onboarding, dashboard, project/session space, the task
-  execution view (decision log vs. final report), the second-session hydration
-  component, memory surfaces, workspaces, jobs, connections, settings, billing,
-  safety/trust surfaces, plus the design language (theme, typography, motion),
-  voice & microcopy, and the full page inventory.
+- **[UI_SPEC.md](UI_SPEC.md)** — **status + remaining backlog**: what's already
+  built (terse notes) and what's not yet (the work we build from), across the
+  global shell, marketing + demo, onboarding, project/session space, the task
+  execution view, the second-session hydration component, memory surfaces,
+  workspaces, jobs, connections, settings, billing, safety/trust surfaces, and the
+  design language. The original full spec lives in git history.
 
 ## Canonical design
 
@@ -25,12 +25,15 @@
 "serious workspace, not a chatbot shell" stance) and **Platform Delivery**
 (web default + email/messaging/notifications, platform-agnostic session state).
 
-## The one screen that matters most
+## The one screen that matters most — built
 
-The **second-session moment** (UI_SPEC §7): the Memory Manager's hydration
+The **second-session moment** (UI_SPEC §7) — the Memory Manager's hydration
 surfacing proactively, in colleague language, with provenance on demand and
-inline correction. The spec calls this component "the product." It is the
+inline correction — is **shipped**. It was the priority and it landed: the
 visible proof of the memory invariants and the Attention Threshold's Pillar 1.
+UI_SPEC.md now tracks the rest as a backlog; the biggest remaining piece is the
+**Project / multi-tenant client space** (§5), then Jobs, Connections, and
+Notifications.
 
 ## Implementation
 
