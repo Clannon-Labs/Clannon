@@ -158,10 +158,10 @@ def test_user_prompt_names_attached_files():
         None,
         [InputFile("sales.csv", "text", b"x", 1), InputFile("q3.csv", "text", b"y", 1)],
     )
-    assert "attached input files" in note and "sales.csv" in note and "q3.csv" in note
+    assert "ATTACHED FILES" in note and "sales.csv" in note and "q3.csv" in note
     # no attachments -> no note
     plain = build_user_prompt(NS(modality="text", content="hi"), NS(items=[]), None, [])
-    assert "attached input files" not in plain
+    assert "ATTACHED FILES" not in plain
 
 
 def test_user_prompt_routes_a_pdf_to_the_media_expert():
