@@ -66,3 +66,26 @@ def test_memory_is_invisible_in_the_decision_log():
     assert any("search.web" in m for m in tool_calls)          # a normal tool IS shown
     assert not any("memory" in m for m in tool_calls)          # the memory tool is HIDDEN
     assert "hydration" not in kinds                            # no "requesting memory hydration" notice
+
+
+class _RecallCaps:
+    """run_turn fires a recall tool call carrying a query arg."""
+    async def run_turn(self, *, output_type, on_event=None, on_message=None, **kw):
+        if on_event:
+            await on_event({"tool": "recall", "args": {"query": "the q3 budget"}})
+        return output_type(answer_text="done", confidence=0.9)
+
+
+def test_recall_event_lifts_query_to_meta_for_clean_rendering():
+    # the UI wants meta.tool + meta.query (the wire mapper stringifies nested values, so a
+    # query buried in args wouldn't survive cleanly). on_event lifts it to detail's top.
+    ports = Ports(memory=_FakeMem(), caps=_RecallCaps(), log=_FakeLog())
+    ctx = VrakshaContext.new(session_id="s", user_id="u", trace_id="t")
+
+    asyncio.run(loop.run_loop(_norm(), ports, ctx))
+
+    recall = [e for e in ports.log.entries
+              if getattr(e, "kind", "") == "tool_call" and e.detail.get("tool") == "recall"]
+    assert len(recall) == 1
+    assert recall[0].detail["tool"] == "recall"             # meta.tool
+    assert recall[0].detail["query"] == "the q3 budget"     # meta.query (FE reads this for the quote)

@@ -43,7 +43,14 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         tool = str(event.get("tool", "?"))
         if tool.startswith("memory.") or tool == "search_tools":
             return
-        await ports.log.emit(DecisionLogEntry(kind="tool_call", message=f"calling {tool}", detail=event))
+        # Lift a string `query` arg (recall, web search, ...) to the top of detail so the UI
+        # gets a clean `meta.query` to render — the wire mapper stringifies nested values, so
+        # the query would otherwise survive only inside a stringified `meta.args` blob.
+        detail = dict(event)
+        args = event.get("args")
+        if isinstance(args, dict) and isinstance(args.get("query"), str):
+            detail["query"] = args["query"]
+        await ports.log.emit(DecisionLogEntry(kind="tool_call", message=f"calling {tool}", detail=detail))
 
     async def on_message(text: str) -> None:
         """The orchestrator's conversational voice (`say`): accumulate it for the turn
