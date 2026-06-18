@@ -220,8 +220,19 @@ class VrakshaContext:
                                               # "content": str}. Set by the entry/caller BEFORE
                                               # orchestration; the orchestrator feeds it as
                                               # message_history so a follow-up genuinely continues
-                                              # the conversation. Empty on the first turn. Foundation
-                                              # stays SDK-free — core/llm converts this to ModelMessages.
+                                              # the conversation. May be COMPACTED for a long session
+                                              # (recent turns verbatim, older ones condensed into a
+                                              # recap) — the full text lives in session_transcript.
+                                              # Empty on the first turn. Foundation stays SDK-free —
+                                              # core/llm converts this to ModelMessages.
+
+    session_transcript: list = field(default_factory=list)
+                                              # the FULL, untrimmed transcript of this session's prior
+                                              # turns, oldest first: [{"n": int, "user": str,
+                                              # "assistant": str}]. Set by the caller alongside
+                                              # `conversation`. Nothing here is ever dropped, so the
+                                              # `recall` tool can return the verbatim text of ANY earlier
+                                              # turn even when `conversation` condensed it (W8).
 
     wiki_entries: list = field(default_factory=list)
                                               # the user's wiki entries [{"title","content"}], set by

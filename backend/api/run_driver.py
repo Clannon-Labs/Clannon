@@ -83,35 +83,88 @@ def _turn_assistant_content(turn: RunState) -> str:
     return f"[The previous turn {note}. Adjust and try again.]"
 
 
-def _build_conversation(run: RunState) -> list[dict]:
-    """Replay this session's earlier turns as neutral chat history (oldest first), in
-    full: each prior turn becomes a user message (the brief, with a note of any files it
-    attached) and an assistant message (its conversational message and/or delivered
-    report). Only turns BEFORE this one are included. The whole session is kept; only a
-    really long one is trimmed from its OLDEST turns to fit `_HISTORY_CHAR_BUDGET`."""
+def _turn_user_content(turn: RunState) -> str:
+    """One prior turn's user side: the brief, plus a note of any files it attached."""
+    user_content = turn.brief
+    names = [f.get("name", "file") for f in (turn.inputs or []) if isinstance(f, dict)]
+    if names:
+        user_content += f"\n[attached file(s) this turn: {', '.join(names)}]"
+    return user_content
+
+
+def _prior_turns(run: RunState) -> list[RunState]:
+    """This session's turns strictly BEFORE this one, oldest first."""
     session = run.session_id or run.id
-    prior = [
+    return [
         t for t in STORE.session_turns(run.user_id, session)
         if t.id != run.id and t.created_at < run.created_at
     ]
-    # one (chars, [user_msg, assistant_msg]) block per turn, oldest first
-    blocks: list[tuple[int, list[dict]]] = []
-    for turn in prior:
-        user_content = turn.brief
-        names = [f.get("name", "file") for f in (turn.inputs or []) if isinstance(f, dict)]
-        if names:
-            user_content += f"\n[attached file(s) this turn: {', '.join(names)}]"
+
+
+def _clip(text: str, limit: int) -> str:
+    """Collapse whitespace and clip to `limit` chars with an ellipsis."""
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _recap_text(old: list[tuple[int, RunState]]) -> str:
+    """A single condensed recap of the oldest turns that don't fit verbatim. They are
+    summarized, NEVER dropped, and their full text stays retrievable via `recall`."""
+    lines = [
+        f"- Turn {n}: user asked “{_clip(_turn_user_content(t), 160)}”; "
+        f"you replied “{_clip(_turn_assistant_content(t), 220)}”"
+        for n, t in old
+    ]
+    return (
+        f"[CONVERSATION RECAP — the earliest {len(old)} turn(s) of this session, condensed "
+        "to save space (reference context, not a new request). The FULL text of any of them is "
+        "still available: use your `recall` tool with a keyword to pull it back verbatim.]\n"
+        + "\n".join(lines)
+    )
+
+
+# always keep at least this many of the most-recent turns verbatim, even mid-condense
+_VERBATIM_TURN_FLOOR = 2
+
+
+def _build_conversation(run: RunState) -> list[dict]:
+    """Replay this session's earlier turns as neutral chat history (oldest first). Recent
+    turns are kept VERBATIM (user brief + assistant message/report). When a session grows
+    past `_HISTORY_CHAR_BUDGET`, the oldest turns are NOT dropped — they are CONDENSED into a
+    recap folded onto the front of the kept history (so the model still knows they happened
+    and their gist), and their full text stays retrievable via the `recall` tool /
+    ctx.session_transcript (W8)."""
+    # one (chars, [user_msg, assistant_msg], turn_number, turn) block per turn, oldest first
+    blocks: list[tuple[int, list[dict], int, RunState]] = []
+    for n, turn in enumerate(_prior_turns(run), start=1):
         msgs = [
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": _turn_user_content(turn)},
             {"role": "assistant", "content": _turn_assistant_content(turn)},
         ]
-        blocks.append((sum(len(m["content"]) for m in msgs), msgs))
-    # trim from the OLDEST until under budget, but always keep the most recent turn whole
-    total = sum(c for c, _ in blocks)
-    while total > _HISTORY_CHAR_BUDGET and len(blocks) > 1:
-        chars, _ = blocks.pop(0)
+        blocks.append((sum(len(m["content"]) for m in msgs), msgs, n, turn))
+    # condense from the OLDEST until under budget, but always keep the most-recent turns whole
+    total = sum(c for c, _, _, _ in blocks)
+    condensed: list[tuple[int, RunState]] = []
+    while total > _HISTORY_CHAR_BUDGET and len(blocks) > _VERBATIM_TURN_FLOOR:
+        chars, _, n, turn = blocks.pop(0)
         total -= chars
-    return [m for _, msgs in blocks for m in msgs]
+        condensed.append((n, turn))
+    out = [m for _, msgs, _, _ in blocks for m in msgs]
+    if condensed and out:
+        # fold the recap onto the first (user) message so history stays strictly alternating
+        out[0] = {"role": "user", "content": _recap_text(condensed) + "\n\n" + out[0]["content"]}
+    return out
+
+
+def _build_transcript(run: RunState) -> list[dict]:
+    """The FULL, untrimmed transcript of this session's earlier turns (oldest first): one
+    {n, user, assistant} record per prior turn, verbatim. Feeds ctx.session_transcript so the
+    orchestrator's `recall` tool can return ANY earlier turn in full, even one the visible
+    history condensed (W8)."""
+    return [
+        {"n": n, "user": _turn_user_content(turn), "assistant": _turn_assistant_content(turn)}
+        for n, turn in enumerate(_prior_turns(run), start=1)
+    ]
 
 
 # Bounds on re-seeding a whole session's uploaded files, so a long session can't seed
@@ -185,8 +238,11 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
     def _prepare(flow: Flow[Any]) -> None:
         """Seed the context the API owns, before any stage runs."""
         # replay this session's earlier turns as real chat history — the orchestrator
-        # continues the conversation instead of re-reading a summary blob
+        # continues the conversation instead of re-reading a summary blob. A long session's
+        # oldest turns are condensed (not dropped); the full untrimmed transcript rides
+        # alongside so the `recall` tool can pull any earlier turn back verbatim (W8).
         flow.ctx.conversation = _build_conversation(run)
+        flow.ctx.session_transcript = _build_transcript(run)
         # the user's wiki — the highest-trust memory tier, loaded as text at hydration
         flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id)
         # every file uploaded this SESSION (this turn + earlier turns), seeded into the

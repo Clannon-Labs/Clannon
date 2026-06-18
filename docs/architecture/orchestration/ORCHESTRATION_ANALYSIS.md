@@ -1,8 +1,9 @@
 # Orchestration — Weaknesses & Evolution
 
 **Status:** analysis + forward plan (not canonical architecture). **Implemented so far (June 2026):**
-W1 control-center self-routing, W3 prompt caching, W2 deferred tool loading (the M0/M1 efficiency set). The
-rest below is still forward plan.
+the full efficiency set Track A — W1 control-center self-routing, W3 prompt caching, W2 deferred tool loading,
+W6 background learn, W7 search fix, W8 history (cache + condense-not-delete + `recall`), W9 retry trim. W10
+(model cascade) is a **conscious skip** (see §2). The remaining forward plan is the Track-B capability gate (§7).
 **Canonical design lives in** [`../SYSTEM_ARCHITECTURE.md`](../SYSTEM_ARCHITECTURE.md) → Orchestrator, and
 [`../agents/EXPERTS_AND_TOOLS.md`](../agents/EXPERTS_AND_TOOLS.md). This document does **not** redefine the
 architecture; it critiques the current implementation and proposes a phased evolution.
@@ -158,26 +159,55 @@ returns. The user waits on a learning call before the filter→delivery handoff.
 belongs in a background task. (The distillation internals are the memory workstream; the **call site** is
 ours.)
 
-### W7 — `search.web` double-summarizes (lossy + extra call)  ·  Quality+Cost  ·  **Medium**
-`grounded_search` (`core/llm/search.py:47-58`) runs its **own** Gemini agent that summarizes, then the
-research expert reasons over that already-summarized text — lossy for citations, and a full extra call per
-search. `_build_search_agent` builds a **fresh `Agent` every call** (`search.py:34-44`). `sources` is
-always `[]` (`search.py:57`, TODO), so grounding URLs are only whatever the model inlines into prose.
+### W7 — `search.web` double-summarizes (lossy + extra call)  ·  Quality+Cost  ·  **Medium**  ·  **DONE**
+`grounded_search` ran its own Gemini agent that summarized, then the research expert reasoned over that
+already-summarized text (lossy for citations), and it built a **fresh `Agent` every call** with `sources`
+always `[]`. **Fixed (§6.6):** the search agent is now built once per layer (`lru_cache`); the prompt asks for
+**source-attributed, detail-preserving** findings (no pre-summarizing — the expert does the final synthesis);
+and `sources` is populated by a provider-agnostic extractor that pulls URLs from the grounded text and any
+URL-bearing result parts (closes the `sources=[]` TODO).
 
-### W8 — Unbounded history re-sent every turn  ·  Cost  ·  **Medium**
-`ctx.conversation` is fed as full chat history every run (`loop.py:50`, `framework.py:142-159`). No
-`ProcessHistory` / trimming / summarization. Long sessions re-bill the whole history on every one of the 20
-turns.
+### W8 — Unbounded history re-sent every turn  ·  Cost  ·  **Medium**  ·  **DONE**
+`ctx.conversation` was fed as full chat history every run and re-billed on every loop turn; the old
+over-budget trim **deleted** the oldest turns.
+> This needs to be carefully managed and the recent chat messages (both given by user and agent output)
+> should be as is, and only summarize very old messages in the chat, summarize them, not deleting.. they might
+> be important too
+> Biggest flaw is agent forgetting things we talked about in the same chat, even if it forgot, it should be
+> able to find and see any message (input + output) at any time in the session
 
-### W9 — Nested retry × fallback × loop → latency blow-up  ·  Robustness  ·  **Medium**
-A single failing call: up to 5 attempts (`retry.py:62`), each re-running the whole 3-model chain, with
-2+4+8+16s ≈ 30s of backoff, nested inside 8 expert turns inside 20 orchestrator turns. Only real bound is
-`ORCHESTRATOR_TIMEOUT_S = 480s` — an 8-minute interactive worst case. No per-call deadline from the
-*remaining* budget; no circuit-breaker on a storming provider.
+**Fixed (§6.5), to that spec, in three parts:**
+1. **Cost** — `anthropic_cache` is now on for the multi-turn layers (orchestrator + expert roles), so the
+   growing message history is a cheap cache read across a loop's turns, not a full re-bill.
+2. **Condense, never delete** — recent turns stay **verbatim**; when a session exceeds the (generous) char
+   budget the oldest turns are folded into a single **recap** at the front of the history (gist preserved),
+   not dropped.
+3. **Recall anything, anytime** — the full untrimmed transcript rides on `ctx.session_transcript`, and a new
+   always-on **`recall(query)`** tool returns the verbatim text of any earlier turn by keyword. So even a
+   condensed turn is fully recoverable: the agent looks it up instead of forgetting.
 
-### W10 — One orchestrator model for all complexity  ·  Cost/Quality  ·  **Low–Medium**
-`models.yaml` pins one orchestrator model (dev: `claude-haiku-4-5`). Haiku driving a 20-turn loop over 13+
-capabilities both over-calls and under-plans. No cascade (start cheap, escalate on complexity).
+### W9 — Nested retry × fallback × loop → latency blow-up  ·  Robustness  ·  **Medium**  ·  **DONE (trim)**
+A single failing call used up to 5 attempts with 2+4+8+16s ≈ 30s of backoff, nested inside the expert and
+orchestrator loops. **Fixed (§6.7):** `LLM_TRANSIENT_MAX_RETRIES` dropped 4 → **2** (≈6s instead of ≈30s of
+single-model backoff). The other two ideas from the original plan are **already covered** and deliberately not
+re-built: the whole-chain re-run is already capped hard (`LLM_FALLBACK_MAX_RETRIES = 1`, prior session), and
+the whole-loop / per-expert timeouts already bound wall-time — sustained rate-limits are handled by **rotating
+providers/keys in the FallbackModel chain**, which is why a single model no longer needs to back off for 30s. A
+per-provider circuit-breaker would have to reach inside `FallbackModel` (which hides provider selection), so it
+isn't a clean fit and the chain-cap already prevents the storm-amplification it was meant to stop.
+
+### W10 — One orchestrator model for all complexity  ·  Cost/Quality  ·  **Low–Medium**  ·  **SKIP**
+`models.yaml` pins one orchestrator model (dev: `claude-haiku-4-5`). No cascade (start cheap, escalate on
+complexity).
+> This is not an immediate needed fix, if it is just a small edit away, we can try doing so, but ideally
+> It's not needed and shouldn't be done in my opinion
+
+**Decision (June 2026): not doing it.** A runtime cascade needs a complexity signal to decide *when* to
+escalate — exactly the pre-classifier we rejected in W1 — and it is not a small edit (a second orchestrator
+model, a mid-loop switch point, and the judgment of when a turn is "hard"). The cheap, already-available
+alternative covers the real need: `models.yaml` + the per-session model override let prod simply **pin a
+stronger orchestrator model** (e.g. sonnet) with no cascade machinery. Revisit only if cost data later shows a
+cheap model wasting most turns while a few genuinely need a bigger one.
 
 ### Non-weaknesses — keep these
 - **Two-output split** (`ExpertSummary` to model, full `ExpertFindings` to `ctx`) — correct context
@@ -396,18 +426,25 @@ One cheap planning pass → subtasks tagged independent/dependent → independen
 fan-out through the existing `asyncio.gather`. Expose a **batch** `spawn_experts(requests: list)` tool.
 Embed Anthropic's scaling rule; gate the spawn budget on `triage.complexity`; set `parallel_tool_calls`.
 
-### 6.5 Off-critical-path learning + bounded history (W6, W8)
-Fire-and-forget `memory.learn` (`asyncio.create_task`, don't await — the call site is ours; distillation is
-the memory workstream). Attach `ProcessHistory(keep_recent)` to trim history before each request.
+### 6.5 Off-critical-path learning + history management (W6, W8) · **DONE**
+`memory.learn` is fire-and-forget off the critical path (W6, prior session). History (W8) went beyond a plain
+`keep_recent` trim, per the product note: **(1)** `anthropic_cache` caches the growing history for the
+multi-turn layers (`_MESSAGE_CACHE_LAYERS` in `model_settings_for_layer`); **(2)** `_build_conversation`
+condenses the oldest over-budget turns into a single front recap instead of deleting them, keeping recent
+turns verbatim; **(3)** the full untrimmed transcript rides on `ctx.session_transcript`, and an always-on
+`recall(query)` built-in returns any earlier turn verbatim by keyword — so a condensed turn is never lost,
+the agent looks it up.
 
-### 6.6 Fix `search.web` (W7)
-Cache the search agent (build once per layer); return rawer grounded results so the expert does the only
-summarization; extract real grounding source URLs (close the `sources=[]` TODO).
+### 6.6 Fix `search.web` (W7) · **DONE**
+The search agent is built once per layer (`lru_cache`); the prompt asks for source-attributed, specifics-preserving
+findings so the research expert does the only synthesis (no lossy double-summary); `sources` is filled by a
+provider-agnostic extractor over the grounded text + any URL-bearing result parts (closes the `sources=[]` TODO).
 
-### 6.7 Deadlines + circuit-break (W9)
-Derive each call's timeout from the orchestrator's **remaining** budget; trip a per-provider breaker on a
-storming model so retries stop and degradation fires sooner; drop interactive `LLM_TRANSIENT_MAX_RETRIES`
-4 → ~2.
+### 6.7 Deadlines + circuit-break (W9) · **DONE (trim)**
+`LLM_TRANSIENT_MAX_RETRIES` dropped 4 → 2 (interactive backoff ≈30s → ≈6s). The budget-derived per-call deadline
+and a per-provider breaker are deliberately **not** built: the whole-chain re-run is already capped
+(`LLM_FALLBACK_MAX_RETRIES = 1`) and the whole-loop / per-expert timeouts already bound wall-time, while a
+breaker would have to reach inside `FallbackModel` (which abstracts providers away). See §2 W9.
 
 ### 6.8 Programmatic tool calling (W2, W5) — longer-term, highest ceiling
 For data/code/repo experts, let the model orchestrate granted tools **in code** inside the existing Docker

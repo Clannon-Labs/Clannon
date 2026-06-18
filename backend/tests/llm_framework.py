@@ -62,3 +62,30 @@ def test_layer_settings_mark_the_cacheable_prefix():
         settings = model_settings_for_layer(layer)
         assert settings.get("anthropic_cache_instructions") is True, layer
         assert settings.get("anthropic_cache_tool_definitions") is True, layer
+
+
+# --- W7: grounded-search agent built once per layer; source URLs extracted ------
+
+def test_search_agent_is_cached_per_layer():
+    from core.llm.search import _search_agent
+    assert _search_agent("search") is _search_agent("search")   # built once, reused (no fresh Agent per call)
+
+
+def test_search_extracts_source_urls():
+    from core.llm.search import _extract_sources
+
+    class _NoMessages:
+        def all_messages(self):
+            return []
+
+    findings = "Market grew, per https://example.com/report, and also https://foo.org/data."
+    out = _extract_sources(_NoMessages(), findings)
+    assert out == ["https://example.com/report", "https://foo.org/data"]   # deduped, trimmed, ordered
+
+
+# --- W8: message-history caching is on for multi-turn layers, off for one-shots --
+
+def test_message_history_caching_scoped_to_multi_turn_layers():
+    from core.llm.registry import model_settings_for_layer
+    assert model_settings_for_layer("orchestrator").get("anthropic_cache") is True   # reuses history across turns
+    assert model_settings_for_layer("filter").get("anthropic_cache") is None         # one-shot, nothing to reuse

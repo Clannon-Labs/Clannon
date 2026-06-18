@@ -168,6 +168,11 @@ def model_for_layer(layer: str) -> str | FallbackModel:
     return resolved
 
 
+# Layers that run a multi-turn loop and reuse a growing message history across turns,
+# so caching that history pays off (W8). One-shot / varying-input layers are excluded.
+_MESSAGE_CACHE_LAYERS = frozenset({"orchestrator", "research", "code", "planner", "media_expert"})
+
+
 def model_settings_for_layer(layer: str) -> ModelSettings:
     """Build bounded model settings for a pipeline layer."""
     profile = model_profile_for_layer(layer)
@@ -190,6 +195,16 @@ def model_settings_for_layer(layer: str) -> ModelSettings:
     # either off per role.
     settings.setdefault("anthropic_cache_instructions", True)
     settings.setdefault("anthropic_cache_tool_definitions", True)
+
+    # W8: also cache the growing MESSAGE HISTORY for the multi-turn agents (the
+    # orchestrator + the expert roles). Their history — prior session turns, then this
+    # turn's own accumulating tool results — is re-sent on every loop turn; the automatic
+    # cache point moves forward as the loop grows, so each re-send is a cheap cache read
+    # instead of a full re-bill. Left OFF for one-shot / varying-input layers (verifier,
+    # filter, normalizer, memory, search): their last message differs every call, so
+    # caching it would cost write overhead with nothing to reuse.
+    if layer in _MESSAGE_CACHE_LAYERS:
+        settings.setdefault("anthropic_cache", True)
 
     return ModelSettings(**settings)
 

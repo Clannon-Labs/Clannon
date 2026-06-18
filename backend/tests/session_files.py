@@ -33,16 +33,31 @@ def test_history_includes_message_channel_and_attachments(monkeypatch):
     assert len(convo) == 4                                       # both turns kept whole
 
 
-def test_history_trims_oldest_when_over_budget(monkeypatch):
+def test_history_condenses_oldest_when_over_budget(monkeypatch):
+    # 4 big turns over the budget: the oldest are CONDENSED into a recap, NEVER dropped (W8)
     big = "x" * 80_000
-    turns = [_turn(f"r{i}", "q", report=big, ts=f"2026-06-18T00:00:0{i}") for i in range(1, 5)]  # ~320k chars
+    turns = [_turn(f"r{i}", f"question number {i}", report=big, ts=f"2026-06-18T00:00:0{i}") for i in range(1, 5)]
     monkeypatch.setattr(rd.STORE, "session_turns", lambda u, s: turns)
     run = SimpleNamespace(id="r9", user_id="u", session_id="r1", created_at="2026-06-18T00:00:09")
     convo = rd._build_conversation(run)
-    kept_turns = len(convo) // 2
-    assert 1 <= kept_turns < 4                                   # oldest dropped to fit the budget
-    # the MOST RECENT turn is always kept
-    assert convo[-2]["content"] == "q"
+
+    # the most recent turn is always kept verbatim
+    assert convo[-2]["content"] == "question number 4"
+    # the oldest turns are not gone — they're summarized into a recap folded onto the first message
+    assert "CONVERSATION RECAP" in convo[0]["content"]
+    assert "question number 1" in convo[0]["content"]           # turn 1 still represented, not deleted
+    assert "recall" in convo[0]["content"].lower()              # and the model is told it can pull it back
+
+
+def test_full_transcript_keeps_every_turn_for_recall(monkeypatch):
+    # the untrimmed transcript (for the recall tool) keeps EVERY prior turn, condensed or not
+    turns = [_turn(f"r{i}", f"question {i}", report=f"answer {i}", ts=f"2026-06-18T00:00:0{i}") for i in range(1, 5)]
+    monkeypatch.setattr(rd.STORE, "session_turns", lambda u, s: turns)
+    run = SimpleNamespace(id="r9", user_id="u", session_id="r1", created_at="2026-06-18T00:00:09")
+    transcript = rd._build_transcript(run)
+
+    assert [t["n"] for t in transcript] == [1, 2, 3, 4]         # every prior turn, none dropped
+    assert transcript[0]["user"] == "question 1" and "answer 1" in transcript[0]["assistant"]
 
 
 def test_uploaded_file_survives_to_a_later_turn(monkeypatch, tmp_path):

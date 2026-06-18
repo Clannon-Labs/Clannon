@@ -320,6 +320,45 @@ def _make_remember_tool() -> Callable:
     return remember
 
 
+_RECALL_MAX_HITS = 3   # cap full turns returned per recall so one call can't flood context
+
+
+def _make_recall_tool() -> Callable:
+    """Retrieve the verbatim text of an earlier turn in THIS session by keyword. The whole
+    session transcript is kept untrimmed on the context, so even when the visible history was
+    condensed for length, the orchestrator can still pull back exactly what was said — nothing
+    in a session is ever truly lost to it (W8)."""
+
+    async def recall(ctx: RunContext[OrchestratorDeps], query: str) -> str:
+        transcript = list(getattr(ctx.deps.ctx, "session_transcript", None) or [])
+        if not transcript:
+            return "There are no earlier turns in this session yet."
+        q = (query or "").lower().strip()
+        if not q:
+            return "Provide a word or phrase to look for in the earlier conversation."
+        hits = [t for t in transcript if q in f"{t.get('user', '')} {t.get('assistant', '')}".lower()]
+        if not hits:
+            return f"No earlier turn in this session mentions '{query}'. ({len(transcript)} earlier turn(s) exist.)"
+        shown = hits[-_RECALL_MAX_HITS:]
+        head = "" if len(hits) <= _RECALL_MAX_HITS else f"({len(hits)} matches; showing the {_RECALL_MAX_HITS} most recent)\n\n"
+        blocks = [
+            f"--- Turn {t.get('n', '?')} ---\nUser: {t.get('user', '')}\nYou: {t.get('assistant', '')}"
+            for t in shown
+        ]
+        return head + "\n\n".join(blocks)
+
+    recall.__name__ = "recall"
+    recall.__doc__ = (
+        "Retrieve the FULL, verbatim text of an earlier turn in THIS conversation by keyword. "
+        "Your visible history may have been condensed if the session is long, so use this when "
+        "you need the exact details of something the user said or you produced earlier and it is "
+        "not in front of you — do not guess or say you forgot, look it up. Returns the matching "
+        "earlier turn(s) (user + assistant). Args: query (a word or short phrase to search the "
+        "earlier conversation for)."
+    )
+    return recall
+
+
 def _offer(fn: Callable, spec) -> "Callable | Tool":
     """Offer one capability to the orchestrator. A hot-path capability (`eager`) is
     passed as a bare function — in context from turn one. The long tail is wrapped as a
@@ -335,16 +374,17 @@ def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
-    guarded wrapper, plus the `remember` long-term-memory tool and (when a message sink
-    is wired) the `say` conversational tool. The handler resolves the specs; support
+    guarded wrapper, plus the always-on built-ins — `remember` (long-term memory) and
+    `recall` (verbatim retrieval of an earlier turn in this session) — and (when a message
+    sink is wired) the `say` conversational tool. The handler resolves the specs; support
     never imports the registry.
 
-    `remember`/`say` and the hot-path (`eager`) capabilities load up front; the long
-    tail is deferred behind tool search (W2). The framework auto-adds a `search_tools`
-    function whenever any deferred capability is present, and the model pulls a
-    capability into context only when it looks for one. Either way, every call still
-    routes through the guarded handler on execution."""
-    fns: list = [_make_remember_tool()]
+    `remember`/`recall`/`say` and the hot-path (`eager`) capabilities load up front; the
+    long tail is deferred behind tool search (W2). The framework auto-adds a `search_tools`
+    function whenever any deferred capability is present, and the model pulls a capability
+    into context only when it looks for one. Either way, every call still routes through the
+    guarded handler on execution."""
+    fns: list = [_make_remember_tool(), _make_recall_tool()]
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
     for spec in tool_specs:

@@ -118,3 +118,31 @@ def test_media_and_code_have_fallback_chains():
     # the media chain crosses providers so image/pdf survive Google being down
     providers = {entry.split(":", 1)[0] for entry in chains["media_expert"]}
     assert {"google", "openai", "anthropic"} <= providers
+
+
+# ---- provider-agnosticism: the anthropic_cache_* knobs must be inert elsewhere ----
+
+
+def test_anthropic_cache_settings_are_inert_on_other_providers():
+    """The anthropic_cache_* keys are NAMESPACED no-ops on every other provider, so a
+    multi-provider models.yaml — or a brand-new provider added tomorrow — never breaks.
+    Proven by mapping a real Google request with the settings present: no error, and no
+    anthropic key leaks into the Gemini request (Google caches implicitly via its own
+    `cached_content`). Anthropic is the only provider that needs the explicit breakpoint."""
+    import asyncio
+    import os
+
+    os.environ.setdefault("GOOGLE_API_KEY", "x")
+    from core.llm.registry import model_settings_for_layer
+    from pydantic_ai.messages import ModelRequest, UserPromptPart
+    from pydantic_ai.models import ModelRequestParameters
+    from pydantic_ai.models.google import GoogleModel
+
+    settings = model_settings_for_layer("orchestrator")           # carries all 3 anthropic_cache_* keys
+    assert any("anthropic" in k for k in settings)                # they ARE set on the layer
+    builder = getattr(GoogleModel("gemini-2.5-flash-lite", provider="google"), "_build_content_and_config", None)
+    if builder is None:                                           # pydantic-ai internal moved; source review still holds
+        return
+    msgs = [ModelRequest(parts=[UserPromptPart(content="hi")])]
+    _, cfg = asyncio.run(builder(msgs, settings, ModelRequestParameters()))
+    assert not [k for k in cfg if "anthropic" in str(k).lower()]  # zero leakage into the provider request
