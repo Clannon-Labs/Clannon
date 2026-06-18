@@ -94,23 +94,33 @@ def _resolve_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str
     return answer.answer_text
 
 
+# With no `say()` note, a tool-free answer up to this length reads as a conversational CHAT reply
+# (a greeting, a quick answer) → the chat bubble; longer than this it is a generated DELIVERABLE
+# (a document/report) and goes to the deliverable channel, never the chat.
+_CHAT_REPLY_MAX_CHARS = 600
+
+
 def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> tuple[str, str]:
-    """Split a turn into (conversational message, deliverable).
+    """Split a turn into (conversational message, deliverable) — the two channels the UI renders
+    separately (the chat bubble vs the deliverable card). They must NOT bleed into each other: a
+    generated document never belongs in the chat, and chat commentary never belongs in the document.
 
-    The message is whatever the orchestrator streamed via `say()` this turn. The
-    deliverable is the referenced expert artifact, or the model's own answer text.
+    - `message` = what the orchestrator streamed via `say()`: short conversational notes only.
+    - `deliverable` = the referenced expert artifact, or the model's own answer text.
 
-    Robustness fallback: a turn that produced NO artifact and ran NO research is the
-    orchestrator simply TALKING (a greeting, a clarifying question, a direct reply) —
-    treat its answer text as the chat message, not a deliverable card, even if it did
-    not explicitly call `say()`. A turn that DID research keeps its synthesized text as
-    the deliverable; the message is just the (optional) framing it streamed.
+    When the orchestrator said a note (`say()`), that note is the chat and the answer/artifact is the
+    deliverable — a generated document never lands in the chat bubble. With NO `say()`, a SHORT
+    tool-free answer is a plain conversational reply (greeting, quick answer) and IS the chat bubble;
+    a LONGER one — or any answer backed by an artifact/findings — is a generated deliverable and is
+    routed to the deliverable channel, never dumped into the chat.
     """
     deliverable = _resolve_deliverable(answer, ctx)
     message = ctx.assistant_message or ""
-    if not message and not answer.deliverable_ref and not ctx.expert_findings:
-        return deliverable, ""   # direct conversational turn: the answer IS the chat, no deliverable
-    return message, deliverable
+    if message:
+        return message, deliverable          # said a note → chat; the answer/artifact is the deliverable
+    if not answer.deliverable_ref and not ctx.expert_findings and len(deliverable) <= _CHAT_REPLY_MAX_CHARS:
+        return deliverable, ""               # a short, direct conversational reply IS the chat
+    return message, deliverable              # a document / artifact-backed answer → deliverable only
 
 
 async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:

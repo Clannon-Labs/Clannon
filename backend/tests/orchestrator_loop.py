@@ -237,3 +237,30 @@ def test_build_orchestrator_tools_defers_the_long_tail():
     # defers, and there's a lot of it — this is what keeps the eager surface flat
     assert len(deferred) >= 5
     assert len(deferred) > len(eager)
+
+
+# --- message/deliverable split: a document never bleeds into the chat bubble ----
+
+def test_split_keeps_document_out_of_the_chat():
+    from types import SimpleNamespace
+    from core.orchestrator.loop import _split_message_and_deliverable
+    from core.orchestrator.schemas import OrchestratorAnswer
+
+    def ctx():
+        return SimpleNamespace(assistant_message="", expert_findings=[])
+
+    # a SHORT tool-free direct answer (no say, no expert) is the CHAT bubble (W1 simple turn)
+    short = OrchestratorAnswer(answer_text="hi there!", confidence=0.9)
+    msg, deliv = _split_message_and_deliverable(short, ctx())
+    assert msg == "hi there!" and deliv == ""
+
+    # a LONG directly-generated document does NOT land in the chat — it's the deliverable
+    doc = "# Brief\n" + "x" * 1000
+    long = OrchestratorAnswer(answer_text=doc, confidence=0.9)
+    msg, deliv = _split_message_and_deliverable(long, ctx())
+    assert deliv == doc and msg == ""
+
+    # when it said a note, the note is the chat and the document is the deliverable (not both)
+    said = SimpleNamespace(assistant_message="Drafted the brief — it's below.", expert_findings=[])
+    msg, deliv = _split_message_and_deliverable(OrchestratorAnswer(answer_text=doc, confidence=0.9), said)
+    assert msg == "Drafted the brief — it's below." and deliv == doc
