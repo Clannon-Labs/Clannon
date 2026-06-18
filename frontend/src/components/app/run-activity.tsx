@@ -22,7 +22,9 @@ export function liveVerb(log: DecisionLogEntry[], status: RunStatus): string {
       case "expert_spawn":
         return `Calling ${last.title.replace(/^spawn\s+/i, "")}`;
       case "tool_call":
-        return "Searching sources";
+        return last.meta?.tool === "recall" || /\brecall\b/i.test(last.title)
+          ? "Looking back at earlier"
+          : "Searching sources";
       case "observation":
         return "Reviewing findings";
       case "answer":

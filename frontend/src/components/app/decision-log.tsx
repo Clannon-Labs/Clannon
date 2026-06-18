@@ -18,6 +18,22 @@ const KIND_META: Record<DecisionKind, { label: string; dot: string; ink: string 
   error: { label: "ERROR", dot: "bg-destructive", ink: "text-destructive" },
 };
 
+// `recall` is a tool_call the orchestrator uses to re-read an earlier turn of
+// THIS session (a long chat gets condensed, so it looks things up instead of
+// forgetting). We render it as the assistant consulting your shared history,
+// not as plumbing — in the memory amber, so it reads as memory, not machinery.
+const RECALL_META = { label: "RECALL", dot: "bg-log-memory", ink: "text-log-memory" };
+
+function isRecall(entry: DecisionLogEntry): boolean {
+  return (
+    entry.kind === "tool_call" &&
+    (entry.meta?.tool === "recall" || /\brecall\b/i.test(entry.title))
+  );
+}
+function recallQuery(entry: DecisionLogEntry): string | null {
+  return entry.meta?.query ?? entry.meta?.args ?? entry.detail ?? null;
+}
+
 /**
  * One transcript line. Set like a printed ledger: the timestamp lives in the
  * margin, a struck rule (the spine) runs down the gutter, and the kind tick
@@ -26,10 +42,13 @@ const KIND_META: Record<DecisionKind, { label: string; dot: string; ink: string 
  */
 function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
   const reduce = useReducedMotion();
-  const meta = KIND_META[entry.kind];
+  const recall = isRecall(entry);
+  const meta = recall ? RECALL_META : KIND_META[entry.kind];
   const flagged = entry.kind === "warning" || entry.kind === "error";
   // the payoff line — the draft landing gets the ignition treatment
   const major = entry.kind === "answer";
+  const title = recall ? "Looking back at our earlier conversation" : entry.title;
+  const query = recall ? recallQuery(entry) : null;
 
   return (
     <motion.li
@@ -76,21 +95,31 @@ function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
             major ? "text-[13px] font-semibold" : "text-[12.5px]",
           )}
         >
-          {entry.title}
+          {title}
         </p>
-        {entry.detail && (
-          <p className="mt-1 font-mono text-[11.5px] leading-snug text-muted-foreground">
-            {entry.detail}
-          </p>
-        )}
-        {entry.meta && (
-          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-            {Object.entries(entry.meta).map(([k, v]) => (
-              <span key={k} className="font-mono text-[10.5px] text-faint">
-                {k}=<span className="text-muted-foreground">{v}</span>
-              </span>
-            ))}
-          </p>
+        {recall ? (
+          query && (
+            <p className="mt-1 font-mono text-[11.5px] italic leading-snug text-muted-foreground">
+              “{query}”
+            </p>
+          )
+        ) : (
+          <>
+            {entry.detail && (
+              <p className="mt-1 font-mono text-[11.5px] leading-snug text-muted-foreground">
+                {entry.detail}
+              </p>
+            )}
+            {entry.meta && (
+              <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                {Object.entries(entry.meta).map(([k, v]) => (
+                  <span key={k} className="font-mono text-[10.5px] text-faint">
+                    {k}=<span className="text-muted-foreground">{v}</span>
+                  </span>
+                ))}
+              </p>
+            )}
+          </>
         )}
       </div>
     </motion.li>
