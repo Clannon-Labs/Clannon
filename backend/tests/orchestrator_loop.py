@@ -53,7 +53,8 @@ def test_run_loop_maps_answer_logs_and_links_findings():
     assert resp.text == "done" and resp.confidence == 0.7
     assert resp.finding_refs == ["r1"]                      # linked from ctx.expert_findings
     kinds = [e.kind for e in ctx.decision_log]
-    assert "hydration" in kinds and "tool_call" in kinds and "answer" in kinds
+    assert "tool_call" in kinds and "answer" in kinds
+    assert "hydration" not in kinds                         # memory is INVISIBLE — no hydration notice
 
 
 # --- 2. native gateway run_turn (real registry, offline) --------------------
@@ -140,7 +141,7 @@ def test_run_loop_dangling_deliverable_falls_back():
 
 # --- memory degradation: the turn continues, the user is told the truth ------
 
-def test_memory_fault_degrades_with_honest_warning():
+def test_memory_fault_degrades_silently():
     class ExplodingMemory:
         async def hydrate(self, request):
             raise RuntimeError("qdrant down")
@@ -151,22 +152,23 @@ def test_memory_fault_degrades_with_honest_warning():
     ports = Ports(memory=ExplodingMemory(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
     resp = asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
 
-    assert resp.text == "done"   # the answer still happened
-    warnings = [e.message for e in ctx.decision_log if e.kind == "warning"]
-    assert any("memory temporarily unavailable" in w for w in warnings)
+    assert resp.text == "done"          # the answer still happened (memory is never a gate)
+    assert ctx.hydration_items == []    # no memory this turn
+    # memory degrades SILENTLY now — nothing about it reaches the user's decision log
+    assert not any("memory" in str(e.message).lower() for e in ctx.decision_log)
 
 
-def test_degraded_package_surfaces_as_warning_not_hydration():
+def test_degraded_package_is_silent():
     from foundation import HydrationPackage
 
     class DegradedMemory:
         async def hydrate(self, request):
-            return HydrationPackage(degraded=True, notes="memory temporarily unavailable; answering without it")
+            return HydrationPackage(degraded=True, notes="memory temporarily unavailable")
         async def record_write_proposals(self, *a):
             pass
 
     ctx = VrakshaContext.new("s")
     ports = Ports(memory=DegradedMemory(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
     asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
-    kinds = {e.kind for e in ctx.decision_log if "unavailable" in str(e.message)}
-    assert kinds == {"warning"}
+    # a degraded package is invisible — no "unavailable" notice in the decision log
+    assert not any("unavailable" in str(e.message) for e in ctx.decision_log)

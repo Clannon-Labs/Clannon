@@ -256,6 +256,9 @@ class VrakshaContext:
                                               # live) — distinct from the deliverable/report that
                                               # buffers through the output filter
 
+    hydration_future: Any | None = None       # in-flight memory hydration started right after
+                                              # normalization so it overlaps the verifier; the
+                                              # orchestrator awaits it (an asyncio future/None)
     hydration_items: list[Any] = field(default_factory=list)
                                               # foundation.MemoryItem
                                               # memory injected this turn — the output filter

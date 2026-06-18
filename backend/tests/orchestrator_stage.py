@@ -15,15 +15,26 @@ def _flow():
 
 
 def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
+    answer = "Here is a substantial, real answer to the user's question. " * 5  # >200 chars => substantive
     async def fake_loop(normalized, ports, ctx):
-        return OrchestratorResponse(text="hi there", confidence=0.8)
+        return OrchestratorResponse(text=answer, confidence=0.8)
     monkeypatch.setattr(stage, "run_loop", fake_loop)
 
     out = asyncio.run(stage.run(_flow()))
     assert out.status.value == "ok"
-    assert out.ctx.orchestrator_response.text == "hi there"
+    assert out.ctx.orchestrator_response.text == answer
     assert any(e.origin == Origin.ORCHESTRATOR for e in out.journal)
-    assert len(out.ctx.memory_writes_requested) == 1   # the turn was proposed for memory
+    assert len(out.ctx.memory_writes_requested) == 1   # a SUBSTANTIVE turn is proposed for episodic memory
+
+
+def test_stage_skips_memory_on_a_trivial_turn(monkeypatch):
+    async def fake_loop(normalized, ports, ctx):
+        return OrchestratorResponse(text="hi", confidence=0.5)
+    monkeypatch.setattr(stage, "run_loop", fake_loop)
+
+    out = asyncio.run(stage.run(_flow()))                  # _flow()'s content is "hi" -> trivial
+    assert out.status.value == "ok"
+    assert len(out.ctx.memory_writes_requested) == 0       # a bare "hi" -> "hi" is NOT dumped to memory
 
 
 def test_stage_degrades_gracefully_on_loop_error(monkeypatch):

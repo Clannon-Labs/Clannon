@@ -12,6 +12,8 @@ gateway.
 
 from __future__ import annotations
 
+import logging
+
 from foundation import (
     HydrationPackage,
     HydrationRequest,
@@ -25,18 +27,21 @@ from .ports import Ports
 from .schemas import DecisionLogEntry, OrchestratorAnswer
 from .utils.prompt import build_user_prompt
 
+log = logging.getLogger(__name__)
+
 
 async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> OrchestratorResponse:
     """Run one orchestration turn and return a draft response."""
     hydration = await _hydrate(normalized, ports, ctx)
 
     async def on_event(event: dict) -> None:
-        """Stream each capability call to the decision-log sink, live."""
-        await ports.log.emit(DecisionLogEntry(
-            kind="tool_call",
-            message=f"calling {event.get('tool', '?')}",
-            detail=event,
-        ))
+        """Stream each capability call to the decision-log sink, live — EXCEPT memory.
+        The orchestrator's memory tool is INVISIBLE to the user: memory must feel like the
+        assistant simply knowing things, never like it is 'running a memory tool'."""
+        tool = str(event.get("tool", "?"))
+        if tool.startswith("memory."):
+            return
+        await ports.log.emit(DecisionLogEntry(kind="tool_call", message=f"calling {tool}", detail=event))
 
     async def on_message(text: str) -> None:
         """The orchestrator's conversational voice (`say`): accumulate it for the turn
@@ -100,34 +105,35 @@ def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaConte
 
 
 async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:
-    """Ask the memory manager (via the port) for context before the turn.
+    """Hydrate memory for the turn — SILENTLY.
 
-    Memory is augmentation, never a gate: any fault here degrades to an empty
-    package and the turn continues — with an honest warning in the decision
-    log, not a silent pretence that the user has no memory.
-    """
-    await ports.log.emit(DecisionLogEntry(kind="hydration", message="requesting memory hydration"))
+    Memory must feel like the assistant simply KNOWING things, so NOTHING about
+    hydration ever reaches the user's decision log: no "requesting memory" notice, no
+    degradation warning. A fault is logged internally and the turn proceeds without
+    memory (augmentation, never a gate).
+
+    Prefers the hydration prefetched right after normalization (so it overlaps the
+    verifier's LLM call instead of being awaited serially here); falls back to hydrating
+    now when no prefetch ran (e.g. a caller that drives stages directly)."""
+    future = getattr(ctx, "hydration_future", None)
     try:
-        hydration = await ports.memory.hydrate(
-            HydrationRequest(
+        if future is not None:
+            hydration = await future
+        else:
+            hydration = await ports.memory.hydrate(HydrationRequest(
                 session_id=ctx.session_id,
                 user_id=ctx.user_id,
                 normalized=normalized,
-                # the user's wiki (set by the delivery layer) — loaded as the
-                # highest-trust text tier, selected by relevance at hydration
                 wiki=tuple(
                     (e.get("title", ""), e.get("content", ""))
-                    for e in ctx.wiki_entries
+                    for e in (ctx.wiki_entries or [])
                     if isinstance(e, dict)
                 ),
-            )
-        )
-    except Exception:
-        hydration = HydrationPackage(
-            degraded=True, notes="memory temporarily unavailable; answering without it"
-        )
+            ))
+    except Exception as exc:  # noqa: BLE001 — memory degrades silently, never fails a turn
+        log.warning("memory hydration degraded: %s", exc)
+        hydration = HydrationPackage(degraded=True, notes="memory temporarily unavailable")
     ctx.hydration_items = list(hydration.items)
-    if hydration.notes:
-        kind = "warning" if hydration.degraded else "hydration"
-        await ports.log.emit(DecisionLogEntry(kind=kind, message=hydration.notes))
+    if hydration.degraded and hydration.notes:
+        log.info("memory hydration degraded this turn: %s", hydration.notes)  # internal log only
     return hydration

@@ -58,6 +58,17 @@ async def _learn(ports, user_id: str, session_id: str, *, task: str, answer: str
         log.warning("memory learning dropped: %s", exc)
 
 
+def _is_substantive_turn(normalized, response, ctx) -> bool:
+    """Worth recording to episodic memory / distilling from: the turn did real work
+    (experts or tools ran) or exchanged something non-trivial. A bare greeting or a
+    one-word reply is NOT substantive, so episodic doesn't fill up with noise."""
+    if getattr(ctx, "expert_findings", None) or getattr(ctx, "tool_calls", None):
+        return True
+    task = (getattr(normalized, "content", "") or "").strip()
+    answer = (getattr(response, "text", "") or "").strip()
+    return len(task) >= 40 or len(answer) >= 200
+
+
 async def run(flow: Flow[Any]) -> Flow[Any]:
     """Pipeline entry point for orchestration."""
     started = time.monotonic()
@@ -76,32 +87,39 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
         flow.ctx.orchestrator_response = response
 
-        # Propose an episodic memory of this turn (experts/orchestrator only PROPOSE;
-        # the manager owns persistence). Minimal: remember the request and answer.
-        # Best-effort: the answer is already produced — a memory fault must never
-        # turn a successful turn into a failed one.
+        # Memory writes for this turn (experts/orchestrator only PROPOSE; the manager
+        # owns persistence). Best-effort: the answer is already produced, so a memory
+        # fault must never turn a successful turn into a failed one.
+        #   - EPISODIC: a recollection of the turn, but ONLY when the turn is
+        #     SUBSTANTIVE. A trivial exchange ("hey" -> "hello") has nothing worth
+        #     recalling cross-session and just pollutes episodic, so it is skipped.
+        #   - the `remember` tool's writes (facts/preferences the orchestrator chose to
+        #     keep, or the user asked it to) are already on ctx.memory_writes_requested;
+        #     they persist together with the episodic note below.
+        substantive = _is_substantive_turn(normalized, response, flow.ctx)
         try:
-            flow.ctx.memory_writes_requested.append(
-                MemoryWriteProposal(
-                    store=MemoryStore.EPISODIC,
-                    content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
-                    rationale="turn outcome",
-                    confidence=response.confidence,
+            if substantive:
+                flow.ctx.memory_writes_requested.append(
+                    MemoryWriteProposal(
+                        store=MemoryStore.EPISODIC,
+                        content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
+                        rationale="turn outcome",
+                        confidence=response.confidence,
+                    )
                 )
-            )
-            await ports.memory.record_write_proposals(
-                flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested
-            )
+            if flow.ctx.memory_writes_requested:
+                await ports.memory.record_write_proposals(
+                    flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested
+                )
         except Exception as exc:
             log.warning("memory write proposals dropped: %s", exc)
 
-        # the memory agent distils semantic facts + procedural patterns from the
-        # turn (its own LLM call, behind the port). Only on substantive turns — a
-        # quick conversational reply has nothing durable to learn. Best-effort AND
-        # off the critical path: the answer already exists, so the distillation
-        # (a second LLM call) runs in the background and the stage returns
-        # immediately, instead of making the user wait on it before delivery.
-        if flow.ctx.expert_findings or len(response.text) >= 240:
+        # the memory agent distils semantic facts + procedural patterns from the turn
+        # (its own LLM call, behind the port). Only on substantive turns — a quick
+        # conversational reply has nothing durable to learn. Best-effort AND off the
+        # critical path: the answer already exists, so the distillation runs in the
+        # background and the stage returns immediately.
+        if substantive:
             _spawn_background(_learn(
                 ports, flow.ctx.user_id, flow.ctx.session_id,
                 task=normalized.content or "",

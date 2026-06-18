@@ -42,6 +42,7 @@ from typing import Any, Awaitable, Callable
 
 from foundation import Flow, constants
 from core import intake, normalizer, verifier, orchestrator
+from core.memory import prefetch as hydration_prefetch
 from security.sanitizers import runner as sanitizer
 from security.filter import run as output_filter_run
 from delivery import run as delivery_run
@@ -69,6 +70,9 @@ ACTIVE_STAGES: list[Stage] = [
     Stage(intake.process,    "intake",       "taking it in",        "sanitizing"),
     Stage(sanitizer.run,     "sanitizer",    "scanning input",      "sanitizing"),
     Stage(normalizer.run,    "normalizer",   "normalizing",         "verifying"),
+    # start memory hydration in the background so it overlaps the verifier (same
+    # user-visible status/label as the verifier — memory is invisible).
+    Stage(hydration_prefetch.run, "hydration_prefetch", "verifying", "verifying"),
     Stage(verifier.run,      "verifier",     "verifying",           "verifying"),
     Stage(orchestrator.run,  "orchestrator", "working",             "orchestrating"),
     Stage(output_filter_run, "filter",       "checking the answer", "filtering"),

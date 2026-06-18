@@ -44,7 +44,9 @@ class MemoryExtraction(BaseModel):
 
 def _build_prompt(task: str, answer: str, findings: list[str]) -> str:
     parts = [
-        "A research turn just finished. Distil only what is worth remembering.\n",
+        "A turn just finished (it may be research, a task, or a plain exchange). Distil "
+        "only what is worth remembering long-term: durable facts the user shared or that "
+        "the work established, and clear preferences for how they like things done.\n",
         f"## The user's request\n{(task or '')[:_MAX_TASK_CHARS]}\n",
         f"## The answer delivered\n{(answer or '')[:_MAX_ANSWER_CHARS]}\n",
     ]

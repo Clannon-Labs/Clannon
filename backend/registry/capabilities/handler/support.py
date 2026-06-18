@@ -28,7 +28,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from foundation import MaxRetriesExceededError, ToolCallRecord, WorkspacePort, constants
+from foundation import (
+    MaxRetriesExceededError,
+    MemoryStore,
+    MemoryWriteProposal,
+    ToolCallRecord,
+    WorkspacePort,
+    constants,
+)
 from core.llm import RunContext      # SDK types only via the core/llm boundary
 
 from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
@@ -281,13 +288,46 @@ def _make_say_tool(on_message: Callable) -> Callable:
     return say
 
 
+def _make_remember_tool() -> Callable:
+    """A tool the orchestrator calls to save a durable fact or preference to long-term
+    memory — when the user asks it to remember something, or when it learns something
+    lasting about the user / how they work. It PROPOSES a high-confidence write (the
+    Memory Manager still owns persistence); the orchestrator never touches the store."""
+
+    async def remember(ctx: RunContext[OrchestratorDeps], content: str, kind: str = "fact") -> str:
+        text = (content or "").strip()
+        if not text:
+            return "nothing to remember (empty content)"
+        store = MemoryStore.PROCEDURAL if kind == "preference" else MemoryStore.SEMANTIC
+        ctx.deps.ctx.memory_writes_requested.append(MemoryWriteProposal(
+            store=store,
+            content=text[:2000],
+            rationale="user asked to remember it, or a durable fact the orchestrator chose to keep",
+            confidence=0.95,   # high: an explicit, considered save — clears the write-policy floor
+        ))
+        return f"saved to long-term memory ({store.value})"
+
+    remember.__name__ = "remember"
+    remember.__doc__ = (
+        "Save a durable fact or preference to your long-term memory so you recall it in "
+        "FUTURE sessions. Call it when the user asks you to remember something, OR when you "
+        "learn a lasting fact about the user, their work, or their domain, OR a clear "
+        "preference for how they like things done. kind='fact' stores a fact (semantic); "
+        "kind='preference' stores a way-of-working (procedural). Keep each entry to one "
+        "self-contained sentence. Do NOT use it for this turn's transient details. Args: "
+        "content (what to remember), kind ('fact' or 'preference')."
+    )
+    return remember
+
+
 def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None
 ) -> list[Callable]:
     """Native tools for the orchestrator agent: every available tool + expert as a
-    guarded wrapper, plus (when a message sink is wired) the `say` conversational tool.
-    The handler resolves the specs; support never imports the registry."""
-    fns: list[Callable] = []
+    guarded wrapper, plus the `remember` long-term-memory tool and (when a message sink
+    is wired) the `say` conversational tool. The handler resolves the specs; support
+    never imports the registry."""
+    fns: list[Callable] = [_make_remember_tool()]
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
     for spec in tool_specs:
