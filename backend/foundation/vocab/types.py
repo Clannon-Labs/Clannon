@@ -104,6 +104,7 @@ class BlockReason(str, Enum):
     Used in dead letter output and internal logs.
     Never shown verbatim to users — user sees a generic system message.
 
+    MALFORMED_INPUT      — input was empty, structurally invalid, or unparseable
     MALICIOUS_CONTENT    — sanitizer detected a threat in the input
     INJECTION_DETECTED   — prompt injection found in text or embedded content
     VERIFIER_REJECTED    — verifier LLM classified input as dangerous
