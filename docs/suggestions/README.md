@@ -17,6 +17,15 @@ Findings are split by domain (one file each) plus a cross-cutting file for issue
 span domains. Every finding carries `file:line`, a severity, the maintenance cost, and a
 concrete fix. The high-severity findings were all verified first-hand against the code.
 
+> **Update (2026-06):** Acted on since this audit. The Stage-metadata + runs.py-split refactor
+> implemented **X1** (pipeline driven 3 ways + parallel side-arrays) and **A3** (`runs.py`
+> god-file) as recommended: `_STAGE_LABELS`/`_STAGE_STATUS` are gone (label/status now live ON
+> each `Stage` in `core/pipeline.py`), both entry points call the unified
+> `pipeline.run(on_stage=...)`, and `api/runs.py` is now a thin façade over
+> `api/run_{state,store,driver}.py` + `api/sse.py`. The X1 and A3 pages and the F2
+> stage-identity paragraph carry dated notes with specifics. Other findings (e.g. the
+> `Origin`/`PipelineStage` enums in F2) and the historical analysis below are left intact.
+
 ## The headline, up front
 
 You gave one concrete fear: *"I don't want to edit multiple files just to make the

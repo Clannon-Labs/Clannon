@@ -8,6 +8,16 @@ change removes coupling in several files at once. Both were verified first-hand.
 <a id="x1"></a>
 ## X1 — The pipeline is driven three different ways, two with a hand-synced parallel array
 
+> **Update (2026-06):** Superseded by the Stage-metadata + runs.py-split refactor, which
+> implemented this finding's own suggestion. The parallel side-arrays are gone:
+> `main.py` `_STAGE_LABELS` and `api/runs.py` `_STAGE_STATUS` no longer exist anywhere; label
+> and status now live ON each stage as a frozen `Stage(name, label, status)` record in
+> `ACTIVE_STAGES` (`core/pipeline.py`). Both real entry points now call the one driver
+> `pipeline.run(..., on_stage=, on_stage_end=)` instead of re-walking the stages (see
+> `main.py` and `api/run_driver.py` `_on_stage`/`_on_stage_end`). The post-orchestrator hook
+> is now the `on_stage_end` callback (`run_driver.py` `run.on_experts_settled(...)`). The
+> historical analysis below is left intact.
+
 - **Severity:** High
 - **Type:** duplication + change-amplifying coupling
 - **Locations:**
