@@ -7,7 +7,7 @@
 
 ## (a) What happened while you were away
 
-The unattended loop cleared the entire v1 test/doc queue: **10 open PRs (#2-#5, #7-#12)**
+The unattended loop cleared the entire v1 test/doc queue: **11 open PRs (#2-#5, #7-#13)**
 plus it correctly opened **needs-reviewer issue #6** instead of writing a bogus test when
 it hit a stale premise. A senior-engineer review then (1) deep-read the codebase and docs,
 (2) filed **5 new needs-reviewer decisions (#14-#18)** for things only you should decide,
@@ -16,9 +16,9 @@ the loop's prompt template so every future iteration pins reality, web-checks ve
 claims, treats docs as a proposal, and writes legible PRs. No code on main changed; no PR
 was merged (merges are yours).
 
-## (b) PR merge guide — 10 open PRs (you merge; the bot cannot)
+## (b) PR merge guide — 11 open PRs (you merge; the bot cannot)
 
-**Merge freely — clean, in-scope, premises verified (7):**
+**Merge freely — clean, in-scope, premises verified (8):**
 - **#2** docs: fix error docstrings to name real constants (real bug fixed)
 - **#3** docs: document `BlockReason.MALFORMED_INPUT` in the enum docstring
 - **#5** test: pin `foundation.__all__` against the import block (verified aligned today)
@@ -26,6 +26,7 @@ was merged (merges are yours).
 - **#9** test: pin the sanitizer modality dispatch ladder
 - **#10** test: lock invariant A (NETWORK tool output re-sanitization) — high-value
 - **#12** test: characterize `_load_one` overlay precedence vs `resolve_overlay`
+- **#13** test: pin the shared expert `run()` entry-point contract (introspected all 9 experts, negative-checked, hermetic)
 
 **Reviewed in depth — all three rest on premises that shifted, but the bot navigated each
 correctly. Recommendation: MERGE all three (see the inline PR comments I added):**
@@ -57,7 +58,7 @@ load-bearing — resolve by taking either side, or merge and let the last one wi
 
 ## (d) The in-progress v2 queue (what the loop is building now)
 
-8 tasks, strict scope (additive tests, characterization/regression, doc-staleness only),
+7 tasks, strict scope (additive tests, characterization/regression, doc-staleness only),
 ordered so safety nets land before the work that rides on them. Full text + the reasoning
 preamble are in QUEUE.md.
 1. models.yaml fallback-chain reference-integrity test (drift net)
@@ -66,14 +67,16 @@ preamble are in QUEUE.md.
 4. memory hydrate fail-closed without `user_id` (hermetic, §V.20)
 5. output filter fail-closed on infra/LLM fault (currently untested)
 6. sanitizer pre-gate blocks before any modality worker runs
-7. expert `run(self, args, env)` conformance test (the one v1 task left pending)
-8. memory hydrate Lagrangian water-filling allocation characterization (hermetic)
+7. memory hydrate Lagrangian water-filling allocation characterization (hermetic)
+
+(The expert `run()` conformance test originally planned as an 8th task was completed by
+the loop as **PR #13** during this prep, so it is not re-queued.)
 
 ## (e) Anything else needing your judgment
 
 - **The loop template change is live on next service restart** (you accepted it + added the
   no-AI-attribution rule). It now points each iteration at the QUEUE CONTEXT preamble, so
   your judgment propagates without you in the loop. Loop logic/ledger/safety flags untouched.
-- **Nothing else is blocking.** The 5 decisions above + the 10 PR merges are the whole of
+- **Nothing else is blocking.** The 5 decisions above + the 11 PR merges are the whole of
   your return review. The loop keeps producing PRs against the v2 queue; if it drains it,
   it sleeps 6h and re-reads — add `- [ ] ` lines anytime.
