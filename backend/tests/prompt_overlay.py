@@ -165,6 +165,59 @@ def test_read_overlay_text_raises_on_missing(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------
+# Characterization: _load_one resolves content with its own inline overlay-first
+# precedence (it predates and duplicates resolve_overlay). These pin that the two
+# code paths agree today — the inline path's (source, resolved file) matches what
+# the canonical resolve_overlay() returns for the same overlay root. Pure
+# characterization: assert current behavior, change neither path. If someone later
+# folds _load_one onto resolve_overlay, these should keep passing unchanged.
+# --------------------------------------------------------------------------
+
+def _assert_inline_matches_resolve_overlay(monkeypatch, base, overlay, relative):
+    """_load_one's inline overlay precedence resolves to the same (source, file
+    content) as resolve_overlay(relative, base/relative).
+
+    overlay_root() (which resolve_overlay consults) is pinned to the SAME overlay
+    _load_one is handed explicitly, so the comparison isolates the precedence rule
+    from overlay *discovery* (env/CWD/repo auto-detect, covered by other tests)."""
+    monkeypatch.setattr(P, "overlay_root", lambda: overlay)
+
+    expected_path, expected_source = P.resolve_overlay(relative, base / relative)
+    expected_text = expected_path.read_text(encoding="utf-8").strip()
+
+    # locked + require=False so only the precedence branch runs (no fail-closed
+    # raise); about is omitted so text equals the raw resolved file content.
+    entry = {"version": 1, "file": relative, "locked": True}
+    prompt = PromptRegistry._load_one(
+        "verifier", entry, base, overlay, base / "registry.yaml",
+        require_overlay_for_locked=False,
+    )
+
+    assert prompt.source == expected_source
+    assert prompt.text == expected_text
+
+
+def test_load_one_inline_precedence_no_overlay_matches_resolver(tmp_path, monkeypatch):
+    # overlay is None -> both paths take the committed baseline.
+    base = _make_base(tmp_path)
+    _assert_inline_matches_resolve_overlay(monkeypatch, base, None, "verifier/system.md")
+
+
+def test_load_one_inline_precedence_overlay_hit_matches_resolver(tmp_path, monkeypatch):
+    # overlay supplies the file -> both paths take the overlay content.
+    base = _make_base(tmp_path)
+    overlay = _overlay(tmp_path, verifier="HARDENED verifier")
+    _assert_inline_matches_resolve_overlay(monkeypatch, base, overlay, "verifier/system.md")
+
+
+def test_load_one_inline_precedence_overlay_miss_matches_resolver(tmp_path, monkeypatch):
+    # overlay exists but lacks this prompt -> both paths fall back to the baseline.
+    base = _make_base(tmp_path)
+    overlay = _overlay(tmp_path, filter="HARDENED filter")  # has filter, not verifier
+    _assert_inline_matches_resolve_overlay(monkeypatch, base, overlay, "verifier/system.md")
+
+
+# --------------------------------------------------------------------------
 # Expert-side wiring (support.py): system.md + skills ride the same overlay
 # --------------------------------------------------------------------------
 
