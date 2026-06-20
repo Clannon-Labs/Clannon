@@ -46,9 +46,11 @@ def _build_prompt(task: str, answer: str, findings: list[str]) -> str:
     parts = [
         "A turn just finished (it may be research, a task, or a plain exchange). Distil "
         "only what is worth remembering long-term: durable facts the user shared or that "
-        "the work established, and clear preferences for how they like things done.\n",
-        f"## The user's request\n{(task or '')[:_MAX_TASK_CHARS]}\n",
-        f"## The answer delivered\n{(answer or '')[:_MAX_ANSWER_CHARS]}\n",
+        "the work established, and clear preferences for how they like things done. "
+        "> Note: Donot save everything.. just save the summary or important things learnt "
+        "from the answer delievered.\n",
+        f"## The user's request\n{(task or '')}\n",
+        f"## The answer delivered\n{(answer or '')}\n",
     ]
     digest = [f[:_MAX_FINDING_CHARS] for f in findings[:_MAX_FINDINGS] if f]
     if digest:

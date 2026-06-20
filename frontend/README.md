@@ -14,6 +14,36 @@ npm run dev        # http://localhost:3000 — runs against the bundled mock
 npm run build && npm start
 ```
 
+To open the app from another device on the LAN (e.g. a phone) against the real
+backend, use the launcher. It frees the port if a previous dev server is still
+on it, detects this machine's LAN IP, points the browser-side API at it, and
+binds to all interfaces — no env vars to remember, safe to re-run:
+
+```bash
+./dev.sh          # from frontend/   (or: npm run lan)
+# then open http://<LAN-IP>:3000 on the other device (same Wi-Fi)
+# if ufw is active, open the port once: sudo ufw allow 3000/tcp
+```
+
+Equivalent by hand — the API URL is the LAN IP, not localhost: the phone runs
+the fetch, so `localhost` would mean the phone (`<LAN-IP>` =
+`hostname -I | awk '{print $1}'`):
+
+```bash
+NEXT_PUBLIC_API_MODE=http \
+NEXT_PUBLIC_API_BASE_URL=http://<LAN-IP>:8000 \
+  npm run dev -- -H 0.0.0.0
+```
+
+Start the backend with `backend/dev.sh` (it wires the matching `FRONTEND_ORIGIN`).
+Two dev settings in `next.config.ts` make LAN dev work and are worth knowing:
+
+- `upgrade-insecure-requests` in the CSP is gated to production. In dev it would
+  force every `_next/static` asset to `https` over the LAN, and the page would
+  load unstyled (`localhost` is exempt, so it only bites over the network).
+- `allowedDevOrigins` is auto-populated from this machine's network interfaces,
+  so fast-refresh works over the LAN and a changed IP needs no edit.
+
 ## Configuration map — everything changeable, and where
 
 Three config files plus `.env.local`. If you need to change something
