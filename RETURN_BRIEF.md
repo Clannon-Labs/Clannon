@@ -77,6 +77,29 @@ the loop as **PR #13** during this prep, so it is not re-queued.)
 - **The loop template change is live on next service restart** (you accepted it + added the
   no-AI-attribution rule). It now points each iteration at the QUEUE CONTEXT preamble, so
   your judgment propagates without you in the loop. Loop logic/ledger/safety flags untouched.
-- **Nothing else is blocking.** The 5 decisions above + the 11 PR merges are the whole of
-  your return review. The loop keeps producing PRs against the v2 queue; if it drains it,
-  it sleeps 6h and re-reads — add `- [ ] ` lines anytime.
+- **Nothing else is blocking.** The 6 decisions (the 5 above + the postcss item under
+  Security) + the 11 PR merges are the whole of your return review. The loop keeps
+  producing PRs against the v2 queue; if it drains it, it sleeps 6h and re-reads — add
+  `- [ ] ` lines anytime.
+
+## Security — Dependabot alert (assessed 2026-06-20)
+
+1. **Dependency + CVE.** `postcss` (npm), GHSA-qx2v-qp2m-jg93 / CVE-2026-41305, **moderate
+   (CVSS 6.1)**, XSS via unescaped `</style>` in CSS stringify output. **Transitive**, nested
+   under Next.js: `frontend/node_modules/next/node_modules/postcss@8.4.31` (`< 8.5.10`). The
+   project's top-level postcss is already 8.5.15 (patched); Next 16.2.9 (current latest) pins
+   the vulnerable copy **exactly**, so it can't be bumped standalone. Known upstream issue:
+   vercel/next.js#93234.
+2. **Reachable here? No — dormant.** postcss runs only at BUILD time (Next + Tailwind v4
+   compiling first-party CSS). The CVE needs USER-SUBMITTED CSS re-stringified into a runtime
+   `<style>` tag; the frontend imports no postcss in `src/` and has no user-CSS-to-`<style>`
+   path, so the vulnerable stringify is never fed untrusted input.
+3. **Verdict: fix-on-return (near-ignorable).** Recommended: wait for the Next.js release that
+   bundles postcss >= 8.5.10 (tracked upstream), then take the Next bump PR; or, to clear it
+   now, an npm `"overrides": { "postcss": ">=8.5.10" }` one-liner in `frontend/package.json`
+   (frontend agent's domain). Full write-up + recommendation in needs-reviewer issue **#19**.
+
+**Dependabot:** vulnerability alerts and security updates are now **enabled** on the repo, so a
+fix PR auto-opens for your review once an upstream patch exists (don't expect one until Next
+ships the bump, given the exact pin). It goes through the same review-on-return flow — nothing
+to merge now, and the loop did not change any frontend code.
