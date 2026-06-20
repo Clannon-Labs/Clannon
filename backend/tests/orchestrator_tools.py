@@ -100,6 +100,54 @@ def test_network_output_sanitized(monkeypatch):
     assert rec.success and "redacted" in rec.result["text"]
 
 
+def test_network_output_triggers_rescan(monkeypatch):
+    """Invariant A (regression): a NETWORK tool's string output is re-fed through
+    scan_text before it can reach reasoning. Spy on scan_text to assert it saw the
+    raw external text, and that a passing scan's sanitized text replaces the original."""
+    class Net:
+        async def run(self, args):
+            return EchoOut(text="external blob")
+
+    seen = []
+
+    class _Scanned:
+        passed = True
+        sanitized_text = "[clean] external blob"
+
+    async def spy_scan(text):
+        seen.append(text)
+        return _Scanned()
+    monkeypatch.setattr(handler_mod, "scan_text", spy_scan)
+
+    rec = asyncio.run(ToolHandler(registry=_reg(Net, permission=PermissionLevel.NETWORK)).call_tool(
+        ToolRequest(key="t.echo", arguments={"text": "x"}), _ctx()))
+
+    assert rec.success
+    assert seen == ["external blob"]                       # the raw network output re-entered sanitization
+    assert rec.result["text"] == "[clean] external blob"   # the sanitized text replaced it
+
+
+def test_non_network_output_skips_rescan(monkeypatch):
+    """Invariant A is keyed on PermissionLevel.NETWORK: a non-NETWORK tool's output
+    never enters scan_text, so it is passed through untouched."""
+    class Read:
+        async def run(self, args):
+            return EchoOut(text="local blob")
+
+    seen = []
+
+    async def spy_scan(text):
+        seen.append(text)
+        return text
+    monkeypatch.setattr(handler_mod, "scan_text", spy_scan)
+
+    rec = asyncio.run(ToolHandler(registry=_reg(Read, permission=PermissionLevel.READ)).call_tool(
+        ToolRequest(key="t.echo", arguments={"text": "x"}), _ctx()))
+
+    assert rec.success and rec.result["text"] == "local blob"
+    assert seen == []                                      # the READ path never hit the sanitizer
+
+
 def test_real_calculator():
     discover()
     ctx = _ctx()
