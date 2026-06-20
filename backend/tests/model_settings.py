@@ -153,3 +153,94 @@ def test_anthropic_cache_settings_are_inert_on_other_providers():
     msgs = [ModelRequest(parts=[UserPromptPart(content="hi")])]
     _, cfg = asyncio.run(builder(msgs, settings, ModelRequestParameters()))
     assert not [k for k in cfg if "anthropic" in str(k).lower()]  # zero leakage into the provider request
+
+
+# ---- characterization: per-layer settings + usage limits are PINNED ----------
+#
+# GOLDEN values. model_settings_for_layer / usage_limits_for_layer only special-case
+# verifier (token + timeout cap) and orchestrator (turn-sized request limit); the
+# message-history cache (anthropic_cache) is on for exactly the multi-turn layers.
+# Every other layer takes the generic path. The failure these guard against is a layer
+# SILENTLY falling back to the generic defaults — a renamed layer, an entry dropped from
+# _MESSAGE_CACHE_LAYERS, the verifier/orchestrator branch no longer matching. That kind
+# of drift is invisible at runtime (a run still "works", just unbounded or uncached), so
+# it has to be pinned here. The numeric caps are tied to their foundation constants on
+# purpose: a deliberate constant tune flows through, but a layer dropping off its branch
+# does not. Update intentionally, never to make a red test green.
+
+from core.llm.registry import model_settings_for_layer, usage_limits_for_layer
+from foundation import constants
+
+# the two anthropic prompt-prefix cache knobs every layer carries
+_CACHE_PREFIX = {"anthropic_cache_instructions": True, "anthropic_cache_tool_definitions": True}
+# the multi-turn layers ALSO cache the growing message history (W8)
+_CACHE_PREFIX_AND_HISTORY = {**_CACHE_PREFIX, "anthropic_cache": True}
+
+EXPECTED_MODEL_SETTINGS = {
+    # multi-turn, tool/expert-driving layers: prefix cache + message-history cache
+    "orchestrator": _CACHE_PREFIX_AND_HISTORY,
+    "research": _CACHE_PREFIX_AND_HISTORY,
+    "code": _CACHE_PREFIX_AND_HISTORY,
+    "planner": _CACHE_PREFIX_AND_HISTORY,
+    "media_expert": _CACHE_PREFIX_AND_HISTORY,
+    # verifier additionally pins a hard token + timeout cap (fail closed on a slow gate)
+    "verifier": {**_CACHE_PREFIX, "max_tokens": constants.VERIFIER_MAX_TOKENS,
+                 "timeout": constants.VERIFIER_TIMEOUT_S},
+    # one-shot / varying-input layers: prefix cache only, no history cache
+    "filter": _CACHE_PREFIX,
+    "normalizer": _CACHE_PREFIX,
+    "memory": _CACHE_PREFIX,
+    "search": _CACHE_PREFIX,
+    "slop_detector": _CACHE_PREFIX,
+}
+
+# (request_limit, output_tokens_limit) for the no-override base path
+EXPECTED_USAGE_LIMITS = {
+    "verifier": (constants.VERIFIER_MAX_RETRIES + 1, constants.VERIFIER_MAX_TOKENS),
+    "orchestrator": (constants.ORCHESTRATOR_MAX_TURNS + 1, constants.ORCHESTRATOR_MAX_TOKENS),
+    # everything else is a one-shot structured agent: one request, no token cap baked in
+    "filter": (1, None),
+    "research": (1, None),
+    "code": (1, None),
+    "planner": (1, None),
+    "media_expert": (1, None),
+    "normalizer": (1, None),
+    "memory": (1, None),
+    "search": (1, None),
+    "slop_detector": (1, None),
+}
+
+
+@pytest.mark.parametrize("layer,expected", sorted(EXPECTED_MODEL_SETTINGS.items()))
+def test_model_settings_per_layer_are_pinned(layer, expected):
+    # exact dict equality: an extra/missing key (e.g. anthropic_cache silently gone) fails here
+    assert dict(model_settings_for_layer(layer)) == expected
+
+
+def test_verifier_is_the_only_layer_with_a_token_and_timeout_cap():
+    # the special-case is verifier-only; nothing else should sprout max_tokens/timeout
+    for layer in EXPECTED_MODEL_SETTINGS:
+        settings = model_settings_for_layer(layer)
+        has_caps = "max_tokens" in settings or "timeout" in settings
+        assert has_caps == (layer == "verifier"), layer
+
+
+@pytest.mark.parametrize("layer,expected", sorted(EXPECTED_USAGE_LIMITS.items()))
+def test_usage_limits_per_layer_are_pinned(layer, expected):
+    limits = usage_limits_for_layer(layer)
+    assert (limits.request_limit, limits.output_tokens_limit) == expected
+
+
+def test_usage_limits_per_run_overrides_resize_request_limit():
+    # max_turns resizes the request cap to turns+1; the layer's base token cap is preserved
+    orch = usage_limits_for_layer("orchestrator", max_turns=5)
+    assert (orch.request_limit, orch.output_tokens_limit) == (6, constants.ORCHESTRATOR_MAX_TOKENS)
+    # a tool-driving layer with no base token cap: override sets requests, tokens stay unbounded
+    research = usage_limits_for_layer("research", max_turns=8)
+    assert (research.request_limit, research.output_tokens_limit) == (9, None)
+    # an explicit per-run token cap wins over the base
+    capped = usage_limits_for_layer("orchestrator", max_turns=3, max_output_tokens=1234)
+    assert (capped.request_limit, capped.output_tokens_limit) == (4, 1234)
+    # token override without a turn override leaves the base request cap untouched
+    filtered = usage_limits_for_layer("filter", max_output_tokens=99)
+    assert (filtered.request_limit, filtered.output_tokens_limit) == (1, 99)
