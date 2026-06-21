@@ -369,10 +369,11 @@ _DEMO_USER_ID = "demo-c5-security-scene"
 _DEMO_SESSION_ID = "demo-c5-session-001"
 
 
-def _persist_to_audit_trail(decisions: list[PayloadDecision]) -> None:
-    """Write blocked decisions to the durable audit trail (if available)."""
+def _persist_to_audit_trail(decisions: list[PayloadDecision]) -> list[str]:
+    """Write blocked decisions to the durable audit trail. Returns error messages for any failures."""
     if not _AUDIT_AVAILABLE:
-        return
+        return []
+    errors: list[str] = []
     for d in decisions:
         if d.blocked and d.block_code:
             try:
@@ -385,20 +386,23 @@ def _persist_to_audit_trail(decisions: list[PayloadDecision]) -> None:
                     origin=d.origin or "unknown",
                     reason=d.reason,
                 )
-            except Exception:  # noqa: BLE001 — demo must not die on audit failure
-                pass
+            except Exception as exc:  # noqa: BLE001 — demo must not die on audit failure
+                errors.append(f"persist {d.fixture.id}: {exc}")
+    return errors
 
 
-def _read_back_from_audit_trail(decisions: list[PayloadDecision]) -> None:
-    """Populate decision.audit_records from the durable trail (if available)."""
+def _read_back_from_audit_trail(decisions: list[PayloadDecision]) -> list[str]:
+    """Populate decision.audit_records from the durable trail. Returns error messages for any failures."""
     if not _AUDIT_AVAILABLE:
-        return
+        return []
+    errors: list[str] = []
     for d in decisions:
         if d.blocked:
             try:
                 d.audit_records = get_for_run(user_id=_DEMO_USER_ID, trace_id=d.trace_id)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"readback {d.fixture.id}: {exc}")
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -416,10 +420,17 @@ def _excerpt(text: str, chars: int = 80) -> str:
     return text[:chars] + "..."
 
 
-def _render_report(decisions: list[PayloadDecision]) -> str:
+def _render_report(
+    decisions: list[PayloadDecision],
+    *,
+    audit_errors: list[str] | None = None,
+) -> str:
     lines: list[str] = []
     attacks = [d for d in decisions if d.fixture.is_attack]
     benign = [d for d in decisions if not d.fixture.is_attack]
+
+    durable_count = sum(1 for d in decisions if d.audit_records)
+    blocked_count = sum(1 for d in decisions if d.blocked)
 
     lines.append(_BAR)
     lines.append("CLANNON — SECURITY VALIDATION DEMO (Critical Benchmark 5)")
@@ -427,11 +438,20 @@ def _render_report(decisions: list[PayloadDecision]) -> str:
     lines.append(
         f"Battery: {len(attacks)} adversarial inputs + {len(benign)} benign controls"
     )
-    audit_label = (
-        "DURABLE (persisted to audit trail, read back)"
-        if _AUDIT_AVAILABLE
-        else "IN-MEMORY (api/audit.py not yet available; pre-merge)"
-    )
+    # Derive label from ACTUAL read-back results, not just import success.
+    # _AUDIT_AVAILABLE=True + 0 records means the write or migration failed.
+    if not _AUDIT_AVAILABLE:
+        audit_label = "IN-MEMORY (api/audit.py not yet available; pre-merge)"
+    elif durable_count > 0:
+        audit_label = (
+            f"DURABLE — {durable_count}/{blocked_count} blocked decisions "
+            "have verified audit records"
+        )
+    else:
+        audit_label = (
+            "module-present but 0 records read back "
+            "(write or migration likely failed)"
+        )
     lines.append(f"Audit trail: {audit_label}")
     lines.append("")
 
@@ -502,6 +522,10 @@ def _render_report(decisions: list[PayloadDecision]) -> str:
         lines.append(
             "  Audit trail: merge feat/c5-security-audit-trail to activate durable records."
         )
+    if audit_errors:
+        lines.append("  Audit errors (write/read failed for some payloads):")
+        for err in audit_errors:
+            lines.append(f"    {err}")
     lines.append("")
 
     # Overall verdict
@@ -528,9 +552,9 @@ def run() -> tuple[list[PayloadDecision], str]:
     this and passes the decisions through for structured verdict extraction.
     """
     decisions = _run_battery_hermetic()
-    _persist_to_audit_trail(decisions)
-    _read_back_from_audit_trail(decisions)
-    report = _render_report(decisions)
+    persist_errors = _persist_to_audit_trail(decisions)
+    readback_errors = _read_back_from_audit_trail(decisions)
+    report = _render_report(decisions, audit_errors=persist_errors + readback_errors)
     return decisions, report
 
 
