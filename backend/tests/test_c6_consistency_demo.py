@@ -1,5 +1,5 @@
 """
-Tests for demos/c6_consistency_demo.py.
+Tests for backend/scripts/c6_consistency_demo.py.
 
 The demo is a standalone script that invokes 4 contract/boundary checks and
 renders a PASS/FAIL consistency table.  These tests verify:
@@ -229,7 +229,7 @@ class TestDemoBaseline:
 
     def test_demo_runnable_as_subprocess(self):
         """
-        Verify the demo is runnable via ``python demos/c6_consistency_demo.py``
+        Verify the demo is runnable via ``python backend/scripts/c6_consistency_demo.py``
         from the repo root, which is the stated usage.  A non-zero exit code here
         means a real C6 contract divergence exists on HEAD.
         """

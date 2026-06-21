@@ -36,7 +36,7 @@ On divergence the report identifies the failure without editing either side;
 reconciliation is a maintainer decision per the C6 drift policy.
 
 Usage (from repo root):
-    python demos/c6_consistency_demo.py
+    python backend/scripts/c6_consistency_demo.py
 
 Exit code:
     0  all surfaces PASS (or at most WARN)
