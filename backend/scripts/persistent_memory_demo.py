@@ -511,15 +511,21 @@ async def scene_day7(manager: MemoryManager, user_id: str, *, live: bool = False
 
     _section("END OF DAY-7 SESSION")
 
-    recency_context = (
-        "         Hermetic: Day-1 items backdated 7 days (score≈0.926);\n"
-        "         the session-start item written today (score=1.000) ranks\n"
-        "         higher within the EPISODIC tier — visible in OPEN WORK above."
-    ) if not live else (
-        "         Live: all items are written in the same run so ages show\n"
-        "         0m ago — the score differential develops after real elapsed\n"
-        "         days between sessions."
-    )
+    if not live:
+        recency_bullet = (
+            "    [ok] Recency decay             — within the EPISODIC tier the session-start\n"
+            "         item (written today) ranks above Day-1 items (one week earlier).\n"
+            "         Hermetic: Day-1 items backdated 7 days (score≈0.925);\n"
+            "         the session-start item written today (score=1.000) ranks\n"
+            "         higher within the EPISODIC tier — visible in OPEN WORK above."
+        )
+    else:
+        recency_bullet = (
+            "    [pending] Recency decay        — requires real elapsed time between sessions.\n"
+            "         Live: all items are written in the same run so ages show\n"
+            "         0m ago — the score differential develops after real elapsed\n"
+            "         days between sessions."
+        )
 
     print(f"""
   Session B had ZERO prior transcript. Every item above came from
@@ -532,9 +538,7 @@ async def scene_day7(manager: MemoryManager, user_id: str, *, live: bool = False
     [ok] Cross-session continuity  — no transcript required
     [ok] user_id-scoped retrieval  — no cross-user leakage
     [ok] Trust-tier ordering       — SEMANTIC decisions rank above EPISODIC / PROCEDURAL
-    [ok] Recency decay             — within the EPISODIC tier the session-start
-         item (written today) ranks above Day-1 items (one week earlier).
-{recency_context}
+{recency_bullet}
     [ok] Lagrangian budget allocation — all tiers represented within budget
 
   What is NOT-YET (gated on issue #16):
@@ -576,7 +580,7 @@ async def run_demo(*, live: bool, user_id: str) -> None:
         print("  Mode: LIVE — real Qdrant + nomic-embed-text embeddings\n")
     else:
         # Backdate Day-1 items 7 days so age labels and recency-decay scores
-        # in Scene 2 are truthful ("7.0d ago", score≈0.926 vs 1.000 today).
+        # in Scene 2 are truthful ("7.0d ago", score≈0.925 vs 1.000 today).
         mem_store = _InMemoryStore(created_at_offset=-7 * 86_400)
         _install_hermetic_doubles(mem_store)
         print("  Mode: HERMETIC — in-memory store + fake embedder (no Qdrant needed)")

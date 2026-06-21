@@ -458,7 +458,7 @@ def test_recency_decay_changes_rank_within_same_tier():
     The manager computes rank_score = raw_score * recency(created_at) where
     recency uses a 30-day half-life with a 0.5 floor:
       fresh item  → recency = 1.0   → rank_score = 1.000
-      7-day item  → recency ≈ 0.926 → rank_score ≈ 0.926
+      7-day item  → recency ≈ 0.925 → rank_score ≈ 0.925
 
     This test proves the decay function is live in the real hydration path.
     """
@@ -510,7 +510,7 @@ def test_recency_decay_changes_rank_within_same_tier():
             f"newer={newer_item.score:.4f} (age≈0s), "
             f"older={older_item.score:.4f} (age≈7d)"
         )
-        # Fresh item: recency=1.0, rank_score=1.000; 7-day item: recency≈0.926
+        # Fresh item: recency=1.0, rank_score=1.000; 7-day item: recency≈0.925
         assert newer_item.score > 0.99, (
             f"fresh item rank_score must be close to 1.0, got {newer_item.score:.4f}"
         )
