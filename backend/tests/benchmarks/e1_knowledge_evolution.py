@@ -35,7 +35,7 @@ import asyncio
 import time
 
 from foundation import HydrationRequest, MemoryStore, NormalizedInput
-from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _RECENCY_FLOOR, _RECENCY_HALF_LIFE_S
+from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _RECENCY_FLOOR, _RECENCY_HALF_LIFE_S, _RELEVANCE_FLOOR
 
 # ---------------------------------------------------------------------------
 # Synthetic fixtures — seeded at module load to keep timestamps stable
@@ -43,12 +43,12 @@ from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _RECENCY_FLOOR
 
 _USER = "e1-probe-synthetic-user"
 _NOW = time.time()
-_T_PAST = _NOW - 30 * 86_400   # 30 days ago (exactly one recency half-life)
+_T_PAST = _NOW - _RECENCY_HALF_LIFE_S  # exactly one recency half-life ago
 
 # Expected recency-weighted rank scores (computed from manager constants):
-#   PYTHON: raw=0.82, recency=0.5+(0.5*0.5^1)=0.75  → rank=0.82*0.75=0.615
-#   RUST:   raw=0.85, recency=0.5+(0.5*1.0)  ≈1.0   → rank=0.85*1.0  ≈0.850
-# Both are above RELEVANCE_FLOOR (0.30), so both survive.
+#   PYTHON: raw=0.82, recency=_RECENCY_FLOOR+(1-_RECENCY_FLOOR)*0.5^1=0.75  → rank=0.82*0.75=0.615
+#   RUST:   raw=0.85, recency=_RECENCY_FLOOR+(1-_RECENCY_FLOOR)*1.0  ≈1.0   → rank=0.85*1.0  ≈0.850
+# Both are above _RELEVANCE_FLOOR, so both survive.
 _PYTHON_RAW_SCORE = 0.82
 _RUST_RAW_SCORE = 0.85
 
