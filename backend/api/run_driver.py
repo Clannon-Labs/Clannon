@@ -32,7 +32,7 @@ from core.llm import model_overrides, usage_scope
 
 from observability import DecisionLogSink
 
-from . import auth, config
+from . import audit as _audit_trail, auth, config
 from .run_state import RunState, _now, _process_summary
 from .run_store import STORE, INPUT_NS
 
@@ -327,6 +327,26 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 else:
                     run.block_stage = "security"
                 run.on_status("blocked")
+                # durable audit record — one per blocked run, scoped to owner
+                _block_origin = flow.meta.origin
+                _block_reason_text = (
+                    ctx.sanitization_block_reason if ctx.sanitization_blocked else
+                    ctx.verifier_block_reason if ctx.verifier_blocked else
+                    ctx.filter_block_reason if ctx.filter_blocked else
+                    None
+                )
+                try:
+                    _audit_trail.write_block_record(
+                        user_id=ctx.user_id,
+                        session_id=ctx.session_id,
+                        trace_id=ctx.trace_id,
+                        block_code=ctx.block_reason or "",
+                        threat_level=flow.threat.value,
+                        origin=_block_origin.value if _block_origin else "unknown",
+                        reason=_block_reason_text,
+                    )
+                except Exception:  # noqa: BLE001 — audit write must not fail the run
+                    pass
             elif ctx.failed:
                 if ctx.failure_error:
                     run.on_log_entry(

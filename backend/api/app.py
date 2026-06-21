@@ -36,7 +36,7 @@ from pydantic import BaseModel, EmailStr, Field
 from core.artifacts import LocalArtifactStore
 from security.sanitizers import uploads as upload_scan
 
-from . import auth, config, runs
+from . import audit as _audit, auth, config, runs
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
 
@@ -358,6 +358,19 @@ def run_thread(run_id: str, user: auth.User = Depends(auth.current_user)) -> lis
         raise HTTPException(404, "Run not found.")
     session_id = run.session_id or run.id
     return [t.full_json() for t in runs.STORE.session_turns(user.id, session_id)]
+
+
+@app.get("/runs/{run_id}/audit")
+def run_audit(run_id: str, user: auth.User = Depends(auth.current_user)) -> list[dict]:
+    """Security-decision audit records for one run, scoped to its owner.
+
+    Returns an empty list when the run was not blocked by a security gate, or
+    when no audit records exist for this run (e.g. pre-audit runs). 404 when the
+    run does not belong to the authenticated user."""
+    run = runs.STORE.get(user.id, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found.")
+    return _audit.get_for_run(user.id, run_id)
 
 
 @app.delete("/sessions/{session_id}", status_code=204)

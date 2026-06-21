@@ -93,6 +93,23 @@ def _db() -> sqlite3.Connection:
             PRIMARY KEY (user_id, layer)
         )"""
     )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS security_audit (
+            id TEXT PRIMARY KEY,
+            trace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            block_code TEXT NOT NULL,
+            threat_level TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            reason TEXT,
+            blocked_at REAL NOT NULL
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS security_audit_by_run "
+        "ON security_audit (user_id, trace_id)"
+    )
     return conn
 
 
