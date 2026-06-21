@@ -6,18 +6,28 @@ Verifies the write/read contract for the durable block-decision store (C5):
     (block_code, threat_level, origin, reason, trace_id, user_id, session_id, blocked_at).
   - Records are user_id-scoped: another user cannot read them.
   - Writes are fail-closed without user_id: no record is created, no read is returned.
+  - run_driver.execute wires the write correctly: a blocked pipeline flow produces
+    exactly one record with fields drawn from the right ctx/flow attributes; a
+    delivered flow produces zero records.
 
 Hermetic: no network, no real models, no real SQLite (patched to a per-test temp file).
 """
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 
 import pytest
 
+import core.pipeline
+from foundation import Flow, BlockReason, ThreatLevel, Origin
+
 from api import audit as audit_mod
 from api import auth as auth_mod
+from api import run_driver
+from api.run_state import RunState
+from api.run_store import STORE
 
 
 def _make_db(db_file: str):
@@ -177,3 +187,95 @@ def test_read_returns_empty_without_user_id(_db):
 def test_no_records_for_unblocked_run(_db):
     """A run that was never blocked has no audit records."""
     assert audit_mod.get_for_run("u_clean", "run_clean") == []
+
+
+# ---------------------------------------------------------------------------
+# run_driver wiring — proves the execute() path reaches write_block_record
+# with the correct field values drawn from ctx + flow attributes
+# ---------------------------------------------------------------------------
+
+def _audit_db(db_file: str):
+    """Minimal SQLite with the security_audit table only."""
+    conn = sqlite3.connect(db_file)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS security_audit ("
+        "id TEXT PRIMARY KEY, trace_id TEXT NOT NULL, user_id TEXT NOT NULL, "
+        "session_id TEXT NOT NULL, block_code TEXT NOT NULL, threat_level TEXT NOT NULL, "
+        "origin TEXT NOT NULL, reason TEXT, blocked_at REAL NOT NULL)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS security_audit_by_run "
+        "ON security_audit (user_id, trace_id)"
+    )
+    conn.commit()
+    return conn
+
+
+def _run(user_id: str, run_id: str, session_id: str) -> RunState:
+    return RunState(
+        id=run_id, user_id=user_id,
+        title="wiring test", brief="test brief",
+        session_id=session_id,
+    )
+
+
+def test_execute_blocked_run_writes_exactly_one_audit_record(monkeypatch, tmp_path):
+    """run_driver.execute with a verifier-blocked flow writes exactly one audit record
+    whose block_code/threat_level/origin/reason match what the blocked flow carries.
+
+    This proves the execute() wiring is correct — wrong ctx field, wrong reason
+    branch, wrong origin source, or write firing zero/two times would all fail here.
+    """
+    db_file = str(tmp_path / "wiring.db")
+    monkeypatch.setattr(auth_mod, "_db", lambda: _audit_db(db_file))
+
+    user_id, run_id, session_id = "u_wiring", "run_wiring", "sess_wiring"
+
+    # Build the same blocked flow the verifier gate would produce
+    flow = Flow.new("test input", session_id=session_id, user_id=user_id, trace_id=run_id)
+    flow.ctx.verifier_blocked = True
+    flow.ctx.verifier_block_reason = "Detected prompt injection."
+    blocked_flow = flow.block(BlockReason.VERIFIER_REJECTED, ThreatLevel.HIGH, Origin.VERIFIER)
+
+    async def _stub_pipeline(*args, **kwargs):
+        return blocked_flow
+
+    monkeypatch.setattr(core.pipeline, "run", _stub_pipeline)
+    monkeypatch.setattr(STORE, "session_turns", lambda uid, sid: [])
+    monkeypatch.setattr(STORE, "persist", lambda run: None)
+    monkeypatch.setattr(auth_mod, "model_prefs_get", lambda uid: {})
+
+    asyncio.run(run_driver.execute(_run(user_id, run_id, session_id)))
+
+    records = audit_mod.get_for_run(user_id, run_id)
+    assert len(records) == 1, f"Expected 1 audit record, got {len(records)}"
+    rec = records[0]
+    assert rec["block_code"] == "verifier_rejected"
+    assert rec["threat_level"] == "high"
+    assert rec["origin"] == "verifier"
+    assert rec["reason"] == "Detected prompt injection."
+
+
+def test_execute_delivered_run_writes_zero_audit_records(monkeypatch, tmp_path):
+    """run_driver.execute with a non-blocked (delivered) flow writes no audit records."""
+    db_file = str(tmp_path / "wiring_ok.db")
+    monkeypatch.setattr(auth_mod, "_db", lambda: _audit_db(db_file))
+
+    user_id, run_id, session_id = "u_ok", "run_ok", "sess_ok"
+
+    flow = Flow.new("test input", session_id=session_id, user_id=user_id, trace_id=run_id)
+    flow.ctx.final_response = "Here is the delivered result."
+
+    async def _stub_pipeline(*args, **kwargs):
+        return flow
+
+    monkeypatch.setattr(core.pipeline, "run", _stub_pipeline)
+    monkeypatch.setattr(STORE, "session_turns", lambda uid, sid: [])
+    monkeypatch.setattr(STORE, "persist", lambda run: None)
+    monkeypatch.setattr(auth_mod, "model_prefs_get", lambda uid: {})
+
+    asyncio.run(run_driver.execute(_run(user_id, run_id, session_id)))
+
+    records = audit_mod.get_for_run(user_id, run_id)
+    assert records == [], f"Expected 0 records for a delivered run, got {len(records)}"

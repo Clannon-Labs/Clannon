@@ -370,7 +370,7 @@ def run_audit(run_id: str, user: auth.User = Depends(auth.current_user)) -> list
     run = runs.STORE.get(user.id, run_id)
     if run is None:
         raise HTTPException(404, "Run not found.")
-    return _audit.get_for_run(user.id, run_id)
+    return [_audit.public_json(r) for r in _audit.get_for_run(user.id, run_id)]
 
 
 @app.delete("/sessions/{session_id}", status_code=204)

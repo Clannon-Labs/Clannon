@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from datetime import datetime, timezone
 
 from . import auth
 
@@ -75,4 +76,23 @@ def _row_dict(row) -> dict:
         "origin": row["origin"],
         "reason": row["reason"],
         "blocked_at": row["blocked_at"],
+    }
+
+
+def public_json(row: dict) -> dict:
+    """The camelCase API presentation of one audit record.
+
+    Call this in the route layer; keep `get_for_run` returning raw columns
+    (snake_case) for internal use and tests. `user_id` is omitted — the caller
+    IS that user and no other API response echoes it back.
+    """
+    return {
+        "id": row["id"],
+        "traceId": row["trace_id"],
+        "sessionId": row["session_id"],
+        "blockCode": row["block_code"],
+        "threatLevel": row["threat_level"],
+        "origin": row["origin"],
+        "reason": row["reason"],
+        "blockedAt": datetime.fromtimestamp(row["blocked_at"], tz=timezone.utc).isoformat(),
     }
