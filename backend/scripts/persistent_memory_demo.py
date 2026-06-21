@@ -14,13 +14,15 @@ Day 1  — A working session ends. The assistant seeds project decisions,
          schema; no new EntryType.  Transcript: discarded.
 
 Day 7  — A completely fresh session opens with NO prior context. The
-         maintainer asks four questions:
+         maintainer asks five questions (the full C1 benchmark set):
            • What was decided?
            • What is still open?
            • What assumptions were recorded?
            • What is the current status and what comes next?
-         The answers come entirely from MemoryManager.hydrate() — ranked
-         by trust x recency, budgeted by Lagrangian water-filling.
+           • What changed? / Which assumptions became invalid?  [NOT-YET]
+         The first four come entirely from MemoryManager.hydrate() —
+         ranked by trust x recency, budgeted by Lagrangian water-filling.
+         The last two are explicitly labelled NOT-YET (gated on #16).
          No injected transcript. No manual context.
 
 ═══════════════════════════════════════════════════════════════════════
@@ -33,6 +35,7 @@ marked throughout this script:
   • First-class typed provenance  (source doc, author, confidence chain)
   • Typed fact-vs-assumption distinction  (Decision / Assumption / TODO)
   • Decision-rank boost over episodic conversation content
+  • Temporal truth  ("what changed?" / "which assumptions became invalid?")
 
 The demo marks these NOT-YET rather than faking them.
 
@@ -51,8 +54,9 @@ USAGE  (from repo root or backend/)
 
 Hermetic mode patches the Qdrant store and embedding model with
 in-memory doubles so the demo runs anywhere without infrastructure.
-Live mode uses the real nomic-embed-text embedder and a local Qdrant
-instance for full semantic recall quality.
+Day-1 items are backdated 7 days in hermetic mode so the age labels
+and recency-decay scores are truthful. Live mode uses the real
+nomic-embed-text embedder and a local Qdrant instance.
 """
 from __future__ import annotations
 
@@ -61,7 +65,7 @@ import os
 import sys
 
 _HERE = os.path.abspath(os.path.dirname(__file__))
-# Walk up from scripts/demos/ until we find the directory that contains
+# Walk up from scripts/ until we find the directory that contains
 # foundation/ (the backend package root). This works from any CWD.
 _BACKEND = _HERE
 while _BACKEND != os.path.dirname(_BACKEND):
@@ -202,7 +206,7 @@ DAY1_PROPOSALS: list[MemoryWriteProposal] = [
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Day-7 query set — mirrors the C1 benchmark's four required questions
+# Day-7 query set — the four retrievable questions from the C1 benchmark
 # ─────────────────────────────────────────────────────────────────────────────
 
 DAY7_QUERIES: list[tuple[str, str]] = [
@@ -224,6 +228,34 @@ DAY7_QUERIES: list[tuple[str, str]] = [
     ),
 ]
 
+# One fresh EPISODIC item written at the start of Session B. In hermetic mode
+# Day-1 items are backdated 7 days while this item lands at current time,
+# making the recency decay score difference visible in the output.
+DAY7_FRESH_ITEM: MemoryWriteProposal = MemoryWriteProposal(
+    store=MemoryStore.EPISODIC,
+    content=(
+        "Session start [Meridian, Day 7]: maintainer opened a fresh session to "
+        "reconstruct project status from persistent memory. No prior transcript."
+    ),
+    rationale="session start event — provides a same-tier recency contrast",
+    confidence=0.95,
+)
+
+# The remaining two questions from the C1 five-question benchmark set. These
+# require temporal truth tracking (is-valid-at / superseded-by) gated on #16.
+# Listed separately so the demo maps 1-to-1 to all five benchmark questions
+# while being honest about what is NOT-YET.
+DAY7_NOT_YET_QUERIES: list[tuple[str, str]] = [
+    (
+        "What changed since the last session?",
+        "CHANGES / EVOLUTION",
+    ),
+    (
+        "Which assumptions became invalid?",
+        "INVALID ASSUMPTIONS",
+    ),
+]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Hermetic in-memory store double
 # ─────────────────────────────────────────────────────────────────────────────
@@ -236,10 +268,15 @@ class _InMemoryStore:
     Dedup is intentionally bypassed (limit=1 search always returns empty) so
     each distinct Day-1 proposal is stored as its own independent entry.
     The user_id filter is enforced exactly as the real store does.
+
+    created_at_offset: seconds added to time.time() on every upsert. Pass a
+    negative value to backdate items (e.g. -7*86400 for "7 days ago"). Reset
+    to 0.0 before writing items that should carry the current timestamp.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, created_at_offset: float = 0.0) -> None:
         self._data: dict[MemoryStore, list[dict]] = {t: [] for t in MemoryStore}
+        self.created_at_offset = created_at_offset
 
     def search(
         self, tier: MemoryStore, user_id: str, vector: list[float], limit: int = 8
@@ -270,9 +307,10 @@ class _InMemoryStore:
         import uuid
 
         pid = point_id or str(uuid.uuid4())
+        created_at = time.time() + self.created_at_offset
         for existing in self._data[tier]:
             if existing.get("id") == pid:
-                existing.update(content=content, confidence=confidence, created_at=time.time())
+                existing.update(content=content, confidence=confidence, created_at=created_at)
                 return pid
         self._data[tier].append(
             {
@@ -281,7 +319,7 @@ class _InMemoryStore:
                 "session_id": session_id,
                 "content": content,
                 "score": 1.0,
-                "created_at": time.time(),
+                "created_at": created_at,
                 "confidence": confidence,
                 "trust": trust,
             }
@@ -377,7 +415,7 @@ async def scene_day1(manager: MemoryManager, user_id: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def scene_day7(manager: MemoryManager, user_id: str) -> None:
+async def scene_day7(manager: MemoryManager, user_id: str, *, live: bool = False) -> None:
     _banner("SCENE 2  ·  DAY 7  ·  Session B: fresh start, zero transcript")
 
     print(f"""
@@ -395,7 +433,18 @@ async def scene_day7(manager: MemoryManager, user_id: str) -> None:
     [x] Typed provenance  (source, author, confidence chain)
     [x] Fact-vs-assumption type labels  (Decision / Assumption / TODO)
     [x] Decision-rank boost over episodic content
+    [x] Temporal truth — "what changed?" / "which assumptions became invalid?"
 """)
+
+    # Write one fresh EPISODIC item for this session. In hermetic mode the
+    # Day-1 items are backdated 7 days (offset reset before this scene runs),
+    # so this item lands at current time and ranks above them within the
+    # EPISODIC tier — the recency-decay score difference is visible in the output.
+    await manager.record_write_proposals(
+        user_id=user_id,
+        session_id="session-day7-b",
+        proposals=[DAY7_FRESH_ITEM],
+    )
 
     for query_text, label in DAY7_QUERIES:
         _section(f"QUESTION: {label}")
@@ -447,8 +496,32 @@ async def scene_day7(manager: MemoryManager, user_id: str) -> None:
             print(_wrap(item.content, indent=6))
             print()
 
+    # The remaining two questions from the C1 five-question benchmark set.
+    # These require temporal truth tracking and are NOT-YET gated on issue #16.
+    for query_text, label in DAY7_NOT_YET_QUERIES:
+        _section(f"QUESTION: {label}  [NOT-YET]")
+        print(f'\n  "{query_text}"\n')
+        print(
+            "  [NOT-YET] Current-vs-historical comparison requires typed temporal\n"
+            "  records (is-valid-at / superseded-by fields) gated on issue #16.\n"
+            "  Today the substrate stores entries but cannot distinguish current\n"
+            "  state from historical state; retrieval returns all matching entries\n"
+            "  without temporal truth-tracking.\n"
+        )
+
     _section("END OF DAY-7 SESSION")
-    print("""
+
+    recency_context = (
+        "         Hermetic: Day-1 items backdated 7 days (score≈0.926);\n"
+        "         the session-start item written today (score=1.000) ranks\n"
+        "         higher within the EPISODIC tier — visible in OPEN WORK above."
+    ) if not live else (
+        "         Live: all items are written in the same run so ages show\n"
+        "         0m ago — the score differential develops after real elapsed\n"
+        "         days between sessions."
+    )
+
+    print(f"""
   Session B had ZERO prior transcript. Every item above came from
   MemoryManager.hydrate() operating on what Session A wrote to the
   persistent store one simulated week earlier.
@@ -456,10 +529,12 @@ async def scene_day7(manager: MemoryManager, user_id: str) -> None:
   This is the "second session is the magic" scene for C1 / E2.
 
   What the demo proves:
-    [ok] Cross-session continuity — no transcript required
-    [ok] user_id-scoped retrieval — no cross-user leakage
-    [ok] Trust-tier ordering — SEMANTIC decisions rank above episodic items
-    [ok] Recency decay — older items rank lower than recent ones
+    [ok] Cross-session continuity  — no transcript required
+    [ok] user_id-scoped retrieval  — no cross-user leakage
+    [ok] Trust-tier ordering       — SEMANTIC decisions rank above EPISODIC / PROCEDURAL
+    [ok] Recency decay             — within the EPISODIC tier the session-start
+         item (written today) ranks above Day-1 items (one week earlier).
+{recency_context}
     [ok] Lagrangian budget allocation — all tiers represented within budget
 
   What is NOT-YET (gated on issue #16):
@@ -467,6 +542,8 @@ async def scene_day7(manager: MemoryManager, user_id: str) -> None:
     [x] Provenance chain (source doc, author, session id surfaced to user)
     [x] Fact-vs-assumption distinction in the retrieved output
     [x] Decision-rank boost that elevates decisions above conversation
+    [x] Temporal truth  — "what changed?" and "which assumptions became invalid?"
+         require is-valid-at / superseded-by fields on typed records (#16)
 """)
 
 
@@ -498,13 +575,22 @@ async def run_demo(*, live: bool, user_id: str) -> None:
             sys.exit(1)
         print("  Mode: LIVE — real Qdrant + nomic-embed-text embeddings\n")
     else:
-        mem_store = _InMemoryStore()
+        # Backdate Day-1 items 7 days so age labels and recency-decay scores
+        # in Scene 2 are truthful ("7.0d ago", score≈0.926 vs 1.000 today).
+        mem_store = _InMemoryStore(created_at_offset=-7 * 86_400)
         _install_hermetic_doubles(mem_store)
-        print("  Mode: HERMETIC — in-memory store + fake embedder (no Qdrant needed)\n")
+        print("  Mode: HERMETIC — in-memory store + fake embedder (no Qdrant needed)")
+        print("  Day-1 items are backdated 7 days; recency decay is active and visible.\n")
 
     manager = MemoryManager()
     await scene_day1(manager, user_id)
-    await scene_day7(manager, user_id)
+
+    if not live:
+        # Reset to current time so the Day-7 session-start item writes at
+        # "now", creating a visible recency contrast with the Day-1 items.
+        mem_store.created_at_offset = 0.0
+
+    await scene_day7(manager, user_id, live=live)
 
 
 def main() -> None:

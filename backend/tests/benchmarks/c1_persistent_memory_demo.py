@@ -2,7 +2,7 @@
 C1 Persistent Cross-Session Memory — hermetic acceptance tests for the demo.
 
 Verifies that the Day-1 seed / Day-7 hydration cycle in
-``demos/persistent_memory_demo.py`` exercises the REAL memory primitives and
+``scripts/persistent_memory_demo.py`` exercises the REAL memory primitives and
 produces the correct cross-session retrieval behavior — all without Qdrant or a
 live embedding model.
 
@@ -52,8 +52,9 @@ from foundation import HydrationRequest, MemoryItem, MemoryStore, MemoryWritePro
 
 
 class _MemStore:
-    def __init__(self) -> None:
+    def __init__(self, created_at_offset: float = 0.0) -> None:
         self._data: dict[MemoryStore, list[dict]] = {t: [] for t in MemoryStore}
+        self.created_at_offset = created_at_offset  # seconds added to time.time() on upsert; negative = backdate
 
     def search(
         self, tier: MemoryStore, user_id: str, vector: list[float], limit: int = 8
@@ -80,9 +81,10 @@ class _MemStore:
         point_id: str | None = None,
     ) -> str | None:
         pid = point_id or str(uuid.uuid4())
+        created_at = time.time() + self.created_at_offset
         for existing in self._data[tier]:
             if existing.get("id") == pid:
-                existing.update(content=content, confidence=confidence, created_at=time.time())
+                existing.update(content=content, confidence=confidence, created_at=created_at)
                 return pid
         self._data[tier].append(
             {
@@ -91,7 +93,7 @@ class _MemStore:
                 "session_id": session_id,
                 "content": content,
                 "score": 1.0,
-                "created_at": time.time(),
+                "created_at": created_at,
                 "confidence": confidence,
                 "trust": trust,
             }
@@ -107,7 +109,7 @@ async def _fake_embed(texts: list[str]) -> list[list[float]] | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Synthetic project fixture (matches demos/persistent_memory_demo.py)
+# Synthetic project fixture (matches scripts/persistent_memory_demo.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _USER = "test-c1-meridian"
@@ -446,4 +448,72 @@ def test_write_proposals_below_confidence_floor_are_not_stored():
         ]
         assert not semantic_stored, (
             "confidence=0.3 proposal must be rejected by the write-policy floor (0.6)"
+        )
+
+
+def test_recency_decay_changes_rank_within_same_tier():
+    """Recency decay: an EPISODIC item written today ranks above one written 7 days
+    ago within the same trust tier.
+
+    The manager computes rank_score = raw_score * recency(created_at) where
+    recency uses a 30-day half-life with a 0.5 floor:
+      fresh item  → recency = 1.0   → rank_score = 1.000
+      7-day item  → recency ≈ 0.926 → rank_score ≈ 0.926
+
+    This test proves the decay function is live in the real hydration path.
+    """
+    from core.memory.manager import MemoryManager
+
+    mem_store = _MemStore()
+
+    OLD_PROPOSAL = MemoryWriteProposal(
+        store=MemoryStore.EPISODIC,
+        content="Old note: seeded seven days ago to demonstrate recency decay ranking.",
+        rationale="recency test — old item",
+        confidence=0.95,
+    )
+    NEW_PROPOSAL = MemoryWriteProposal(
+        store=MemoryStore.EPISODIC,
+        content="New note: seeded today to rank above the seven-day-old item.",
+        rationale="recency test — new item",
+        confidence=0.95,
+    )
+
+    with patch("core.memory.store.search", mem_store.search), \
+         patch("core.memory.store.upsert", mem_store.upsert), \
+         patch("core.memory.store.is_down", mem_store.is_down), \
+         patch("core.memory.embeddings.embed", _fake_embed):
+
+        manager = MemoryManager()
+
+        # Write the old item backdated 7 days
+        mem_store.created_at_offset = -7 * 86_400
+        asyncio.run(manager.record_write_proposals(_USER, "session-old", [OLD_PROPOSAL]))
+
+        # Write the new item at current time
+        mem_store.created_at_offset = 0.0
+        asyncio.run(manager.record_write_proposals(_USER, "session-new", [NEW_PROPOSAL]))
+
+        pkg = _hydrate(manager, _USER, "what notes and open items are there?")
+
+        episodic_items = [i for i in pkg.items if i.store is MemoryStore.EPISODIC]
+        assert len(episodic_items) == 2, (
+            f"expected 2 EPISODIC items for recency comparison, got {len(episodic_items)}"
+        )
+
+        # Sort by created_at to identify old vs new
+        by_age = sorted(episodic_items, key=lambda i: i.created_at)
+        older_item, newer_item = by_age[0], by_age[-1]
+
+        assert newer_item.score > older_item.score, (
+            f"recency decay must make the newer item rank higher: "
+            f"newer={newer_item.score:.4f} (age≈0s), "
+            f"older={older_item.score:.4f} (age≈7d)"
+        )
+        # Fresh item: recency=1.0, rank_score=1.000; 7-day item: recency≈0.926
+        assert newer_item.score > 0.99, (
+            f"fresh item rank_score must be close to 1.0, got {newer_item.score:.4f}"
+        )
+        assert older_item.score < 0.99, (
+            f"7-day-old item rank_score must be < 1.0 due to decay, got {older_item.score:.4f}"
         )
