@@ -292,13 +292,15 @@ NOT_YET_CAPABILITIES: list[str] = [
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Hermetic helpers — deterministic BOW hash embedding + cosine similarity
+# Hermetic helpers — deterministic BOW hash embedding + query-term recall
 #
 # The real nomic-embed-text model is replaced with a bag-of-words hashed
 # vector so the hermetic mode runs without any ML infrastructure. Each text
-# maps to a 768-dim vector where hash(token) % 768 accumulates token counts,
-# then L2-normalised. Cosine similarity between query and stored vectors is
-# proportional to token overlap — enough to prove per-question ranking:
+# maps to a 65536-dim vector where hash(token) % 65536 accumulates token
+# counts, then L2-normalised. Similarity is computed as the fraction of the
+# query's content tokens that appear in the stored item (query-term recall),
+# NOT cosine — document length and magnitude are ignored entirely. This is
+# sufficient to prove per-question ranking:
 #   "why selected?"    → DECISION record ranks first (shares "selected", "decision")
 #   "what arguments?"  → ARGUMENTS FOR B ranks first (most "graph" occurrences)
 #   "what risks?"      → RISKS record ranks first (shares "risks", "r1", "r2"…)
@@ -665,8 +667,7 @@ async def _run(live: bool) -> None:
             sys.exit(1)
         print(f"  Mode : LIVE  (real Qdrant + nomic-embed-text)\n")
         # Clean up any prior run for this demo user so the demo is repeatable
-        from core.memory import store as _store_mod
-        _store_mod.delete_user(user_id)
+        await manager.delete_user(user_id)
     else:
         print(f"  Mode : HERMETIC  (in-memory doubles, no Qdrant needed)\n")
         mem_store = _InMemoryStore(created_at_offset=-_THREE_WEEKS_S)
@@ -681,8 +682,7 @@ async def _run(live: bool) -> None:
 
     if live:
         # Leave the store clean after a live run.
-        from core.memory import store as _store_mod  # noqa: F811
-        _store_mod.delete_user(user_id)
+        await manager.delete_user(user_id)
         print(f"\n  [cleaned up {user_id} from live store]")
 
     _banner("END  ·  C4 Decision Memory Demo")

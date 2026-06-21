@@ -54,7 +54,8 @@ from foundation import (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Deterministic BOW hash embedding + cosine similarity
+# Deterministic BOW hash embedding + query-term recall
+# (similarity = fraction of query content tokens present in the stored item)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
