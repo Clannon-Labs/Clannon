@@ -21,12 +21,15 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from check_invariants import (  # noqa: E402
     BACKEND_ROOT,
     REPO_ROOT,
+    _is_under,
+    _iter_py_files,
     check_foundation_deep_import,
     check_foundation_dep_direction,
     check_memory_internals_confined,
     check_network_tools_ssrf_gate,
     check_no_bare_set,
     check_pydantic_ai_confined,
+    main,
 )
 
 
@@ -103,7 +106,8 @@ class TestMemoryInternalsConfined:
         assert any("api/runs.py" in str(h[0]) for h in result.hits)
 
     def test_fail_on_embeddings_import(self, tmp_path):
-        f = _write(tmp_path, "core/warmup.py",
+        # Use a neutral path that is not in the allowlist.
+        f = _write(tmp_path, "api/some_module.py",
                    "from core.memory import embeddings\n")
         result = check_memory_internals_confined([f])
         assert result.status == "FAIL"
@@ -317,3 +321,106 @@ class TestFoundationDeepImport:
         # The check excludes foundation/ — pass empty list to test this.
         result = check_foundation_deep_import([])
         assert result.status == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# Allowlist — warmup.py and test files must not FAIL
+# ---------------------------------------------------------------------------
+
+class TestMemoryInternalsAllowlist:
+    """
+    Verify that the blessed baseline hits are correctly classified as waived
+    (not FAIL) so the script exits 0 on the clean tree.
+    """
+
+    def test_allowlisted_warmup_does_not_fail(self):
+        """core/warmup.py is allowlisted; it must produce PASS with waived hits."""
+        warmup = BACKEND_ROOT / "core" / "warmup.py"
+        if not warmup.exists():
+            pytest.skip("warmup.py not found at expected path")
+        result = check_memory_internals_confined([warmup])
+        assert result.status == "PASS", (
+            f"warmup.py is allowlisted but produced FAIL: {result.hits}"
+        )
+        assert result.waived, (
+            "warmup.py imports should appear in result.waived, not silently dropped"
+        )
+        assert result.hits == [], (
+            "No fail hits expected when only the allowlisted warmup.py is scanned"
+        )
+
+    def test_memory_test_files_excluded_from_check(self):
+        """backend/tests/ is excluded from check #2 — test internals imports are by-design."""
+        test_files = [
+            BACKEND_ROOT / "tests" / "memory_isolation.py",
+            BACKEND_ROOT / "tests" / "memory_wiki_and_learn.py",
+        ]
+        existing = [f for f in test_files if f.exists()]
+        if not existing:
+            pytest.skip("memory test files not found")
+        result = check_memory_internals_confined(existing)
+        assert result.status == "PASS", (
+            f"Test files in backend/tests/ should be excluded from check #2 but got FAIL: {result.hits}"
+        )
+        assert result.hits == [], "No fail hits expected for excluded test files"
+
+    def test_new_violation_still_fails(self, tmp_path):
+        """A non-allowlisted file with an internal import must still FAIL."""
+        f = _write(tmp_path, "delivery/cli.py",
+                   "from core.memory import store\n")
+        result = check_memory_internals_confined([f])
+        assert result.status == "FAIL", (
+            "A real violation outside the allowlist must still FAIL"
+        )
+        assert len(result.hits) == 1
+
+
+# ---------------------------------------------------------------------------
+# Baseline guard — the script must exit 0 on the clean tree
+# ---------------------------------------------------------------------------
+
+class TestBaselineGuard:
+    """
+    Run every check against the real BACKEND_ROOT tree and assert zero FAIL
+    statuses.  This is the test that would have caught the round-1 defect and
+    prevents the green baseline from silently regressing as the codebase grows.
+    """
+
+    def _build_file_lists(self):
+        all_files = _iter_py_files(BACKEND_ROOT)
+        foundation_files = [f for f in all_files if _is_under(f, BACKEND_ROOT / "foundation")]
+        network_files = [
+            f for f in all_files
+            if _is_under(f, BACKEND_ROOT / "tools") or _is_under(f, BACKEND_ROOT / "experts")
+        ]
+        return all_files, foundation_files, network_files
+
+    def test_no_fail_on_clean_tree(self):
+        """All checks must pass (PASS or WARN) against the current HEAD tree."""
+        all_files, foundation_files, network_files = self._build_file_lists()
+        results = [
+            check_pydantic_ai_confined(all_files),
+            check_memory_internals_confined(all_files),
+            check_foundation_dep_direction(foundation_files),
+            check_no_bare_set(all_files),
+            check_network_tools_ssrf_gate(network_files),
+            check_foundation_deep_import(all_files),
+        ]
+        fail_results = [r for r in results if r.status == "FAIL"]
+        assert fail_results == [], (
+            "Invariant script exits 1 on clean tree (baseline guard). FAILing checks: "
+            + "; ".join(
+                f"{r.label}: {[str(h[0]) + ':' + str(h[1]) for h in r.hits]}"
+                for r in fail_results
+            )
+        )
+
+    def test_main_exits_zero_on_clean_tree(self):
+        """main() must return 0 when run against the real backend with no arguments."""
+        import sys
+        from unittest.mock import patch
+        with patch.object(sys, "argv", ["check_invariants.py"]):
+            exit_code = main()
+        assert exit_code == 0, (
+            f"main() returned {exit_code} on clean tree; should return 0"
+        )
