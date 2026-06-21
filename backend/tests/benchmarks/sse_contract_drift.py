@@ -14,13 +14,19 @@ WHAT THIS TEST DOES
   1. Pins the FRONTEND contract into a committed, machine-checkable fixture
      (`fixtures/sse_contract.json`) and asserts the fixture still matches the
      frontend source (so the fixture cannot rot silently as the frontend evolves).
-  2. Extracts the BACKEND's actually-emitted events by RUNNING the real RunState
-     mappers (not by trusting docs), plus a source-scan for the driver-only
-     `message_done` close event, and introspecting `DecisionLogKind` / the pipeline
-     stage statuses.
+  2. Extracts the BACKEND's emitted events from the real code, two ways that must
+     agree: the authoritative event-NAME set comes from source-scanning EVERY emit
+     site (`run_state.py` + `run_driver.py`), and the payload SHAPES come from RUNNING
+     the real RunState mappers. A scan-vs-run reconciliation fails loudly if a new
+     emit site is ever added to `run_state.py` without being exercised by this harness
+     -- otherwise that new event type would silently escape every drift check below
+     (the exact C6 failure mode: the backend emits an event the frontend drops). Run
+     statuses / decision kinds are introspected from `ACTIVE_STAGES` / `DecisionLogKind`.
   3. Classifies every divergence as MATERIAL (a real break) or INFORMATIONAL (a
      forward-compatible gap: the frontend declares an event the backend has not
      wired yet, which is safe because the frontend ignores events it does not know).
+  4. Cross-checks `api/README.md`'s declared SSE frame list against the code so the
+     documented backend contract cannot drift from what the backend actually emits.
 
 ACCEPTANCE / DRIFT POLICY
   * Aligned contract -> the tests PASS.
@@ -59,6 +65,7 @@ _TYPES_TS = _FRONTEND_API / "types.ts"
 _MOCK_TS = _FRONTEND_API / "mock.ts"
 _RUN_STATE_PY = _BACKEND_ROOT / "api" / "run_state.py"
 _RUN_DRIVER_PY = _BACKEND_ROOT / "api" / "run_driver.py"
+_README_MD = _BACKEND_ROOT / "api" / "README.md"
 
 # A stable banner so the unattended loop / CI can recognise this escalation in the
 # test output and open the needs-reviewer issue from it.
@@ -220,9 +227,24 @@ def _backend_contract() -> dict:
     asyncio.run(r.stream_report("one two three four five six seven eight nine ten"))
     _harvest(r)
 
-    # driver-only events: the conversational `message_delta` (final-answer path) and
-    # the `message_done` close are plain run.emit literals with no isolated mapper.
-    for etype, keys in _emit_literals(_RUN_DRIVER_PY).items():
+    # event types the harness actually OBSERVED by running run_state's mappers above;
+    # their payload shapes are therefore real, not guessed. Captured BEFORE the
+    # source-scan merge so the scan-vs-run reconciliation can compare the two.
+    run_observed = set(events)
+
+    # Authoritative event-NAME universe: source-scan EVERY emit site. The set of event
+    # names the backend can put on the wire must NOT depend on which mappers this
+    # harness happens to drive -- otherwise a newly added mapper emitting a new event
+    # type would be invisible here, and material-drift check #1 ("the backend emits an
+    # event the frontend silently drops") could never fire for it (the C6 failure mode).
+    # The scan is authoritative for NAMES; the run above stays authoritative for payload
+    # SHAPES. Where a name is both scanned and run-observed the shapes agree (asserted by
+    # test_run_state_emit_sites_are_all_exercised); run_driver's two events
+    # (`message_delta` on the final-answer path, the `message_done` close) have no
+    # isolated mapper, so the scan is the only way to see them.
+    state_scan = _emit_literals(_RUN_STATE_PY)
+    driver_scan = _emit_literals(_RUN_DRIVER_PY)
+    for etype, keys in {**state_scan, **driver_scan}.items():
         events.setdefault(etype, set()).update(keys)
 
     # backend run-status vocabulary: pipeline stage statuses + terminal + initial
@@ -237,6 +259,11 @@ def _backend_contract() -> dict:
         # the full backend kind enum, for the escalation note (includes "message",
         # which is translated to a message_delta and never reaches a `log` entry)
         "all_decision_kinds": sorted(get_args(DecisionLogKind)),
+        # scan-vs-run reconciliation inputs (C6 safety net): every event the run_state
+        # SOURCE emits must be exercised by a mapper this harness drives. run_driver's
+        # events are scan-only (no isolated mapper) and so are excluded from this check.
+        "run_state_scanned_events": sorted(state_scan),
+        "run_observed_events": sorted(run_observed),
     }
 
 
@@ -480,6 +507,69 @@ def test_backend_enums_are_known_to_the_frontend():
     assert "message" not in be["decision_kinds"], (
         "backend leaked the internal `message` kind into a log entry; it must become "
         "a message_delta event, not a decision-log entry."
+    )
+
+
+def test_run_state_emit_sites_are_all_exercised():
+    """C6 safety net: backend event DISCOVERY must not be execution-bound. Every event
+    type emitted from the `api/run_state.py` SOURCE must also be produced by RUNNING a
+    mapper in `_backend_contract`. If a future change adds a new emit site (a new mapper
+    emitting a new event type) without wiring a call into the harness, the run-based
+    shape extraction -- and the material-drift check that catches "the backend emits an
+    event the frontend silently drops" -- would never see it, so the protection would be
+    illusory. The source scan is the authoritative event-name set; this asserts the run
+    harness actually covers all of it, converting that protection from illusory to real."""
+    be = _backend_contract()
+    scanned = set(be["run_state_scanned_events"])
+    observed = set(be["run_observed_events"])
+    unexercised = scanned - observed
+    assert not unexercised, (
+        f"new backend emit site(s) {sorted(unexercised)} in api/run_state.py are not "
+        "exercised by the contract harness -- wire a mapper call into _backend_contract() "
+        "so the new event's payload shape is checked against the frontend contract (C6)."
+    )
+    # The converse cannot happen unless the emit-literal scan silently missed a literal
+    # the mappers actually emit (e.g. a multi-line literal the regex skips). Guard it so
+    # the scan can never quietly fall behind the running code.
+    phantom = observed - scanned
+    assert not phantom, (
+        f"harness observed event(s) {sorted(phantom)} not found by the run_state source "
+        "scan -- the emit-literal scan is out of sync with the mappers (fix _emit_literals)."
+    )
+
+
+def _readme_sse_frames() -> set[str]:
+    """The SSE frame names declared in api/README.md's `/runs/:id/stream` row."""
+    src = _README_MD.read_text(encoding="utf-8")
+    row = next((ln for ln in src.splitlines() if "/runs/:id/stream" in ln), "")
+    m = re.search(r"RunEvent`:\s*(.*?)\.\s", row)
+    assert m, "could not locate the SSE frame enumeration in api/README.md"
+    return set(re.findall(r"`([a-z_]+)`", m.group(1)))
+
+
+def test_readme_frame_list_matches_the_code():
+    """The fixture cites api/README.md as the backend's DECLARED contract; assert code
+    and doc cannot drift apart unnoticed. Every event the backend actually emits must be
+    documented, and every documented frame must be real -- either emitted, or at least a
+    frontend-declared forward-compatible event. This keeps `usage` (declared by the
+    frontend, not yet streamed) honest while catching an invented frame or an
+    emitted-but-undocumented event."""
+    if not _README_MD.exists():
+        pytest.skip("api/README.md not present in this checkout")
+    fx = _load_fixture()
+    be = _backend_contract()
+    frames = _readme_sse_frames()
+    emitted = set(be["events"])
+    undocumented = emitted - frames
+    assert not undocumented, (
+        f"backend emits event(s) {sorted(undocumented)} not documented in api/README.md's "
+        "SSE frame list -- update the README so the declared contract matches the code."
+    )
+    declared = set(fx["stream_events"])
+    invented = frames - emitted - declared
+    assert not invented, (
+        f"api/README.md declares SSE frame(s) {sorted(invented)} the backend does not emit "
+        "and the frontend contract does not declare -- the doc is out of date."
     )
 
 
