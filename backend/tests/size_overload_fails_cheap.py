@@ -6,14 +6,15 @@ Two size caps from foundation/vocab/constants.py:
 1. MAX_INPUT_SIZE_BYTES (50 MB, INTAKE)
    Any payload exceeding this cap is blocked at intake — the first and cheapest
    pipeline stage — before any sanitizer, verifier, normalizer, or orchestrator
-   runs. Tripwires on verify_with_llm and run_loop prove zero model calls occur.
+   runs. The end-to-end chain test (test_oversize_rejected_before_any_paid_stage_
+   end_to_end) proves this with live tripwires on verify_with_llm and run_loop.
 
 2. MAX_TEXT_INPUT_CHARS (100 k chars, NORMALIZER)
    A text payload that passes the byte cap but exceeds the char limit is truncated
    in the code-only normalizer before the verifier or orchestrator ever see it.
    No model call is needed to enforce this cap; the normalizer test confirms it.
 
-Hermetic: no ClamAV, no Qdrant, zero API spend.
+Hermetic: no Qdrant, zero API spend.
 Serves: Critical Benchmarks 5 and 6 (security resilience + architectural robustness).
 """
 
@@ -24,6 +25,8 @@ import pytest
 from foundation import Flow, BlockReason, Origin, constants
 from core.intake import intake, rate_limiter
 from core.normalizer import builders
+from core import normalizer, verifier, orchestrator
+from security.sanitizers import runner as sanitizer_runner
 import core.verifier.verifier as verifier_mod
 import core.orchestrator.orchestrator as orch_mod
 
@@ -66,7 +69,11 @@ def _tripwire_model_calls(monkeypatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters():
-    """Keep tests independent of the shared in-process limiter state."""
+    """Keep tests independent of the shared in-process limiter state.
+
+    Reaches into _requests on the module-level singletons intentionally: there is
+    no public reset API and the limiters are shared across the process lifetime.
+    """
     rate_limiter._identity_rate_limiter._requests.clear()
     rate_limiter._global_rate_limiter._requests.clear()
     yield
@@ -82,36 +89,62 @@ class TestMaxInputSizeBytes:
     intake stage before any sanitizer, verifier, or orchestrator stage runs.
     """
 
-    def test_binary_oversize_blocked_before_any_model_call(self, monkeypatch):
+    def test_binary_oversize_blocked_at_intake(self):
         """
         Binary payload one byte over the cap is rejected at intake.
-        Tripwires on verify_with_llm and run_loop prove no model call occurs.
-        """
-        _tripwire_model_calls(monkeypatch)
 
-        # One byte over. bytes is used so _input_size_bytes does len() only —
-        # no second allocation for UTF-8 encoding as there would be for a str.
+        Uses bytes so _input_size_bytes does len() only — no second allocation
+        for UTF-8 encoding as there would be for a str.
+        """
         payload = b"A" * (constants.MAX_INPUT_SIZE_BYTES + 1)
 
-        out = _run_intake(payload, session="binary-oversize-tripwire")
+        out = _run_intake(payload, session="binary-oversize")
 
-        # If either tripwire fired it would have raised AssertionError above;
-        # reaching these assertions proves the guard fired before any LLM stage.
         assert out.status.value == "blocked"
         assert out.reason == BlockReason.INPUT_TOO_LARGE.value
         assert out.meta.origin == Origin.INTAKE
 
-    def test_text_str_encoding_also_blocked(self, monkeypatch):
+    def test_text_str_encoding_also_blocked_at_intake(self):
         """
         A str payload whose UTF-8 byte length exceeds the cap is also blocked.
         Covers the encoding path: intake measures len(str.encode('utf-8')).
         """
-        _tripwire_model_calls(monkeypatch)
-
         # ASCII: 1 char = 1 byte, so byte length == char count here.
         payload = "X" * (constants.MAX_INPUT_SIZE_BYTES + 1)
 
-        out = _run_intake(payload, session="str-oversize-tripwire")
+        out = _run_intake(payload, session="str-oversize")
+
+        assert out.status.value == "blocked"
+        assert out.reason == BlockReason.INPUT_TOO_LARGE.value
+        assert out.meta.origin == Origin.INTAKE
+
+    def test_oversize_rejected_before_any_paid_stage_end_to_end(self, monkeypatch):
+        """
+        Drive the real stage chain with live tripwires to prove the size guard
+        short-circuits all downstream paid stages.
+
+        Tripwires on verify_with_llm and run_loop become real regression guards
+        here: if intake ever stops blocking an oversized input, or Flow.then()'s
+        Railway short-circuit breaks, one of these sentinels fires and the test
+        fails. The sanitizer stage is included in the chain but is never actually
+        called — Flow.then() checks should_stop BEFORE invoking the next stage
+        (foundation/transport/flow.py:506-508), so ClamAV is never contacted and
+        the test remains hermetic.
+        """
+        _tripwire_model_calls(monkeypatch)
+
+        payload = b"A" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+
+        out = asyncio.run(Flow.chain(
+            Flow.new(payload, "e2e-oversize"),
+            [
+                intake.process,
+                sanitizer_runner.run,
+                normalizer.run,
+                verifier.run,
+                orchestrator.run,
+            ],
+        ))
 
         assert out.status.value == "blocked"
         assert out.reason == BlockReason.INPUT_TOO_LARGE.value
