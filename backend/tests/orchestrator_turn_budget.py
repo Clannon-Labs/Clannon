@@ -26,7 +26,7 @@ from pydantic_ai import ModelResponse
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
-from foundation import NormalizedInput, VrakshaContext, constants
+from foundation import VrakshaContext, constants
 from registry.capabilities import discover
 from registry.capabilities.handler import Capabilities
 from registry.capabilities.schemas import ExpertOutput
@@ -42,12 +42,6 @@ def _caps():
     return Capabilities.open(VrakshaContext.new("s"))
 
 
-def _norm():
-    return NormalizedInput(
-        modality="text", content_type="text/plain", content="loop forever"
-    )
-
-
 # ---------------------------------------------------------------------------
 # A. Orchestrator: loop capped at ORCHESTRATOR_MAX_TURNS
 # ---------------------------------------------------------------------------
@@ -57,7 +51,12 @@ def test_orchestrator_loop_is_bounded_at_cap():
     must be forced to a final answer once the orchestrator hits ORCHESTRATOR_MAX_TURNS
     -- it must NOT loop forever and consume unbounded paid rounds.
 
-    Prints: turn-count + call-count vs cap, flags an unbounded loop as a real gap."""
+    Flags an unbounded loop as a REAL gap in two ways:
+      - If the cap is enforced but set too high: assertion on call_count fails fast.
+      - If the cap is fully disabled: asyncio.wait_for timeout raises TimeoutError,
+        converting a catastrophic pytest hang into a clean failure.
+
+    Prints: turn-count + call-count vs cap."""
     call_log = []
 
     def always_loop(messages, info):
@@ -74,13 +73,17 @@ def test_orchestrator_loop_is_bounded_at_cap():
             args={"answer_text": "forced by turn cap", "confidence": 0.3})])
 
     caps = _caps()
-    ans = asyncio.run(caps.run_turn(
-        system_prompt="orchestrate",
-        user_prompt="loop forever",
-        output_type=OrchestratorAnswer,
-        model=FunctionModel(always_loop),
-        # NO max_turns override: uses the real ORCHESTRATOR_MAX_TURNS from constants
-    ))
+
+    async def _run():
+        return await caps.run_turn(
+            system_prompt="orchestrate",
+            user_prompt="loop forever",
+            output_type=OrchestratorAnswer,
+            model=FunctionModel(always_loop),
+            # NO max_turns override: uses the real ORCHESTRATOR_MAX_TURNS from constants
+        )
+
+    ans = asyncio.run(asyncio.wait_for(_run(), timeout=30))
 
     cap = constants.ORCHESTRATOR_MAX_TURNS
     call_count = len(call_log)
@@ -112,7 +115,12 @@ def test_expert_loop_is_bounded_at_cap():
     Exercises the think() path in registry.capabilities.handler.support directly,
     with the model replaced by a FunctionModel spy.
 
-    Prints: turn-count + call-count vs cap, flags an unbounded loop as a real gap."""
+    Flags an unbounded loop as a REAL gap in two ways:
+      - If the cap is enforced but set too high: assertion on call_count fails fast.
+      - If the cap is fully disabled: asyncio.wait_for timeout raises TimeoutError,
+        converting a catastrophic pytest hang into a clean failure.
+
+    Prints: turn-count + call-count vs cap."""
     from registry.capabilities.handler.support import ExpertEnv, SkillBook, think
 
     call_log = []
@@ -152,7 +160,9 @@ def test_expert_loop_is_bounded_at_cap():
             "core.llm.framework.model_for_layer",
             return_value=FunctionModel(always_load),
         ):
-            output = asyncio.run(think(env, "loop inside an expert forever"))
+            output = asyncio.run(
+                asyncio.wait_for(think(env, "loop inside an expert forever"), timeout=30)
+            )
 
     cap = constants.EXPERT_MAX_TURNS
     call_count = len(call_log)
