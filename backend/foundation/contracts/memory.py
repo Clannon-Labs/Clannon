@@ -29,10 +29,18 @@ class MemoryItem:
     """One retrieved memory, ready to hydrate into orchestrator context."""
     store: MemoryStore
     content: str
-    score: float = 0.0          # per-query relevance
+    score: float = 0.0          # per-query relevance (rank_score = cosine × recency)
     trust: int = 0              # higher = more authoritative (wiki > inferred)
-    created_at: float = 0.0     # unix ts the memory was written — provenance
-                                # ("learned when"); 0 = unknown / text tier (wiki)
+    created_at: float = 0.0     # unix ts the memory was written; 0 = unknown (wiki)
+    # Provenance fields — surfaced from the store payload (additive read-path only).
+    # All fields below are already written by store.upsert; they are now propagated
+    # through the retrieval path so consumers can explain "why / where" per item.
+    rationale: str = ""         # why this was stored (write-time reason)
+    confidence: float = 0.0     # write-time confidence (0–1)
+    session_id: str = ""        # originating session; "" for wiki / unknown
+    trace_id: str = ""          # originating trace; "" when not plumbed at write time
+    # SOURCE-DOCUMENT ATTRIBUTION is NOT-YET: no source-document field exists in
+    # the current store payload. Gated on issue #16 (typed-record schema).
 
 
 @dataclass(frozen=True, slots=True)
