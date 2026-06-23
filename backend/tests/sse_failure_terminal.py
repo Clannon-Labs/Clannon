@@ -5,9 +5,19 @@ Pins the delivery contract that a run FAILING mid-stream still closes its SSE
 stream cleanly and never hangs a connected client. Distinct from tests/run_cancel.py
 (which covers cooperative CANCELLATION); this covers the EXCEPTION fault path.
 
-Hermetic: no live server, no pipeline, no paid keys. A test-double executor mirrors
-the try/except/finally guard in api/run_driver.execute() exactly, injecting a fault
-via a test-double stage (RuntimeError, no LLM or store involved).
+Hermetic: no live server, no real pipeline, no paid keys. The REAL
+api.run_driver.execute() is driven with the pipeline call replaced by a test-double
+that raises RuntimeError, so execute()'s own try/except/finally guard is under
+test. Only the I/O calls execute() makes before and after the pipeline call are
+stubbed:
+  - core.pipeline.run (== run_driver.pipeline.run)
+                         -> raises RuntimeError("injected pipeline fault")
+  - STORE.session_turns  -> returns []   (_gather_session_files; no prior turns)
+  - STORE.persist        -> no-op        (finally; no SQLite in hermetic env)
+  - auth.model_prefs_get -> returns {}   (build_model_overrides; no DB)
+
+auth.fetch_wiki is NOT needed: the fake pipeline.run never invokes the _prepare
+callback, so that branch is never reached.
 
 Cases
 -----
@@ -21,6 +31,7 @@ and the process exits 1. The adapter is NOT modified; the gap is reported.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import pathlib
 import sys
@@ -32,38 +43,43 @@ from collections.abc import Awaitable, Callable
 if __name__ == "__main__":
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-from api.run_state import RunState, TERMINAL_STATUSES
+from api.run_state import RunState, TERMINAL_STATUSES  # noqa: F401 — imported for callers
 from api import sse
+import api.run_driver as run_driver
+import core.pipeline as _pipeline_mod
+
 
 # ---------------------------------------------------------------------------
-# test-double executor
+# hermetic patch context
 # ---------------------------------------------------------------------------
 
 
-async def _fault_execute(run: RunState) -> None:
+async def _injected_pipeline_fault(*args, **kwargs) -> None:
+    raise RuntimeError("injected pipeline fault")
+
+
+@contextlib.contextmanager
+def _hermetic_patches():
     """
-    Mirrors api/run_driver.execute()'s try/except/finally structure exactly.
-    Injects a RuntimeError to exercise the exception path without any real
-    pipeline, LLM, or store.
+    Patch the I/O surfaces execute() touches so the test stays hermetic, and
+    replace pipeline.run with a fault-injecting stub. The real execute() body
+    (try/except/finally) is what's under test.
     """
-    run.on_status("orchestrating")
+    orig_pipeline_run = run_driver.pipeline.run
+    orig_session_turns = run_driver.STORE.session_turns
+    orig_persist = run_driver.STORE.persist
+    orig_model_prefs_get = run_driver.auth.model_prefs_get
     try:
-        # test-double stage: raises unconditionally to simulate a pipeline fault
-        raise RuntimeError("injected pipeline fault — test double")
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        run.on_log_entry(
-            type("E", (), {
-                "kind": "error",
-                "message": f"pipeline error: {exc}",
-                "detail": {},
-            })()
-        )
-        run.on_status("failed")
+        run_driver.pipeline.run = _injected_pipeline_fault
+        run_driver.STORE.session_turns = lambda *a, **kw: []
+        run_driver.STORE.persist = lambda *a, **kw: None
+        run_driver.auth.model_prefs_get = lambda *a, **kw: {}
+        yield
     finally:
-        run.emit({"type": "message_done"})
-        run.finish()
+        run_driver.pipeline.run = orig_pipeline_run
+        run_driver.STORE.session_turns = orig_session_turns
+        run_driver.STORE.persist = orig_persist
+        run_driver.auth.model_prefs_get = orig_model_prefs_get
 
 
 def _fresh_run() -> RunState:
@@ -103,9 +119,11 @@ def _has_message_done(frames: list[str]) -> bool:
 
 async def _case_subscriber_first() -> list[str]:
     """
-    Client subscribes BEFORE the run starts. When the executor raises the stream
-    must deliver the terminal failed-status event and message_done, then close via
-    the None sentinel from run.finish().
+    Client subscribes BEFORE the run starts. When execute()'s pipeline call raises,
+    the real except/finally guard must deliver the terminal failed-status event and
+    message_done, then close via the None sentinel from run.finish(). A regression
+    where message_done moves out of finally or an early return skips run.finish()
+    would make this case hang past the wait_for timeout.
     """
     run = _fresh_run()
     frames: list[str] = []
@@ -114,26 +132,27 @@ async def _case_subscriber_first() -> list[str]:
         async for frame in sse.sse_stream(run):
             frames.append(frame)
 
-    consumer = asyncio.create_task(consume())
-    # yield so the consumer coroutine runs to its first queue.get() suspension,
-    # registering its queue in run.subscribers before any events are emitted
-    await asyncio.sleep(0)
+    with _hermetic_patches():
+        consumer = asyncio.create_task(consume())
+        # yield so consume() runs to its first queue.get() suspension, registering
+        # the subscriber queue before execute() emits any events
+        await asyncio.sleep(0)
+        await run_driver.execute(run)
 
-    await _fault_execute(run)
-    await consumer   # must complete, not hang
+    await consumer  # must complete, not hang; proves the None sentinel was sent
     return frames
 
 
 async def _case_late_subscriber() -> list[str]:
     """
     Client connects AFTER the run has already failed. The SSE replay path must
-    serve the buffered terminal events then short-circuit on TERMINAL_STATUSES
-    (sse.py line 31) without hanging on queue.get().
+    serve the buffered terminal events (written by the real execute() finally) then
+    short-circuit on TERMINAL_STATUSES (sse.py:31) without hanging on queue.get().
     """
     run = _fresh_run()
 
-    # execute first; all events buffered, run.status == "failed"
-    await _fault_execute(run)
+    with _hermetic_patches():
+        await run_driver.execute(run)  # all events buffered into run.events
 
     frames: list[str] = []
     async for frame in sse.sse_stream(run):
