@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from urllib.parse import urlparse
 
 from foundation import Flow, InputFile
 
@@ -35,6 +36,46 @@ from observability import DecisionLogSink
 from . import auth, config
 from .run_state import RunState, _now, _process_summary
 from .run_store import STORE, INPUT_NS
+
+
+def _collect_sources(ctx) -> list[dict]:
+    """Collect de-duplicated grounded-search source URLs from all tool call records
+    (orchestrator direct calls + every expert's sub-tool calls), mapped to the Source
+    shape the frontend expects: {id, title, url, domain}. Only records that carry a
+    `sources` list in their result are considered — this is the field web_search returns.
+    Never raises: a malformed URL or unexpected result shape is skipped silently."""
+    seen: set[str] = set()
+    sources: list[dict] = []
+    all_records = list(ctx.tool_calls)
+    for expert in ctx.expert_calls:
+        all_records.extend(expert.sub_tool_calls)
+    for record in all_records:
+        if not record.success or not isinstance(record.result, dict):
+            continue
+        url_list = record.result.get("sources")
+        if not isinstance(url_list, list):
+            continue
+        for url in url_list:
+            if not isinstance(url, str) or not url or url in seen:
+                continue
+            seen.add(url)
+            try:
+                parsed = urlparse(url)
+                netloc = parsed.netloc or ""
+                domain = netloc[4:] if netloc.startswith("www.") else netloc
+                path = parsed.path.rstrip("/")
+                slug = path.split("/")[-1].replace("-", " ").replace("_", " ").strip() if path else ""
+                title = f"{domain} — {slug}" if slug else domain
+            except Exception:  # noqa: BLE001
+                domain = ""
+                title = url
+            sources.append({
+                "id": f"src_{len(sources) + 1}",
+                "title": title or url,
+                "url": url,
+                "domain": domain,
+            })
+    return sources
 
 
 def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
@@ -349,7 +390,13 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                     for finding in ctx.expert_findings
                     for art in (finding.metadata or {}).get("artifacts", [])
                 ]
+                # collect grounded-search source URLs from all tool call records
+                # (orchestrator direct + expert sub-calls), de-dup, and surface them
+                # as the {type:"sources"} SSE frame before the report text streams.
+                _srcs = _collect_sources(ctx)
+                run.sources = _srcs
                 run.on_status("delivered")
+                run.emit({"type": "sources", "sources": _srcs})
                 await run.stream_report(str(text))
 
     except asyncio.CancelledError:

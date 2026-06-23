@@ -84,6 +84,10 @@ class RunState:
     # delivered output artifacts (ArtifactRef dicts) — files an expert produced
     # and published, captured out of its workspace to durable storage
     artifacts: list[dict] = field(default_factory=list)
+    # grounded-search source URLs collected from tool call results, mapped to the
+    # {id, title, url, domain} Source shape the frontend expects. Populated at delivery
+    # by run_driver._collect_sources; empty until the run completes.
+    sources: list[dict] = field(default_factory=list)
     # uploaded input files admitted for this run (metadata only: name/modality/size;
     # the bytes are passed to execute() and seeded into the expert workspace, never stored here)
     inputs: list[dict] = field(default_factory=list)
@@ -221,7 +225,7 @@ class RunState:
             "experts": list(self.experts.values()),
             "message": self.message,   # the conversational chat bubble (separate from report)
             "report": self.report,
-            "sources": [],  # structured sources arrive with the citation expert
+            "sources": self.sources,
             "artifacts": self.artifacts,
             "inputs": self.inputs,
             "feedbackRating": self.feedback_rating,
