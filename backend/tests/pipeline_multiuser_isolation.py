@@ -9,9 +9,17 @@ Asserts:
   1. No cross-user bleed: each user's hydrated memory, decision-log entries,
      final report, and per-run ctx never contain the other user's fingerprinted data.
   2. Memory reads are scoped to each run's own user_id (the store double is keyed
-     by the user_id field of the HydrationRequest).
+     by the user_id field of the HydrationRequest, mirroring the real Qdrant filter).
   3. An empty/missing user_id run fails closed: the run completes with empty
      hydration_items and never borrows context from another user's memory.
+
+The LLM double is wired at the Capabilities.run_turn seam so the REAL run_loop
+executes, including _hydrate() (which populates ctx.hydration_items from the
+prefetched future) and the on_message/on_event emitters (which populate
+ctx.decision_log via CtxDecisionLog.emit). The harness asserts that both
+hydration_items and decision_log are NON-EMPTY before checking that they carry no
+foreign-user fingerprints, preventing those assertions from passing vacuously on
+an empty collection.
 
 Pins Critical Benchmark 5 (security/memory-isolation guarantee) and Critical
 Benchmark 6 (multi-agent consistency contract) at the orchestration layer, above
@@ -35,18 +43,17 @@ from foundation import (
     HydrationPackage,
     MemoryItem,
     MemoryStore,
-    OrchestratorResponse,
 )
+from core.orchestrator.schemas import OrchestratorAnswer
 from core.pipeline import ACTIVE_STAGES, run as pipeline_run
 from core.verifier.utils import verification_result
 import core.verifier.verifier as verifier_mod
-import core.orchestrator.orchestrator as orch_mod
 import security.filter.filter as filter_mod
 from security.filter.schemas import FilterResult
 
 
 # ---------------------------------------------------------------------------
-# Per-user fingerprints — unique strings that must never cross user boundaries
+# Per-user fingerprints -- unique strings that must never cross user boundaries
 # ---------------------------------------------------------------------------
 
 _UID_A = "user_alpha"
@@ -59,7 +66,7 @@ _RPT_B = "BETA_REPORT_TAG"     # embedded in beta's synthesised report
 
 
 # ---------------------------------------------------------------------------
-# Slim stage list — normalizer onwards, skipping intake + sanitizer
+# Slim stage list -- normalizer onwards, skipping intake + sanitizer
 # (both need a live ClamAV daemon; the scope of this test is orchestration-level)
 # ---------------------------------------------------------------------------
 
@@ -80,7 +87,7 @@ class _TrackingMemory:
         self.write_calls: list[tuple[str, int]] = []      # (user_id, proposal_count)
 
     async def hydrate(self, req) -> HydrationPackage:
-        await asyncio.sleep(0)          # yield — forces real interleaving under gather
+        await asyncio.sleep(0)          # yield -- forces real interleaving under gather
         uid = req.user_id
         if not uid:
             # fail-closed: no scope -> no memory; never borrow another user's data
@@ -125,21 +132,35 @@ def _wire_doubles(monkeypatch, mem: _TrackingMemory) -> None:
         return verification_result(proceed=True, normalized=normalized)
     monkeypatch.setattr(verifier_mod, "verify_with_llm", _fake_verify)
 
-    # orchestrator loop: user-aware report; yield to allow true event interleaving
-    async def _fake_loop(normalized, ports, ctx):
-        await asyncio.sleep(0)
-        uid = ctx.user_id
+    # capability gateway: patch Capabilities.run_turn so the REAL run_loop
+    # executes. The real run_loop calls _hydrate() (which awaits the
+    # prefetched future and sets ctx.hydration_items) and passes on_message
+    # and on_event closures to run_turn. By calling on_message here with the
+    # per-user tag, we cause run_loop's on_message closure to emit a real
+    # DecisionLogEntry onto ctx.decision_log via CtxDecisionLog.emit. The
+    # run_loop also emits an "answer" entry after run_turn returns, so
+    # ctx.decision_log is guaranteed non-empty for every real user run.
+    import registry.capabilities.handler.capability as caps_mod
+
+    async def _fake_run_turn(
+        self, *, system_prompt, user_prompt, output_type,
+        on_event=None, on_message=None, **kwargs
+    ):
+        await asyncio.sleep(0)   # yield -- forces true interleaving under gather
+        uid = self.ctx.user_id
         if uid == _UID_A:
             tag = _RPT_A
         elif uid == _UID_B:
             tag = _RPT_B
         else:
             tag = f"REPORT_TAG_{uid}"
-        return OrchestratorResponse(
-            text=f"Synthesis complete. {tag} for session {ctx.session_id}.",
-            confidence=0.9,
+        if on_message:
+            await on_message(f"Synthesizing report. {tag}")
+        return OrchestratorAnswer(
+            answer_text=f"Synthesis complete. {tag}", confidence=0.9
         )
-    monkeypatch.setattr(orch_mod, "run_loop", _fake_loop)
+
+    monkeypatch.setattr(caps_mod.Capabilities, "run_turn", _fake_run_turn)
 
     # output filter: always proceed (no LLM call)
     async def _fake_filter(response, findings, memory, tool_calls):
@@ -155,7 +176,7 @@ def _wire_doubles(monkeypatch, mem: _TrackingMemory) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Helpers — extract text representations for bleed checks
+# Helpers -- extract text representations for bleed checks
 # ---------------------------------------------------------------------------
 
 def _item_texts(flow) -> list[str]:
@@ -196,10 +217,6 @@ def _collect_bleed(
         findings.append(f"decision_log contains foreign mem tag {foreign_mem!r}")
     if foreign_rpt in dlog:
         findings.append(f"decision_log contains foreign rpt tag {foreign_rpt!r}")
-
-    if flow.ctx.user_id not in (own_mem, own_rpt):
-        # user_id check: it should equal the uid we passed, not be overwritten
-        pass  # verified separately in the test body
 
     return findings
 
@@ -274,6 +291,12 @@ def test_two_user_concurrent_isolation(monkeypatch):
     asyncio.gather interleaves the two coroutines on a single event loop. The
     asyncio.sleep(0) yields inside each test double guarantee that run A and run B
     are actually in flight simultaneously, so any shared-state bug would surface.
+
+    The Capabilities.run_turn double calls on_message with the per-user tag so that
+    the REAL run_loop emits real DecisionLogEntry objects onto ctx.decision_log. The
+    REAL _hydrate() awaits the prefetched future and sets ctx.hydration_items from
+    the store double. Both collections are asserted NON-EMPTY before checking
+    isolation, so neither assertion can pass vacuously on an empty collection.
     """
     mem = _TrackingMemory()
     _wire_doubles(monkeypatch, mem)
@@ -321,10 +344,18 @@ def test_two_user_concurrent_isolation(monkeypatch):
             f"beta's memory query returned alpha-fingerprinted content: {content!r}"
         )
 
-    # -- hydration_items: each run's items carry only its own fingerprint -------
+    # -- hydration_items: non-empty, and each run carries only its own fingerprint
     a_items = _item_texts(flow_a)
     b_items = _item_texts(flow_b)
 
+    assert len(a_items) >= 1, (
+        "user_alpha hydration_items is empty -- the store double should have "
+        "returned one fingerprinted item for this user"
+    )
+    assert len(b_items) >= 1, (
+        "user_beta hydration_items is empty -- the store double should have "
+        "returned one fingerprinted item for this user"
+    )
     for content in a_items:
         assert _MEM_B not in content, (
             f"user_alpha.hydration_items contains beta fingerprint: {content!r}"
@@ -345,10 +376,18 @@ def test_two_user_concurrent_isolation(monkeypatch):
         f"user_beta final_response contains alpha tag: {rpt_b!r}"
     )
 
-    # -- decision log: no foreign fingerprints in either run's log -------------
+    # -- decision log: non-empty, and no foreign fingerprints in either run ----
     dlog_a = _dlog_text(flow_a)
     dlog_b = _dlog_text(flow_b)
 
+    assert len(flow_a.ctx.decision_log) >= 1, (
+        "user_alpha decision_log is empty -- run_loop should have emitted at "
+        "least one entry via on_message + the answer entry"
+    )
+    assert len(flow_b.ctx.decision_log) >= 1, (
+        "user_beta decision_log is empty -- run_loop should have emitted at "
+        "least one entry via on_message + the answer entry"
+    )
     assert _MEM_B not in dlog_a and _RPT_B not in dlog_a, (
         f"user_alpha decision_log contains beta data: {dlog_a!r}"
     )
@@ -364,17 +403,17 @@ def test_two_user_concurrent_isolation(monkeypatch):
         (
             _UID_A,
             flow_a.ctx.user_id == _UID_A,
-            all(_MEM_B not in c for c in a_items),
+            len(a_items) >= 1 and all(_MEM_B not in c for c in a_items),
             _RPT_B not in rpt_a,
-            _MEM_B not in dlog_a and _RPT_B not in dlog_a,
+            len(flow_a.ctx.decision_log) >= 1 and _MEM_B not in dlog_a and _RPT_B not in dlog_a,
             bleed_a,
         ),
         (
             _UID_B,
             flow_b.ctx.user_id == _UID_B,
-            all(_MEM_A not in c for c in b_items),
+            len(b_items) >= 1 and all(_MEM_A not in c for c in b_items),
             _RPT_A not in rpt_b,
-            _MEM_A not in dlog_b and _RPT_A not in dlog_b,
+            len(flow_b.ctx.decision_log) >= 1 and _MEM_A not in dlog_b and _RPT_A not in dlog_b,
             bleed_b,
         ),
     ])
@@ -393,11 +432,16 @@ def test_two_user_concurrent_isolation(monkeypatch):
 
 
 def test_empty_user_id_fails_closed(monkeypatch):
-    """An empty user_id run completes but receives NO memory — never borrows context.
+    """An empty user_id run completes but receives NO memory -- never borrows context.
 
     Confirms the fail-closed scoping rule (invariant V.20, ADR 0002) at the
     orchestration layer: missing identity => empty hydration_items, not a
     borrowed slice of another user's memory.
+
+    The real _hydrate() runs under the new seam (Capabilities.run_turn is doubled,
+    not run_loop), so ctx.hydration_items == [] is now a genuine observation of
+    the hydration path returning an empty package for the empty user_id scope,
+    not a vacuous assertion on state that was never populated.
     """
     mem = _TrackingMemory()
     _wire_doubles(monkeypatch, mem)
