@@ -22,8 +22,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from types import SimpleNamespace
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from foundation import Flow, NormalizedInput, OrchestratorResponse
 import security.filter.filter as filter_stage
