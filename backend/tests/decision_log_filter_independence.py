@@ -8,18 +8,25 @@ Hermetic harness pinning the C6 architectural split:
 
 Three contract assertions:
   (a) DECISION-LOG-DELIVERED  -- log entries survive a blocking filter verdict;
-                                 the log is already on ctx before the filter runs
-                                 so the filter verdict cannot suppress it.
+                                 the filter verdict cannot retroactively suppress
+                                 them, even after the skipped delivery stage.
   (b) REPORT-FILTERED         -- final_response is always filter-approved text,
                                  never the raw orchestrator draft; when the filter
-                                 blocks, final_response stays None.
+                                 blocks, final_response stays None AND the delivery
+                                 stage never renders an answer to the user.
   (c) FILTER-SAW-LOG          -- the filter receives the final report only, never
                                  the decision-log entries.
 
-Hermetic: no network, no paid keys.  The real orchestrator loop (loop.py),
+Hermetic: no network, no paid keys.  The real orchestrator stage (orchestrator.py),
 output filter stage (security/filter/filter.py), and delivery stage
-(delivery/delivery.py) run.  The LLM capability door, memory store, and the
-filter LLM call itself are test doubles.
+(delivery/delivery.py) run under the REAL pipeline driver (core/pipeline.drive).
+The LLM capability door, memory store, and the filter LLM call itself are test
+doubles.
+
+The real pipeline driver (core.pipeline.drive) is what decides whether delivery
+runs -- NOT test-level logic.  When the filter blocks, the pipeline driver sees
+flow.should_stop and breaks the stage loop before delivery is reached.  This pins
+the production short-circuit, not a hand-rolled imitation of it.
 
 On a genuine violation the harness prints a VIOLATED verdict and opens a
 needs-reviewer note at needs_reviewer_c6_split.md alongside this file, rather
@@ -35,23 +42,25 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import os
 import pathlib
-import time
 from unittest.mock import patch
 
 from foundation import (
     Flow,
     HydrationPackage,
     NormalizedInput,
-    Origin,
 )
-from core.orchestrator import loop as loop_mod
+from core import pipeline
+from core.orchestrator import run as orchestrator_stage_run
 from core.orchestrator.ports import Ports
 from core.orchestrator.schemas import OrchestratorAnswer
 from core.orchestrator.utils.decision_log import CtxDecisionLog
 from registry.capabilities import ExpertFindings
 import security.filter.filter as filter_mod
+from security.filter import run as filter_stage_run
 from security.filter.schemas import FilterResult
 from delivery.delivery import run as delivery_run
 
@@ -127,15 +136,29 @@ class _FakeMemory:
 
 def _run_scenario(*, filter_blocks: bool):
     """
-    Drive a benign brief through the real orchestrator loop, real filter stage,
-    and real delivery stage using test doubles for the LLM and filter.
+    Drive a benign brief through the real orchestrator stage, real filter stage,
+    and real delivery stage using the REAL pipeline driver (pipeline.drive()).
 
-    Returns a dict with the state to assert against:
-        log_entries     list[DecisionLogEntry]   -- what was on ctx after orch
+    FIX 1: pipeline.drive() is the driver.  The real short-circuit (flow.should_stop
+    in the driver's stage loop) decides whether delivery runs -- NOT test logic.  A
+    future regression that allowed delivery to run after a block would be caught here
+    because the test never manually skips delivery; the driver does it, or doesn't.
+
+    FIX 2: VRAKSHA_CLI_QUIET is not set so delivery renders normally.  stdout is
+    captured via contextlib.redirect_stdout, allowing the tests to assert the
+    user-visible ordering: decision-log entries first, filtered answer second.
+
+    FIX 3: ctx.decision_log is read AFTER pipeline.drive() returns, proving that the
+    entries survive the blocking filter verdict AND the skipped delivery stage.
+
+    Returns a dict with state to assert against:
+        log_entries     list[DecisionLogEntry]   -- ctx after the full pipeline run
         filter_called   bool                     -- did the filter run at all?
         filter_input    dict                     -- what the filter received
         final_response  str | None               -- what ended up as final output
         filter_blocked  bool
+        orchestrator_response_text  str          -- raw draft before filter verdict
+        cli_output      str                      -- captured stdout from delivery
     """
     filter_calls: list[dict] = []
 
@@ -159,53 +182,69 @@ def _run_scenario(*, filter_blocks: bool):
 
     spy = _spy_blocking if filter_blocks else _spy_passing
 
+    def _fake_build_ports(ctx):
+        """Injected at the real seam (core.orchestrator.orchestrator.build_default_ports).
+        Called by the REAL orchestrator.run stage door with the live ctx -- the same
+        door that production uses.  Returns fake ports so no model/store is touched."""
+        return Ports(
+            memory=_FakeMemory(),
+            caps=_FakeCaps(ctx),
+            log=CtxDecisionLog(ctx),
+        )
+
     async def _inner():
-        # Build a fresh flow with the brief as the NormalizedInput payload.
+        # Seed the flow with a NormalizedInput so orchestrator.run can coerce it
+        # as normal.  The upstream intake/sanitizer/normalizer/verifier stages are
+        # intentionally omitted -- this harness pins only the orchestrator->filter->
+        # delivery split.
         normalized = NormalizedInput(
             modality="text",
             content_type="text/plain",
             content=_BRIEF,
         )
         flow = Flow.new(normalized, session_id="s-harness", user_id="u-harness")
+
+        # Three REAL stage functions in the production order.  pipeline.drive()
+        # runs them Railway-style: flow.should_stop short-circuits the loop so
+        # the real driver (not test code) decides whether delivery runs.
+        stages = [
+            pipeline.Stage(orchestrator_stage_run, "orchestrator", "working",    "orchestrating"),
+            pipeline.Stage(filter_stage_run,       "filter",       "checking",   "filtering"),
+            pipeline.Stage(delivery_run,           "delivery",     "delivering", "filtering"),
+        ]
+
+        # Ensure delivery render is not suppressed so the CLI output is exercised
+        # and captured.  This is what the task cites (delivery.py:19-24).
+        os.environ.pop("VRAKSHA_CLI_QUIET", None)
+
+        stdout_buf = io.StringIO()
+        with (
+            # FIX 1: inject fakes at the real seam (orchestrator.run calls
+            # build_default_ports(ctx) -- we replace it so the caps and memory
+            # doors are our doubles while the stage door itself is untouched).
+            patch("core.orchestrator.orchestrator.build_default_ports", _fake_build_ports),
+            # The filter spy replaces only the LLM call (_filter) inside the real
+            # filter.run -- the stage routing, block/pass logic, and ctx updates
+            # all stay real.
+            patch.object(filter_mod, "_filter", spy),
+            # FIX 2: capture stdout so we can assert the user-visible ordering.
+            contextlib.redirect_stdout(stdout_buf),
+        ):
+            flow = await pipeline.drive(flow, stages)
+
         ctx = flow.ctx
-
-        # Assemble fake ports: fake caps + fake memory + real decision-log sink.
-        ports = Ports(
-            memory=_FakeMemory(),
-            caps=_FakeCaps(ctx),
-            log=CtxDecisionLog(ctx),
-        )
-
-        # 1. Run the REAL orchestrator loop with the fake ports.
-        #    This is the code that emits DecisionLogEntry objects to ctx.decision_log
-        #    (loop.py:37-62: on_event appends tool_call entries; the answer is appended
-        #    at the end of run_loop).  No filter is involved yet.
-        response = await loop_mod.run_loop(normalized, ports, ctx)
-        ctx.orchestrator_response = response
-        log_entries_after_orch = list(ctx.decision_log)  # snapshot before filter
-        flow = flow.next(response, Origin.ORCHESTRATOR, time.monotonic())
-
-        # 2. Run the REAL filter stage with the spy double.
-        #    The real filter.run() reads ctx.orchestrator_response.text, calls _filter()
-        #    (which we replace), and sets ctx.filter_blocked on rejection.
-        with patch.object(filter_mod, "_filter", spy):
-            flow = await filter_mod.run(flow)
-
-        # 3. Run the REAL delivery stage only when the filter passes.
-        #    When the filter blocks, the flow is short-circuited (flow.should_stop)
-        #    and delivery is intentionally skipped -- the raw draft must never reach
-        #    final_response.  CLI output is suppressed in tests.
-        if not flow.ctx.filter_blocked:
-            os.environ["VRAKSHA_CLI_QUIET"] = "1"
-            flow = await delivery_run(flow)
-
+        # FIX 3: read ctx.decision_log AFTER the full pipeline (including the
+        # blocking filter AND the skipped delivery stage) -- proving entries survive.
         return {
-            "log_entries": log_entries_after_orch,
+            "log_entries": list(ctx.decision_log),
             "filter_called": bool(filter_calls),
             "filter_input": filter_calls[0] if filter_calls else {},
             "final_response": ctx.final_response,
             "filter_blocked": ctx.filter_blocked,
-            "orchestrator_response_text": response.text,
+            "orchestrator_response_text": (
+                ctx.orchestrator_response.text if ctx.orchestrator_response else ""
+            ),
+            "cli_output": stdout_buf.getvalue(),
         }
 
     return asyncio.run(_inner())
@@ -224,57 +263,73 @@ def _check_assertions(blocking_result, passing_result):
     results = []
 
     # --- (a) DECISION-LOG-DELIVERED -----------------------------------------
-    # Decision-log entries must be present even when the filter blocks.
-    # They are emitted during orchestration, BEFORE the filter runs, so the
-    # filter verdict cannot retroactively suppress them.
-    log_present = len(blocking_result["log_entries"]) > 0
-    log_has_tool_call = any(
-        getattr(e, "kind", "") == "tool_call"
-        for e in blocking_result["log_entries"]
-    )
-    log_has_answer = any(
-        getattr(e, "kind", "") == "answer"
-        for e in blocking_result["log_entries"]
-    )
+    # Decision-log entries must be present AFTER the full pipeline run (post-
+    # pipeline snapshot), surviving the blocking filter verdict and the skipped
+    # delivery stage.  The filter verdict must not retroactively suppress them.
+    log = blocking_result["log_entries"]
+    log_present = len(log) > 0
+    log_has_tool_call = any(getattr(e, "kind", "") == "tool_call" for e in log)
+    log_has_answer = any(getattr(e, "kind", "") == "answer" for e in log)
     a_ok = log_present and log_has_tool_call and log_has_answer
     results.append((
         "DECISION-LOG-DELIVERED",
         a_ok,
         (
-            f"{len(blocking_result['log_entries'])} log entries present "
+            f"{len(log)} log entries present post-pipeline "
             f"(tool_call={log_has_tool_call}, answer={log_has_answer}) "
-            "after filter block"
+            "after filter block + skipped delivery"
         ),
     ))
 
     # --- (b) REPORT-FILTERED ------------------------------------------------
-    # (b1) When the filter blocks, final_response must be None -- the raw draft
-    #      must NEVER leak to the user.
-    b1_ok = blocking_result["final_response"] is None
+    # (b1) Blocking path: final_response must be None AND the delivery stage must
+    #      not have rendered an answer to the user.  The real pipeline driver
+    #      (pipeline.drive's should_stop check) is what keeps delivery from running
+    #      -- the test never manually skips it, so a regression that called delivery
+    #      anyway would surface as a non-empty cli_output or a non-None final_response.
+    b1_no_response = blocking_result["final_response"] is None
+    b1_no_render = "--- answer ---" not in blocking_result["cli_output"]
+    b1_ok = b1_no_response and b1_no_render
     results.append((
         "REPORT-FILTERED (block)",
         b1_ok,
         (
-            "final_response=None when filter blocks"
+            "final_response=None and no CLI answer section rendered when filter blocks"
             if b1_ok
-            else f"final_response leaked raw draft: {blocking_result['final_response']!r}"
+            else (
+                f"VIOLATION: final_response={blocking_result['final_response']!r}, "
+                f"cli_output contains answer section: "
+                f"{'--- answer ---' in blocking_result['cli_output']}"
+            )
         ),
     ))
 
-    # (b2) When the filter passes, final_response must equal the
-    #      orchestrator_response.text that the filter approved -- not some
-    #      pre-filter or alternative text.
+    # (b2) Passing path: final_response must equal the orchestrator_response.text
+    #      the filter approved, AND the CLI output must render the decision-log
+    #      section BEFORE the answer section (the user-visible ordering contract
+    #      delivery.py:19-24 specifies).
     expected = passing_result["orchestrator_response_text"]
-    b2_ok = passing_result["final_response"] == expected
+    b2_response_ok = passing_result["final_response"] == expected
+    cli = passing_result["cli_output"]
+    log_hdr = "--- decision log ---"
+    ans_hdr = "--- answer ---"
+    b2_order_ok = (
+        log_hdr in cli
+        and ans_hdr in cli
+        and cli.index(log_hdr) < cli.index(ans_hdr)
+    )
+    b2_ok = b2_response_ok and b2_order_ok
     results.append((
         "REPORT-FILTERED (pass)",
         b2_ok,
         (
-            f"final_response == orchestrator_response.text ({expected!r})"
+            f"final_response == orchestrator_response.text; "
+            f"CLI renders log section before answer section"
             if b2_ok
             else (
-                f"final_response ({passing_result['final_response']!r}) "
-                f"!= orchestrator_response.text ({expected!r})"
+                f"final_response={passing_result['final_response']!r} "
+                f"(expected {expected!r}); "
+                f"log_before_answer={b2_order_ok}"
             )
         ),
     ))
@@ -303,9 +358,8 @@ def _check_assertions(blocking_result, passing_result):
         # answer log entry (loop.py emits it as `kind="answer"`).  But the filter
         # receives the FULL expert artifact text via response.text, not the lean
         # summary.  So this check is that the log-entry strings do not appear
-        # verbatim in what the filter payload *unless* they happen to be
-        # substrings of the report itself -- which in our synthetic scenario they
-        # are not, since the report text is distinct.
+        # verbatim in the filter payload -- which in our synthetic scenario they
+        # do not, since the report text is distinct.
         if msg not in _REPORT_TEXT
     )
     c_ok = c_response_correct and not log_leaked
@@ -388,7 +442,8 @@ def _open_needs_reviewer(results):
         "   the log sink must be independent of the filter outcome -- check",
         "   pipeline.py _drive_with_revision and delivery.py.",
         "3. If raw report leaks to final_response without filter approval (violation b):",
-        "   delivery.py must only run after the filter passes.",
+        "   delivery.py must only run after the filter passes.  Check pipeline.drive",
+        "   -- the real driver's should_stop short-circuit is what enforces this.",
         "",
         "## Recommendation",
         "",
@@ -404,35 +459,48 @@ def _open_needs_reviewer(results):
 # ---------------------------------------------------------------------------
 
 def test_decision_log_delivered_when_filter_blocks():
-    """(a) Decision-log entries survive a blocking filter verdict.
+    """(a) Decision-log entries survive the full blocking pipeline run.
 
-    The log is populated during orchestration (before the filter runs), so a
-    filter block cannot retroactively suppress it.
+    Entries are populated during orchestration, before the filter runs.  The
+    post-pipeline snapshot proves they survive both the blocking filter verdict
+    and the delivery stage that was short-circuited by the real pipeline driver.
     """
     result = _run_scenario(filter_blocks=True)
-    log = result["log_entries"]
+    log = result["log_entries"]  # post-pipeline snapshot (FIX 3)
     kinds = [getattr(e, "kind", "") for e in log]
-    assert len(log) > 0, "decision log must not be empty after orchestration"
+    assert len(log) > 0, "decision log must not be empty after pipeline run"
     assert "tool_call" in kinds, "expected at least one tool_call entry in the log"
     assert "answer" in kinds, "expected an answer entry in the log"
     assert result["filter_blocked"] is True, "filter double must have blocked"
     # The blocked filter must NOT have suppressed the log.
     assert len(log) >= 2, (
-        f"log entries dropped to {len(log)} -- filter block should not suppress the log"
+        f"log entries dropped to {len(log)} after blocking filter + skipped delivery -- "
+        "filter block must not suppress the decision log"
     )
 
 
 def test_final_report_is_filter_approved_text():
     """(b) The final report is always the filter-approved text, never raw.
 
-    When the filter blocks: final_response stays None (raw draft never leaked).
-    When the filter passes: final_response equals orchestrator_response.text
-    (the report the filter approved).
+    Blocking path: final_response stays None AND delivery renders nothing to the
+    user -- proved by the real pipeline driver's should_stop short-circuit, NOT
+    by the test skipping delivery manually.
+
+    Passing path: final_response equals orchestrator_response.text (the report the
+    filter approved), AND the CLI output shows the decision-log section BEFORE the
+    answer section (delivery.py:19-24 user-visible ordering contract).
     """
     blocking = _run_scenario(filter_blocks=True)
     assert blocking["final_response"] is None, (
         f"raw draft leaked to final_response when filter blocked: "
         f"{blocking['final_response']!r}"
+    )
+    # Delivery must not have rendered an answer section when the filter blocked.
+    # If "--- answer ---" appears in cli_output it means delivery ran despite the
+    # block -- a regression in pipeline.drive's should_stop short-circuit.
+    assert "--- answer ---" not in blocking["cli_output"], (
+        "delivery rendered an answer section even though the filter blocked -- "
+        "the real pipeline driver should have short-circuited before delivery"
     )
 
     passing = _run_scenario(filter_blocks=False)
@@ -443,6 +511,13 @@ def test_final_report_is_filter_approved_text():
     )
     assert passing["final_response"] is not None and passing["final_response"] != "", (
         "filter-approved response must be non-empty"
+    )
+    # Decision-log section must appear before the answer section in the CLI output.
+    cli = passing["cli_output"]
+    assert "--- decision log ---" in cli, "expected decision log section in CLI output"
+    assert "--- answer ---" in cli, "expected answer section in CLI output"
+    assert cli.index("--- decision log ---") < cli.index("--- answer ---"), (
+        "decision log must be rendered before the answer in the user-visible output"
     )
 
 
