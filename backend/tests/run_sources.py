@@ -12,9 +12,17 @@ Hermetic: uses test-double ToolCallRecord / ExpertCallRecord carrying a 'sources
 list in their results; no network, no models, no paid keys.
 """
 
+import asyncio
+
 from foundation import ExpertCallRecord, ToolCallRecord, VrakshaContext
 from api.run_state import RunState
 import api.run_driver as rd
+
+
+class _FakeFlow:
+    """Minimal stand-in for a completed pipeline Flow, carrying a pre-built ctx."""
+    def __init__(self, ctx: VrakshaContext) -> None:
+        self.ctx = ctx
 
 
 # ---------------------------------------------------------------------------
@@ -229,3 +237,65 @@ def test_c_run_full_json_sources_empty_after_non_search_tools():
     run.sources = rd._collect_sources(_ctx_no_search())
     j = run.full_json()
     assert j["sources"] == []
+
+
+# ---------------------------------------------------------------------------
+# execute() integration — the delivery path is the actual system under test
+# ---------------------------------------------------------------------------
+
+def _monkeypatch_execute(monkeypatch, ctx: VrakshaContext) -> None:
+    """Neutralize all I/O that execute() touches outside the delivery wiring."""
+    async def fake_run(*a, **k):
+        return _FakeFlow(ctx)
+
+    monkeypatch.setattr(rd.pipeline, "run", fake_run)
+    monkeypatch.setattr(rd.auth, "model_prefs_get", lambda uid: {})
+    monkeypatch.setattr(rd.STORE, "persist", lambda run: None)
+    monkeypatch.setattr(rd.STORE, "session_turns", lambda u, s: [])
+
+
+def test_execute_sources_populated_and_one_frame_before_report(monkeypatch):
+    """(a)+(b) exercised through execute(): a delivered run that ran a grounded
+    search returns non-empty sources in full_json() AND emits exactly ONE
+    {type:'sources'} frame BEFORE the first report_delta/report_done frame."""
+    ctx = _ctx_with_direct_search([
+        "https://www.statista.com/outlook/cmo/skincare",
+        "https://gov.uk/guidance/cosmetics",
+    ])
+    ctx.final_response = "the delivered report text"
+    _monkeypatch_execute(monkeypatch, ctx)
+
+    run = _run("rx")
+    asyncio.run(rd.execute(run))
+
+    # (a) sources present in the REST shape — populated by the real delivery path
+    j = run.full_json()
+    assert len(j["sources"]) == 2
+    for src in j["sources"]:
+        assert src["id"] and src["title"] and src["url"] and src["domain"]
+
+    # (b) exactly one sources frame, and it precedes the first report frame
+    sources_events = [e for e in run.events if e.get("type") == "sources"]
+    assert len(sources_events) == 1
+
+    event_types = [e.get("type") for e in run.events]
+    sources_pos = event_types.index("sources")
+    first_report_pos = next(
+        (i for i, t in enumerate(event_types) if t in ("report_delta", "report_done")),
+        None,
+    )
+    assert first_report_pos is not None, "expected report frames from stream_report"
+    assert sources_pos < first_report_pos, "sources frame must precede the report"
+
+
+def test_execute_empty_sources_when_no_grounded_search(monkeypatch):
+    """(c) exercised through execute(): a delivered run with no web-search tool
+    calls returns an empty sources list — never fabricated."""
+    ctx = _ctx_no_search()
+    ctx.final_response = "a report with no sources"
+    _monkeypatch_execute(monkeypatch, ctx)
+
+    run = _run("ry")
+    asyncio.run(rd.execute(run))
+
+    assert run.full_json()["sources"] == []
