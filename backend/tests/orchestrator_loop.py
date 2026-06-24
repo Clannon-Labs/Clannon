@@ -93,11 +93,10 @@ def test_run_turn_routes_a_tool_call_through_the_guard():
     assert [r.tool_name for r in caps.ctx.tool_calls] == ["math.calculator"]   # routed + recorded
 
 
-def test_run_turn_defers_the_long_tail_behind_tool_search():
-    # W2: only the hot path (+ remember) is offered up front; the long tail is hidden behind
-    # tool search until the model looks for it. Driven by TestModel, which has no native tool
-    # search, so it uses the local `search_tools` fallback that actually hides deferred tools;
-    # call_tools=[] so none of the (network/LLM-backed) hot tools actually fire.
+def test_run_turn_offers_the_whole_roster_to_the_model():
+    # the orchestrator sees its FULL toolset up front (deferred loading is off), so it can choose
+    # the best capability instead of defaulting to whatever happened to be eager. call_tools=[]
+    # so none of the (network/LLM-backed) tools actually fire.
     from pydantic_ai.models.test import TestModel
 
     tm = TestModel(call_tools=[])
@@ -109,10 +108,10 @@ def test_run_turn_defers_the_long_tail_behind_tool_search():
         model=tm,
     ))
     offered = {t.name for t in tm.last_model_request_parameters.function_tools}
-    assert {"remember", "search_web"} <= offered      # hot path + remember are eager, up front
-    assert "search_tools" in offered                  # discovery is available
-    assert "math_calculator" not in offered           # the long tail is hidden until discovered
-    assert "media_analyst" not in offered
+    # experts AND tools are all directly visible — incl. the file experts, the calculator, etc.
+    assert {"remember", "recall", "search_web", "math_calculator", "web_fetch_url"} <= offered
+    assert {"media_analyst", "data_analyst", "code_engineer", "web_research", "synthesis_writer"} <= offered
+    assert "search_tools" not in offered              # nothing is deferred, so no discovery tool is injected
 
 
 def test_run_turn_graceful_forced_answer_at_cap():
@@ -213,7 +212,9 @@ def test_degraded_package_is_silent():
 
 # --- W2 deferred loading: hot path eager, long tail behind tool search ---------
 
-def test_build_orchestrator_tools_defers_the_long_tail():
+def test_build_orchestrator_tools_offers_the_full_roster_eagerly():
+    # deferred loading is OFF on today's small roster: the orchestrator sees its WHOLE toolset up
+    # front (experts AND tools) so it can choose the best, and nothing is hidden behind tool search.
     from core.llm import Tool
     from registry.capabilities import CapabilityKind
     from registry.capabilities import registry as reg
@@ -225,18 +226,12 @@ def test_build_orchestrator_tools_defers_the_long_tail():
     expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
 
     fns = build_orchestrator_tools(tool_specs, expert_specs, on_message=None)
-    eager = [f for f in fns if not isinstance(f, Tool)]
-    deferred = [f for f in fns if isinstance(f, Tool) and f.defer_loading]
-
-    eager_names = {getattr(f, "__name__", "") for f in eager}
-    # remember is always eager; the hot path (web search + research + writer) is eager
-    assert "remember" in eager_names
-    assert "search_web" in eager_names
-    assert {"web_research", "synthesis_writer"} <= eager_names
-    # the long tail (media/code/data/verification/... + calculator/fetch/http/python/memory)
-    # defers, and there's a lot of it — this is what keeps the eager surface flat
-    assert len(deferred) >= 5
-    assert len(deferred) > len(eager)
+    assert not [f for f in fns if isinstance(f, Tool)]          # nothing deferred
+    names = {getattr(f, "__name__", "") for f in fns}
+    # the file experts + the rest of the roster are all eager (the fix for "uses web search to read a file")
+    assert {"media_analyst", "data_analyst", "code_engineer", "docs_writer"} <= names
+    assert {"web_research", "synthesis_writer", "verification_claims", "summary_condenser"} <= names
+    assert {"remember", "recall", "search_web", "math_calculator", "web_fetch_url"} <= names
 
 
 # --- message/deliverable split: a document never bleeds into the chat bubble ----
@@ -266,25 +261,5 @@ def test_split_keeps_document_out_of_the_chat():
     assert msg == "Drafted the brief — it's below." and deliv == doc
 
 
-def test_file_experts_become_eager_when_files_are_attached():
-    # W2 deferred the file-reading experts (media/data/code) behind tool search; if the user
-    # attaches a file they must be EAGER so the orchestrator can reach one to read it (instead of
-    # falling back to the eager web search). Regression guard for the "reads a file with web search" bug.
-    from core.llm import Tool
-    from registry.capabilities import CapabilityKind
-    from registry.capabilities import registry as reg
-    from registry.capabilities.handler.support import build_orchestrator_tools
-
-    discover()
-    tool_specs = [reg.get_tool(c["key"]) for c in reg.cards(CapabilityKind.TOOL)]
-    tool_specs = [s for s in tool_specs if s and not getattr(s.impl, "wants_workspace", False)]
-    expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
-
-    def eager(files):
-        fns = build_orchestrator_tools(tool_specs, expert_specs, on_message=None, files_attached=files)
-        return {getattr(f, "__name__", "") for f in fns if not isinstance(f, Tool)}
-
-    no_files, with_files = eager(False), eager(True)
-    assert "media_analyst" not in no_files and "data_analyst" not in no_files   # deferred when no files
-    assert {"media_analyst", "data_analyst", "code_engineer", "docs_writer"} <= with_files  # eager with files
-    assert {"web_research", "synthesis_writer", "search_web"} <= with_files      # hot path eager either way
+# (file experts being eager-on-attach is now subsumed by the full-roster-eager behaviour above:
+#  every expert is eager, so a file turn always has the media/data/code experts in front of it.)

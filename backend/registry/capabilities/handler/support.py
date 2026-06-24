@@ -359,23 +359,30 @@ def _make_recall_tool() -> Callable:
     return recall
 
 
+# Deferred tool loading (W2) hides the long tail behind tool search to keep the eager surface
+# flat when the roster is large. It is **OFF** on today's small roster (~9 experts + ~9 tools):
+# deferral cost a `search_tools` round-trip per discovered capability (slow) AND hid the catalog
+# from the model so it couldn't see what it had and chose badly (dumb). With prompt caching the
+# full catalog is nearly free to keep eager, so the orchestrator gets its WHOLE toolset up front
+# and picks the best capability itself. Re-enable (flip this true + mark the hot path `eager`)
+# only once the Track-B roster — KG/repo experts + their tools — actually outgrows the context.
+_DEFER_LONG_TAIL = False
+
+
 def _reads_files(spec) -> bool:
-    """An expert that can read an uploaded file — it is granted the workspace file-read tool
-    (`fs.read`): the media / data / code / docs experts. These are the delegation targets when
-    the user attaches a file."""
+    """An expert that can read an uploaded file — granted the workspace file-read tool (`fs.read`):
+    the media / data / code / docs experts. (Used only when deferral is re-enabled.)"""
     return "fs.read" in tuple(getattr(spec, "tool_grants", ()) or ())
 
 
 def _offer(fn: Callable, spec, *, files_attached: bool = False) -> "Callable | Tool":
-    """Offer one capability to the orchestrator. A hot-path capability (`eager`) is passed as a
-    bare function — in context from turn one. The long tail is wrapped as a deferred `Tool`: it
-    stays OUT of the prompt (and out of the cached tool prefix) until the model discovers it via
-    tool search. Default is deferred, so the eager surface stays flat as the roster grows (W2).
-
-    Exception: when the user attached files THIS turn, the file-reading experts (`_reads_files`)
-    are forced eager so the orchestrator can actually reach one to read the upload — otherwise the
-    file experts sit behind tool search and the model falls back to whatever IS eager (e.g. web
-    search), never reading the file."""
+    """Offer one capability to the orchestrator. With deferral OFF (the default today) every
+    capability is offered EAGERLY — a bare function in context from turn one, so the model sees
+    the whole catalog and chooses the best fit. With deferral on, the hot path (`eager`, or a file
+    expert when files are attached) stays eager and the long tail is wrapped as a deferred `Tool`
+    discovered via tool search."""
+    if not _DEFER_LONG_TAIL:
+        return fn
     if getattr(spec, "eager", False) or (files_attached and _reads_files(spec)):
         return fn
     return Tool(fn, defer_loading=True)
