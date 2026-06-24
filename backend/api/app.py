@@ -37,6 +37,9 @@ from core.artifacts import LocalArtifactStore
 from security.sanitizers import uploads as upload_scan
 
 from . import auth, config, runs
+from .config_validation import fail_fast_if_strict
+
+fail_fast_if_strict()
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
 
