@@ -3,9 +3,14 @@ Cross-cutting integration harness: reject-before-paid-stages gauntlet.
 
 Proves that bad-or-excess load is rejected BEFORE the expensive paid LLM stages
 by driving the real core.pipeline.run() entry point with the paid-model seam
-(core.llm.retry.run_agent) counter-wrapped. All pre-rejection production code
-runs normally; only external dependencies (ClamAV/YARA, Qdrant/embeddings,
-text-worker NLP) are stubbed to keep the suite hermetic.
+counter-wrapped. All pre-rejection production code runs normally; only external
+dependencies (ClamAV/YARA, Qdrant/embeddings, text-worker NLP) are stubbed to
+keep the suite hermetic.
+
+The paid-model seam is core.llm.framework.run_agent (and core.llm.search.run_agent
+for the grounded-search path). Both modules do `from .retry import run_agent` at
+import time, creating their own bindings; the counter therefore patches those
+call-site bindings, not core.llm.retry directly.
 
 Five pre-paid rejection classes (seam_counter == 0 for each):
   1. Oversize input     -> BlockReason.INPUT_TOO_LARGE    (intake)
@@ -40,7 +45,8 @@ from security.sanitizers.pre_sanitization import PreSanitizationResult
 from security.sanitizers.workers import text as text_worker
 from security.sanitizers.workers.text import TextScanResult
 from core import pipeline
-import core.llm.retry as retry_mod
+import core.llm.framework as framework_mod
+import core.llm.search as search_mod
 import core.verifier.verifier as verifier_door
 
 
@@ -61,14 +67,20 @@ def _reset_rate_limiters():
 @pytest.fixture()
 def seam_counter(monkeypatch):
     """
-    Wrap the single paid-model seam with a call counter that RAISES immediately
-    if reached.  Any accidental LLM call becomes a hard test failure rather than
-    a silent, cost-incurring pass.
+    Wrap the paid-model seam with a call counter that RAISES immediately if
+    reached.  Any accidental LLM call becomes a hard test failure rather than a
+    silent, cost-incurring pass.
 
-    Patching core.llm.retry.run_agent is the correct instrumentation point:
-    every LLM-using stage (verifier, orchestrator, experts, filter) calls
-    run_agent through core.llm.framework.run_structured.  A counter here is the
-    single control for ALL paid calls regardless of stage.
+    core.llm.framework and core.llm.search each do `from .retry import run_agent`
+    at import time, binding run_agent into their own module namespaces.  Patching
+    core.llm.retry would not rebind those copies.  The counter therefore patches
+    the call-site names directly:
+      - framework_mod.run_agent: every LLM stage (verifier, filter, orchestrator,
+        experts) calls run_agent through framework.run_structured -> framework.run_agent
+      - search_mod.run_agent: the grounded-search path inside the orchestrator's
+        web_search tool calls search.run_agent
+    Both patches are belt-and-suspenders; none of the six rejection cases reach
+    either seam, but patching both makes the guard complete for future cases too.
     """
     counter = {"calls": 0}
 
@@ -79,7 +91,8 @@ def seam_counter(monkeypatch):
             "a paid model call must not occur before a rejection gate fires"
         )
 
-    monkeypatch.setattr(retry_mod, "run_agent", counted_sentinel)
+    monkeypatch.setattr(framework_mod, "run_agent", counted_sentinel)
+    monkeypatch.setattr(search_mod, "run_agent", counted_sentinel)
     return counter
 
 
