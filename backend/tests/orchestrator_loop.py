@@ -264,3 +264,27 @@ def test_split_keeps_document_out_of_the_chat():
     said = SimpleNamespace(assistant_message="Drafted the brief — it's below.", expert_findings=[])
     msg, deliv = _split_message_and_deliverable(OrchestratorAnswer(answer_text=doc, confidence=0.9), said)
     assert msg == "Drafted the brief — it's below." and deliv == doc
+
+
+def test_file_experts_become_eager_when_files_are_attached():
+    # W2 deferred the file-reading experts (media/data/code) behind tool search; if the user
+    # attaches a file they must be EAGER so the orchestrator can reach one to read it (instead of
+    # falling back to the eager web search). Regression guard for the "reads a file with web search" bug.
+    from core.llm import Tool
+    from registry.capabilities import CapabilityKind
+    from registry.capabilities import registry as reg
+    from registry.capabilities.handler.support import build_orchestrator_tools
+
+    discover()
+    tool_specs = [reg.get_tool(c["key"]) for c in reg.cards(CapabilityKind.TOOL)]
+    tool_specs = [s for s in tool_specs if s and not getattr(s.impl, "wants_workspace", False)]
+    expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
+
+    def eager(files):
+        fns = build_orchestrator_tools(tool_specs, expert_specs, on_message=None, files_attached=files)
+        return {getattr(f, "__name__", "") for f in fns if not isinstance(f, Tool)}
+
+    no_files, with_files = eager(False), eager(True)
+    assert "media_analyst" not in no_files and "data_analyst" not in no_files   # deferred when no files
+    assert {"media_analyst", "data_analyst", "code_engineer", "docs_writer"} <= with_files  # eager with files
+    assert {"web_research", "synthesis_writer", "search_web"} <= with_files      # hot path eager either way

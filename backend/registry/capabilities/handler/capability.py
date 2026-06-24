@@ -94,7 +94,12 @@ class Capabilities:
             "orchestrator",
             output_type=output_type,
             system_prompt=system_prompt,
-            tools=build_orchestrator_tools(tool_specs, expert_specs, on_message=on_message),
+            tools=build_orchestrator_tools(
+                tool_specs, expert_specs, on_message=on_message,
+                # when the user attached files this turn, surface the file-reading experts up
+                # front so the orchestrator can actually read the upload (not fall back to search)
+                files_attached=bool(getattr(self.ctx, "input_files", None)),
+            ),
             deps_type=OrchestratorDeps,
         )
         try:

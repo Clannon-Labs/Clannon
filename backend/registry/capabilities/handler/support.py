@@ -359,19 +359,31 @@ def _make_recall_tool() -> Callable:
     return recall
 
 
-def _offer(fn: Callable, spec) -> "Callable | Tool":
-    """Offer one capability to the orchestrator. A hot-path capability (`eager`) is
-    passed as a bare function — in context from turn one. The long tail is wrapped as a
-    deferred `Tool`: it stays OUT of the prompt (and out of the cached tool prefix) until
-    the model discovers it via tool search, then becomes callable. Default is deferred,
-    so the eager surface stays flat as the roster grows (W2)."""
-    if getattr(spec, "eager", False):
+def _reads_files(spec) -> bool:
+    """An expert that can read an uploaded file — it is granted the workspace file-read tool
+    (`fs.read`): the media / data / code / docs experts. These are the delegation targets when
+    the user attaches a file."""
+    return "fs.read" in tuple(getattr(spec, "tool_grants", ()) or ())
+
+
+def _offer(fn: Callable, spec, *, files_attached: bool = False) -> "Callable | Tool":
+    """Offer one capability to the orchestrator. A hot-path capability (`eager`) is passed as a
+    bare function — in context from turn one. The long tail is wrapped as a deferred `Tool`: it
+    stays OUT of the prompt (and out of the cached tool prefix) until the model discovers it via
+    tool search. Default is deferred, so the eager surface stays flat as the roster grows (W2).
+
+    Exception: when the user attached files THIS turn, the file-reading experts (`_reads_files`)
+    are forced eager so the orchestrator can actually reach one to read the upload — otherwise the
+    file experts sit behind tool search and the model falls back to whatever IS eager (e.g. web
+    search), never reading the file."""
+    if getattr(spec, "eager", False) or (files_attached and _reads_files(spec)):
         return fn
     return Tool(fn, defer_loading=True)
 
 
 def build_orchestrator_tools(
-    tool_specs: list, expert_specs: list, on_message: Callable | None = None
+    tool_specs: list, expert_specs: list, on_message: Callable | None = None,
+    *, files_attached: bool = False,
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the always-on built-ins — `remember` (long-term memory) and
@@ -380,15 +392,18 @@ def build_orchestrator_tools(
     never imports the registry.
 
     `remember`/`recall`/`say` and the hot-path (`eager`) capabilities load up front; the
-    long tail is deferred behind tool search (W2). The framework auto-adds a `search_tools`
-    function whenever any deferred capability is present, and the model pulls a capability
-    into context only when it looks for one. Either way, every call still routes through the
-    guarded handler on execution."""
+    long tail is deferred behind tool search (W2). When `files_attached`, the file-reading
+    experts are ALSO eager this turn (so the orchestrator can read an upload instead of falling
+    back to web search). The framework auto-adds a `search_tools` function whenever any deferred
+    capability is present; every call still routes through the guarded handler on execution."""
     fns: list = [_make_remember_tool(), _make_recall_tool()]
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
     for spec in tool_specs:
         fns.append(_offer(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description), spec))
     for spec in expert_specs:
-        fns.append(_offer(_make_orchestrator_expert_fn(spec.key, spec.input_schema, spec.description), spec))
+        fns.append(_offer(
+            _make_orchestrator_expert_fn(spec.key, spec.input_schema, spec.description),
+            spec, files_attached=files_attached,
+        ))
     return fns
