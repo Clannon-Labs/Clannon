@@ -37,6 +37,7 @@ from core.artifacts import LocalArtifactStore
 from security.sanitizers import uploads as upload_scan
 
 from . import auth, config, runs
+from .hardening import install_hardening
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
 
@@ -47,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+install_hardening(app)
 
 
 # ---------- public config (read-only sync) ----------

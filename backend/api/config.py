@@ -116,6 +116,13 @@ WIKI_UPLOAD_MAX_FILES = 10        # files per bulk wiki import
 WIKI_UPLOAD_MAX_BYTES = 512 * 1024
 WIKI_UPLOAD_EXTENSIONS = (".md", ".markdown", ".txt")
 
+# Transport-layer body-size ceiling enforced by hardening.BodySizeLimitMiddleware BEFORE
+# any route or pipeline stage runs.  Must exceed any legitimate payload: the largest
+# upload is WIKI_UPLOAD_MAX_BYTES × WIKI_UPLOAD_MAX_FILES = 5 MB plus multipart overhead.
+# 32 MB is generous for the current feature set and low enough to stop a memory-overload
+# attack at the edge.  Override at deployment with MAX_REQUEST_BODY_BYTES env var.
+MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(32 * 1024 * 1024)))
+
 LIMITS = {
     "briefMinChars": BRIEF_MIN_CHARS,
     "briefMaxChars": BRIEF_MAX_CHARS,
