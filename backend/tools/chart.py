@@ -50,7 +50,7 @@ def _empty_svg(title: str, message: str) -> str:
 
 def _y_scale(all_vals: list[float]) -> tuple[float, float, float]:
     y_min = min(0.0, min(all_vals))
-    y_max = max(all_vals)
+    y_max = max(0.0, max(all_vals))
     if y_max == y_min:
         y_max = y_min + 1.0
     return y_min, y_max, _PH / (y_max - y_min)

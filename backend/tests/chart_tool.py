@@ -204,6 +204,26 @@ def test_negative_values_bar():
     assert "Profit/Loss" in result.svg
 
 
+def test_all_negative_bar_stays_on_canvas():
+    import re
+    result = _run(ChartTool().run(ChartIn(
+        kind="bar",
+        series=[Series(label="Loss", values=[-10.0, -5.0, -8.0])],
+    )))
+    assert result.error == ""
+    bars = re.findall(
+        r'<rect x="[-\d.]+" y="([-\d.]+)" width="[-\d.]+" height="([-\d.]+)"'
+        r' fill="#[^"]*" opacity=',
+        result.svg,
+    )
+    assert bars, "expected bar rects"
+    for y_s, h_s in bars:
+        y, h = float(y_s), float(h_s)
+        assert y >= 50 - 0.5 and y + h <= 300 + 0.5, (
+            f"bar escapes plot area: y={y} h={h}"
+        )
+
+
 def test_no_network_filesystem_subprocess(monkeypatch):
     """Confirm run() does not import or call any network/fs/subprocess primitive."""
     import socket
