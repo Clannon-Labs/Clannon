@@ -69,8 +69,11 @@ Read in this order on first entry to the repository:
 3. **`vision/ATTENTION_THRESHOLD.md`** — the strategic lens that overrides
    architecture on conflict.
 4. **`vision/GOALS.md`** — what Clannon is trying to become and what success is.
-5. **`architecture/SYSTEM_ARCHITECTURE.md`** — the canonical system design and
-   the index of every subsystem.
+5. **`ARCHITECTURE.md`** — the single authoritative, build-state-tagged architecture
+   (BUILT / PARTIAL / PROPOSED). Read this for the current architecture and what
+   actually runs today. Then **`architecture/SYSTEM_ARCHITECTURE.md`** — retained as
+   detailed subsystem canon and the index of every subsystem (defers to `ARCHITECTURE.md`
+   on build state).
 6. **The relevant `architecture/<subsystem>/` folder** — only the subsystem you
    are about to work in (each folder has a short README entry point).
 7. **`benchmarks/`** — the outcomes Clannon must be able to demonstrate.
@@ -89,7 +92,7 @@ to match your code — escalate it to the owning tier.
 | 1 | **Invariants** | `vision/INVARIANTS.md` | Must never be violated — not even for a demo. Safety, identity, transport, trust ordering. |
 | 2 | **Attention Threshold** | `vision/ATTENTION_THRESHOLD.md` | Strategic priority. Supersedes *architecture* decisions when elegance and demonstrability conflict. Never supersedes Tier 1. |
 | 3 | **Goals** | `vision/GOALS.md` | What we are building toward. Frames whether a thing should exist at all. |
-| 4 | **System Architecture** | `architecture/SYSTEM_ARCHITECTURE.md` | The canonical, system-wide design. |
+| 4 | **System Architecture** | `ARCHITECTURE.md` (authoritative, build-state-tagged) → `architecture/SYSTEM_ARCHITECTURE.md` (detailed subsystem canon) | The system-wide design. `ARCHITECTURE.md` is the top authority and wins on build state; `SYSTEM_ARCHITECTURE.md` is retained for subsystem detail. |
 | 5 | **Subsystem Architectures** | `architecture/<subsystem>/` | Detail under the system architecture; inherit its rules. |
 | 6 | **Benchmarks** | `benchmarks/` | Measure outcomes, not design. They validate; they do not dictate how. |
 | 7 | **Decisions (ADRs)** | `decisions/accepted/` | Authoritative record of a single settled decision and its reasoning. Subordinate to Tiers 1–5. |
