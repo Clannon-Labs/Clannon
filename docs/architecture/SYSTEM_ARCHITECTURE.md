@@ -15,6 +15,17 @@
 > [../glossary/TERMS.md](../glossary/TERMS.md) ·
 > [../decisions/README.md](../decisions/README.md)
 
+> **⚠️ Authority handoff (2026-06-26):** [`../ARCHITECTURE.md`](../ARCHITECTURE.md) is now
+> the single authoritative, build-state-tagged architecture and sits **above** this
+> document. This file is **retained as detailed subsystem canon**, but several of its
+> build-state claims were written during the Phase-1 "spine / stub" period and are now
+> **stale**: experts, tools, and the Memory Manager described below as stubs/planned are
+> **BUILT** today; the **entropy router remains PROPOSED — not built**. For the current
+> build state of any component, defer to `../ARCHITECTURE.md`. Discrete proven-false
+> statements have been corrected inline below (embeddings provider, verifier model,
+> entropy routing, MemoryPort method count, Memory Manager stub claim, output-filter
+> escalation, the Semgrep build-gate).
+
 ## Documentation Authority
 
 This document sits at **Tier 4**. Conflicts resolve **upward**:
@@ -39,7 +50,7 @@ text those subsystems elaborate.
 
 | Subsystem | Entry point | Status | Covers |
 |---|---|---|---|
-| Agents | [agents/](agents/) | built (runtime) | Orchestrator, experts, tools, LLM adapter, entropy routing |
+| Agents | [agents/](agents/) | built (runtime) | Orchestrator, experts, tools, LLM adapter. Entropy routing is **PROPOSED — not built** (see [../ARCHITECTURE.md](../ARCHITECTURE.md) §7.2) |
 | Agent Civilization | [agents/AGENT_CIVILIZATION.md](agents/AGENT_CIVILIZATION.md) | **PROPOSED — no implementation** | Pillar 4: institutional artifact protocol |
 | Memory | [memory/](memory/) | built | Four tiers, Memory Manager, MemoryPort, hydration |
 | Media | [media/](media/) | partial (preprocessing built; "→ knowledge" proposed) | Per-modality representations |
@@ -285,7 +296,7 @@ Gemini is the default provider for video, audio, image, and research tasks.
 
 ### Embedding Stack
 
-- Model: `nomic-embed-text` via Ollama (local dev), same model via API (cloud)
+- Model: `nomic-embed-text-v1.5` via **local fastembed ONNX** (`backend/core/memory/embeddings.py:18-45`); a hosted-API embedding profile for cloud scale is **PROPOSED**. (Corrected: not Ollama, not a hosted API today.)
 - Dimensions: 768
 - Vector store: Qdrant (Docker locally, Qdrant Cloud in production)
 
@@ -313,19 +324,31 @@ what the orchestrator is doing and why (expert selection, tool invocations,
 routing decisions, confidence signals). The final report is separate: it
 buffers through the output filter before streaming to the user.
 
-### Expert Spawning: Entropy-Based Routing
+### Expert Spawning: Entropy-Based Routing [PROPOSED — not built]
 
-The orchestrator determines how many experts to spawn using Shannon entropy
-over expert domain centroids. The query is embedded and compared against
-domain centroid vectors. Entropy over the resulting similarity distribution
-determines routing:
+> **Build state: PROPOSED.** Today spawn count is whatever the model emits
+> ([orchestration/ORCHESTRATION_ANALYSIS.md](orchestration/ORCHESTRATION_ANALYSIS.md)
+> line 48). The target is entropy-**as-advisory-signal** (math informs, the reasoner
+> decides) — see [../ARCHITECTURE.md](../ARCHITECTURE.md) §7.2. The present-tense
+> description below is the design target, not current behavior.
 
-- Low entropy (query maps clearly to one domain): spawn one targeted expert.
-- High entropy (query spans multiple domains): spawn multiple experts in
-  parallel, one per significantly activated domain.
+**[PROPOSED — not built.]** Today, spawn count is whatever the model emits — there
+is no entropy computation in the routing path
+([orchestration/ORCHESTRATION_ANALYSIS.md](orchestration/ORCHESTRATION_ANALYSIS.md)
+line 48). The target below is an **advisory signal**, not an automatic gate.
 
-This prevents both under-coverage (missing relevant domains) and over-spawning
-(wasteful parallel calls on focused queries).
+The *proposed* design: embed the query, compute its similarity to each expert's
+domain centroid, and surface that distribution (its Shannon entropy and spread) to
+the orchestrator as **structured evidence**. The orchestrator (the reasoning model)
+then makes the actual spawn/route decision, informed by the math but not ruled by it:
+
+- Low entropy (the evidence points clearly to one domain) *suggests* a single targeted
+  expert.
+- High entropy (the evidence spans several domains) *suggests* spawning multiple
+  experts in parallel, one per strongly activated domain.
+
+Math informs, the reasoner decides — this is meant to avoid both brittle
+math-threshold misfires and ungrounded over-spawning. None of it runs yet.
 
 ### Expert Communication Contract
 
@@ -345,8 +368,9 @@ that returns one `OrchestratorDecision` per turn (`answer`, `spawn_experts`,
 `call_tool`, or `need_more`); clannon code executes it — enforcing permissions,
 routing, and streaming the decision log. The framework never drives the loop.
 
-Implemented contracts (experts, tools, memory, and the entropy router are wired
-behind ports with stub implementations for now):
+Implemented contracts (experts, tools, and memory are wired behind ports and are now
+**BUILT** — see [../ARCHITECTURE.md](../ARCHITECTURE.md) §4-§5. The **entropy router is
+[PROPOSED] — not built**; spawn count is currently whatever the model emits):
 
 - **Decision log:** a structured `DecisionLogEntry` (kinds: hydration, route,
   expert_spawn, tool_call, observation, answer, warning, error), streamed through
@@ -402,11 +426,14 @@ Responsibilities:
 - inject the final hydration package into orchestrator context
 - coordinate memory write proposals after task completion
 
-The memory layer is reached only through the Manager, which is the sole
-implementer of the `MemoryPort` contract (`hydrate` in, `record_write_proposals`
-out). Nothing imports memory internals. It is a stub today; the real Manager
-becomes a background memory-agent with its own LLM call. (Experts/orchestrator
-only *propose* writes — they never write memory directly.)
+The memory layer is reached only through the Manager, the sole implementer of the
+`MemoryPort` contract. **Correction:** the port has **three** methods — `hydrate`,
+`record_write_proposals`, and `learn` (`backend/foundation/contracts/memory.py:92-128`)
+— not two; and the Manager is **BUILT, not a stub** today (real hydration, Lagrangian
+budget, trust/recency ranking, Qdrant writes — `backend/core/memory/manager.py`). The
+`learn` method is the background memory-agent with its own LLM call, living behind the
+door. Nothing imports memory internals. (Experts/orchestrator only *propose* writes —
+they never write memory directly.)
 
 ### Lagrangian Memory Budget Allocation
 
@@ -475,9 +502,12 @@ scoped at query time using `user_id` payload filtering. This keeps the
 infrastructure simple and avoids collection proliferation.
 
 The `user_id` filter is mandatory and enforced at the Memory Manager boundary —
-no other module may construct a raw Qdrant query. A CI check (Semgrep) blocks any
-user-data query that lacks a scope filter, making unscoped access a build failure
-rather than a convention.
+no other module may construct a raw Qdrant query. **Correction:** the Semgrep CI
+build-gate is **PROPOSED — not built** (no semgrep config in repo; CI runs only pytest
++ frontend build). Today the single-door rule, runtime per-hit re-checks, and
+`tests/memory_isolation.py` are the guard; the build-gate that would make an unscoped
+query a *build failure* is future work (see
+[INVARIANT_OWNERSHIP.md](INVARIANT_OWNERSHIP.md) §V.20).
 
 ### Memory Tier Access By Subscription Tier
 
@@ -565,9 +595,12 @@ The output filter checks:
 - PII exposure in final text
 - instruction-following completeness
 
-If the output filter blocks a response, it returns a structured failure to the
-orchestrator with a reason code. The orchestrator may retry, escalate to a
-different expert, or surface a safe partial response with an explanation.
+If the output filter blocks a response, it returns a structured failure with a reason
+code, and the pipeline driver runs a **bounded** revision loop —
+`FILTER_MAX_REVISIONS = 2` (`backend/foundation/vocab/constants.py:173`), feeding the
+reason back (`ctx.filter_feedback`) and re-running the reasoning loop, fail-closed after
+the bound (`backend/core/pipeline.py:180-229`). **Correction:** there is **no**
+"escalate to a different expert" path in code; that earlier claim is removed.
 
 ## Background Jobs And Async Work
 
@@ -769,6 +802,7 @@ Speed comes from:
 - compact context hydration via the Memory Manager instead of full transcript
   replay
 - entropy-based expert spawning to avoid over-spawning on focused queries
+  (**[PROPOSED] — not built**; today spawn count is whatever the model emits)
 
 ## Infrastructure Summary
 
@@ -779,7 +813,7 @@ Speed comes from:
 | Primary DB        | SQLite                 | Supabase / Postgres + RLS  |
 | Session / Budget  | Redis (local)          | Upstash Redis              |
 | Vector Store      | Qdrant (Docker)        | Qdrant Cloud               |
-| Embeddings        | Ollama nomic-embed-text| nomic-embed-text via API   |
+| Embeddings        | fastembed nomic-embed-text (local ONNX) | hosted-API profile (PROPOSED) |
 | Wiki File Storage | Local / S3-compatible  | Cloudflare R2              |
 | Billing           | —                      | Stripe                     |
 | Virus / YARA scan | ClamAV + YARA (local)  | ClamAV + YARA              |

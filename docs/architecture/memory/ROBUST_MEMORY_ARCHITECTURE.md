@@ -625,9 +625,11 @@ not a research breakthrough, and we should not market it as one.
   context (with an orchestrator-brokered pull fallback).
 
 **Open decisions (need founder sign-off → ADR).**
-1. **Graph store.** Qdrant-native edges (no new infra, slower multi-hop) vs
-   embedded Kuzu vs Neo4j. *Recommendation: Qdrant-native through Phase 3, decide
-   at Phase 4 with real query patterns.* Ratifies the open question in ADR 0005.
+1. **Graph store.** **Resolved (2026-06-26) → embedded Kuzu** behind a GraphPort, with
+   Qdrant retained as the vector layer (entry by similarity → walk the web); Neo4j is a
+   future scale-up swap. See [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §5.2. This
+   supersedes the prior "Qdrant-native through Phase 3" recommendation and closes the
+   open question in ADR 0005.
 2. **Orchestrator reasoning shift (cross-domain).** §7.3 elevates the orchestrator
    from tool-driver to central reasoner + memory broker, and removes expert
    `memory.search` grants. This is an **orchestrator-domain** change that must land

@@ -3,7 +3,8 @@
 > **Purpose:** Entry point for how Clannon reasons and acts — the orchestrator
 > loop, the experts it spawns, and the tools they call.
 > **Scope:** Orchestration, expert roster, tool roster, the LLM adapter that
-> drives them, and entropy-based expert routing. Excludes memory (see
+> drives them, and entropy-based expert routing *(PROPOSED — not built; see
+> [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §7.2)*. Excludes memory (see
 > [../memory/](../memory/)) and security gates (see [../security/](../security/)).
 > **Authority level:** Tier 5 (Subsystem). Inherits
 > [../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) and the Invariants.
@@ -27,8 +28,9 @@ The authoritative design lives in [../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITEC
 - **Orchestrator** — central reasoning layer; Clannon-owned loop where the model
   is a structured *advisor*, not the driver.
 - **Decision Log Streaming** — structured decision commentary streamed live.
-- **Expert Spawning: Entropy-Based Routing** — Shannon entropy over domain
-  centroids decides how many experts to spawn.
+- **Expert Spawning: Entropy-Based Routing** *(PROPOSED — not built)* — the target:
+  Shannon entropy over domain centroids surfaced as an advisory signal. Today spawn
+  count is whatever the model emits (`ORCHESTRATION_ANALYSIS.md:48`).
 - **Expert Communication Contract** — brief summary to the orchestrator, full
   findings to the output pipeline.
 - **Control Model And Contracts** — `OrchestratorDecision`, `DecisionLogEntry`,

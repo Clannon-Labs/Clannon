@@ -2,7 +2,11 @@
 
 > **Status:** proposed
 > **Date recorded:** 2026-06-15
-> **Supersedes / superseded by:** —
+> **Supersedes / superseded by:** the **graph-engine choice is superseded by**
+> [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §5.2 → **Kuzu** (embedded, Cypher,
+> behind a GraphPort; Qdrant remains the vector layer; Neo4j = future scale-up swap).
+> The "graph DB choice not yet ratified" / "e.g. Neo4j" below is resolved; the rest of
+> this ADR (media-becomes-knowledge intent) stands.
 > **Authority:** Tier 7 (ADR). The *principle* (media becomes knowledge) is
 > Invariant §VI.25; the *full graph implementation* below is a target, not yet
 > built, hence "proposed."

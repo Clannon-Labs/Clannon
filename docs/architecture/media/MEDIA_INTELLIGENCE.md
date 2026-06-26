@@ -228,6 +228,11 @@ entity embeddings
 
 ## Graph Database
 
+> **Superseded (2026-06-26):** the graph engine is resolved to **Kuzu** in
+> [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §5.2 (embedded, Cypher, behind a
+> GraphPort; Qdrant remains the vector layer). Neo4j is retained only as a future
+> scale-up swap. The recommendation below is updated accordingly.
+
 Purpose:
 
 Reality relationships.
@@ -235,14 +240,14 @@ Reality relationships.
 Recommended:
 
 ```text
-Neo4j
+Kuzu   (resolved — see ARCHITECTURE.md §5.2)
 ```
 
 Alternatives:
 
 ```text
+Neo4j   (future scale-up swap)
 Memgraph
-Kuzu
 ```
 
 Stores:

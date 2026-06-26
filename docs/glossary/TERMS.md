@@ -58,9 +58,11 @@ output filter → delivery**, with async memory writes after delivery.
 - **Sub-agent** — synonym for an expert/worker spawned beneath the orchestrator.
 - **Tool** — a deterministic function experts/orchestrator call to *do one thing*
   (web search, fetch URL, code exec, file read). Tools don't reason.
-- **Entropy-based routing / expert spawning** — deciding how many experts to spawn
-  using **Shannon entropy** over similarity to expert domain centroids: low
-  entropy → one targeted expert; high entropy → multiple in parallel.
+- **Entropy-based routing / expert spawning** *(PROPOSED — not built)* — the design
+  target for deciding how many experts to spawn: **Shannon entropy** over similarity to
+  expert domain centroids, surfaced to the orchestrator as an **advisory signal** (math
+  informs, the reasoner decides). **Today spawn count is whatever the model emits** (see
+  `ARCHITECTURE.md` §7.2).
 - **Domain centroid** — a vector representing an expert's domain; the query is
   embedded and compared against these to route.
 - **Decision log** — the structured, live-streamed record of what the
@@ -89,8 +91,9 @@ output filter → delivery**, with async memory writes after delivery.
 - **Memory Manager** — the component that proactively hydrates context (it pushes,
   doesn't wait), ranks by relevance/recency/trust, enforces the budget, and
   coordinates write proposals. The sole implementer of the MemoryPort.
-- **MemoryPort** — the only door to memory (`hydrate` in, `record_write_proposals`
-  out). Nothing imports memory internals.
+- **MemoryPort** — the only door to memory. **Three** methods: `hydrate`,
+  `record_write_proposals`, and `learn` (`backend/foundation/contracts/memory.py:92-128`).
+  Nothing imports memory internals.
 - **Hydration** — assembling the relevant memory package and injecting it into the
   orchestrator's context before planning. Selective and trust-aware; never full
   transcript replay.

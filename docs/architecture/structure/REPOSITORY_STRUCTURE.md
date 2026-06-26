@@ -67,7 +67,7 @@ clannon/
 │   │   ├── __init__.py
 │   │   ├── loop.py                    ← clannon-owned loop, model is advisor only
 │   │   ├── decisions.py               ← OrchestratorDecision, DecisionLogEntry
-│   │   └── entropy_router.py          ← Shannon entropy expert spawning
+│   │   └── entropy_router.py          ← Shannon entropy spawning (PROPOSED — file not built)
 │   │
 │   ├── experts/
 │   │   ├── __init__.py
@@ -146,7 +146,7 @@ clannon/
 │
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                     ← Semgrep + tests on every push
+│       ├── ci.yml                     ← tests on every push (Semgrep gate PROPOSED — not built)
 │       └── deploy.yml
 │
 ├── .semgrepignore

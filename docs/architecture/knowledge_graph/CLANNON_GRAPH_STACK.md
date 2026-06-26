@@ -190,7 +190,7 @@ modules behind a common "write nodes + edges + vectors" interface.
 - `pyannote.audio` *(optional — diarization)*
 
 **Memory:**
-- `nomic-embed-text` via Ollama *(already in stack)*
+- `nomic-embed-text-v1.5` via **local fastembed ONNX** *(in stack; not Ollama — see [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §5.1)*
 - `spacy` *(or reuse an LLM pass for relation extraction)*
 
 **Algorithms on slices (optional):**

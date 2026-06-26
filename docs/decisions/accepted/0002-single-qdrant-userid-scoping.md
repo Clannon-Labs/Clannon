@@ -4,6 +4,13 @@
 > **Date recorded:** 2026-06-15 (back-filled; decision predates this record)
 > **Supersedes / superseded by:** —
 > **Authority:** Tier 7 (ADR). Reflected as Invariant §V.20.
+>
+> **Build-state note (2026-06-26):** the runtime `user_id` payload-filter scoping is
+> **built and tested** (`backend/core/memory/store.py`, `tests/memory_isolation.py`).
+> The **Semgrep CI build-gate** described below is **PROPOSED — not built** (no semgrep
+> config in repo; CI runs only pytest + frontend build). The single-door rule is the
+> current guard. See [INVARIANT_OWNERSHIP.md](../../architecture/INVARIANT_OWNERSHIP.md)
+> §V.20 and [ARCHITECTURE.md](../../ARCHITECTURE.md) §5.1.
 
 ## Context
 
