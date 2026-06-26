@@ -37,11 +37,14 @@ server and the TUI share this one driver instead of copying the stage loop.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from foundation import Flow, constants
 from core import intake, normalizer, verifier, orchestrator
+
+log = logging.getLogger(__name__)
 from core.memory import prefetch as hydration_prefetch
 from security.sanitizers import runner as sanitizer
 from security.filter import run as output_filter_run
@@ -229,6 +232,25 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
     return flow
 
 
+async def _persist_turn_memory_if_delivered(flow: Flow) -> None:
+    """Persist this turn's memory ONLY when the output filter ACCEPTED the draft and it
+    was delivered.
+
+    This is the post-filter write site: a blocked or failed draft never seeds memory, so
+    the "rejected drafts never touch memory" invariant now holds on the INITIAL pass, not
+    only inside the bounded revision loop. The actual write policy lives in the
+    orchestrator (`persist_turn_memory`) — the pipeline owns only the TIMING. Best-effort:
+    the answer is already delivered, so a memory fault must never fail the turn.
+    """
+    ctx = flow.ctx
+    if ctx.blocked or ctx.failed or ctx.filter_blocked:
+        return  # not delivered — never write
+    try:
+        await orchestrator.persist_turn_memory(ctx)
+    except Exception as exc:  # noqa: BLE001 — answer already delivered; memory is best-effort
+        log.warning("post-delivery memory persist dropped: %s", exc)
+
+
 async def _drive_with_revision(
     flow: Flow,
     stages: list[Stage],
@@ -243,10 +265,15 @@ async def _drive_with_revision(
     only turns a rejection from a silent dead-end into a feedback-driven retry, and
     NEVER delivers content the filter hasn't accepted. A stage list without an
     orchestrator+filter pair (tests/subsets) falls back to a plain linear drive.
+
+    Memory for the turn is persisted ONCE, AFTER the filter accepts and the answer is
+    delivered (`_persist_turn_memory_if_delivered`), so a blocked draft never seeds it.
     """
     split = _split_at_filter(stages)
     if split is None or constants.FILTER_MAX_REVISIONS <= 0:
-        return await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
+        flow = await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
+        await _persist_turn_memory_if_delivered(flow)
+        return flow
 
     pre, segment, post = split
     # input gates + the first orchestrator→filter pass
@@ -254,5 +281,7 @@ async def _drive_with_revision(
     if flow.ctx.filter_blocked:
         flow = await recover_from_filter_block(flow)
     if flow.should_stop:
-        return flow  # input-blocked, failed, or still filter-blocked after recovery
-    return await drive(flow, post, on_stage=on_stage, on_stage_end=on_stage_end)  # delivery
+        return flow  # input-blocked, failed, or still filter-blocked after recovery — NO memory write
+    flow = await drive(flow, post, on_stage=on_stage, on_stage_end=on_stage_end)  # delivery
+    await _persist_turn_memory_if_delivered(flow)  # only now, on the delivered draft
+    return flow

@@ -87,46 +87,11 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
         flow.ctx.orchestrator_response = response
 
-        # Memory writes for this turn (experts/orchestrator only PROPOSE; the manager
-        # owns persistence). Best-effort: the answer is already produced, so a memory
-        # fault must never turn a successful turn into a failed one.
-        #   - EPISODIC: a recollection of the turn, but ONLY when the turn is
-        #     SUBSTANTIVE. A trivial exchange ("hey" -> "hello") has nothing worth
-        #     recalling cross-session and just pollutes episodic, so it is skipped.
-        #   - the `remember` tool's writes (facts/preferences the orchestrator chose to
-        #     keep, or the user asked it to) are already on ctx.memory_writes_requested;
-        #     they persist together with the episodic note below.
-        substantive = _is_substantive_turn(normalized, response, flow.ctx)
-        try:
-            if substantive:
-                flow.ctx.memory_writes_requested.append(
-                    MemoryWriteProposal(
-                        store=MemoryStore.EPISODIC,
-                        content=f"task: {(normalized.content or '')[:200]} | answer: {response.text[:500]}",
-                        rationale="turn outcome",
-                        confidence=response.confidence,
-                    )
-                )
-            if flow.ctx.memory_writes_requested:
-                await ports.memory.record_write_proposals(
-                    flow.ctx.user_id, flow.ctx.session_id, flow.ctx.memory_writes_requested
-                )
-        except Exception as exc:
-            log.warning("memory write proposals dropped: %s", exc)
-
-        # the memory agent distils semantic facts + procedural patterns from the turn
-        # (its own LLM call, behind the port). Only on substantive turns — a quick
-        # conversational reply has nothing durable to learn. Best-effort AND off the
-        # critical path: the answer already exists, so the distillation runs in the
-        # background and the stage returns immediately.
-        if substantive:
-            _spawn_background(_learn(
-                ports, flow.ctx.user_id, flow.ctx.session_id,
-                task=normalized.content or "",
-                answer=response.text,
-                findings=[getattr(f, "full_content", "") for f in flow.ctx.expert_findings],
-            ))
-
+        # Memory writes for this turn are DEFERRED to AFTER the output filter accepts
+        # the draft (core.pipeline calls `persist_turn_memory` on the delivered path),
+        # so a draft the filter BLOCKS never seeds memory — the invariant now holds on
+        # the initial pass, not just the revision loop. See `persist_turn_memory` below
+        # and docs/ARCHITECTURE.md §5.3.
         return flow.next(response, Origin.ORCHESTRATOR, started)
 
     except Exception as exc:
@@ -143,3 +108,58 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         degraded = build_degraded_response(flow.ctx, kind)
         flow.ctx.orchestrator_response = degraded
         return flow.next(degraded, Origin.ORCHESTRATOR, started)
+
+
+async def persist_turn_memory(ctx) -> None:
+    """Persist this turn's memory — POST-FILTER, on the DELIVERED path only.
+
+    Called by `core.pipeline` ONLY after the output filter has ACCEPTED the draft and it
+    is being delivered, so a draft the filter blocks never seeds memory (the
+    "rejected drafts never touch memory" invariant now holds on the INITIAL pass, not
+    just the bounded revision loop). Experts/orchestrator only PROPOSE; the manager owns
+    persistence. Best-effort: the answer is already delivered, so a memory fault must
+    never turn a successful turn into a failed one.
+
+      - EPISODIC: a recollection of the turn, built from the FINAL delivered answer (a
+        revised draft records what the user actually received, not the blocked draft),
+        and only when the turn is SUBSTANTIVE — a trivial exchange ("hey" -> "hello")
+        has nothing worth recalling cross-session and would just pollute episodic.
+      - the `remember` tool's writes (facts/preferences the orchestrator chose to keep,
+        or the user asked it to) are already on ctx.memory_writes_requested; they
+        persist together with the episodic note. On a blocked turn this function never
+        runs, so those proposals are never written either.
+    """
+    response = ctx.orchestrator_response
+    if response is None:
+        return
+    normalized = ctx.normalized_input
+    task_content = getattr(normalized, "content", "") or ""
+    ports = build_default_ports(ctx)
+    substantive = _is_substantive_turn(normalized, response, ctx)
+    try:
+        if substantive:
+            ctx.memory_writes_requested.append(
+                MemoryWriteProposal(
+                    store=MemoryStore.EPISODIC,
+                    content=f"task: {task_content[:200]} | answer: {response.text[:500]}",
+                    rationale="turn outcome",
+                    confidence=response.confidence,
+                )
+            )
+        if ctx.memory_writes_requested:
+            await ports.memory.record_write_proposals(
+                ctx.user_id, ctx.session_id, ctx.memory_writes_requested
+            )
+    except Exception as exc:  # noqa: BLE001 — answer already delivered; memory is best-effort
+        log.warning("memory write proposals dropped: %s", exc)
+
+    # the memory agent distils semantic facts + procedural patterns from the turn (its
+    # own LLM call, behind the port). Only on substantive turns, and off the critical
+    # path: the answer is already delivered, so distillation runs in the background.
+    if substantive:
+        _spawn_background(_learn(
+            ports, ctx.user_id, ctx.session_id,
+            task=task_content,
+            answer=response.text,
+            findings=[getattr(f, "full_content", "") for f in ctx.expert_findings],
+        ))

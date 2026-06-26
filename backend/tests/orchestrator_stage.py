@@ -1,7 +1,8 @@
 """Tests for the orchestrator Flow stage (entry point). The reasoning core
 (run_loop) is faked here — the stage's job is Flow handling: response storage,
-the memory proposal, the timeout, and degrading gracefully (never a blank
-failure) when the loop times out, hits a provider rate-limit storm, or faults."""
+the timeout, and degrading gracefully (never a blank failure) when the loop times
+out, hits a provider rate-limit storm, or faults. Memory writes are NO LONGER done
+here — they are deferred to a post-filter site (see tests/memory_write_timing.py)."""
 
 import asyncio
 
@@ -14,7 +15,7 @@ def _flow():
     return Flow.new(NormalizedInput(modality="text", content_type="text/plain", content="hi"), "s")
 
 
-def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
+def test_stage_happy_path_sets_response_and_journal(monkeypatch):
     answer = "Here is a substantial, real answer to the user's question. " * 5  # >200 chars => substantive
     async def fake_loop(normalized, ports, ctx):
         return OrchestratorResponse(text=answer, confidence=0.8)
@@ -24,17 +25,9 @@ def test_stage_happy_path_sets_response_journal_and_memory(monkeypatch):
     assert out.status.value == "ok"
     assert out.ctx.orchestrator_response.text == answer
     assert any(e.origin == Origin.ORCHESTRATOR for e in out.journal)
-    assert len(out.ctx.memory_writes_requested) == 1   # a SUBSTANTIVE turn is proposed for episodic memory
-
-
-def test_stage_skips_memory_on_a_trivial_turn(monkeypatch):
-    async def fake_loop(normalized, ports, ctx):
-        return OrchestratorResponse(text="hi", confidence=0.5)
-    monkeypatch.setattr(stage, "run_loop", fake_loop)
-
-    out = asyncio.run(stage.run(_flow()))                  # _flow()'s content is "hi" -> trivial
-    assert out.status.value == "ok"
-    assert len(out.ctx.memory_writes_requested) == 0       # a bare "hi" -> "hi" is NOT dumped to memory
+    # the stage NO LONGER writes memory — that is deferred to a post-filter site so a
+    # draft the filter blocks never seeds memory (see tests/memory_write_timing.py).
+    assert out.ctx.memory_writes_requested == []
 
 
 def test_stage_degrades_gracefully_on_loop_error(monkeypatch):
@@ -85,24 +78,6 @@ def test_stage_salvages_partial_findings_on_rate_limit(monkeypatch):
     assert "Web research" in resp.text
     assert resp.finding_refs == ["abc123"]
 
-
-def test_memory_fault_never_fails_a_delivered_turn(monkeypatch):
-    async def fake_loop(normalized, ports, ctx):
-        return OrchestratorResponse(text="answer", confidence=0.8)
-    monkeypatch.setattr(stage, "run_loop", fake_loop)
-
-    class BrokenMemory:
-        async def record_write_proposals(self, user_id, session_id, proposals):
-            raise RuntimeError("qdrant exploded")
-
-    real_build = stage.build_default_ports
-    def build_with_broken_memory(ctx):
-        ports = real_build(ctx)
-        ports.memory = BrokenMemory()
-        return ports
-    monkeypatch.setattr(stage, "build_default_ports", build_with_broken_memory)
-
-    out = asyncio.run(stage.run(_flow()))
-    # the answer was produced — a memory write fault must not undo that
-    assert out.status.value == "ok"
-    assert out.ctx.orchestrator_response.text == "answer"
+# NOTE: "a memory fault never fails a delivered turn" now lives in
+# tests/memory_write_timing.py (test_memory_fault_never_fails_persist), because the
+# memory write moved out of this stage to the post-filter persist site.
