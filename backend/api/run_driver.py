@@ -307,14 +307,6 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             if _final_msg and not run.message:
                 run.message = _final_msg
                 run.emit({"type": "message_delta", "text": _final_msg})
-            run.memory_writes = [
-                {
-                    "content": getattr(w, "content", str(w)),
-                    "rationale": getattr(w, "rationale", ""),
-                    "ts": _now(),
-                }
-                for w in ctx.memory_writes_requested
-            ]
 
             if ctx.blocked or ctx.sanitization_blocked or ctx.verifier_blocked or ctx.filter_blocked:
                 # record WHICH gate blocked so the UI can explain it accurately
@@ -341,6 +333,18 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 text = ctx.final_response or (
                     ctx.orchestrator_response.text if ctx.orchestrator_response else ""
                 )
+                # memory is persisted ONLY on the delivered path (post-filter), so the
+                # /memory view is populated ONLY here. A blocked or failed draft wrote
+                # nothing to memory, and its proposals (e.g. an in-flight `remember`) must
+                # not appear in the view — run.memory_writes stays its empty default.
+                run.memory_writes = [
+                    {
+                        "content": getattr(w, "content", str(w)),
+                        "rationale": getattr(w, "rationale", ""),
+                        "ts": _now(),
+                    }
+                    for w in ctx.memory_writes_requested
+                ]
                 # surface the delivered output artifacts (experts captured them to
                 # durable storage; here we just collect their refs for the API).
                 # Only on the delivered path — a withheld draft keeps its files held.
