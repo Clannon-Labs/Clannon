@@ -326,10 +326,25 @@ Experts return a brief `ExpertSummary` to the orchestrator (keeps its context le
 buffer full `ExpertFindings` to the output pipeline (`handler/experts.py:82-101`). The
 orchestrator never receives raw expert output. Hard constraint.
 
-> Open design fork (not resolved by this document): whether to elevate the orchestrator
-> to "sole memory broker" and remove experts' own `memory.search` grant
-> (`architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md:428-460`). Today experts hold the
-> grant. Flagged in §11 as a decision to make, not silently settled here.
+> **Memory access — RESOLVED → sole-broker.** All memory access is mediated by the
+> Memory Manager. It hydrates the turn's relevant context once, the orchestrator brokers
+> it, and experts are stateless workers that receive their context from the
+> orchestrator/Manager and **never query memory directly**. One auditable memory access
+> point, not N independent expert lookups. (Supersedes the earlier "open fork";
+> `architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md:428-460`.)
+>
+> - `[BUILT]` — the Manager hydrates each turn through the single `MemoryPort` door
+>   (`core/memory/prefetch.py` → `MemoryPort.hydrate`, injected into the orchestrator's
+>   context); writes are already orchestrator-only (the `remember` tool proposes, experts
+>   never write); and every read is constructed in one place (`core/memory/store.py`), so
+>   the access point is already singular and auditable.
+> - `[PARTIAL]` — three experts still hold a `memory.search` grant
+>   (`experts/{writer,documentation,web_research}/expert.py`), and the `ExpertEnv`
+>   (`registry/capabilities/handler/experts.py:117-125`) does not yet carry the hydrated
+>   context. Enforcing sole-broker means first handing experts their context through the
+>   broker, then removing the grant — until that lands the rule is stated, not enforced.
+>   The grant-removal is scoped (not yet applied, pending approval) in
+>   `conversation/report_v4.md`.
 
 ---
 
@@ -467,9 +482,11 @@ irreversible-action-approval safety gates; the **decision-log audit mirror** (§
 replay-based; no compaction store).
 
 **Cross-cutting open decisions to make before/within these phases** (flagged, not
-silently settled here): (1) orchestrator-as-sole-memory-broker vs. experts keeping
-`memory.search` (§7.3); (2) whether a second entity-embedding space is added alongside
-nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job type.
+silently settled here): (1) **resolved → sole-broker** (§7.3): experts will receive
+Manager-hydrated context and lose their `memory.search` grant; the grant-removal is
+`[PARTIAL]`, pending the change that threads hydrated context to experts (scoped in
+`conversation/report_v4.md`); (2) whether a second entity-embedding space is added
+alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job type.
 
 ---
 
