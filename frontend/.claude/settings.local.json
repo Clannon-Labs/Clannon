@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Read(//mnt/win_c/active_projects/Vraksha/.claude/**)",
+      "Read(//mnt/win_c/active_projects/Vraksha/clannon/.claude/**)",
+      "Bash(.venv/bin/python -c \"import fastapi, uvicorn; print\\('fastapi', fastapi.__version__, '| uvicorn ok'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(sed -n '89,135p' foundation/transport/context.py)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python -c \"import fastapi, uvicorn; print\\('fastapi', fastapi.__version__\\)\")",
+      "Read(//tmp/**)",
+      "Bash(rm -f cj.txt)",
+      "Bash(curl -s -c cj.txt -H \"Content-Type: application/json\" -d '{\"name\":\"Test User\",\"email\":\"t@example.com\",\"password\":\"longenough1\"}' http://localhost:8000/auth/signup)",
+      "Bash(curl -s -b cj.txt http://localhost:8000/auth/me)",
+      "Bash(curl -s -b cj.txt http://localhost:8000/runs)",
+      "Bash(curl -s -o /dev/null -w \"unauthed me: %{http_code}\\\\n\" http://localhost:8000/auth/me)",
+      "Bash(curl -s -b cj.txt -X POST http://localhost:8000/billing/checkout -o /dev/null -w \"checkout: %{http_code}\\\\n\")",
+      "Bash(curl -s -b cj.txt -H \"Content-Type: application/json\" -d '{\"brief\":\"In two sentences: what is the capital of Nepal and its approximate population?\"}' http://localhost:8000/runs)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/config)",
+      "Bash(pkill -f \"next start\")",
+      "Bash(NEXT_PUBLIC_API_MODE=http NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run build)",
+      "Bash(curl -s -o /dev/null -w \"frontend: %{http_code} \" http://localhost:3777/)",
+      "Bash(curl -s -o /dev/null -w \"api: %{http_code}\\\\n\" http://localhost:8000/config)",
+      "Bash(node clannon-e2e-real.mjs)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"frontend %{http_code} \" http://localhost:3777/)",
+      "Bash(curl -s -o /dev/null -w \"api %{http_code}\\\\n\" http://localhost:8000/config)",
+      "Bash(node clannon-full-e2e.mjs)",
+      "Bash(sed -i 's|await page.waitForURL\\(\"\\\\*\\\\*/login?error=oauth_unavailable\", { timeout: 15000 }\\);|await page.waitForURL\\(\"**/login?error=oauth_unavailable\", { timeout: 15000 }\\);\\\\nawait page.waitForTimeout\\(1800\\);|' clannon-full-e2e.mjs)",
+      "Bash(sed -i 's|\"dialog input\"|'\"'\"'dialog[open] input'\"'\"'|g; s|\"dialog textarea\"|'\"'\"'dialog[open] textarea'\"'\"'|g; s|'\"'\"'dialog button\\\\[type=\"submit\"\\\\]'\"'\"'|'\"'\"'dialog[open] button[type=\"submit\"]'\"'\"'|g; s|'\"'\"'dialog button:has-text\\(\"Delete\"\\)'\"'\"'|'\"'\"'dialog[open] button:has-text\\(\"Delete\"\\)'\"'\"'|g' clannon-full-e2e.mjs)",
+      "Bash(node *)"
+    ],
+    "defaultMode": "bypassPermissions"
+  }
+}
