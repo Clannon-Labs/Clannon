@@ -61,7 +61,7 @@ function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
       )}
     >
       {/* margin — the transcript's timestamp column */}
-      <span className="select-none pr-2 pt-2 text-right text-[10.5px] leading-tight text-faint/80 tabular">
+      <span className="select-none pr-2 pt-2 text-right text-[10px] leading-tight text-faint/80 tabular">
         {formatClock(entry.ts)}
       </span>
 
@@ -91,29 +91,29 @@ function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
         </p>
         <p
           className={cn(
-            "mt-1 font-mono leading-snug text-foreground",
-            major ? "text-[13px] font-semibold" : "text-[12.5px]",
+            "mt-1 font-mono text-[13px] leading-snug text-foreground",
+            major && "font-semibold",
           )}
         >
           {title}
         </p>
         {recall ? (
           query && (
-            <p className="mt-1 font-mono text-[11.5px] italic leading-snug text-muted-foreground">
+            <p className="mt-1 font-mono text-[12px] italic leading-snug text-muted-foreground">
               “{query}”
             </p>
           )
         ) : (
           <>
             {entry.detail && (
-              <p className="mt-1 font-mono text-[11.5px] leading-snug text-muted-foreground">
+              <p className="mt-1 font-mono text-[12px] leading-snug text-muted-foreground">
                 {entry.detail}
               </p>
             )}
             {entry.meta && (
               <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                 {Object.entries(entry.meta).map(([k, v]) => (
-                  <span key={k} className="font-mono text-[10.5px] text-faint">
+                  <span key={k} className="font-mono text-[11px] text-faint">
                     {k}=<span className="text-muted-foreground">{v}</span>
                   </span>
                 ))}
@@ -203,7 +203,7 @@ export function DecisionLog({
             {live && (
               <li className="grid grid-cols-[2.9rem_1fr] sm:grid-cols-[3.6rem_1fr]">
                 <span aria-hidden />
-                <p className="border-l border-border/60 py-2 pl-4 font-mono text-[11.5px] text-faint">
+                <p className="border-l border-border/60 py-2 pl-4 font-mono text-[12px] text-faint">
                   orchestrating<span className="caret" />
                 </p>
               </li>
@@ -217,7 +217,7 @@ export function DecisionLog({
         <button
           type="button"
           onClick={jumpToLatest}
-          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border-strong bg-surface-raised px-3 py-1.5 text-[11.5px] font-medium text-foreground shadow-md transition-colors hover:border-primary"
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border-strong bg-surface-raised px-3 py-1.5 text-[12px] font-medium text-foreground shadow-md transition-colors hover:border-primary"
         >
           <ArrowDown className="size-3.5 text-primary" aria-hidden />
           Jump to live

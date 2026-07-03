@@ -131,7 +131,7 @@ function EntryCard({
           )}
         </button>
       )}
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-faint">
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-faint">
         <span>{formatRelativeTime(entry.updatedAt)}</span>
         {entry.confidence !== undefined && (
           <span className="tabular">confidence {Math.round(entry.confidence * 100)}%</span>

@@ -177,7 +177,7 @@ function RailBody({
           <Search className="size-4" aria-hidden />
           Search
         </span>
-        <kbd className="hidden rounded border border-border px-1.5 py-0.5 font-mono text-[10.5px] md:block">
+        <kbd className="hidden rounded border border-border px-1.5 py-0.5 font-mono text-[11px] md:block">
           ⌘K
         </kbd>
       </button>

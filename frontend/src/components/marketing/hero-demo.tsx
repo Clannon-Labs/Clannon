@@ -82,7 +82,7 @@ export function HeroDemo() {
         </div>
 
         {/* log body */}
-        <div className="flex h-[280px] flex-col justify-end gap-0.5 overflow-hidden px-4 py-3 font-mono text-[12.5px] leading-relaxed sm:h-[300px]">
+        <div className="flex h-[280px] flex-col justify-end gap-0.5 overflow-hidden px-4 py-3 font-mono text-[13px] leading-relaxed sm:h-[300px]">
           {entries.map((entry, i) => {
             const style = KIND_STYLE[entry.kind];
             return (
@@ -96,7 +96,7 @@ export function HeroDemo() {
                 <span className="hidden shrink-0 text-faint sm:inline">{entry.time}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
                   <span className={cn("inline-block size-1.5 rounded-full", style.dot)} />
-                  <span className="w-14 text-[10.5px] tracking-wider text-muted-foreground">
+                  <span className="w-14 text-[11px] tracking-wider text-muted-foreground">
                     {style.label}
                   </span>
                 </span>

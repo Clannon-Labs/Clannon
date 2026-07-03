@@ -185,7 +185,7 @@ export function CommandPalette() {
           aria-label="Search commands"
           className="h-12 w-full bg-transparent text-[15px] placeholder:text-faint focus:outline-none"
         />
-        <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10.5px] text-faint sm:block">
+        <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[11px] text-faint sm:block">
           esc
         </kbd>
       </div>
@@ -219,7 +219,7 @@ export function CommandPalette() {
                     <command.icon className="size-4 shrink-0 opacity-70" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{command.label}</span>
                     {command.hint && (
-                      <span className="shrink-0 text-[11.5px] text-faint">{command.hint}</span>
+                      <span className="shrink-0 text-[12px] text-faint">{command.hint}</span>
                     )}
                   </button>
                 </li>

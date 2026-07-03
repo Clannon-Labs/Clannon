@@ -24,7 +24,7 @@ export default function DemoPage() {
         <Link href="/" className="flex items-center gap-2" aria-label={`${siteConfig.name} home`}>
           <Mark className="size-5 text-primary" aria-hidden />
           <span className="font-display text-base font-medium">{siteConfig.name}</span>
-          <span className="ml-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-faint">
+          <span className="tag-label ml-1 rounded-full border border-border px-2 py-0.5 text-faint">
             Demo
           </span>
         </Link>

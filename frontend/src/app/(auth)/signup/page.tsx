@@ -136,7 +136,7 @@ export default function SignupPage() {
           {submitting ? "Creating workspace…" : "Create my workspace"}
         </Button>
 
-        <p className="text-center text-[12.5px] leading-relaxed text-faint">
+        <p className="text-center text-[12px] leading-relaxed text-faint">
           By creating a workspace you agree to the{" "}
           <Link href="/legal/terms" className="underline underline-offset-2 hover:text-foreground">
             Terms of Service

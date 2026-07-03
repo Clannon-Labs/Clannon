@@ -84,7 +84,7 @@ function ModelDropdown({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left font-mono text-[12.5px] transition-colors",
+                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left font-mono text-[13px] transition-colors",
                     selected ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
@@ -140,9 +140,9 @@ export function ModelRoleList({
                 </span>
               )}
             </p>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{layer.description}</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{layer.description}</p>
             {layer.default && !layer.locked && (
-              <p className="mt-1 text-[11.5px] text-faint">
+              <p className="mt-1 text-[12px] text-faint">
                 Recommended: <span className="font-mono">{layer.default}</span>
               </p>
             )}
@@ -344,7 +344,7 @@ export function SessionModelPicker({
         aria-haspopup="dialog"
         aria-expanded={anchor !== null}
         title="Models for this run"
-        className="flex min-w-0 max-w-[9.5rem] shrink cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[15rem]"
+        className="flex min-w-0 max-w-[9.5rem] shrink cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[15rem]"
       >
         <span className="truncate">{prettyModel(valueFor(orchestrator))}</span>
         {overrides > 0 && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />}
@@ -454,7 +454,7 @@ export function SessionModelPicker({
                   <ChevronLeft className="size-4 shrink-0 text-faint" aria-hidden />
                   More models
                 </button>
-                <p className="px-3 pb-1 text-[11.5px] leading-relaxed text-faint">
+                <p className="px-3 pb-1 text-[12px] leading-relaxed text-faint">
                   The specialists the orchestrator can spawn — pick one to set its model.
                 </p>
                 <div className="mx-1 mb-1 h-px bg-border" />
@@ -489,7 +489,7 @@ export function SessionModelPicker({
                   {current.label}
                 </button>
                 {current.description && (
-                  <p className="px-3 pb-1 text-[11.5px] leading-relaxed text-faint">{current.description}</p>
+                  <p className="px-3 pb-1 text-[12px] leading-relaxed text-faint">{current.description}</p>
                 )}
                 <div className="mx-1 mb-1 h-px bg-border" />
                 <ul

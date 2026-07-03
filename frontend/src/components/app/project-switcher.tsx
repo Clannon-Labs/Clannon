@@ -152,7 +152,7 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
           <Layers className="size-4 shrink-0 text-faint" aria-hidden />
         )}
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] uppercase tracking-[0.14em] text-faint">Project</span>
+          <span className="tag-label block text-faint">Project</span>
           <span className="block truncate text-[13px] font-medium text-foreground">
             {current?.name ?? "All projects"}
           </span>
@@ -182,7 +182,7 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
           </div>
 
           <div className="h-px bg-border" />
-          <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.14em] text-faint">
+          <p className="tag-label px-3 pb-1 pt-2 text-faint">
             Projects {projects.length > 0 && <span className="tabular">· {projects.length}</span>}
           </p>
 

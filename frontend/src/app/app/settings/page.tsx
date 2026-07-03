@@ -58,7 +58,7 @@ function UsageChart() {
             style={{ width: `${pct}%` }}
           />
         </div>
-        <p className="mt-2 text-[12.5px] text-faint">
+        <p className="mt-2 text-[12px] text-faint">
           Budgets are enforced atomically per call — runs stop cleanly at the
           limit, never mid-charge.
         </p>
@@ -73,13 +73,13 @@ function UsageChart() {
                 className="w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary"
                 style={{ height: `${Math.max(4, (day.tokens / max) * 128)}px` }}
               />
-              <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[10.5px] tabular group-hover:block">
+              <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block">
                 {formatTokens(day.tokens)}
               </span>
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-between text-[10.5px] text-faint tabular">
+        <div className="mt-2 flex justify-between text-[10px] text-faint tabular">
           <span>{usage.byDay[0]?.date.slice(5)}</span>
           <span>{usage.byDay.at(-1)?.date.slice(5)}</span>
         </div>
@@ -200,7 +200,7 @@ function BillingTab() {
                 ${plan.monthlyUsd}
                 <span className="font-sans text-sm text-muted-foreground">/mo</span>
               </p>
-              <p className="mt-1 text-[12.5px] text-faint">
+              <p className="mt-1 text-[12px] text-faint">
                 {formatTokens(plan.tokenBudget)} tokens · {plan.memoryTiers.length}/4 memory tiers
               </p>
               {!isCurrent && (

@@ -128,10 +128,10 @@ export default function WorkspacePage() {
                 aria-hidden
               />
               <span className="flex min-w-0 flex-col">
-                <span className="text-[14px] font-medium leading-snug text-foreground sm:text-[13.5px]">
+                <span className="text-sm font-medium leading-snug text-foreground sm:text-[13px]">
                   {example.label}
                 </span>
-                <span className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground sm:mt-0 sm:text-[12px]">
+                <span className="mt-0.5 text-[12px] leading-snug text-muted-foreground sm:mt-0">
                   {example.hint}
                 </span>
               </span>

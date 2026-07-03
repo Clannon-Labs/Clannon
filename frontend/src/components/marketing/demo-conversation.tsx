@@ -169,7 +169,7 @@ export function DemoConversation() {
                     )}
                   >
                     <Icon className={cn("size-5 shrink-0", active ? "text-primary" : "text-primary/70")} aria-hidden />
-                    <span className="text-[14px] font-medium leading-snug text-foreground sm:text-[13.5px]">
+                    <span className="text-sm font-medium leading-snug text-foreground sm:text-[13px]">
                       {brief.label}
                     </span>
                   </button>
@@ -195,7 +195,7 @@ export function DemoConversation() {
                 </span>
                 <RunStatusBadge status={s.status} />
                 {s.tokensUsed > 0 && (
-                  <span className="text-[12.5px] text-faint tabular">
+                  <span className="text-[12px] text-faint tabular">
                     {formatTokens(s.tokensUsed)} tokens
                   </span>
                 )}
@@ -243,7 +243,7 @@ export function DemoConversation() {
                   <p className="display-soft text-[1.4rem] leading-tight">
                     Sign up and it never forgets this.
                   </p>
-                  <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">
+                  <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
                     The demo runs clean every time but starts from zero. The real
                     Clannon carries your clients, your style, and what worked last
                     time into every run.
@@ -278,7 +278,7 @@ export function DemoConversation() {
           a great way to go bankrupt). */}
       <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         {watched >= NUDGE_AFTER && (
-          <div className="mb-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/25 bg-primary-soft/40 px-3 py-2 text-center text-[12.5px] text-muted-foreground">
+          <div className="mb-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/25 bg-primary-soft/40 px-3 py-2 text-center text-[12px] text-muted-foreground">
             <span>You&apos;ve watched {watched} runs — the real one would remember every one.</span>
             <Link href="/signup" className="font-medium text-primary underline-offset-2 hover:underline">
               Run your own, free →
@@ -294,7 +294,7 @@ export function DemoConversation() {
                 disabled={running}
                 onClick={() => setSelected(i)}
                 className={cn(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-[12.5px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                  "shrink-0 rounded-full border px-3 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                   selected === i
                     ? "border-primary bg-primary-soft text-primary"
                     : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",

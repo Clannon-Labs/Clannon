@@ -104,7 +104,7 @@ export function ReportRating({
   return (
     <div className="mt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[12.5px] text-faint">Was this useful?</span>
+        <span className="text-[12px] text-faint">Was this useful?</span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"

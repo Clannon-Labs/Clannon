@@ -38,7 +38,7 @@ export function ExpertPanel({ experts, className }: { experts: ExpertState[]; cl
                     {expert.name}
                     <span className="text-faint">/{expert.domain.toLowerCase()}</span>
                   </p>
-                  <span className={cn("flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium", meta.tone)}>
+                  <span className={cn("flex shrink-0 items-center gap-1.5 text-[12px] font-medium", meta.tone)}>
                     {meta.live && (
                       <span className="size-1.5 animate-pulse-dot rounded-full bg-current" aria-hidden />
                     )}
@@ -46,7 +46,7 @@ export function ExpertPanel({ experts, className }: { experts: ExpertState[]; cl
                   </span>
                 </div>
                 {expert.summary ? (
-                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
                     {expert.summary}
                   </p>
                 ) : (
@@ -86,14 +86,14 @@ export function SourcesPanel({ sources, className }: { sources: Source[]; classN
               rel="noopener noreferrer"
               className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted"
             >
-              <span className="mt-px shrink-0 font-mono text-[11.5px] text-faint tabular">
+              <span className="mt-px shrink-0 font-mono text-[11px] text-faint tabular">
                 [{i + 1}]
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] text-foreground group-hover:text-primary">
                   {source.title}
                 </span>
-                <span className="block truncate text-[11.5px] text-faint">{source.domain}</span>
+                <span className="block truncate text-[12px] text-faint">{source.domain}</span>
               </span>
               <ExternalLink className="mt-1 size-3.5 shrink-0 text-faint opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
             </a>

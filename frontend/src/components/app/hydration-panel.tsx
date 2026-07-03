@@ -157,7 +157,7 @@ function HydrationItem({
             type="button"
             onClick={onToggle}
             aria-expanded={expanded}
-            className="inline-flex min-h-7 items-center gap-1 text-[11.5px] text-faint transition-colors hover:text-muted-foreground"
+            className="inline-flex min-h-7 items-center gap-1 text-[12px] text-faint transition-colors hover:text-muted-foreground"
           >
             Why do I know this?
             <ChevronRight className={cn("size-3 transition-transform duration-200", expanded && "rotate-90")} aria-hidden />
@@ -165,7 +165,7 @@ function HydrationItem({
           {isWiki ? (
             <Link
               href="/app/memory"
-              className="inline-flex min-h-7 items-center gap-1 text-[11.5px] text-faint transition-colors hover:text-foreground"
+              className="inline-flex min-h-7 items-center gap-1 text-[12px] text-faint transition-colors hover:text-foreground"
             >
               <Pencil className="size-3" aria-hidden /> Wrong — fix it
             </Link>
@@ -173,7 +173,7 @@ function HydrationItem({
             <button
               type="button"
               onClick={onCorrect}
-              className="inline-flex min-h-7 items-center gap-1 text-[11.5px] text-faint transition-colors hover:text-destructive"
+              className="inline-flex min-h-7 items-center gap-1 text-[12px] text-faint transition-colors hover:text-destructive"
             >
               <X className="size-3" aria-hidden /> That&apos;s outdated
             </button>
@@ -189,7 +189,7 @@ function HydrationItem({
               transition={{ duration: 0.22 }}
               className="overflow-hidden"
             >
-              <dl className="mt-2 flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2.5 text-[11.5px]">
+              <dl className="mt-2 flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2.5 text-[12px]">
                 <ProvRow label="Trust">
                   {TIER_LABELS[entry.tier]} — {TRUST_LINE[entry.tier]}
                 </ProvRow>

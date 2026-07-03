@@ -34,7 +34,7 @@ export function LiveDemo() {
               >
                 <Icon className="size-5 text-primary/70 transition-colors group-hover:text-primary" aria-hidden />
                 <span className="text-[14px] font-medium leading-snug text-foreground">{brief.label}</span>
-                <span className="mt-auto inline-flex items-center gap-1 text-[12.5px] text-faint transition-colors group-hover:text-primary">
+                <span className="mt-auto inline-flex items-center gap-1 text-[12px] text-faint transition-colors group-hover:text-primary">
                   Watch the run
                   <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
                 </span>

@@ -132,7 +132,7 @@ export function ArtifactPreview({
             </div>
           )}
           {state.kind === "text" && (
-            <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[12.5px] leading-relaxed text-muted-foreground">
+            <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[13px] leading-relaxed text-muted-foreground">
               {state.text}
             </pre>
           )}

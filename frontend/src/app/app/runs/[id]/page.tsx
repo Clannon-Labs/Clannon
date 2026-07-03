@@ -216,7 +216,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             </span>
             <RunStatusBadge status={live.status} />
             {live.tokensUsed > 0 && (
-              <span className="text-[12.5px] text-faint tabular">
+              <span className="text-[12px] text-faint tabular">
                 {formatTokens(live.tokensUsed)} tokens
               </span>
             )}

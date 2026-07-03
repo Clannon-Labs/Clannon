@@ -140,7 +140,7 @@ function LoginForm() {
           {submitting ? "Signing in…" : "Sign in"}
         </Button>
 
-        <p className="text-center text-[12.5px] leading-relaxed text-faint">
+        <p className="text-center text-[12px] leading-relaxed text-faint">
           By signing in you agree to the{" "}
           <Link href="/legal/terms" className="underline underline-offset-2 hover:text-foreground">
             Terms of Service
