@@ -36,6 +36,13 @@ list to maintain, not two. The import lines themselves are unavoidable; the dupl
 <a id="f2"></a>
 ## F2 — `Origin` and `PipelineStage` are parallel enums for the same concept
 
+> **Update (2026-06):** Partially superseded. The `_STAGE_LABELS`/`_STAGE_STATUS` side-arrays
+> named in "Why it hurts" below were removed by the Stage-metadata refactor (label and status
+> now live ON each `Stage` in `core/pipeline.py`), so a stage's identity is no longer spread
+> across those two arrays. But the actual finding still stands: `Origin` (`vocab/types.py:26`)
+> and `PipelineStage` (`transport/context.py:65`) BOTH still exist with the same mismatched
+> value strings. Only the side-array half of the "spread across N places" sentence is stale.
+
 - **Severity:** Medium
 - **Type:** scattered logic
 - **Locations:** `vocab/types.py:26-43` (`Origin`) and `transport/context.py:65-83`

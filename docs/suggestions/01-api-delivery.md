@@ -70,6 +70,15 @@ the `app.py` routes just bypass it.)
 <a id="a3"></a>
 ## A3 — `runs.py` is a 591-line god-file (store + driver + SSE + recovery)
 
+> **Update (2026-06):** Superseded by the runs.py-split refactor, which split along the
+> exact seams this finding named. `api/runs.py` is now a ~40-line façade that only
+> re-exports; the four jobs moved to focused modules: `api/run_state.py` (`RunState` + its
+> serialization), `api/run_store.py` (`RunStore`, `STORE`, in-memory cache + SQLite
+> persistence), `api/run_driver.py` (`execute`/`_drive`, model-override resolution,
+> conversation replay), and `api/sse.py` (`sse_stream`). Filter-block recovery is no longer
+> here either: it moved to the single shared `core.pipeline.recover_from_filter_block`. The
+> historical analysis below is left intact.
+
 - **Severity:** Medium
 - **Type:** mixed concern
 - **Locations:** `api/runs.py` — `RunState` + `RunStore` (in-memory + SQLite persistence),
