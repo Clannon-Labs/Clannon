@@ -121,12 +121,15 @@ function HydrationItem({
   expanded,
   onToggle,
   onCorrect,
+  stageDelay = 0,
 }: {
   entry: MemoryEntry;
   reduce: boolean | null;
   expanded: boolean;
   onToggle: () => void;
   onCorrect: () => void;
+  /** Seconds before this row prints — the recap assembles line by line. */
+  stageDelay?: number;
 }) {
   const isWiki = entry.tier === "wiki";
   return (
@@ -135,12 +138,17 @@ function HydrationItem({
       initial={reduce ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduce ? undefined : { opacity: 0, x: 10, height: 0, marginTop: 0 }}
-      transition={{ duration: 0.32 }}
-      className="grid grid-cols-[auto_1fr] gap-3 border-t border-border/60 py-3 first:border-t-0"
+      transition={{ duration: 0.32, delay: stageDelay }}
+      style={reduce ? undefined : { animationDelay: `${stageDelay + 0.1}s` }}
+      className={cn(
+        "grid grid-cols-[auto_1fr] gap-3 rounded-sm border-t border-border/60 py-3 first:border-t-0",
+        // each memory "burns in" as it arrives — the amber wash cooling off
+        !reduce && "animate-ignite",
+      )}
     >
       <span className="flex items-center gap-2 pt-px">
         <span className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier])} aria-hidden />
-        <span className="w-[4.5rem] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+        <span className="tag-label w-[4.5rem] text-faint">
           {TIER_LABELS[entry.tier]}
         </span>
       </span>
@@ -283,17 +291,6 @@ export function HydrationPanel({
 
   return (
     <section aria-label="Picking up where we left off" className={cn("relative", className)}>
-      {/* the thread — this panel is fed by the composer above it */}
-      <div aria-hidden className="ml-7 flex flex-col items-center">
-        <span className="h-8 w-px bg-gradient-to-b from-border-strong to-border" />
-        <span
-          className={cn(
-            "-mt-px size-[7px] rounded-full transition-colors duration-500",
-            matched ? "animate-pulse-dot bg-memory" : "bg-border-strong",
-          )}
-        />
-      </div>
-
       <AnimatePresence mode="wait" initial={false}>
         {listening ? (
           /* RECEDED — work has started; shrink to a quiet, live chip */
@@ -342,16 +339,31 @@ export function HydrationPanel({
                   : recapLine(live)}
               </p>
 
-              {!sparse && (
+              {sparse ? (
+                /* the four tiers as empty slots — the shape of what will
+                   accumulate, before anything has */
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2" aria-hidden>
+                  {(Object.keys(TIER_LABELS) as MemoryTier[]).map((tier) => (
+                    <span
+                      key={tier}
+                      className="tag-label inline-flex items-center gap-1.5 text-faint"
+                    >
+                      <span className="size-1.5 rounded-full border border-border-strong" />
+                      {TIER_LABELS[tier]}
+                    </span>
+                  ))}
+                </div>
+              ) : (
                 <>
                   <Rule className="mt-3" />
                   <ol className="mt-1 flex flex-col">
                     <AnimatePresence initial={false} mode="popLayout">
-                      {surfaced.map((entry) => (
+                      {surfaced.map((entry, i) => (
                         <HydrationItem
                           key={entry.id}
                           entry={entry}
                           reduce={reduce}
+                          stageDelay={0.12 + i * 0.14}
                           expanded={expandedId === entry.id}
                           onToggle={() => setExpandedId((id) => (id === entry.id ? null : entry.id))}
                           onCorrect={() => correct(entry)}
