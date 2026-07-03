@@ -161,22 +161,32 @@ def normalize_payload(
                     "pages": normalized.metadata.get("pages"),
                 },
             )
-    elif target_model.supports(modality):
-        normalized = _preserve_native(
-            payload,
-            modality,
-            target_layer,
-            target_model.provider,
-            target_model.model,
-        )
     else:
-        normalized = _requires_expert(
-            payload,
-            modality,
-            target_layer,
-            target_model.provider,
-            target_model.model,
-        )
+        # Image/audio/video never go to the orchestrator's model — they are
+        # routed to the MEDIA EXPERT. Judge native support against that route's
+        # model, not the orchestrator's (issue #17: with an orchestrator model
+        # that declares no media, every upload was marked requires_expert even
+        # though the media route consumes it natively). The normalized target
+        # follows the judging layer, so the verifier's coherence re-check
+        # (verify_routing derives from target_layer) stays consistent.
+        target_layer = "media_expert"
+        target_model = registry.for_layer(target_layer)
+        if target_model.supports(modality):
+            normalized = _preserve_native(
+                payload,
+                modality,
+                target_layer,
+                target_model.provider,
+                target_model.model,
+            )
+        else:
+            normalized = _requires_expert(
+                payload,
+                modality,
+                target_layer,
+                target_model.provider,
+                target_model.model,
+            )
 
     normalized.target_layer = target_layer
     normalized.target_provider = target_model.provider
