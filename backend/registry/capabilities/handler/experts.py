@@ -121,6 +121,9 @@ class ExpertHandler:
             toolbox=self._toolbox_for(granted, ctx, workspace),
             granted=granted,
             findings=list(ctx.expert_findings),
+            # the turn's hydrated memory, pushed to the (stateless) expert — the
+            # Manager hydrated it once at loop start; think() folds it into the task
+            hydration=list(getattr(ctx, "hydration_items", None) or []),
             workspace=workspace,
         )
 
