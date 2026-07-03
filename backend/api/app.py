@@ -533,6 +533,70 @@ def list_memory(
     return wiki + episodic
 
 
+_PREVIEW_MAX_ITEMS = 8    # frontend renders a compact panel; the Manager already ranks
+_PREVIEW_MIN_CHARS = 3    # don't hydrate on a keystroke or two
+
+
+@app.get("/memory/hydration-preview")
+async def hydration_preview(
+    brief: str = "",
+    projectId: str | None = None,
+    user: auth.User = Depends(auth.current_user),
+) -> list[dict]:
+    """Preview what the Memory Manager would hydrate for a draft brief, BEFORE a run
+    exists — a read-only dry-run through the same `MemoryPort.hydrate` door with the
+    same `user_id` scoping (never a second access path). Ranked by the Manager's real
+    trust + similarity + recency ordering, capped for the panel. Best-effort: a short
+    brief, degraded memory, or a memory fault returns [] — a preview never 5xxs."""
+    text = (brief or "").strip()
+    if len(text) < _PREVIEW_MIN_CHARS:
+        return []
+    from core.memory import manager  # the MemoryPort door (lazy: heavy deps)
+    from foundation import HydrationRequest, NormalizedInput
+
+    wiki_entries = auth.wiki_list(user.id, projectId)
+    try:
+        pkg = await manager.hydrate(HydrationRequest(
+            session_id="",   # preview: no session, no run — provenance stays empty
+            user_id=user.id,
+            normalized=NormalizedInput(modality="text", content_type="text/plain", content=text),
+            wiki=tuple((e["title"], e["content"]) for e in wiki_entries),
+        ))
+    except Exception:  # noqa: BLE001 — best-effort preview, never an error surface
+        return []
+    if pkg.degraded:
+        return []
+
+    # MemoryEntry shape (like GET /memory) + `score`. Wiki items map back to their
+    # real entries (hydration keeps wiki as verbatim text); learned-tier items have
+    # no API id, so they get a stable preview id + a derived title.
+    wiki_by_content = {e["content"]: e for e in wiki_entries}
+    out: list[dict] = []
+    for i, item in enumerate(pkg.items[:_PREVIEW_MAX_ITEMS]):
+        entry = wiki_by_content.get(item.content) if item.store.value == "wiki" else None
+        if entry is not None:
+            id_, title = entry["id"], entry["title"]
+            updated = datetime.fromtimestamp(entry["updated_at"], tz=timezone.utc).isoformat()
+            project = entry.get("project_id")
+        else:
+            id_ = f"preview_{i}"
+            first_line = next((ln.strip() for ln in item.content.splitlines() if ln.strip()), "Memory")
+            title = first_line[:80]
+            created = getattr(item, "created_at", 0.0)
+            updated = datetime.fromtimestamp(created, tz=timezone.utc).isoformat() if created else None
+            project = None
+        out.append({
+            "id": id_,
+            "tier": item.store.value,
+            "title": title,
+            "content": item.content,
+            "updatedAt": updated,
+            "projectId": project,
+            "score": max(0.0, min(1.0, float(item.score))),
+        })
+    return out
+
+
 @app.post("/memory", status_code=201)
 def create_memory(body: MemoryBody, user: auth.User = Depends(auth.current_user)) -> dict:
     if body.tier != "wiki":
