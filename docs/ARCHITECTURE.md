@@ -340,9 +340,9 @@ orchestrator never receives raw expert output. Hard constraint.
 >   the access point is already singular and auditable.
 > - `[BUILT]` — experts are stateless, context is pushed (2026-07-03, Option D of
 >   `conversation/report_v4.md`): the turn's hydrated memory is snapshot into
->   `ExpertEnv.hydration` (`registry/capabilities/handler/experts.py:126`) and folded
->   into every expert's task as labelled reference data
->   (`handler/support.py:173` `_memory_note`, applied in `think()` at `:221`); the
+>   `ExpertEnv.hydration` (`registry/capabilities/handler/experts.py::_build_env`) and
+>   folded into the expert's task as labelled reference data
+>   (`handler/support.py::_memory_note`, applied in `think()`); the
 >   orchestrator brokers sub-task-specific recall before spawning (it keeps
 >   `memory.search` natively; prompt §"Brokering memory for experts",
 >   `prompts/orchestrator/system.md:101`); and **no expert holds a `memory.*` grant**
@@ -350,6 +350,23 @@ orchestrator never receives raw expert output. Hard constraint.
 >   fs only, `experts/web_research/expert.py:30` = web only). Locked by
 >   `tests/expert_hydration.py` and `tests/orchestrator_memory_broker.py`
 >   (invariant: no registered expert carries a memory grant).
+> - `[BUILT]` — **push is non-NETWORK only** (2026-07-03, report_v6): any expert
+>   granted a NETWORK tool (`delivery.notifier`, `verification.claims`,
+>   `web.research`) receives an EMPTY hydration snapshot — user memory sitting in
+>   the same prompt as an outbound channel is an exfiltration surface under prompt
+>   injection (closes the MEDIUM flag from the Option D security review). Their
+>   user context arrives solely via the orchestrator's pre-spawn brokering.
+> - `[BUILT]` — **need-context channel** (2026-07-03, report_v6): a non-NETWORK
+>   expert can REQUEST mid-task recall via a built-in `need_context(query)` tool but
+>   never executes it — the handler-built broker
+>   (`handler/experts.py::_make_context_broker`) runs the user-scoped searcher and
+>   curates code-only (Manager ranking, cap 5, dedup vs the pushed hydration — per
+>   the decided "reads are code-only on the hot path" rule), returns labelled
+>   reference data, and audit-records every request on `ctx.tool_calls`
+>   (`memory.need_context`) while staying out of the user's decision log. NETWORK
+>   experts get no channel. Locked by `tests/expert_need_context.py`. The
+>   orchestrator-LLM-in-review variant (a need-context field in the expert's RETURN
+>   channel) remains `[PROPOSED]` — it requires an `ExpertOutput` contract change.
 
 ---
 

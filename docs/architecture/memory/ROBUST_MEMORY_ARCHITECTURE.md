@@ -451,8 +451,14 @@ just a tool-driving agent (its role today — orchestrator `CLAUDE.md`).
   port. This keeps "orchestrator = central authority" true without starving experts
   that genuinely need to discover.
   *Built form (2026-07-03): the orchestrator brokers recall PRE-SPAWN (prompt
-  §"Brokering memory for experts"; it keeps `memory.search` natively). The mid-task
-  expert→orchestrator "need-context" channel is NOT built.*
+  §"Brokering memory for experts"; it keeps `memory.search` natively), and a
+  MID-TASK `need_context(query)` channel now exists as a tool-shaped callback:
+  the expert requests, the handler-built broker executes (user-scoped searcher,
+  code-only curation — cap + dedup vs the pushed bundle), non-NETWORK experts
+  only, audit-recorded on `ctx.tool_calls`. The expert still never touches the
+  port. The variant where the ORCHESTRATOR LLM reviews the request in the
+  expert's RETURN channel is NOT built — it needs an `ExpertOutput` contract
+  change (report_v6).*
 - **Central reasoning, lean context — the tension, resolved.** The existing
   invariant "the orchestrator never receives raw expert output, only brief
   summaries" (orchestrator `CLAUDE.md`) seems to fight "central reasoner." It does
@@ -500,8 +506,9 @@ To make the codebase *ready* for the model above without a big-bang refactor:
 4. Remove `memory.search` from expert grants; add a per-expert **context-bundle**
    input and an expert→orchestrator **need-context** request path (orchestrator
    domain — land with the loop change). ✅ *Grants removed + turn-level context
-   push built 2026-07-03 (`ExpertEnv.hydration`); the mid-task need-context
-   request path remains open.*
+   push (non-NETWORK experts only) + the need-context channel (tool-shaped,
+   broker-executed, code-only curation) all built 2026-07-03. Per-expert bundle
+   SLICING and the orchestrator-LLM-review variant remain open.*
 5. Keep `learn()`/distillation async (already is); add the scheduled maintenance
    entry point as a no-op stub the Curator (L4) will fill.
 
