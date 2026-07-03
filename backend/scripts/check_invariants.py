@@ -55,6 +55,21 @@ _MEMORY_INTERNALS_ALLOWLIST: dict[Path, str] = {
         "startup warm path / ops-healthcheck concern, not a memory query; "
         "MemoryPort exposes no warm() surface so a direct internal import is intentional"
     ),
+    BACKEND_ROOT / "api" / "_health.py": (
+        "readiness probe / ops-healthcheck concern, not a memory query — same "
+        "class as the warmup.py waiver; it calls store.healthcheck(), never a "
+        "scoped read or write"
+    ),
+    BACKEND_ROOT / "scripts" / "decision_memory_demo.py": (
+        "demo script patches the embeddings/store module seams for hermetic demo "
+        "mode (the same seams tests patch); its real memory traffic goes through "
+        "the Manager door"
+    ),
+    BACKEND_ROOT / "scripts" / "persistent_memory_demo.py": (
+        "demo script patches the embeddings/store module seams for hermetic demo "
+        "mode (the same seams tests patch); its real memory traffic goes through "
+        "the Manager door"
+    ),
 }
 
 
