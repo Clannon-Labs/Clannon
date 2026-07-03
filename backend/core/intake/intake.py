@@ -97,7 +97,13 @@ async def process(flow: Flow) -> Flow:
     try:
         raw_input = await flow.load()  # payload in its current condition
 
-        rate_limit = check_request_rate(flow.ctx.session_id)
+        # Key the limit on the STRONGEST identity available: the user_id when the
+        # context carries one (a client can mint fresh session ids at will, so
+        # keying on session id alone is a rotatable bypass — issue #18). The web
+        # path always sets a real user_id; the CLI carries the local single-user
+        # id; the session id is the fallback only for a caller with neither.
+        identity = getattr(flow.ctx, "user_id", "") or flow.ctx.session_id
+        rate_limit = check_request_rate(identity)
         if not rate_limit.allowed:
             return flow.block(BlockReason.RATE_LIMITED, ThreatLevel.NONE, Origin.INTAKE, started)
 

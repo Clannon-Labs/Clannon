@@ -75,3 +75,42 @@ def test_str_payload_is_never_read_as_a_path(tmp_path):
     assert out.ctx.detected_modalities == [Modality.TEXT.value]
     # The forwarded payload is the path string itself, not the file contents.
     assert asyncio.run(out.load()) == str(secret)
+
+
+# --- rate-limit identity: user_id first, session id fallback (issue #18) -----
+
+def _small_limiters(monkeypatch, per_identity=3):
+    monkeypatch.setattr(rate_limiter, "_identity_rate_limiter",
+        rate_limiter.InMemorySlidingWindowRateLimiter(max_requests=per_identity, window_s=60.0))
+    monkeypatch.setattr(rate_limiter, "_global_rate_limiter",
+        rate_limiter.InMemorySlidingWindowRateLimiter(max_requests=1000, window_s=60.0))
+
+
+def test_rate_limit_keys_on_user_id_so_session_rotation_cannot_bypass(monkeypatch):
+    """Issue #18: an authed client minting a fresh session id per request must
+    NOT reset its budget — the limit keys on user_id when the ctx carries one."""
+    _small_limiters(monkeypatch)
+
+    def go(session, user_id):
+        return asyncio.run(intake.process(Flow.new("hello world", session, user_id=user_id)))
+
+    for i in range(3):                                     # fresh session EVERY request
+        assert go(f"rotated_{i}", "user_A").status.value != "blocked"
+    denied = go("rotated_fresh", "user_A")                 # 4th: budget spent, rotation useless
+    assert denied.status.value == "blocked" and denied.reason == "rate_limited"
+
+    assert go("any_sess", "user_B").status.value != "blocked"   # other users unaffected
+
+
+def test_rate_limit_falls_back_to_session_id_for_unauthed(monkeypatch):
+    """Pre-auth callers (empty user_id) still get per-session limiting."""
+    _small_limiters(monkeypatch)
+
+    def go(session):
+        return asyncio.run(intake.process(Flow.new("hello world", session, user_id="")))
+
+    for _ in range(3):
+        assert go("anon_sess").status.value != "blocked"
+    denied = go("anon_sess")
+    assert denied.status.value == "blocked" and denied.reason == "rate_limited"
+    assert go("other_sess").status.value != "blocked"      # scoped per session

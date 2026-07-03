@@ -65,7 +65,10 @@ def _limiter(max_requests: int = 3, window_s: float = 10.0):
 
 
 def _run_intake(payload: str, session: str) -> Flow:
-    return asyncio.run(intake.process(Flow.new(payload, session)))
+    # user_id="" models a PRE-AUTH caller: the limiter then keys on the session id
+    # (the documented fallback). Authed callers key on user_id so session rotation
+    # can't bypass the window — issue #18, pinned in tests/intake.py.
+    return asyncio.run(intake.process(Flow.new(payload, session, user_id="")))
 
 
 # ---------------------------------------------------------------------------

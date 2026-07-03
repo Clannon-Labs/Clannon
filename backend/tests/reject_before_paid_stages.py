@@ -160,15 +160,15 @@ def test_oversize_blocked_before_paid_stages(seam_counter):
 
 
 def test_rate_limited_blocked_before_paid_stages(seam_counter):
-    """Exhausting the per-session rate-limit window blocks at intake; seam never reached."""
-    session_id = "s-rate-limit"
-    # Pre-fill only the per-session window so the per-identity check fails first.
+    """Exhausting the caller's rate-limit window blocks at intake; seam never reached."""
+    # The limiter keys on the authenticated user_id (issue #18 — session ids are
+    # rotatable), so pre-fill the window under the user this run carries ("u").
     # Direct calls to _identity_rate_limiter.allow() bypass the global window,
     # preventing accidental global-limiter pollution across tests.
     for _ in range(constants.RATE_LIMIT_MAX_REQUESTS):
-        rate_limiter._identity_rate_limiter.allow(session_id)
+        rate_limiter._identity_rate_limiter.allow("u")
 
-    out = _run("hello", session_id=session_id)
+    out = _run("hello", session_id="s-rate-limit")
 
     assert out.status.value == "blocked"
     assert out.reason == BlockReason.RATE_LIMITED.value

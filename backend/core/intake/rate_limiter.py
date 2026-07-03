@@ -108,15 +108,15 @@ def check_request_rate(identity: str) -> RateLimitResult:
     Check per-identity and global intake request limits.
 
     `identity` should be the strongest caller identity available. Intake passes
-    the session id today; this is the seam where auth plugs in.
+    the authenticated user_id when the context carries one (closes issue #18 —
+    keying on session id alone was a rotatable bypass), falling back to the
+    session id for pre-auth/CLI callers.
 
     Per-identity is checked first so one noisy caller does not consume global
     burst capacity after it is already over its own limit.
 
-    TODO(auth/Redis): once auth exists, pass user_id (and/or client IP) as
-    `identity` so a client cannot bypass the per-identity limit by rotating
-    session ids; and swap the in-process backend for Redis so the limit is
-    shared across app replicas (the allow(key) contract stays the same).
+    TODO(Redis): swap the in-process backend for Redis so the limit is shared
+    across app replicas (the allow(key) contract stays the same).
     """
     key = identity or "anonymous"
 
