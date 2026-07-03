@@ -189,7 +189,11 @@ class MemoryManager:
                     items.append(MemoryItem(
                         store=tier, content=hit.get("content", ""),
                         score=hit["rank_score"], trust=_TIER_TRUST[tier],
-                        created_at=float(hit.get("created_at", 0.0)),  # provenance
+                        created_at=float(hit.get("created_at", 0.0)),
+                        rationale=hit.get("rationale", ""),
+                        confidence=float(hit.get("confidence", 0.0)),
+                        session_id=hit.get("session_id", ""),
+                        trace_id=hit.get("trace_id", ""),
                     ))
 
         items.sort(key=lambda i: (i.trust, i.score), reverse=True)
