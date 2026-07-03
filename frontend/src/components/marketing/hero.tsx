@@ -69,7 +69,11 @@ export function MarketingHero() {
           </Reveal>
 
           <Reveal immediate delay={0.38}>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* keyed so the anon→authed CTA swap reads as a fade, not a flash */}
+            <div
+              key={user ? "authed" : "anon"}
+              className="mt-7 flex animate-fade-in flex-col gap-3 sm:flex-row sm:items-center"
+            >
               {user ? (
                 <ButtonLink href={workspaceUrl()} size="lg" className="w-full sm:w-auto">
                   Open workspace

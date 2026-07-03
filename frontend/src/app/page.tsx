@@ -39,7 +39,10 @@ export default function LandingPage() {
         <MarketingHero />
 
         {/* ---------- pillars ---------- */}
-        <section className="hairline-t bg-surface">
+        <section className="hairline-t bg-surface" aria-labelledby="pillars-heading">
+          <h2 id="pillars-heading" className="sr-only">
+            Why Clannon
+          </h2>
           <Stagger className="mx-auto grid max-w-6xl grid-cols-1 gap-px overflow-hidden border-y border-border bg-border sm:grid-cols-3">
             {PILLARS.map((pillar, i) => (
               <StaggerItem key={pillar.title} className="h-full bg-surface px-6 py-12 sm:px-8">
@@ -47,7 +50,7 @@ export default function LandingPage() {
                   <pillar.icon className="size-5 text-primary" aria-hidden />
                   <span className="tag-label text-faint">0{i + 1}</span>
                 </div>
-                <h2 className="display-soft mt-6 text-[1.5rem] leading-none">{pillar.title}</h2>
+                <h3 className="display-soft mt-6 text-[1.5rem] leading-none">{pillar.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                   {pillar.body}
                 </p>
@@ -77,7 +80,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-9 flex justify-center">
               <ButtonLink href="/signup" size="lg">
-                Plant the first ring
+                Start free
                 <ArrowRight className="size-4" aria-hidden />
               </ButtonLink>
             </div>

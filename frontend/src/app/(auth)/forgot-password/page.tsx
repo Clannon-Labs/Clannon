@@ -27,6 +27,7 @@ export default function ForgotPasswordPage() {
     // Always resolves to the same state — never reveals whether an
     // account exists for this address.
     await new Promise((r) => setTimeout(r, 700));
+    setSubmitting(false);
     setSent(true);
   }
 

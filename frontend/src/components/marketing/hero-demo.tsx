@@ -12,7 +12,7 @@ interface DemoEntry {
 
 const SCRIPT: DemoEntry[] = [
   { kind: "hydration", time: "00:01.2", text: "memory hydrated", detail: "2 wiki · 3 episodic · 1.9k tokens" },
-  { kind: "route", time: "00:02.8", text: "entropy H=1.38 → 3 domains", detail: "market · regulatory · competitive" },
+  { kind: "route", time: "00:02.8", text: "brief routed → 3 domains", detail: "market · regulatory · competitive" },
   { kind: "expert_spawn", time: "00:03.1", text: "spawn web.research/market" },
   { kind: "expert_spawn", time: "00:03.4", text: "spawn web.research/regulatory" },
   { kind: "expert_spawn", time: "00:03.6", text: "spawn web.research/competitive" },

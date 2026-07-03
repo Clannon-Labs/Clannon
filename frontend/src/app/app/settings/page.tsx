@@ -18,7 +18,6 @@ import { ModelRoleList } from "@/components/app/model-picker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeSegment } from "@/components/theme";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatTokens } from "@/lib/utils";
@@ -276,18 +275,22 @@ function SettingsInner() {
 
         <TabsContent value="account" className="mt-6">
           <div className="flex max-w-md flex-col gap-5">
-            <Input label="Name" defaultValue={user?.name ?? ""} autoComplete="name" className="capitalize" />
-            <Input
-              label="Email"
-              type="email"
-              defaultValue={user?.email ?? ""}
-              autoComplete="email"
-              disabled
-              hint="Email changes require re-verification — available once accounts are live."
-            />
-            <div>
-              <Button disabled>Save changes — soon</Button>
-            </div>
+            {/* read-only on purpose: an editable-looking form with a dead save
+                button is a lie. This becomes a real form when accounts go live. */}
+            <dl className="divide-y divide-border/60 rounded-lg border border-border bg-surface px-5">
+              <div className="grid grid-cols-[6rem_1fr] items-baseline gap-3 py-3.5">
+                <dt className="tag-label text-faint">Name</dt>
+                <dd className="truncate text-sm font-medium capitalize text-foreground">{user?.name ?? "—"}</dd>
+              </div>
+              <div className="grid grid-cols-[6rem_1fr] items-baseline gap-3 py-3.5">
+                <dt className="tag-label text-faint">Email</dt>
+                <dd className="truncate text-sm text-foreground">{user?.email ?? "—"}</dd>
+              </div>
+            </dl>
+            <p className="text-[12px] leading-relaxed text-faint">
+              Name and email editing arrive with cloud accounts — changes will
+              need re-verification.
+            </p>
 
             <div className="mt-2 border-t border-border pt-5">
               <p className="text-sm font-medium">Appearance</p>

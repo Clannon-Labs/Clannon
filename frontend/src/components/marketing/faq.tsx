@@ -37,7 +37,7 @@ export function FaqSection() {
           {FAQS.map((faq) => (
             <details key={faq.q} className="group hairline-b">
               <summary className="flex cursor-pointer list-none items-start justify-between gap-6 py-5 [&::-webkit-details-marker]:hidden">
-                <span className="display-soft text-[1.15rem] leading-snug">{faq.q}</span>
+                <h3 className="display-soft text-[1.15rem] leading-snug">{faq.q}</h3>
                 <Plus
                   className="mt-1 size-4 shrink-0 text-faint transition-transform duration-200 group-open:rotate-45"
                   aria-hidden

@@ -71,6 +71,8 @@ export function MarketingHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
+          {/* keyed so the anon→authed swap reads as a fade, not a flash */}
+          <span key={user ? "authed" : "anon"} className="flex animate-fade-in items-center gap-3">
           {user ? (
             <ButtonLink href={workspaceUrl()} size="sm">
               Open workspace
@@ -89,6 +91,7 @@ export function MarketingHeader() {
               </ButtonLink>
             </>
           )}
+          </span>
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
