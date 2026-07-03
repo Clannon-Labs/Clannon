@@ -23,12 +23,9 @@ KNOWN LATENT GAP — case (a) today PROPAGATES
   Verified by running the real code path with a raising test-double before
   writing this test.  Result: ConnectionError escaped hydrate() uncaught.
 
-  Test (a) is marked @pytest.mark.xfail(strict=True) so:
-    TODAY (gap present)  — test body raises => xfailed => suite exits 0.
-    AFTER FIX (gap closed) — test body passes => xpass => strict mode requires
-      the xfail marker to be removed (enforces cleanup of the annotation).
-
-  A needs-reviewer note with the recommended fix is at the bottom of this file.
+  Test (a) pins the fix (issue #52, resolved 2026-07-03): a raising
+  store.search degrades instead of propagating. The resolution note is at the
+  bottom of this file.
 
 Distinct from tests/memory_isolation.py (write-path tenant isolation) and
 tests/memory_invisible.py (hydration prefetch + decision-log filtering).
@@ -86,16 +83,6 @@ async def _ok_embed(texts: list[str]) -> list[list[float]]:
 # (a) store.search RAISES mid-query
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "REAL ROBUSTNESS GAP: asyncio.gather at manager.py:143-146 has no "
-        "try/except and no return_exceptions=True.  A store.search that raises "
-        "inside asyncio.to_thread propagates out of hydrate() instead of "
-        "degrading.  Fix: wrap the gather in a door-level try/except.  "
-        "See the needs-reviewer note at the bottom of this file."
-    ),
-)
 def test_a_store_search_raises_degrades(monkeypatch):
     """
     (a) A raising store.search must produce a degraded HydrationPackage,
@@ -225,55 +212,9 @@ def test_z_fault_table():
 
 
 # ---------------------------------------------------------------------------
-# NEEDS-REVIEWER: manager.py:143-146 degrade-never-raise gap
-#
-# Location:  backend/core/memory/manager.py, lines 143-146
-# Contract:  core/memory/CLAUDE.md NEVER block —
-#            "Every fault DEGRADES, never fails the run."
-#
-# Gap:
-#   asyncio.gather is called without return_exceptions=True and without a
-#   surrounding try/except:
-#
-#       tier_hits = await asyncio.gather(
-#           *(asyncio.to_thread(store.search, tier, request.user_id,
-#                               vectors[0], _SEARCH_K)
-#             for tier in inferred)
-#       )
-#
-#   The production store.search wraps all Qdrant calls in try/except and
-#   returns [] on any failure, so it NEVER raises today.  However the
-#   module's stated contract says every fault must degrade — a defensive
-#   door-level wrap is required so that any future change to store.search
-#   (or a bug in it) cannot silently break the invariant.
-#
-# Evidence:
-#   test_a_store_search_raises_degrades is marked xfail(strict=True).
-#   Verified manually before writing this test: ConnectionError from a
-#   raising test-double store.search escaped hydrate() uncaught.
-#
-# Recommendation:
-#   Option 1 (preferred -- minimal, one try/except at the door):
-#
-#       try:
-#           tier_hits = await asyncio.gather(
-#               *(asyncio.to_thread(store.search, tier, request.user_id,
-#                                   vectors[0], _SEARCH_K)
-#                 for tier in inferred)
-#           )
-#       except Exception as exc:
-#           log.warning("memory store fault mid-gather (degrading): %s", exc)
-#           return HydrationPackage(
-#               items=items, token_budget=budget, degraded=True,
-#               notes="memory temporarily unavailable (store error); answering without it",
-#           )
-#
-#   Option 2 (finer-grained, degrade per-tier):
-#       Pass return_exceptions=True to gather; skip any tier whose result is
-#       an Exception instance rather than aborting the whole call.
-#
-# Owner:    memory module maintainer
-# Priority: High — the degrade-never-raise contract is a production
-#           reliability invariant stated in the module's own CLAUDE.md.
-#           One try/except closes the gap.
+# RESOLVED (2026-07-03, issue #52): manager.hydrate now guards the tier-search
+# gather with return_exceptions=True — a raising store.search degrades that
+# tier (Option 2 below, finer-grained than the original Option 1 sketch), and
+# an all-tiers fault returns an honest degraded package (empty-because-down,
+# never "no prior memory"). test_a_store_search_raises_degrades pins it.
 # ---------------------------------------------------------------------------

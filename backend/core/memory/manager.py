@@ -137,14 +137,23 @@ class MemoryManager:
             )
 
         per_tier: dict[MemoryStore, list[dict]] = {}
+        search_faulted = False
         if vectors:
             # store.search is a sync HTTP call — run the tiers concurrently in
-            # threads so hydration never blocks the event loop
+            # threads so hydration never blocks the event loop. Door-level guard
+            # (issue #52): a tier search that RAISES (store fault mid-flight)
+            # degrades to an empty tier instead of propagating out of hydrate() —
+            # every fault degrades, never fails the run.
             tier_hits = await asyncio.gather(
                 *(asyncio.to_thread(store.search, tier, request.user_id, vectors[0], _SEARCH_K)
-                  for tier in inferred)
+                  for tier in inferred),
+                return_exceptions=True,
             )
             for tier, hits in zip(inferred, tier_hits):
+                if isinstance(hits, BaseException):
+                    log.warning("memory tier search failed (%s): %s", tier.value, hits)
+                    search_faulted = True
+                    continue
                 # Relevance floor: drop weak hits on RAW cosine before recency
                 # weighting, so a stale-but-relevant memory is kept while a
                 # fresh-but-irrelevant one is not. Without this, the store always
@@ -159,9 +168,9 @@ class MemoryManager:
                     per_tier[tier] = scored
 
         if not items and not per_tier:
-            if store.is_down():
-                # honesty: empty because the store is down, not because the
-                # user has no memory — say so instead of pretending
+            if store.is_down() or search_faulted:
+                # honesty: empty because the store is down (or faulted mid-gather),
+                # not because the user has no memory — say so instead of pretending
                 return HydrationPackage(
                     token_budget=budget, degraded=True,
                     notes="memory temporarily unavailable; answering without it",
