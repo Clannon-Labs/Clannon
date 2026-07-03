@@ -98,8 +98,8 @@ copy.
 
 - **Severity:** Low
 - **Type:** duplication
-- **Locations:** `config/prompts.py:96-121` (`resolve_overlay`/`read_overlay_text`, the
-  real helpers) vs `config/prompts.py:211-219` (the inline "overlay / relative + is_file()
+- **Locations:** `registry/config/prompts.py:96-121` (`resolve_overlay`/`read_overlay_text`, the
+  real helpers) vs `registry/config/prompts.py:211-219` (the inline "overlay / relative + is_file()
   + source tag" block in `PromptRegistry._load_one`).
 
 **Problem.** The "overlay file wins, committed baseline falls back" rule is encapsulated in
