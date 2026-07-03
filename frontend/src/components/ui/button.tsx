@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive" | "outline";
-type Size = "sm" | "md" | "lg";
+type Size = "sm" | "md" | "lg" | "icon";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -21,13 +21,14 @@ const variantClasses: Record<Variant, string> = {
     "border border-border-strong bg-transparent text-foreground hover:bg-muted",
   ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
   destructive:
-    "bg-destructive text-white hover:opacity-90",
+    "bg-destructive text-destructive-foreground hover:bg-destructive-hover shadow-sm",
 };
 
 const sizeClasses: Record<Size, string> = {
   sm: "h-8 px-3 text-[13px] gap-1.5",
   md: "h-10 px-4 text-sm gap-2",
   lg: "h-12 px-6 text-[15px] gap-2",
+  icon: "size-9 p-0 rounded-full",
 };
 
 /** The shared look — used by <Button>, and by <ButtonLink> so links never

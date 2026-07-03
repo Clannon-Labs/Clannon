@@ -26,6 +26,8 @@
   --color-border-strong: var(--border-strong);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-soft: var(--destructive-soft);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -44,6 +46,10 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
+  /* the two large radii are deliberate members of the scale (cards, the
+     composer pill) — not Tailwind defaults that snuck in */
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
 
   --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-in: fade-in 0.5s ease-out both;

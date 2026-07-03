@@ -3,7 +3,7 @@ import Script from "next/script";
 import { Fraunces, Schibsted_Grotesk, Spline_Sans_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { siteConfig } from "@/config/site.config";
-import { themeCss } from "@/config/theme.config";
+import { themeConfig, themeCss } from "@/config/theme.config";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -53,8 +53,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f2e9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0c120d" },
+    // mirror the real background tokens so the browser chrome matches the page
+    { media: "(prefers-color-scheme: light)", color: themeConfig.light.background },
+    { media: "(prefers-color-scheme: dark)", color: themeConfig.dark.background },
   ],
 };
 

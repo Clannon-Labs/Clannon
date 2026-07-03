@@ -69,7 +69,7 @@ export function Composer({
       <div
         {...attach.dropZoneProps}
         className={cn(
-          "relative overflow-hidden rounded-[1.7rem] border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary sm:rounded-3xl",
+          "relative overflow-hidden rounded-3xl border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary",
           attach.dragOver && "border-primary ring-2 ring-primary/30",
         )}
       >
@@ -151,11 +151,11 @@ export function Composer({
               <Tooltip label="Send" align="end">
                 <Button
                   type="submit"
-                  size="sm"
+                  size="icon"
                   loading={pending}
                   disabled={tooShort}
                   aria-label="Send"
-                  className="size-10 rounded-full !px-0 sm:size-9"
+                  className="size-10 sm:size-9"
                 >
                   {!pending && <ArrowUp className="size-4" aria-hidden />}
                 </Button>

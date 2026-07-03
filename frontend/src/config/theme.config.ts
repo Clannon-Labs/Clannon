@@ -39,6 +39,8 @@ const light: TokenSet = {
   ring: "#285539",
 
   destructive: "#a83a28",
+  "destructive-hover": "#8f2f20",
+  "destructive-foreground": "#f7f5ec",
   "destructive-soft": "#f6e3de",
   success: "#285539",
   warning: "#6e4a0e",
@@ -84,6 +86,8 @@ const dark: TokenSet = {
   ring: "#6fb583",
 
   destructive: "#e0735c",
+  "destructive-hover": "#e88a72",
+  "destructive-foreground": "#200d08",
   "destructive-soft": "#311b16",
   success: "#6fb583",
   warning: "#d9a84e",

@@ -128,7 +128,7 @@ export function ThemeSegment({ className }: { className?: string }) {
             aria-checked={active}
             onClick={() => setTheme(value)}
             className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-medium transition-colors",
+              "flex cursor-pointer items-center gap-1.5 rounded-xs px-3 py-1.5 text-[13px] font-medium transition-colors",
               active
                 ? "bg-primary-soft text-primary"
                 : "text-muted-foreground hover:text-foreground",
