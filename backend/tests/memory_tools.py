@@ -79,11 +79,13 @@ def test_searcher_degrades_instead_of_raising(monkeypatch):
 # ---- registered + granted --------------------------------------------------
 
 
-def test_memory_search_registered_and_granted():
+def test_memory_search_registered_for_the_orchestrator_only():
     discover()
     from foundation import PermissionLevel
     tool = registry.get_tool("memory.search")
     assert tool is not None and tool.permission == PermissionLevel.READ      # read-only
     assert getattr(tool.impl, "wants_memory", False) is True
-    assert "memory.search" in registry.get_expert("web.research").tool_grants
+    # sole-broker (§7.3): the tool stays registered as the ORCHESTRATOR's door;
+    # no expert holds it (experts get their context pushed via ExpertEnv.hydration)
+    assert "memory.search" not in registry.get_expert("web.research").tool_grants
     assert "memory.search" not in {b.key for b in registry.broken()}

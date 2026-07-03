@@ -37,7 +37,7 @@ class DocumentationExpert:
     input_schema = DocsIn
     output_schema = ExpertOutput
     skills = ("skills",)                       # baseline skills/ beside this file
-    tools = ("fs.read", "fs.write", "memory.search")  # read attached source docs, write + deliver the doc; recall prior docs/decisions
+    tools = ("fs.read", "fs.write")  # read attached source docs, write + deliver the doc; prior docs/decisions arrive via the pushed hydration + the orchestrator's brokered recall (sole-broker, §7.3)
     model_role = "planner"                     # long-form structured writing
     permission = PermissionLevel.WRITE
     tags = ("documentation", "writing", "specs", "readme")

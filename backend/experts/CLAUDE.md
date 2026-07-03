@@ -4,9 +4,11 @@ Each expert is a real tool-driving agent the orchestrator spawns for deep domain
 work. Drop a `@expert`-decorated package here and it self-registers — no wiring.
 
 ## NEVER
-- Experts NEVER write memory directly (invariant §I.6). The only memory access is
-  the READ-ONLY, user-scoped `memory.search` tool; writes happen only via write
-  proposals through the Memory Manager.
+- Experts NEVER touch memory (sole-broker, ARCHITECTURE.md §7.3): no expert holds
+  a `memory.*` grant. The turn's hydrated context is PUSHED into the expert's task
+  (`ExpertEnv.hydration` → `think()`), and the orchestrator brokers any
+  sub-task-specific recall before spawning. Writes happen only via write proposals
+  through the Memory Manager (invariant §I.6) — never by an expert.
 - Least-privilege: an expert may use ONLY the tools in its `tools=(...)` grant, at
   its declared `permission` — the handler scopes a tool box to exactly those keys.
   Don't grant NETWORK/workspace an expert doesn't need.

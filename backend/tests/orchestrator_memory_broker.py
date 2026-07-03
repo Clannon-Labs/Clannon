@@ -20,6 +20,18 @@ def test_memory_search_is_offered_to_the_orchestrator():
     assert "memory.search" in _orchestrator_tool_keys()
 
 
+def test_no_expert_holds_a_memory_grant():
+    # the sole-broker invariant: experts are stateless — memory access is the
+    # orchestrator's alone; an expert's context arrives pushed (ExpertEnv.hydration)
+    discover()
+    for card in registry.cards(CapabilityKind.EXPERT):
+        spec = registry.get_expert(card["key"])
+        grants = tuple(getattr(spec, "tool_grants", ()) or ())
+        assert not any(g.startswith("memory.") for g in grants), (
+            f"expert {spec.key!r} holds a memory grant {grants!r} — sole-broker violated"
+        )
+
+
 def test_baseline_prompt_instructs_the_orchestrator_to_broker():
     # the committed baseline (overlay may harden, never weaken — read the repo file)
     text = (Path(__file__).parent.parent / "prompts" / "orchestrator" / "system.md").read_text()

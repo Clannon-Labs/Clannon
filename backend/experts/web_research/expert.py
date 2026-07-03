@@ -27,7 +27,7 @@ class WebResearchExpert:
     input_schema = ResearchIn
     output_schema = ExpertOutput
     skills = ("skills",)                       # baseline skills/ beside this file
-    tools = ("search.web", "web.fetch_url", "memory.search")  # scoped + guarded; memory.search recalls prior research on this user/client
+    tools = ("search.web", "web.fetch_url")  # scoped + guarded; prior research on this user/client arrives via the pushed hydration + the orchestrator's brokered recall (sole-broker, §7.3)
     model_role = "research"
     permission = PermissionLevel.NETWORK
     tags = ("open-web", "sources", "citations")

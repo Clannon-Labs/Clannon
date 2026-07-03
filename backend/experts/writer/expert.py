@@ -30,7 +30,7 @@ class WriterExpert:
     input_schema = WriteIn
     output_schema = ExpertOutput
     skills = ("skills",)       # baseline skills/ beside this file
-    tools = ("memory.search",) # mostly reasons over what it's given; memory.search recalls the user's context/preferences/style
+    tools = ()                 # pure reasoning over what it's given — the user's context/preferences/style arrive via the pushed hydration + the orchestrator's brokered recall (sole-broker, §7.3)
     model_role = "planner"
     tags = ("report", "writing", "citations")
     eager = True               # hot path: the synthesis step of nearly every research turn (W2)
