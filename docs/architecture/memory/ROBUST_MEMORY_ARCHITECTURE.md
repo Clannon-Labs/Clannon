@@ -430,9 +430,10 @@ LLM-touching operation is parallel or offline.
 The orchestrator becomes the **central reasoner and the sole memory broker**, not
 just a tool-driving agent (its role today — orchestrator `CLAUDE.md`).
 
-- **The orchestrator holds the `MemoryPort`; experts do not.** Today
-  `web.research`, `docs.writer`, and `synthesis.writer` carry a `memory.search`
-  grant and self-fetch (Phase 2 Part B). Remove it. Experts must not open the
+- **The orchestrator holds the `MemoryPort`; experts do not.** ✅ **BUILT
+  (2026-07-03):** no expert holds a `memory.*` grant any more
+  (`experts/{writer,documentation,web_research}/expert.py`; invariant locked in
+  `tests/orchestrator_memory_broker.py`). Experts must not open the
   memory door themselves — this shrinks the number of surfaces that touch memory
   (better for the single-door rule and `user_id` scoping) and keeps expert context
   controlled.
@@ -440,12 +441,18 @@ just a tool-driving agent (its role today — orchestrator `CLAUDE.md`).
   context bundle** — the slice of hydrated/searched memory that expert needs plus
   its task brief — and hands it in at spawn. Experts are *not* stateless and do
   *not* fetch; they receive exactly the context the orchestrator decided they need.
+  *Built form (2026-07-03): the whole TURN's hydrated memory is pushed to every
+  expert (`ExpertEnv.hydration` → `_memory_note` in `handler/support.py`); the
+  per-expert SLICING of that bundle remains open.*
 - **Broker, don't open (fallback path).** When an expert discovers mid-task that it
   needs more (a newly-surfaced entity's history), it **asks the orchestrator** (a
   structured "need-context" request in its return channel); the orchestrator runs
   the on-demand search and hands results back. The expert still never touches the
   port. This keeps "orchestrator = central authority" true without starving experts
   that genuinely need to discover.
+  *Built form (2026-07-03): the orchestrator brokers recall PRE-SPAWN (prompt
+  §"Brokering memory for experts"; it keeps `memory.search` natively). The mid-task
+  expert→orchestrator "need-context" channel is NOT built.*
 - **Central reasoning, lean context — the tension, resolved.** The existing
   invariant "the orchestrator never receives raw expert output, only brief
   summaries" (orchestrator `CLAUDE.md`) seems to fight "central reasoner." It does
@@ -492,7 +499,9 @@ To make the codebase *ready* for the model above without a big-bang refactor:
    orchestrator entry (a small pipeline/`loop.py` change, Flow-safe per 7.2).
 4. Remove `memory.search` from expert grants; add a per-expert **context-bundle**
    input and an expert→orchestrator **need-context** request path (orchestrator
-   domain — land with the loop change).
+   domain — land with the loop change). ✅ *Grants removed + turn-level context
+   push built 2026-07-03 (`ExpertEnv.hydration`); the mid-task need-context
+   request path remains open.*
 5. Keep `learn()`/distillation async (already is); add the scheduled maintenance
    entry point as a no-op stub the Curator (L4) will fill.
 
@@ -630,10 +639,11 @@ not a research breakthrough, and we should not market it as one.
    future scale-up swap. See [../../ARCHITECTURE.md](../../ARCHITECTURE.md) §5.2. This
    supersedes the prior "Qdrant-native through Phase 3" recommendation and closes the
    open question in ADR 0005.
-2. **Orchestrator reasoning shift (cross-domain).** §7.3 elevates the orchestrator
-   from tool-driver to central reasoner + memory broker, and removes expert
-   `memory.search` grants. This is an **orchestrator-domain** change that must land
-   with the memory contract — needs the orchestrator agent/doc, not just memory.
+2. **Orchestrator reasoning shift (cross-domain).** **Resolved → landed 2026-07-03**
+   (sole-broker, `ARCHITECTURE.md §7.3`): expert `memory.search` grants removed,
+   hydrated context pushed to experts (`ExpertEnv.hydration`), pre-spawn brokered
+   recall in the orchestrator prompt. The fuller "central reasoner" elevation
+   (per-expert bundles, need-context channel) stays a roadmap item.
 3. **Embedding space.** Stay on local nomic-768 (`embeddings.py`) or add a second
    space for entities (Zep uses 1024-d)? Invariant §VI.24 says never trust one
    embedding space — but multi-space is a Phase 4 concern.

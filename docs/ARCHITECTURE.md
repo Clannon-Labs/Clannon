@@ -338,13 +338,18 @@ orchestrator never receives raw expert output. Hard constraint.
 >   context); writes are already orchestrator-only (the `remember` tool proposes, experts
 >   never write); and every read is constructed in one place (`core/memory/store.py`), so
 >   the access point is already singular and auditable.
-> - `[PARTIAL]` — three experts still hold a `memory.search` grant
->   (`experts/{writer,documentation,web_research}/expert.py`), and the `ExpertEnv`
->   (`registry/capabilities/handler/experts.py:117-125`) does not yet carry the hydrated
->   context. Enforcing sole-broker means first handing experts their context through the
->   broker, then removing the grant — until that lands the rule is stated, not enforced.
->   The grant-removal is scoped (not yet applied, pending approval) in
->   `conversation/report_v4.md`.
+> - `[BUILT]` — experts are stateless, context is pushed (2026-07-03, Option D of
+>   `conversation/report_v4.md`): the turn's hydrated memory is snapshot into
+>   `ExpertEnv.hydration` (`registry/capabilities/handler/experts.py:126`) and folded
+>   into every expert's task as labelled reference data
+>   (`handler/support.py:173` `_memory_note`, applied in `think()` at `:221`); the
+>   orchestrator brokers sub-task-specific recall before spawning (it keeps
+>   `memory.search` natively; prompt §"Brokering memory for experts",
+>   `prompts/orchestrator/system.md:101`); and **no expert holds a `memory.*` grant**
+>   (`experts/writer/expert.py:33` = no tools, `experts/documentation/expert.py:40` =
+>   fs only, `experts/web_research/expert.py:30` = web only). Locked by
+>   `tests/expert_hydration.py` and `tests/orchestrator_memory_broker.py`
+>   (invariant: no registered expert carries a memory grant).
 
 ---
 
@@ -482,9 +487,9 @@ irreversible-action-approval safety gates; the **decision-log audit mirror** (§
 replay-based; no compaction store).
 
 **Cross-cutting open decisions to make before/within these phases** (flagged, not
-silently settled here): (1) **resolved → sole-broker** (§7.3): experts will receive
-Manager-hydrated context and lose their `memory.search` grant; the grant-removal is
-`[PARTIAL]`, pending the change that threads hydrated context to experts (scoped in
+silently settled here): (1) **resolved → sole-broker, `[BUILT]` 2026-07-03** (§7.3):
+experts receive Manager-hydrated context pushed into their task and hold no
+`memory.*` grant; the orchestrator brokers sub-task recall (Option D of
 `conversation/report_v4.md`); (2) whether a second entity-embedding space is added
 alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job type.
 
