@@ -156,7 +156,7 @@ export function CommandPalette() {
       }}
       className={cn(
         "m-auto mt-[12dvh] w-[calc(100vw-2rem)] max-w-lg rounded-lg border border-border bg-surface-raised p-0 text-foreground shadow-2xl",
-        "backdrop:bg-black/55 backdrop:backdrop-blur-[2px] open:animate-fade-up",
+        "backdrop:bg-black/55 backdrop:backdrop-blur-[2px] open:animate-sheet-in",
       )}
       aria-label="Command palette"
     >

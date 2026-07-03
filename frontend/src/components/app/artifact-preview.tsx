@@ -90,7 +90,7 @@ export function ArtifactPreview({
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="m-auto h-[85dvh] w-[calc(100vw-2rem)] max-w-3xl rounded-lg border border-border bg-surface-raised p-0 text-foreground shadow-2xl backdrop:bg-black/55 backdrop:backdrop-blur-[2px] open:animate-fade-up"
+      className="m-auto h-[85dvh] w-[calc(100vw-2rem)] max-w-3xl rounded-lg border border-border bg-surface-raised p-0 text-foreground shadow-2xl backdrop:bg-black/55 backdrop:backdrop-blur-[2px] open:animate-sheet-in"
     >
       <div className="flex h-full flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">

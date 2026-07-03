@@ -22,6 +22,8 @@ export interface ToastInput {
 
 interface ToastItem extends ToastInput {
   id: number;
+  /** Playing its exit animation; removed from the list when it finishes. */
+  leaving?: boolean;
 }
 
 const ToastContext = createContext<{ toast: (t: ToastInput) => void } | null>(null);
@@ -37,7 +39,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const counter = useRef(0);
 
   const dismiss = useCallback((id: number) => {
-    setItems((list) => list.filter((t) => t.id !== id));
+    // exit choreography: mark it leaving, drop it once the animation played
+    setItems((list) => list.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    window.setTimeout(() => {
+      setItems((list) => list.filter((t) => t.id !== id));
+    }, 190);
   }, []);
 
   const toast = useCallback(
@@ -64,7 +70,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={item.id}
             className={cn(
               "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-surface-raised p-4 shadow-xl",
-              "animate-log-in",
+              item.leaving ? "animate-toast-out" : "animate-log-in",
               item.tone === "warning" ? "border-warning/40" : "border-border-strong",
             )}
           >

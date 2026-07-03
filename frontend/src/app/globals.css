@@ -57,6 +57,44 @@
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   --animate-shimmer: shimmer 1.8s linear infinite;
   --animate-ignite: ignite 1.5s ease-out both;
+  /* interaction-speed surfaces (dialogs, palette, toasts): fast in, faster out.
+     fade-up stays reserved for editorial scroll reveals, never for modals. */
+  --animate-sheet-in: sheet-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-sheet-out: sheet-out 0.16s ease-in both;
+  --animate-toast-out: toast-out 0.18s ease-in both;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sheet-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 /* a memory arriving: an amber wash that settles — the tier "burning in" */
