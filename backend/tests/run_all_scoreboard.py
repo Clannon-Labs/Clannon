@@ -114,7 +114,10 @@ class TestRunStandard:
 
 class TestRunE1:
     def test_not_measured_when_module_missing(self):
-        verdict, reason = run_all._run_e1()
+        # simulate absence — the real e1 harness HAS landed (PR #33), so the
+        # missing-module path must be mocked, never assumed from the repo state
+        with patch.object(run_all, "_import", return_value=None):
+            verdict, reason = run_all._run_e1()
         assert verdict == "NOT-MEASURED"
         assert "not yet landed" in reason
 
