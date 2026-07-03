@@ -5,6 +5,42 @@
 This CLAUDE.md belongs to the repository root and is intended for the
 ROOT MANAGER agent.
 
+> There is a separate instance for the frontend so if you are not specifically
+> assigned to work on the frontend, NEVER make any changes on it.
+
+> Important: YOU must be careful to not let any merge conflicts happen or,
+> Overwrite the work of the frontend agent !!
+
+## PROPOSAL PROTOCOL (cross-agent channel — no owner relay)
+
+Two interactive sessions work this repo: the BACKEND agent (this file's reader,
+root + backend/) and the FRONTEND agent (frontend/). They exchange work through
+proposal FILES — never by editing the other side's code, never by asking the
+owner to carry a message. Format spec + worked example: `proposals/README.md`
+(filename `YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary; body
+with contract + acceptance criteria; receiver appends `## Response`, flips
+Status, archives).
+
+**At the START of every user interaction, BEFORE anything else, check your
+inbox:**
+
+- Backend agent: `proposals/to-backend/` (from the frontend agent) and
+  `backend/proposals/` (from the owner).
+- Frontend agent: `proposals/to-frontend/` and `frontend/proposals/`.
+
+If pending proposals exist: tell the owner in one line — "N pending proposals:
+<slugs>" — then handle them (accept / reject / act, per their Priority and your
+CONTEXT.md rules) unless the owner's current request is urgent, in which case
+ask which comes first. Never leave a proposal pending that you could have
+handled; when done, append your `## Response`, flip Status, and move the file
+to `proposals/archive/<your-inbox-name>/`.
+
+When YOUR work needs something from the OTHER side (an API change, a contract,
+a new endpoint, UI for a backend feature): write a proposal file into the other
+agent's inbox (`proposals/to-frontend/` or `proposals/to-backend/`), note it in
+your report, and design around the gap until answered. Do NOT relay through the
+owner. Proposals are the ONLY cross-agent channel.
+
 The root manager is responsible for:
 
 * repository-wide planning
