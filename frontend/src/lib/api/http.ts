@@ -6,6 +6,7 @@ import {
   ApiError,
   type Credentials,
   type LayerModelConfig,
+  type HydrationPreviewEntry,
   type MemoryEntry,
   type Project,
   type RemoteConfig,
@@ -326,6 +327,18 @@ export class HttpClient implements ClannonClient {
 
   listMemory(projectId?: string): Promise<MemoryEntry[]> {
     return request(withQuery(appConfig.endpoints.memory, { projectId }));
+  }
+
+  async hydrationPreview(brief: string, projectId?: string): Promise<HydrationPreviewEntry[]> {
+    // the preview is decorative — the contract returns [] on any backend
+    // fault, and a network fault must degrade the same way, never surface
+    try {
+      return await request(
+        withQuery(appConfig.endpoints.memoryHydrationPreview, { brief, projectId }),
+      );
+    } catch {
+      return [];
+    }
   }
 
   saveMemoryEntry(

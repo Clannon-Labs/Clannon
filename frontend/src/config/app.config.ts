@@ -76,6 +76,7 @@ export const appConfig = {
     /** Delete a whole conversation (a session and all its turns). */
     session: "/sessions/:id",
     memory: "/memory",
+    memoryHydrationPreview: "/memory/hydration-preview",
     memoryEntry: "/memory/:id",
     /** Multipart bulk import of .md/.txt files as wiki entries. */
     memoryUpload: "/memory/upload",

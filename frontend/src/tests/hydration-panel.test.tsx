@@ -78,6 +78,9 @@ const mockDeleteMutate = vi.fn();
 
 vi.mock("@/lib/api/hooks", () => ({
   useMemoryEntries: vi.fn(),
+  // the chip's "N in reach" now comes from the Manager's dry-run ranking
+  // (GET /memory/hydration-preview), not a local re-rank — mock it per test
+  useHydrationPreview: vi.fn(),
   useDeleteMemory: vi.fn(() => ({
     mutate: mockDeleteMutate,
     isPending: false,
@@ -87,8 +90,8 @@ vi.mock("@/lib/api/hooks", () => ({
 // ---- Imports ----------------------------------------------------------------
 
 import { HydrationPanel } from "@/components/app/hydration-panel";
-import { useMemoryEntries } from "@/lib/api/hooks";
-import type { MemoryEntry } from "@/lib/api/types";
+import { useHydrationPreview, useMemoryEntries } from "@/lib/api/hooks";
+import type { HydrationPreviewEntry, MemoryEntry } from "@/lib/api/types";
 
 // ---- Fixtures ---------------------------------------------------------------
 
@@ -127,11 +130,18 @@ function setupEntries(entries: MemoryEntry[]) {
   >);
 }
 
+function setupPreview(hits: HydrationPreviewEntry[] | undefined) {
+  vi.mocked(useHydrationPreview).mockReturnValue({ data: hits, isLoading: false } as ReturnType<
+    typeof useHydrationPreview
+  >);
+}
+
 // ---- Tests ------------------------------------------------------------------
 
 describe("HydrationPanel", () => {
   beforeEach(() => {
     setupEntries([WIKI_ENTRY, SEMANTIC_ENTRY, EPISODIC_ENTRY]);
+    setupPreview(undefined); // no dry-run hits unless a test provides them
   });
 
   // --- Loading / null state -------------------------------------------------
@@ -275,20 +285,18 @@ describe("HydrationPanel", () => {
       expect(screen.queryByText(/Why do I know this\?/i)).toBeNull();
     });
 
-    it("shows 'N in reach' in the chip when typed tokens match an entry", () => {
-      // SEMANTIC_ENTRY title contains "summaries" and "format"
+    it("shows 'N in reach' in the chip when the dry-run ranking returns hits", () => {
       setupEntries([SEMANTIC_ENTRY]);
+      setupPreview([{ ...SEMANTIC_ENTRY, score: 0.9 }]);
       const { rerender } = render(<HydrationPanel brief="" />);
       rerender(<HydrationPanel brief="preferred summaries format" />);
-      expect(screen.getByText(/in reach/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 in reach/i)).toBeInTheDocument();
     });
 
-    it("shows 'listening' in the chip when typed tokens match nothing", () => {
-      // Wiki entries always score 0.5 regardless of match (the tier boost), so use
-      // an episodic entry to get a clean 0-score result with unrelated tokens.
+    it("shows 'listening' in the chip while the dry-run returns nothing", () => {
       setupEntries([EPISODIC_ENTRY]);
+      setupPreview([]); // the endpoint's honest empty — never an error surface
       const { rerender } = render(<HydrationPanel brief="" />);
-      // Tokens that do not appear in EPISODIC_ENTRY content ("2 experts, 12k tokens…")
       rerender(<HydrationPanel brief="completely unrelated xyzzy quux" />);
       expect(screen.getByText(/listening/i)).toBeInTheDocument();
     });

@@ -7,6 +7,7 @@ import {
   type Credentials,
   type DecisionLogEntry,
   type LayerModelConfig,
+  type HydrationPreviewEntry,
   type MemoryEntry,
   type Project,
   type Run,
@@ -473,6 +474,35 @@ export class MockClient implements ClannonClient {
   async listMemory(projectId?: string): Promise<MemoryEntry[]> {
     await sleep(260);
     return structuredClone(this.memory.filter((m) => !projectId || m.projectId === projectId));
+  }
+
+  async hydrationPreview(brief: string, projectId?: string): Promise<HydrationPreviewEntry[]> {
+    await sleep(180);
+    // keyword-overlap stand-in for the backend's real trust+similarity ranking.
+    // Mirrors its scoping rule: projectId filters wiki only; learned tiers are
+    // account-wide. Learned-tier hits get synthetic render-only ids.
+    const terms = brief.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2);
+    if (terms.length === 0) return [];
+    return this.memory
+      .filter((m) => m.tier !== "wiki" || !projectId || m.projectId === projectId)
+      .map((m, n) => {
+        const hay = `${m.title} ${m.content}`.toLowerCase();
+        let hits = 0;
+        for (const t of terms) if (hay.includes(t)) hits += 1;
+        const score = Math.min(1, (hits + (m.tier === "wiki" ? 0.5 : 0)) / (terms.length + 0.5));
+        return {
+          hits,
+          hit: {
+            ...structuredClone(m),
+            id: m.tier === "wiki" ? m.id : `preview_${n}`,
+            score,
+          },
+        };
+      })
+      .filter((x) => x.hits > 0)
+      .sort((a, b) => b.hit.score - a.hit.score)
+      .slice(0, 8)
+      .map((x) => x.hit);
   }
 
   async saveMemoryEntry(

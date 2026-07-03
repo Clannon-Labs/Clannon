@@ -3,6 +3,7 @@ import type { PlanId } from "@/config/plans";
 import type {
   Credentials,
   LayerModelConfig,
+  HydrationPreviewEntry,
   MemoryEntry,
   Project,
   RemoteConfig,
@@ -88,6 +89,11 @@ export interface ClannonClient {
 
   /** Memory, optionally scoped to one project (omit for all of the user's memory). */
   listMemory(projectId?: string): Promise<MemoryEntry[]>;
+
+  /** Dry-run of what the Manager would hydrate for a draft brief — the real
+   *  ranking behind the hydration panel's "in reach" chip. Render-only
+   *  (learned-tier ids are synthetic); resolves [] on any fault, never throws. */
+  hydrationPreview(brief: string, projectId?: string): Promise<HydrationPreviewEntry[]>;
   /** Save a wiki entry; `projectId` scopes a NEW entry to a project (edits keep
    *  their existing scope). */
   saveMemoryEntry(

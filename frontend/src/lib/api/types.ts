@@ -160,6 +160,17 @@ export interface MemoryEntry {
 }
 
 /**
+ * One hydration-preview hit — a dry-run of what the Manager would hydrate for
+ * a draft brief. Render-only: learned-tier hits carry synthetic `preview_<n>`
+ * ids (never build links or mutations off them) and may lack a timestamp.
+ */
+export interface HydrationPreviewEntry extends Omit<MemoryEntry, "updatedAt"> {
+  updatedAt: string | null;
+  /** Relevance from the real ranking, clamped 0..1, best-first. */
+  score: number;
+}
+
+/**
  * A project: a client or a body of work. Sessions (runs) and memory are scoped
  * to one. "Current project" is client-side state — every scoped request carries
  * the projectId. See the Projects proposal in conversation/proposal.md.

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -184,6 +185,22 @@ export function useMemoryEntries(projectId?: string) {
   return useQuery({
     queryKey: queryKeys.memoryList(projectId),
     queryFn: () => getClient().listMemory(projectId),
+  });
+}
+
+/**
+ * The Manager's dry-run ranking for a draft brief — feeds the hydration
+ * panel's receded "in reach" chip while the user types. Callers pass an
+ * already-debounced brief; previous results are kept while the next brief
+ * resolves so the chip never flickers back to "listening".
+ */
+export function useHydrationPreview(brief: string, projectId?: string) {
+  return useQuery({
+    queryKey: ["hydration-preview", projectId ?? null, brief] as const,
+    queryFn: () => getClient().hydrationPreview(brief, projectId),
+    enabled: brief.trim().length >= 3,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 }
 

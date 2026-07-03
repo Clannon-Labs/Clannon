@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ChevronRight, Pencil, Sprout, X } from "lucide-react";
-import { useDeleteMemory, useMemoryEntries } from "@/lib/api/hooks";
+import { useDeleteMemory, useHydrationPreview, useMemoryEntries } from "@/lib/api/hooks";
 import type { MemoryEntry } from "@/lib/api";
 import { TIER_LABELS, type MemoryTier } from "@/config/plans";
 import { MemoryRings } from "@/components/brand/memory-rings";
@@ -32,17 +32,6 @@ function tokens(text: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 2 && !STOP.has(t));
-}
-
-/** Light, honest relevance: keyword overlap. The real pipeline hydrates
- *  semantically — this preview just re-ranks what's already in reach as you
- *  type, so the receded chip can name the tier that's surfacing. */
-function score(entry: MemoryEntry, brief: string[]): number {
-  const hay = `${entry.title} ${entry.content}`.toLowerCase();
-  let s = 0;
-  for (const t of brief) if (hay.includes(t)) s += 1;
-  if (entry.tier === "wiki") s += 0.5; // wiki always slightly forward — it outranks
-  return s;
 }
 
 const byRecency = (a: MemoryEntry, b: MemoryEntry) =>
@@ -251,25 +240,29 @@ export function HydrationPanel({
   const briefTokens = useMemo(() => tokens(brief), [brief]);
   const listening = briefTokens.length > 0;
 
+  // hand the draft to the Manager's dry-run at a debounced cadence — the chip
+  // reflects the REAL ranking a run would hydrate, not a local guess
+  const [debouncedBrief, setDebouncedBrief] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedBrief(brief), 500);
+    return () => window.clearTimeout(t);
+  }, [brief]);
+  const preview = useHydrationPreview(debouncedBrief, projectId);
+
   const live = useMemo(() => (entries ?? []).filter((e) => !dismissed.has(e.id)), [entries, dismissed]);
 
-  // resting: a curated recap. typing: re-rank by the brief so the chip can
-  // name what's surfacing.
-  const surfaced = useMemo(() => {
-    if (live.length === 0) return [];
-    if (!listening) return restingRecap(live);
-    return live
-      .map((e) => ({ e, s: score(e, briefTokens) }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s)
-      .slice(0, 4)
-      .map((x) => x.e);
-  }, [live, listening, briefTokens]);
+  // resting: a curated recap of what's carried into the session
+  const surfaced = useMemo(() => (live.length === 0 ? [] : restingRecap(live)), [live]);
+  // typing: the dry-run hits (render-only — learned-tier ids are synthetic)
+  const previewHits = useMemo(
+    () => (preview.data ?? []).filter((e) => !dismissed.has(e.id)),
+    [preview.data, dismissed],
+  );
 
-  const activeTier = surfaced[0]?.tier ?? null;
-  const matched = surfaced.length > 0;
+  const activeTier = (listening ? previewHits[0]?.tier : surfaced[0]?.tier) ?? null;
+  const matched = listening ? previewHits.length > 0 : surfaced.length > 0;
   // sparse: little to nothing remembered yet (early in a relationship).
-  const sparse = !listening && restingRecap(live).length === 0;
+  const sparse = !listening && surfaced.length === 0;
 
   function correct(entry: MemoryEntry) {
     setExpandedId((id) => (id === entry.id ? null : id));
@@ -309,7 +302,7 @@ export function HydrationPanel({
               {matched ? (
                 <span className="flex items-center gap-1.5 tabular">
                   {activeTier && <span className={cn("size-1.5 rounded-full", TIER_TICK[activeTier])} aria-hidden />}
-                  {surfaced.length} in reach
+                  {previewHits.length} in reach
                 </span>
               ) : (
                 <span className="text-faint">
