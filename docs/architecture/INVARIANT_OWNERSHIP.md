@@ -26,8 +26,9 @@
 > atomic token budgets (§21), tenant-isolation/RLS (§22), typed knowledge (§3),
 > and the institutional/decision-memory promotion rules (§2, §8). One is
 > **partial**: §20's runtime `user_id` scoping **is** enforced and tested
-> (`tests/memory_isolation.py`), but the Semgrep unscoped-query **build-gate** it
-> claims does **not** exist. None should be relied on beyond its stated status.
+> (`tests/memory_isolation.py`), and a runnable grep-based stand-in now exists at
+> `backend/scripts/check_invariants.py` (exits 0 on clean tree), but the full
+> Semgrep CI build-gate (issue #15) is still absent. None should be relied on beyond its stated status.
 > (Verified: `grep DECRBY|EVAL|SET LOCAL|invoice.paid|promotion|EntryType` and a
 > search for a Semgrep config returned nothing in `backend/`; tenant isolation is
 > exercised by `tests/memory_isolation.py`, and provider fallback by
@@ -56,7 +57,7 @@
 | IV.17 | All fetched/retrieved content is untrusted | `tools/` + `security/sanitizers` | fetched content should re-enter sanitization | **verify routing** | partial |
 | IV.18 | Identity set once, never re-derived | `foundation/transport/context.py` + `api/` auth | `user_id` in Flow context | context.py | enforced |
 | IV.19 | User input is never a filesystem path | `foundation/coercion.py` | `coerce_to_bytes` boundary | coercion.py | enforced |
-| V.20 | One Qdrant instance, `user_id`-scoped **+ CI gate** | `core/memory` (runtime); CI (missing) | runtime payload filter enforced **and tested**; **Semgrep build-gate ABSENT** | `tests/memory_isolation.py` (tenant isolation); grep: no semgrep config | partial |
+| V.20 | One Qdrant instance, `user_id`-scoped **+ CI gate** | `core/memory` (runtime); CI (partial) | runtime payload filter enforced **and tested**; Semgrep CI gate still absent (issue #15); **grep-based stand-in present** | `tests/memory_isolation.py` (tenant isolation); `backend/scripts/check_invariants.py` (runnable stand-in, exits 0 on clean tree) | partial |
 | V.21 | Token-budget decrements are atomic | — (design only) | Lua `EVAL` pattern designed, not built | `REDIS_ARCHITECTURE.md`; grep: none | **aspirational** |
 | V.22 | No tenant leakage via keys/rows (RLS) | — (design only) | RLS/`SET LOCAL` designed, not built | grep: none | **aspirational** |
 | VI.23 | Capability first, provider second | `core/llm` (registry) + `models.yaml` | capability-filtered model routing | registry + config | enforced |

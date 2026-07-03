@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -37,8 +39,58 @@ from core.artifacts import LocalArtifactStore
 from security.sanitizers import uploads as upload_scan
 
 from . import auth, config, runs
+from .run_state import TERMINAL_STATUSES
+from .config_validation import fail_fast_if_strict
 
-app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION)
+fail_fast_if_strict()
+
+log = logging.getLogger(__name__)
+
+_WARMUP_TIMEOUT_S = 30.0
+_DRAIN_TIMEOUT_S = 10.0
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    # STARTUP: warm heavy dependencies under a bounded timeout; never hard-fail
+    from core.warmup import warmup
+
+    try:
+        await asyncio.wait_for(warmup(), timeout=_WARMUP_TIMEOUT_S)
+        log.info("startup: warmup completed")
+    except asyncio.TimeoutError:
+        log.warning(
+            "startup: warmup timed out after %ss (dependencies load lazily)",
+            _WARMUP_TIMEOUT_S,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("startup: warmup error (non-fatal): %s", exc)
+
+    yield
+
+    # SHUTDOWN: signal cancellation to every in-flight run, then drain
+    live_tasks = []
+    for run in list(runs.STORE._runs.values()):
+        if run.status not in TERMINAL_STATUSES:
+            runs.STORE.request_cancel(run.user_id, run.id)
+            if run.task is not None and not run.task.done():
+                live_tasks.append(run.task)
+
+    if live_tasks:
+        log.info("shutdown: draining %d in-flight run(s)", len(live_tasks))
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*live_tasks, return_exceptions=True),
+                timeout=_DRAIN_TIMEOUT_S,
+            )
+            log.info("shutdown: drain complete")
+        except asyncio.TimeoutError:
+            log.warning("shutdown: drain timed out after %ss; proceeding", _DRAIN_TIMEOUT_S)
+    else:
+        log.info("shutdown: no in-flight runs to drain")
+
+
+app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,6 +99,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------- infrastructure (unauthenticated; expose ONLY process + dependency state) ----------
+
+
+@app.get("/health")
+def health() -> dict:
+    """Liveness probe: 200 whenever the process is up. No dependency calls."""
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready() -> JSONResponse:
+    """Readiness probe: 200 when all dependencies are healthy, 503 when any is down.
+    Body is a per-dependency status map; no user or tenant data is ever included."""
+    from ._health import probe_db, probe_embeddings, probe_qdrant
+
+    qdrant, emb, db = await asyncio.gather(
+        probe_qdrant(),
+        asyncio.to_thread(probe_embeddings),
+        asyncio.to_thread(probe_db),
+    )
+    deps = {"qdrant": qdrant, "embeddings": emb, "db": db}
+    healthy = all(v == "up" for v in deps.values())
+    return JSONResponse(
+        {"status": "healthy" if healthy else "degraded", "deps": deps},
+        status_code=200 if healthy else 503,
+    )
 
 
 # ---------- public config (read-only sync) ----------

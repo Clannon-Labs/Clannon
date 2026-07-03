@@ -1,7 +1,30 @@
+import ast
+
 import pytest
 
+import foundation
 from foundation import Flow, Origin, ThreatLevel, ConfigError, constants
 from registry.config import ModelRegistry
+
+
+def _names_bound_by_import_block():
+    """Names the public surface re-exports, read straight from the import block.
+
+    Parses `foundation/__init__.py` and collects every name bound by a relative
+    `from .X import (...)` statement (its alias if aliased). This is exactly the
+    set `__all__` is meant to mirror; `__future__` and star imports are ignored.
+    """
+    source = open(foundation.__file__, encoding="utf-8").read()
+    bound = set()
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level == 0 or node.module == "__future__":
+            continue
+        for alias in node.names:
+            if alias.name != "*":
+                bound.add(alias.asname or alias.name)
+    return bound
 
 
 def test_flow_truncates_long_error():
@@ -65,3 +88,25 @@ def test_flow_block_and_fail_release_the_cached_payload():
         assert failed.handle._cached is None
 
     asyncio.run(go())
+
+
+def test_all_mirrors_the_import_block():
+    """__all__ is the public surface; it must list exactly what the import block
+    re-exports. Catches an import added or removed without updating __all__."""
+    exported = set(foundation.__all__)
+    imported = _names_bound_by_import_block()
+
+    missing = imported - exported          # imported but not advertised
+    stale = exported - imported            # advertised but no longer imported
+    assert not missing, f"in the import block but missing from __all__: {sorted(missing)}"
+    assert not stale, f"in __all__ but not imported: {sorted(stale)}"
+
+
+def test_all_has_no_duplicates():
+    assert len(foundation.__all__) == len(set(foundation.__all__))
+
+
+def test_every_all_entry_resolves_on_the_module():
+    """`from foundation import X` works for every advertised name."""
+    unresolved = [name for name in foundation.__all__ if not hasattr(foundation, name)]
+    assert not unresolved, f"listed in __all__ but absent from the module: {unresolved}"

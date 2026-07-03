@@ -1,0 +1,71 @@
+{
+  "_about": [
+    "Machine-checkable snapshot of the frontend<->backend SSE event contract.",
+    "This is the FRONTEND side of the contract: the event names, payload shapes, and",
+    "enum vocabularies the frontend mock client + types expect on a live run stream.",
+    "The backend's actually-emitted events are extracted at test time and asserted",
+    "against this fixture by backend/tests/benchmarks/sse_contract_drift.py.",
+    "On MATERIAL drift the test emits a needs-reviewer escalation and fails; it never",
+    "edits either side. Forward-compatible gaps (frontend declares an event the backend",
+    "does not yet stream) are reported as informational, not drift."
+  ],
+  "_source": {
+    "stream_events_and_nested_shapes": "frontend/src/lib/api/types.ts (RunEvent union, DecisionLogEntry, ExpertState)",
+    "enums": "frontend/src/lib/api/types.ts (RunStatus, DecisionKind, ExpertStatus)",
+    "runtime_emission": "frontend/src/lib/api/mock.ts (MockClient.streamRun)",
+    "backend_declared_contract": "backend/api/README.md (the data: RunEvent frame table)"
+  },
+  "_keys": {
+    "required_keys": "keys (besides `type`) the frontend reads unconditionally for this event",
+    "backend_required": "whether the backend is obligated to stream this event today; false = forward-compatible (frontend handles it if sent, backend has not wired it yet)"
+  },
+  "stream_events": {
+    "status":        { "required_keys": ["status"],     "backend_required": true },
+    "log":           { "required_keys": ["entry"],      "backend_required": true },
+    "expert":        { "required_keys": ["expert"],     "backend_required": true },
+    "message_delta": { "required_keys": ["text"],       "backend_required": true },
+    "message_done":  { "required_keys": [],             "backend_required": true },
+    "report_delta":  { "required_keys": ["text"],       "backend_required": true },
+    "report_done":   { "required_keys": [],             "backend_required": true },
+    "sources":       { "required_keys": ["sources"],    "backend_required": false },
+    "usage":         { "required_keys": ["tokensUsed"], "backend_required": false }
+  },
+  "nested_shapes": {
+    "DecisionLogEntry": {
+      "required_keys": ["id", "ts", "kind", "title"],
+      "optional_keys": ["detail", "meta"]
+    },
+    "ExpertState": {
+      "required_keys": ["id", "name", "domain", "status", "toolCalls"],
+      "optional_keys": ["summary"]
+    }
+  },
+  "decision_kinds": [
+    "hydration",
+    "route",
+    "expert_spawn",
+    "tool_call",
+    "observation",
+    "answer",
+    "warning",
+    "error"
+  ],
+  "run_statuses": [
+    "queued",
+    "sanitizing",
+    "verifying",
+    "orchestrating",
+    "filtering",
+    "delivered",
+    "blocked",
+    "failed",
+    "cancelled"
+  ],
+  "expert_statuses": [
+    "spawned",
+    "working",
+    "summarizing",
+    "done",
+    "failed"
+  ]
+}
