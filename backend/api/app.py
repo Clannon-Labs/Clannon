@@ -40,6 +40,9 @@ from security.sanitizers import uploads as upload_scan
 
 from . import auth, config, runs
 from .run_state import TERMINAL_STATUSES
+from .config_validation import fail_fast_if_strict
+
+fail_fast_if_strict()
 
 log = logging.getLogger(__name__)
 
