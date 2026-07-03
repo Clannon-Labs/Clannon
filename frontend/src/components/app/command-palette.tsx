@@ -183,6 +183,11 @@ export function CommandPalette() {
           }}
           placeholder="Type a command or search…"
           aria-label="Search commands"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="cmd-listbox"
+          aria-autocomplete="list"
+          aria-activedescendant={filtered.length > 0 ? `cmd-opt-${selected}` : undefined}
           className="h-12 w-full bg-transparent text-[15px] placeholder:text-faint focus:outline-none"
         />
         <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[11px] text-faint sm:block">
@@ -190,7 +195,7 @@ export function CommandPalette() {
         </kbd>
       </div>
 
-      <ul ref={listRef} className="max-h-[40dvh] overflow-y-auto p-2" role="listbox">
+      <ul ref={listRef} id="cmd-listbox" className="max-h-[40dvh] overflow-y-auto p-2" role="listbox">
         {filtered.length === 0 && (
           <li className="px-3 py-6 text-center text-sm text-faint">
             Nothing matches “{query}”.
@@ -204,6 +209,7 @@ export function CommandPalette() {
                 <li key={command.id}>
                   <button
                     type="button"
+                    id={`cmd-opt-${index}`}
                     data-index={index}
                     role="option"
                     aria-selected={selected === index}

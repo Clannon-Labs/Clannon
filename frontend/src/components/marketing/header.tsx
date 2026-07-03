@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useMe } from "@/lib/api/hooks";
 import { siteConfig } from "@/config/site.config";
 import { MARKETING_NAV as NAV } from "@/config/nav.config";
 import { workspaceUrl } from "@/config/app.config";
+import { useFocusTrap, useScrollLock } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
 export function MarketingHeader() {
@@ -18,6 +19,12 @@ export function MarketingHeader() {
   const { data: user } = useMe();
   // transparent (light-on-dark) over the hero, solid once scrolled past it
   const [scrolled, setScrolled] = useState(false);
+
+  // keep focus (and scroll) inside the open panel; the trap hands focus back
+  // to the toggle button on close
+  const panelRef = useRef<HTMLElement>(null);
+  useFocusTrap(open, panelRef);
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +107,9 @@ export function MarketingHeader() {
 
       {open && (
         <nav
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
           aria-label="Mobile"
           className="animate-fade-in border-t border-border bg-background px-5 py-4 md:hidden"
         >

@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Cpu, ShieldCheck } from "lucide-react";
 import { useModelConfig } from "@/lib/api/hooks";
 import type { LayerModelConfig } from "@/lib/api";
+import { useFocusTrap } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
 /** A friendlier display name for a model id — "gemini-2.5-flash" → "Gemini 2.5
@@ -284,6 +285,18 @@ export function SessionModelPicker({
       window.removeEventListener("scroll", onScroll, { capture: true });
     };
   }, [anchor]);
+
+  // keyboard: focus moves into the dialog on open, Tab cycles inside, and
+  // closing (Escape / pick / outside click) hands focus back to the trigger
+  useFocusTrap(anchor !== null, popRef);
+
+  // drilling between views swaps the whole panel content — land focus on the
+  // new view's first control so the keyboard follows the drill (DOM focus
+  // only; no state changes here)
+  useEffect(() => {
+    if (!anchor) return;
+    popRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus();
+  }, [view, anchor]);
 
   if (!layers) return null;
 

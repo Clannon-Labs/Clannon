@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { menuKeyboardHandler, useFocusTrap } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
 // palette key -> a theme dot color
@@ -74,6 +75,12 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // keyboard: focus lands on the first item on open, Tab stays inside (the
+  // row actions and "New project" are Tab stops), and closing — Escape, pick,
+  // outside click — hands focus back to the trigger. Arrow/Home/End roving
+  // across the items is menuKeyboardHandler on the menu itself.
+  useFocusTrap(open, popRef);
 
   function pick(id: string) {
     selectProject(id);
@@ -164,6 +171,7 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         <div
           ref={popRef}
           role="menu"
+          onKeyDown={(e) => menuKeyboardHandler(popRef.current)(e)}
           className="absolute inset-x-3 top-full z-50 mt-1 flex max-h-[min(60vh,26rem)] flex-col rounded-lg border border-border bg-surface-raised shadow-xl"
         >
           {/* All projects — clears the filter */}
@@ -203,8 +211,9 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                     <Check className="size-3.5 shrink-0 text-primary group-hover/row:hidden" aria-hidden />
                   )}
                 </button>
-                {/* inline actions — no nested popup to clip; hover on desktop, always on touch */}
-                <span className="flex shrink-0 items-center gap-0.5 pr-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100">
+                {/* inline actions — no nested popup to clip; hover on desktop
+                    (or keyboard focus — Tab reaches them), always on touch */}
+                <span className="flex shrink-0 items-center gap-0.5 pr-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
                   <button
                     type="button"
                     onClick={() => {
@@ -237,6 +246,7 @@ export function ProjectSwitcher({ onNavigate }: { onNavigate?: () => void }) {
           <div className="p-1">
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 setOpen(false);
                 setName("");

@@ -38,7 +38,8 @@ const TIERS: { tier: MemoryTier; name: string; trust: string; description: strin
 ];
 
 export function MemorySection() {
-  // hover-driven, not auto-cycling — calmer, and the reader controls it
+  // hover- and focus-driven, not auto-cycling — calmer, and the reader
+  // controls it (keyboard included)
   const [active, setActive] = useState<MemoryTier | null>(null);
 
   return (
@@ -75,7 +76,10 @@ export function MemorySection() {
             {TIERS.map((tier) => (
               <StaggerItem key={tier.tier}>
                 <div
+                  tabIndex={0}
                   onMouseEnter={() => setActive(tier.tier)}
+                  onFocus={() => setActive(tier.tier)}
+                  onBlur={() => setActive(null)}
                   className={cn(
                     "h-full cursor-default bg-background p-6 transition-colors duration-300",
                     active === tier.tier && "bg-memory-soft/60",

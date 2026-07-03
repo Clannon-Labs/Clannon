@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Mark } from "@/components/brand/logo";
 import { openCommandPalette } from "@/components/app/command-palette";
+import { menuKeyboardHandler, useFocusTrap, useScrollLock } from "@/lib/focus";
 import { ThemeToggle } from "@/components/theme";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -77,15 +78,23 @@ function RailBody({
   // so the scrolling history list can't clip it
   const [rowMenu, setRowMenu] = useState<{ session: SessionEntry; x: number; y: number } | null>(null);
   const rowMenuRef = useRef<HTMLDivElement>(null);
+  // the kebab that opened the menu — Escape hands focus back to it
+  const rowMenuAnchorRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!rowMenu) return;
+    // DOM focus only (no state writes) — menus start on their first item
+    rowMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const close = () => setRowMenu(null);
     const onDown = (e: PointerEvent) => {
       const t = e.target as Element;
       if (rowMenuRef.current?.contains(t) || t.closest("[data-row-kebab]")) return;
       close();
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      close();
+      rowMenuAnchorRef.current?.focus();
+    };
     document.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
     // a fixed menu detaches from its anchor on scroll — close it
@@ -100,12 +109,19 @@ function RailBody({
   // the account menu — a popover holding Settings, Usage, Billing, theme, log out
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
+    // DOM focus only (no state writes) — menus start on their first item
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const onDown = (e: PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+    };
     document.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
     return () => {
@@ -241,6 +257,7 @@ function RailBody({
                       e.preventDefault();
                       e.stopPropagation();
                       const r = e.currentTarget.getBoundingClientRect();
+                      rowMenuAnchorRef.current = e.currentTarget;
                       setRowMenu((cur) =>
                         cur?.session.sessionId === session.sessionId
                           ? null
@@ -271,6 +288,8 @@ function RailBody({
         <div
           ref={rowMenuRef}
           role="menu"
+          // ref is still null while this render is committing — read it at event time
+          onKeyDown={(e) => menuKeyboardHandler(e.currentTarget)(e)}
           style={{ position: "fixed", top: rowMenu.y + 4, left: rowMenu.x }}
           className="z-[60] min-w-[8.5rem] -translate-x-full overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg"
         >
@@ -362,6 +381,8 @@ function RailBody({
         {menuOpen && (
           <div
             role="menu"
+            // read the element at event time — refs are off-limits in render
+            onKeyDown={(e) => menuKeyboardHandler(e.currentTarget)(e)}
             className="absolute inset-x-2 bottom-full mb-1 z-10 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-xl"
           >
             <p className="truncate px-3 py-1.5 text-[12px] text-faint">{user?.email}</p>
@@ -387,6 +408,7 @@ function RailBody({
           </div>
         )}
         <button
+          ref={menuTriggerRef}
           type="button"
           onClick={() => setMenuOpen((o) => !o)}
           aria-expanded={menuOpen}
@@ -441,17 +463,16 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     setDrawerOpen(false);
   }
 
-  // lock the background scroll while the drawer is open; close on Escape
+  // trap focus in the drawer while it's open (restores to the hamburger on
+  // close), lock the background scroll, and close on Escape
+  const drawerRef = useRef<HTMLElement>(null);
+  useFocusTrap(drawerOpen, drawerRef);
+  useScrollLock(drawerOpen);
   useEffect(() => {
     if (!drawerOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
   return (
@@ -523,6 +544,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           )}
         />
         <aside
+          ref={drawerRef}
           role="dialog"
           aria-modal="true"
           aria-label="Menu"

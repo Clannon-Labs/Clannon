@@ -23,6 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatTokens } from "@/lib/utils";
 
+// "2026-07-01" → "Jul 1" for the bar labels (parsed at local midnight so the
+// day never shifts across timezones)
+const dayLabel = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 function UsageChart() {
   const { data: usage } = useUsage();
   if (!usage) return <Skeleton className="h-48" />;
@@ -66,14 +71,22 @@ function UsageChart() {
 
       <div className="rounded-lg border border-border bg-surface p-5">
         <h3 className="tag-label text-muted-foreground">Daily spend — last 14 days</h3>
-        <div className="mt-4 flex h-36 items-end gap-1.5" aria-hidden>
+        <div className="mt-4 flex h-36 items-end gap-1.5">
           {usage.byDay.map((day) => (
-            <div key={day.date} className="group relative flex-1">
+            // each bar is a Tab stop with the day+value as its label, so the
+            // per-day numbers aren't hover-only
+            <div
+              key={day.date}
+              tabIndex={0}
+              role="img"
+              aria-label={`${dayLabel(day.date)} — ${formatTokens(day.tokens)} tokens`}
+              className="group relative flex-1"
+            >
               <div
-                className="w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary"
+                className="w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary group-focus-within:bg-primary"
                 style={{ height: `${Math.max(4, (day.tokens / max) * 128)}px` }}
               />
-              <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block">
+              <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block group-focus-within:block">
                 {formatTokens(day.tokens)}
               </span>
             </div>
