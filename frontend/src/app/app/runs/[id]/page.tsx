@@ -17,6 +17,7 @@ import {
   Image,
   type LucideIcon,
 } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip, InfoTip } from "@/components/ui/tooltip";
 import { useRun, useLiveRun, useRunThread, useDownloadArtifact, useCancelRun } from "@/lib/api/hooks";
@@ -24,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Report } from "@/components/app/report";
 import { RunActivity } from "@/components/app/run-activity";
 import { RunStatusBadge } from "@/components/app/run-status";
-import { Reveal } from "@/components/motion";
+import { EASE, Reveal } from "@/components/motion";
 import { RunComposer, ReportRating } from "@/components/app/run-feedback";
 import { PriorTurns } from "@/components/app/prior-turns";
 import { UserMessage } from "@/components/app/thread";
@@ -97,6 +98,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const download = useDownloadArtifact();
   const cancel = useCancelRun(id);
   const toast = useToast();
+  const reduce = useReducedMotion();
 
   // turns of this session that came before the one on screen — the chat history.
   // thread is oldest-first; take everything up to the current turn.
@@ -298,12 +300,28 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           {showReport && (
             <section aria-label="Report" className="mt-6">
               <Reveal className="rounded-lg border border-border bg-surface">
-                <header className="flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
+                <header className="relative flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                   <h2 className="tag-label text-muted-foreground">
                     {live.reportDone ? "Report — passed output filter" : "Report — streaming"}
                   </h2>
+                  {/* the filter passing is the payoff — a moss rule strikes
+                      across the masthead as the verified mark rises in */}
+                  {live.reportDone && !reduce && (
+                    <motion.span
+                      aria-hidden
+                      className="absolute inset-x-0 bottom-[-1px] h-px origin-left bg-primary/50"
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ duration: 0.6, ease: EASE }}
+                    />
+                  )}
                   {live.reportDone && (
-                    <span className="flex items-center gap-1">
+                    <motion.span
+                      initial={reduce ? false : { opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, ease: EASE }}
+                      className="flex items-center gap-1"
+                    >
                       <span className="tag-label mr-1 flex items-center gap-1.5 text-primary sm:mr-2">
                         <Check className="size-3.5" aria-hidden />
                         <span className="sr-only sm:not-sr-only">Verified</span>
@@ -332,7 +350,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                           <Download className="size-4" />
                         </button>
                       </Tooltip>
-                    </span>
+                    </motion.span>
                   )}
                 </header>
                 <div className="px-5 py-6 sm:px-8 sm:py-8">
