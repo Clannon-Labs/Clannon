@@ -40,7 +40,17 @@ function recallQuery(entry: DecisionLogEntry): string | null {
  * sits on the rule like a bullet. Each line prints itself once on mount —
  * which, on a live run, means every entry types in as it arrives.
  */
-function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
+function LogEntry({
+  entry,
+  live,
+  animate,
+}: {
+  entry: DecisionLogEntry;
+  live: boolean;
+  /** False for entries that were already there when the log mounted (or that
+   *  a reconnect replays) — they render settled instead of re-typing. */
+  animate: boolean;
+}) {
   const reduce = useReducedMotion();
   const recall = isRecall(entry);
   const meta = recall ? RECALL_META : KIND_META[entry.kind];
@@ -52,7 +62,7 @@ function LogEntry({ entry, live }: { entry: DecisionLogEntry; live: boolean }) {
 
   return (
     <motion.li
-      initial={reduce ? false : { opacity: 0, y: 7 }}
+      initial={reduce || !animate ? false : { opacity: 0, y: 7 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.34, ease: EASE }}
       className={cn(
@@ -137,6 +147,10 @@ export function DecisionLog({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  // whatever is already in the log when it mounts is history — it renders
+  // settled, and only lines that arrive while watching print themselves.
+  // (Opening a mid-flight run must not replay 30 entrances at once.)
+  const [mountCount] = useState(() => entries.length);
   // mirror `pinned` into state so the "jump to live" affordance can render —
   // it shows only when a live run is scrolled up away from the newest entry
   const [atBottom, setAtBottom] = useState(true);
@@ -167,7 +181,10 @@ export function DecisionLog({
           </h2>
           <span className="flex items-center gap-1.5 text-[10px] text-faint">
             <span
-              className={cn("size-1.5 rounded-full", live ? "animate-pulse-dot bg-primary" : "bg-faint")}
+              className={cn(
+                "size-1.5 rounded-full transition-colors duration-500",
+                live ? "animate-pulse-dot bg-primary" : "bg-faint",
+              )}
               aria-hidden
             />
             <span className="tabular tracking-wide">
@@ -197,8 +214,8 @@ export function DecisionLog({
           </p>
         ) : (
           <ol className="divide-y divide-border/40">
-            {entries.map((entry) => (
-              <LogEntry key={entry.id} entry={entry} live={live} />
+            {entries.map((entry, i) => (
+              <LogEntry key={entry.id} entry={entry} live={live} animate={i >= mountCount} />
             ))}
             {live && (
               <li className="grid grid-cols-[2.9rem_1fr] sm:grid-cols-[3.6rem_1fr]">

@@ -179,6 +179,34 @@ export function DemoConversation() {
             <p className="mt-4 text-center text-[12px] text-faint">
               {selected === null ? "Select one, then press send below." : "Ready — press send below."}
             </p>
+
+            {/* the anatomy of a run, in the ledger's own language — so the
+                empty screen teaches what the decision log is about to show */}
+            <div className="mx-auto mt-12 max-w-md" aria-hidden>
+              <p className="tag-label text-center text-faint">What you&apos;ll watch</p>
+              <div className="mt-3 rounded-lg border border-border bg-surface px-5 py-3">
+                {(
+                  [
+                    { label: "MEM", dot: "bg-log-memory", ink: "text-log-memory", copy: "context loads before planning starts" },
+                    { label: "ROUTE", dot: "bg-log-route", ink: "text-log-route", copy: "the brief splits into domains" },
+                    { label: "EXPERT", dot: "bg-log-expert", ink: "text-log-expert", copy: "specialists work in parallel" },
+                    { label: "ANSWER", dot: "bg-log-answer", ink: "text-foreground", copy: "a filtered report lands" },
+                  ] as const
+                ).map((row) => (
+                  <div key={row.label} className="relative border-l border-border py-2 pl-4">
+                    <span
+                      className={cn("absolute -left-[4.5px] top-[13px] size-[9px] rounded-full ring-4 ring-surface", row.dot)}
+                    />
+                    <span className="flex items-baseline gap-3">
+                      <span className={cn("w-14 shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.16em]", row.ink)}>
+                        {row.label}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">{row.copy}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           /* TRANSCRIPT — a chat turn, exactly like the workspace run view */
@@ -308,7 +336,7 @@ export function DemoConversation() {
 
         <div
           className={cn(
-            "flex items-center gap-2 rounded-[1.7rem] border bg-surface-raised px-5 py-4 transition-colors sm:rounded-3xl sm:px-4 sm:py-3.5",
+            "flex items-center gap-2 rounded-3xl border bg-surface-raised px-5 py-4 transition-colors sm:px-4 sm:py-3.5",
             selected !== null ? "border-border-strong" : "border-border",
           )}
         >

@@ -21,7 +21,7 @@ export function ExpertPanel({ experts, className }: { experts: ExpertState[]; cl
           <h2 className="display-soft text-[15px] leading-none text-foreground">Experts</h2>
           <span className="text-[11px] text-faint tabular">{experts.length}</span>
         </div>
-        <div className="mt-2.5 h-px w-full bg-border" />
+        <div className="mt-2.5 rule-strong" />
       </header>
       {experts.length === 0 ? (
         <p className="px-4 py-5 text-[13px] text-faint">
@@ -75,7 +75,7 @@ export function SourcesPanel({ sources, className }: { sources: Source[]; classN
           <h2 className="display-soft text-[15px] leading-none text-foreground">Sources</h2>
           <span className="text-[11px] text-faint tabular">{sources.length}</span>
         </div>
-        <div className="mt-2.5 h-px w-full bg-border" />
+        <div className="mt-2.5 rule-strong" />
       </header>
       <ol className="divide-y divide-border/60">
         {sources.map((source, i) => (
