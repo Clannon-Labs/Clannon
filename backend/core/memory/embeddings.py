@@ -56,6 +56,11 @@ async def warm() -> bool:
     return (await asyncio.to_thread(_load)) is not None
 
 
+def is_ready() -> bool:
+    """True if the embedding model is currently loaded (not backing off after a failure)."""
+    return _model is not None
+
+
 async def embed(texts: list[str]) -> list[list[float]] | None:
     """Embed texts; None means embeddings are unavailable right now."""
     if not texts:
