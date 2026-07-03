@@ -51,6 +51,32 @@ def test_build_env_defaults_to_empty_hydration():
     assert env.hydration == []
 
 
+# --- NETWORK experts get NO push (exfiltration surface under prompt injection) ---
+
+def _ctx_with_memory():
+    ctx = VrakshaContext.new(session_id="s", user_id="u", trace_id="t")
+    ctx.hydration_items = _items()
+    return ctx
+
+
+def test_network_capable_experts_get_no_hydration_push():
+    # any expert granted a NETWORK tool (outbound channel) is denied the push:
+    # user memory + an outbound channel in one prompt = exfil surface
+    discover()
+    for key in ("delivery.notifier", "verification.claims", "web.research"):
+        spec = registry.get_expert(key)
+        env = ExpertHandler(registry=registry)._build_env(spec, _ctx_with_memory())
+        assert env.hydration == [], f"{key} must not receive pushed memory"
+
+
+def test_non_network_experts_still_get_the_push():
+    discover()
+    for key in ("synthesis.writer", "docs.writer", "summary.condenser"):
+        spec = registry.get_expert(key)
+        env = ExpertHandler(registry=registry)._build_env(spec, _ctx_with_memory())
+        assert env.hydration == _items(), f"{key} should receive the pushed memory"
+
+
 # --- the memory note itself ---------------------------------------------------
 
 def test_memory_note_renders_items_as_reference_data(tmp_path):

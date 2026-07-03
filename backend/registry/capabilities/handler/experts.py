@@ -114,6 +114,11 @@ class ExpertHandler:
         # first use — the Docker container is lazy; the temp dir is wiped on close.
         needs_ws = self._tools is not None and any(getattr(s.impl, "wants_workspace", False) for s in granted)
         workspace = DockerWorkspace() if needs_ws else None
+        # NETWORK-capable experts get NO memory push: pushed user context sitting in
+        # the same prompt as an outbound channel (http/web) is an exfiltration surface
+        # under prompt injection. Their user context arrives solely through what the
+        # orchestrator brokers into the task prompt before spawning.
+        networked = any(s.permission == PermissionLevel.NETWORK for s in granted)
         return ExpertEnv(
             module_dir=module_dir,
             model_role=spec.model_role,
@@ -123,7 +128,7 @@ class ExpertHandler:
             findings=list(ctx.expert_findings),
             # the turn's hydrated memory, pushed to the (stateless) expert — the
             # Manager hydrated it once at loop start; think() folds it into the task
-            hydration=list(getattr(ctx, "hydration_items", None) or []),
+            hydration=[] if networked else list(getattr(ctx, "hydration_items", None) or []),
             workspace=workspace,
         )
 
