@@ -22,7 +22,16 @@ export function Report({
   className?: string;
 }) {
   return (
-    <div className={cn("report-prose", ornate && "report-ornate", className)}>
+    <div
+      className={cn(
+        "report-prose",
+        ornate && "report-ornate",
+        // the caret rides the END of the last rendered line (a ::after on the
+        // last block), never an orphan block of its own
+        streaming && "stream-caret",
+        className,
+      )}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -51,12 +60,7 @@ export function Report({
       >
         {markdown}
       </ReactMarkdown>
-      {streaming && (
-        <span
-          className="ml-0.5 inline-block h-4 w-2 animate-pulse-dot bg-primary align-text-bottom"
-          aria-hidden
-        />
-      )}
+
     </div>
   );
 }

@@ -250,7 +250,7 @@ export default function MemoryPage() {
           </TabsList>
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-md bg-gradient-to-l from-muted to-transparent sm:hidden"
+            className="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-md bg-gradient-to-l from-muted via-muted/70 to-transparent sm:hidden"
           />
         </div>
 

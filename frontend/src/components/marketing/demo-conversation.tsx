@@ -229,7 +229,7 @@ export function DemoConversation() {
                   <Mark className="size-5 text-primary" aria-hidden />
                   <span className="font-display text-[15px] font-medium">Clannon</span>
                 </span>
-                <RunStatusBadge status={s.status} />
+                {isTerminal && <RunStatusBadge status={s.status} />}
                 {s.tokensUsed > 0 && (
                   <span className="text-[12px] text-faint tabular">
                     {formatTokens(s.tokensUsed)} tokens

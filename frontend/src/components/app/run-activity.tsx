@@ -14,6 +14,11 @@ import { cn } from "@/lib/utils";
  *  newest decision-log entry (or the pipeline status before any logs arrive).
  *  Mirrors Claude/ChatGPT's collapsed "thinking" line. */
 export function liveVerb(log: DecisionLogEntry[], status: RunStatus): string {
+  // gate stages speak as the stage — early OBS entries (intake, sanitizers)
+  // must not read as "Reviewing findings" while the badge would say SANITIZING
+  if (status === "queued") return "Queued";
+  if (status === "sanitizing") return "Scanning your input";
+  if (status === "verifying") return "Verifying";
   const last = log[log.length - 1];
   if (last) {
     switch (last.kind) {
@@ -37,12 +42,6 @@ export function liveVerb(log: DecisionLogEntry[], status: RunStatus): string {
     }
   }
   switch (status) {
-    case "queued":
-      return "Queued";
-    case "sanitizing":
-      return "Scanning your input";
-    case "verifying":
-      return "Verifying";
     case "orchestrating":
       return "Orchestrating";
     case "filtering":
@@ -61,7 +60,7 @@ function useElapsed(startTs: string | undefined, running: boolean): string | nul
     return () => window.clearInterval(t);
   }, [running]);
   if (!startTs) return null;
-  const s = Math.max(0, Math.floor((now - +new Date(startTs)) / 1000));
+  const s = Math.max(1, Math.floor((now - +new Date(startTs)) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 

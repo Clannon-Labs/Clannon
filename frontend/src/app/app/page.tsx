@@ -150,7 +150,7 @@ export default function WorkspacePage() {
           onChange={setBrief}
           pending={createRun.isPending}
           submitError={error}
-          rows={2}
+          rows={1}
           placeholder="How can I help you today?"
           onSubmit={(files, models) => {
             setError(null);

@@ -1,4 +1,5 @@
 import { appConfig } from "@/config/app.config";
+import { DEMO_BRIEFS } from "@/config/demo.config";
 import type { OAuthProvider } from "@/config/site.config";
 import { planById, type PlanId } from "@/config/plans";
 import type { ClannonClient } from "./client";
@@ -239,10 +240,14 @@ export class MockClient implements ClannonClient {
     }
     const id = nextId("run");
     // clamp on a word boundary — never a mid-word cut before the ellipsis
+    // a known demo brief gets its curated label — the report's H1 is a real
+    // title, never a clipped prompt (the backend synthesizes titles the same way)
+    const curated = DEMO_BRIEFS.find((b) => b.brief === trimmed)?.label;
     const title =
-      trimmed.length > 64
+      curated ??
+      (trimmed.length > 64
         ? `${trimmed.slice(0, 61).replace(/\s+\S*$/, "").trimEnd()}…`
-        : trimmed;
+        : trimmed);
     const inputs = files.map((f) => ({
       name: f.name,
       modality: modalityOf(f),
@@ -423,10 +428,11 @@ export class MockClient implements ClannonClient {
       }
     }
 
-    // Output filter cleared — stream the report in word chunks.
+    // Output filter cleared — stream the report in word chunks. Event order
+    // mirrors the real backend: deltas → report_done → status:delivered
+    // (a DELIVERED badge over a still-streaming report is a contract breach).
     const report = `# ${run.title}\n${SAMPLE_REPORT.split("\n").slice(1).join("\n")}`;
     run.status = "delivered";
-    yield { type: "status", status: "delivered" };
 
     const words = report.split(/(?<=\s)/);
     let assembled = "";
@@ -444,6 +450,7 @@ export class MockClient implements ClannonClient {
     }
     run.report = assembled;
     yield { type: "report_done" };
+    yield { type: "status", status: "delivered" };
 
     // post-delivery memory writes, like the real pipeline (scoped to the project)
     this.memory.unshift({

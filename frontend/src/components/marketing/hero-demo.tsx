@@ -78,7 +78,7 @@ export function HeroDemo() {
             <span className={cn("size-2 rounded-full", done ? "bg-primary" : "animate-pulse-dot bg-primary")} />
             <span className="tag-label text-muted-foreground">decision log — live</span>
           </div>
-          <span className="tag-label text-faint">run_4c2a · 3 experts</span>
+          <span className="tag-label hidden text-faint sm:block">run_4c2a · 3 experts</span>
         </div>
 
         {/* log body */}

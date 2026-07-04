@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ShieldAlert,
@@ -100,6 +100,19 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const cancel = useCancelRun(id);
   const toast = useToast();
   const reduce = useReducedMotion();
+
+  // when delivery happens WHILE watching, bring the payoff into view — on a
+  // phone the report otherwise lands below the fold behind the composer.
+  // (No scroll when opening an already-delivered run: prev starts null.)
+  const reportRef = useRef<HTMLElement>(null);
+  const prevReportDone = useRef<boolean | null>(null);
+  useEffect(() => {
+    const was = prevReportDone.current;
+    prevReportDone.current = live.reportDone;
+    if (was === false && live.reportDone) {
+      reportRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    }
+  }, [live.reportDone, reduce]);
 
   // turns of this session that came before the one on screen — the chat history.
   // thread is oldest-first; take everything up to the current turn.
@@ -217,7 +230,9 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
               <Mark className="size-5 text-primary" aria-hidden />
               <span className="font-display text-[15px] font-medium">Clannon</span>
             </span>
-            <RunStatusBadge status={live.status} />
+            {/* the band below owns the live voice; the pill returns for the
+                terminal verdict */}
+            {isTerminal && <RunStatusBadge status={live.status} />}
             {live.tokensUsed > 0 && (
               <span className="text-[12px] text-faint tabular">
                 {formatTokens(live.tokensUsed)} tokens
@@ -309,7 +324,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
           {/* report — the hero */}
           {showReport && (
-            <section aria-label="Report" className="mt-6">
+            <section ref={reportRef} aria-label="Report" className="mt-6 scroll-mt-4">
               {/* the payoff frame — the artifact sits raised off the desk:
                   stronger border, raised surface, a hairline top light in dark */}
               <Reveal className="rounded-lg border border-border-strong bg-surface-raised shadow-md dark:shadow-lg dark:[box-shadow:inset_0_1px_0_0_var(--border),0_10px_30px_-12px_rgb(0_0_0/0.5)]">

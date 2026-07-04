@@ -439,6 +439,18 @@ body {
   color: var(--primary);
 }
 
+/* streaming prose — the caret sits inline at the end of the last line */
+.stream-caret > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5ch;
+  height: 1em;
+  margin-left: 2px;
+  translate: 0 0.15em;
+  background: var(--primary);
+  animation: caret-blink 1.1s steps(1) infinite;
+}
+
 /* live caret for the transcript — a blinking block, terminal-grade */
 .caret::after {
   content: "";
