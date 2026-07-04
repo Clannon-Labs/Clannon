@@ -76,6 +76,14 @@ export default function ForgotPasswordPage() {
         </Button>
       </form>
 
+      {/* grounds the sparse form with something true and on-brand — the reset
+          flow is deliberately privacy-preserving, and saying so fills the space
+          with reassurance instead of air */}
+      <p className="mt-6 border-l-2 border-border-strong pl-4 text-[13px] leading-relaxed text-faint">
+        The link expires in 30 minutes and works once. We never reveal whether
+        an address has an account.
+      </p>
+
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Remembered it?{" "}
         <Link

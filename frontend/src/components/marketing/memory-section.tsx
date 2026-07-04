@@ -43,7 +43,7 @@ export function MemorySection() {
   const [active, setActive] = useState<MemoryTier | null>(null);
 
   return (
-    <section id="memory" className="hairline-t bg-surface">
+    <section id="memory" className="hairline-t scroll-mt-20 bg-surface">
       <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
         <p className="tag-label text-memory">Memory — the part that compounds</p>
         <Rule className="mt-3 max-w-[28rem]" />

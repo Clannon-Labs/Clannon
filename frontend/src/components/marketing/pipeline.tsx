@@ -50,7 +50,7 @@ const STAGES: Stage[] = [
 
 export function PipelineSection() {
   return (
-    <section id="how-it-works" className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+    <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
       <SectionHeading
         kicker="How it works"
         intro="Clannon is a pipeline, not a chatbot. Every run moves through the same auditable stages — and you watch each decision as it happens."

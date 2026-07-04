@@ -14,7 +14,7 @@ export function PricingSection() {
   // signed-in visitors manage plans in the workspace, not via signup
   const { data: user } = useMe();
   return (
-    <section id="pricing" className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
       <SectionHeading
         kicker="Pricing"
         intro="Every plan is a monthly token budget you spend however you like — three deep teardowns or thirty quick briefs. A typical client research task that takes a freelancer 6–10 hours runs in about 20 minutes."

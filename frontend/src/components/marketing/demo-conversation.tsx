@@ -141,7 +141,7 @@ export function DemoConversation() {
       <div className="flex flex-1 flex-col gap-6 pb-10 pt-6">
         {!started ? (
           /* EMPTY STATE — welcome + the pre-defined starters (pick one) */
-          <div className="pt-[6vh] sm:pt-[10vh]">
+          <div className="pt-[3vh] sm:pt-[10vh]">
             <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2rem] leading-[1.1] sm:text-[2.4rem]">
               <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
               Watch Clannon work
@@ -183,7 +183,7 @@ export function DemoConversation() {
 
             {/* the anatomy of a run, in the ledger's own language — so the
                 empty screen teaches what the decision log is about to show */}
-            <div className="mx-auto mt-12 max-w-md" aria-hidden>
+            <div className="mx-auto mt-8 max-w-md sm:mt-12" aria-hidden>
               <p className="tag-label text-center text-faint">What you&apos;ll watch</p>
               <div className="mt-3 rounded-lg border border-border bg-surface px-5 py-3">
                 {/* one spine, drawn tick-to-tick — no dangling segment above the
@@ -265,7 +265,7 @@ export function DemoConversation() {
               {s.reportText && (
                 <section
                   aria-label="Report"
-                  className="mt-6 rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_16px_40px_-16px_rgb(0_0_0/0.65)]"
+                  className="mx-auto mt-6 max-w-[40rem] rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]"
                 >
                   <header className="flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                     <h2 className="tag-label text-muted-foreground">

@@ -328,10 +328,11 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           {/* report — the hero */}
           {showReport && (
             <section ref={reportRef} aria-label="Report" className="mt-6 scroll-mt-4">
-              {/* the payoff frame — the lit sheet on the dark desk: the report
-                  gets its OWN surface (warm paper-cast in dark), edge-light,
-                  and a real shadow. The climax is a material event. */}
-              <Reveal className="rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_16px_40px_-16px_rgb(0_0_0/0.65)]">
+              {/* the payoff frame — a lit SHEET on the dark desk: narrower than
+                  the thread so the desk shows around it (a page of paper, not a
+                  full-bleed panel), with its own warm-cast surface, edge-light,
+                  and a real shadow. The measure fills the sheet — no dead gutter. */}
+              <Reveal className="mx-auto max-w-[40rem] rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]">
                 <header className="relative flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                   {/* a tag-label never wraps — below sm the gate suffix goes, not the line */}
                   <h2 className="tag-label text-muted-foreground">

@@ -88,13 +88,17 @@ export function MarketingHero() {
                   <ArrowRight className="size-4" aria-hidden />
                 </ButtonLink>
               )}
+              {/* secondary action: a left-aligned link on mobile (not a second
+                  full-width slab that mirrors the primary), a ghost button on
+                  wider screens where they sit side by side */}
               <ButtonLink
                 href={appConfig.features.demo ? "/demo" : "/login"}
                 size="lg"
                 variant="ghost"
-                className="w-full sm:w-auto"
+                className="-ml-3 w-fit sm:ml-0 sm:w-auto"
               >
                 See a real run
+                <ArrowRight className="size-4 opacity-70" aria-hidden />
               </ButtonLink>
             </div>
             <p className="mt-5 text-[13px] text-faint">

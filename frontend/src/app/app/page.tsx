@@ -94,7 +94,7 @@ export default function WorkspacePage() {
        sidebar, not here. */
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
       <div className="flex flex-1 flex-col pb-10">
-        <div className="pt-[9vh] sm:pt-[10vh]">
+        <div className="pt-[3vh] sm:pt-[10vh]">
           <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2.15rem] leading-[1.1] sm:text-[2.6rem]">
             <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
             <span>
@@ -115,7 +115,7 @@ export default function WorkspacePage() {
 
         {/* starter cards — clicking loads the full brief into the composer.
             Compact rows on a phone, full cards on a wider screen. */}
-        <div className="mt-10 grid gap-2.5 sm:grid-cols-3 sm:gap-3">
+        <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
           {EXAMPLE_BRIEFS.map((example) => (
             <button
               key={example.label}
@@ -140,7 +140,7 @@ export default function WorkspacePage() {
         </div>
 
         {/* the hydration moment — context surfaces before the brief is even sent */}
-        <HydrationPanel brief={brief} projectId={projectId} className="mt-12" />
+        <HydrationPanel brief={brief} projectId={projectId} className="mt-8 sm:mt-12" />
       </div>
 
       {/* docked composer — same control set as the run reply, same place too */}
