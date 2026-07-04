@@ -324,16 +324,24 @@ export function HydrationPanel({
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 text-[12px] text-muted-foreground">
               <Sprout className="size-3.5 text-memory" aria-hidden />
               <span>Picking up where we left off</span>
-              <span className="text-faint" aria-hidden>·</span>
+              {/* one separator per joint: the tier dot separates when present,
+                  the middot only when it isn't */}
               {matched ? (
                 <span className="flex items-center gap-1.5 tabular">
-                  {activeTier && <span className={cn("size-1.5 rounded-full", TIER_TICK[activeTier])} aria-hidden />}
+                  {activeTier ? (
+                    <span className={cn("size-1.5 rounded-full", TIER_TICK[activeTier])} aria-hidden />
+                  ) : (
+                    <span className="text-faint" aria-hidden>·</span>
+                  )}
                   {previewHits.length} in reach
                 </span>
               ) : (
-                <span className="text-faint">
-                  listening<span className="caret" />
-                </span>
+                <>
+                  <span className="text-faint" aria-hidden>·</span>
+                  <span className="text-faint">
+                    listening<span className="caret" />
+                  </span>
+                </>
               )}
             </span>
           </motion.div>

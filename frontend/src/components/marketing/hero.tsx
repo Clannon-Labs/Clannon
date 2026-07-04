@@ -44,8 +44,10 @@ export function MarketingHero() {
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-16 pt-12 sm:pt-16 lg:grid-cols-[0.95fr_1.05fr] lg:gap-14 lg:pb-20">
         {/* the pitch — left, editorial, specific */}
         <div className="max-w-xl">
-          <p className="tag-label inline-flex items-center gap-2 text-primary">
-            <span className="size-1.5 animate-pulse-dot rounded-full bg-primary" aria-hidden />
+          {/* items-start + a cap-height nudge: when the eyebrow wraps to two
+              lines (390), the dot hangs on the FIRST line, not the block's middle */}
+          <p className="tag-label inline-flex items-start gap-2 text-primary">
+            <span className="mt-[0.3em] size-1.5 shrink-0 animate-pulse-dot rounded-full bg-primary" aria-hidden />
             <TypeSet immediate>Workflow automation for freelancers &amp; agencies</TypeSet>
           </p>
           <Rule immediate className="mt-3 max-w-[15rem]" delay={0.15} />

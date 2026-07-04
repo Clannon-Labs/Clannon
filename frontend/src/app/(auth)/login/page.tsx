@@ -142,11 +142,11 @@ function LoginForm() {
 
         <p className="text-center text-[12px] leading-relaxed text-faint">
           By signing in you agree to the{" "}
-          <Link href="/legal/terms" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/legal/terms" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground">
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/legal/privacy" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/legal/privacy" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground">
             Privacy Policy
           </Link>
           .

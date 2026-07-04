@@ -73,7 +73,8 @@ export default function LandingPage() {
             <h2 className="display mx-auto max-w-3xl text-balance text-[2.6rem] leading-[0.98] sm:text-[4.2rem]">
               The first run is good.
               <br />
-              The tenth one <em className="glow-word not-italic">knows your&nbsp;clients.</em>
+              {/* the emphasis phrase breaks as a unit, never after "knows" */}
+              The tenth one <em className="glow-word not-italic sm:whitespace-nowrap">knows your&nbsp;clients.</em>
             </h2>
             <p className="mx-auto mt-6 max-w-md text-[15px] leading-relaxed text-muted-foreground">
               Start free. Run a real brief. Watch the decision log and decide for

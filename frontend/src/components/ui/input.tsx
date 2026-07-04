@@ -31,7 +31,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       {label && (
         <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
           {label}
-          {required && <span className="ml-0.5 text-destructive" aria-hidden>*</span>}
+          {/* tucked to the label, quiet — error red is for errors, and a
+              two-field form doesn't need its labels shouting "required" */}
+          {required && <span className="text-faint" aria-hidden>*</span>}
         </label>
       )}
       <div className="relative">

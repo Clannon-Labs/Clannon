@@ -17,7 +17,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </Link>
 
         <div className="relative">
-          <Mark className="size-44 text-primary opacity-[0.13]" />
+          {/* the panel is a poster — in dark the ring needs twice the ink to
+              read at all */}
+          <Mark className="size-44 text-primary opacity-[0.13] dark:opacity-30" />
           <blockquote className="mt-8 max-w-sm">
             <p className="display-soft text-[1.8rem] leading-[1.12]">
               “Every run lays down a ring. By the tenth, it knows your clients

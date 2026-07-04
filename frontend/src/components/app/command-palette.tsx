@@ -235,7 +235,8 @@ export function CommandPalette() {
                     <command.icon className="size-4 shrink-0 opacity-70" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{command.label}</span>
                     {command.hint && (
-                      <span className="shrink-0 text-[12px] text-faint">{command.hint}</span>
+                      /* one metadata register: mono 11px, same as the kbd legend */
+                      <span className="shrink-0 font-mono text-[11px] text-faint">{command.hint}</span>
                     )}
                   </button>
                 </li>

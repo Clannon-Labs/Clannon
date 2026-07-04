@@ -573,9 +573,11 @@ body {
 }
 
 /* the one luminous word in a headline — moss-lit in the dark, sun-warmed in light */
+/* the emphasis word holds the accent WITHOUT the bloom — the glowing
+   italic serif over dark is the most-cloned AI-design move of the year,
+   and confidence is not doing it (pass 3) */
 .glow-word {
   color: var(--primary);
-  text-shadow: 0 0 28px var(--glow);
 }
 
 @media (prefers-reduced-motion: reduce) {

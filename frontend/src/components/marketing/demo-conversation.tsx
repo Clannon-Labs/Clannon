@@ -169,7 +169,8 @@ export function DemoConversation() {
                     )}
                   >
                     <Icon className={cn("size-5 shrink-0", active ? "text-primary" : "text-primary/70")} aria-hidden />
-                    <span className="text-sm font-medium leading-snug text-foreground sm:text-[13px]">
+                    {/* balance so a title never strands one word on line 2 */}
+                    <span className="text-balance text-sm font-medium leading-snug text-foreground sm:text-[13px]">
                       {brief.label}
                     </span>
                   </button>
@@ -231,7 +232,8 @@ export function DemoConversation() {
                 </span>
                 {isTerminal && <RunStatusBadge status={s.status} />}
                 {s.tokensUsed > 0 && (
-                  <span className="text-[12px] text-faint tabular">
+                  /* a figure is machine register — mono, like everywhere else */
+                  <span className="font-mono text-[11px] text-faint tabular">
                     {formatTokens(s.tokensUsed)} tokens
                   </span>
                 )}
@@ -365,7 +367,7 @@ export function DemoConversation() {
           >
             {selected !== null
               ? DEMO_BRIEFS[selected].brief
-              : "Pick a starter — you can't type in the demo, but you'll see a real run."}
+              : "Pick a starter to watch a real run."}
           </p>
           <Tooltip label={selected === null ? "Pick a starter first" : "Send"} align="end">
             <button

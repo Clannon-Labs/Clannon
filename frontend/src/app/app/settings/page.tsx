@@ -69,8 +69,14 @@ function UsageChart() {
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-5">
-        <h3 className="tag-label text-muted-foreground">Daily spend — last 14 days</h3>
-        <div className="mt-4 flex h-36 items-end gap-1.5 border-b border-border">
+        <div className="flex items-baseline justify-between">
+          <h3 className="tag-label text-muted-foreground">Daily spend — last 14 days</h3>
+          {/* the instrument states its scale — bars mean nothing without it */}
+          <p className="font-mono text-[10px] text-faint tabular">peak {formatTokens(max)}</p>
+        </div>
+        <div className="relative mt-4 flex h-36 items-end gap-1.5 border-b border-border">
+          {/* half-scale gridline so the eye can read proportion */}
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-border/50" />
           {usage.byDay.map((day) => (
             // each bar is a Tab stop with the day+value as its label, so the
             // per-day numbers aren't hover-only
@@ -81,17 +87,20 @@ function UsageChart() {
               aria-label={`${dayLabel(day.date)} — ${formatTokens(day.tokens)} tokens`}
               className="group relative flex-1"
             >
-              {/* zero days get a faint stub — lighter than data, never darker */}
+              {/* zero is a flat tick seated ON the baseline — a rounded stub
+                  reads as "small spend", and an instrument can't lie */}
               <div
                 className={cn(
-                  "w-full rounded-t-sm transition-colors",
+                  "w-full transition-colors",
                   day.tokens === 0
-                    ? "bg-primary/20"
-                    : "bg-primary/70 group-hover:bg-primary group-focus-within:bg-primary",
+                    ? "h-[2px] bg-border-strong"
+                    : "rounded-t-sm bg-primary/70 group-hover:bg-primary group-focus-within:bg-primary",
                 )}
-                style={{
-                  height: day.tokens === 0 ? "3px" : `${Math.max(4, (day.tokens / max) * 128)}px`,
-                }}
+                style={
+                  day.tokens === 0
+                    ? undefined
+                    : { height: `${Math.max(4, (day.tokens / max) * 128)}px` }
+                }
               />
               <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block group-focus-within:block">
                 {formatTokens(day.tokens)}
@@ -216,12 +225,21 @@ function BillingTab() {
                   </span>
                 )}
               </div>
+              {/* a zero price wearing a per-month unit is filler — "Free" is
+                  the honest figure */}
               <p className="display-soft mt-2 text-2xl tabular">
-                ${plan.monthlyUsd}
-                <span className="font-sans text-sm text-muted-foreground">/mo</span>
+                {plan.monthlyUsd === 0 ? (
+                  "Free"
+                ) : (
+                  <>
+                    ${plan.monthlyUsd}
+                    <span className="font-sans text-sm text-muted-foreground">/mo</span>
+                  </>
+                )}
               </p>
               <p className="mt-1 text-[12px] text-faint">
-                {formatTokens(plan.tokenBudget)} tokens · {plan.memoryTiers.length}/4 memory tiers
+                {formatTokens(plan.tokenBudget)} tokens ·{" "}
+                <span className="tabular">{plan.memoryTiers.length}/4</span> memory tiers
               </p>
               {isCurrent ? (
                 /* the same footer slot as its siblings, so the grid keeps
@@ -303,7 +321,7 @@ function SettingsInner() {
             </dl>
             <p className="text-[12px] leading-relaxed text-faint">
               Name and email editing arrive with cloud accounts — changes will
-              need re-verification.
+              need <span className="whitespace-nowrap">re-verification</span>.
             </p>
 
             <dl className="divide-y divide-border/60 rounded-lg border border-border bg-surface px-5">

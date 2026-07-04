@@ -138,11 +138,11 @@ export default function SignupPage() {
 
         <p className="text-center text-[12px] leading-relaxed text-faint">
           By creating a workspace you agree to the{" "}
-          <Link href="/legal/terms" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/legal/terms" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground">
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/legal/privacy" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/legal/privacy" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground">
             Privacy Policy
           </Link>
           .

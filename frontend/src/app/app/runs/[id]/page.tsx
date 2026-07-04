@@ -254,8 +254,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
               <p className="tag-label flex items-center gap-1.5 text-destructive">
                 <ShieldAlert className="size-3.5" aria-hidden />
+                {/* the status pill above already says BLOCKED — the kicker
+                    names the gate, it doesn't repeat the verdict */}
                 {live.status === "blocked"
-                  ? `Blocked — ${run.blockStage ?? "security"} gate`
+                  ? `${run.blockStage ?? "security"} gate`
                   : "Run failed"}
               </p>
               <p className="mt-1.5 text-sm font-medium text-foreground">

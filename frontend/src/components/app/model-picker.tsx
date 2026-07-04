@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Cpu, ShieldCheck } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
 import { useModelConfig } from "@/lib/api/hooks";
 import type { LayerModelConfig } from "@/lib/api";
 import { useFocusTrap } from "@/lib/focus";
@@ -189,10 +189,10 @@ export function ModelRoleList({
         >
           <div className="min-w-0 sm:flex-1">
             <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-              {layer.locked ? (
+              {/* only the locked rows carry an icon — five identical glyphs in a
+                  row is decoration, one meaningful shield is information */}
+              {layer.locked && (
                 <ShieldCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              ) : (
-                <Cpu className="size-4 shrink-0 text-primary" aria-hidden />
               )}
               {layer.label}
               {layer.locked && (
@@ -203,7 +203,9 @@ export function ModelRoleList({
               )}
             </p>
             <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{layer.description}</p>
-            {layer.default && !layer.locked && (
+            {/* say "Recommended" only when the row is NOT already on it —
+                otherwise the page repeats itself three times per row */}
+            {layer.default && !layer.locked && valueFor(layer) !== layer.default && (
               <p className="mt-1 text-[12px] text-faint">
                 Recommended: <span title={layer.default}>{prettyModel(layer.default)}</span>
               </p>
