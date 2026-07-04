@@ -55,6 +55,13 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // wraps route navigations in document.startViewTransition() so the browser
+  // can crossfade/morph between pages — powers the shared-element run-row →
+  // run-page morph (matching view-transition-name per run id). Native API;
+  // gated to prefers-reduced-motion in globals.css.
+  experimental: {
+    viewTransition: true,
+  },
   // Dev-only: lets HMR/fast-refresh work when the app is opened over the LAN
   // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
   // new IP needs no edit. Ignored in production.

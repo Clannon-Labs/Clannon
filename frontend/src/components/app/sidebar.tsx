@@ -239,6 +239,15 @@ function RailBody({
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     title={session.title}
+                    // the morph source — this row expands into the run page's
+                    // brief bubble. Only when NOT active: the sidebar persists
+                    // across navigation, so the active row must drop the name
+                    // or it would collide with the run page's matching element.
+                    style={
+                      active
+                        ? undefined
+                        : { viewTransitionName: `run-open-${session.latestId.replace(/[^a-zA-Z0-9]/g, "-")}` }
+                    }
                     className={cn(
                       "block rounded-md py-1.5 pl-3 pr-9 text-[13px] transition-colors",
                       active

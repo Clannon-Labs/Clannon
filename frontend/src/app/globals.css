@@ -609,4 +609,17 @@ body {
     transition-duration: 0.01ms !important;
   }
   .caret::after { animation: none; opacity: 1; }
+  /* route view transitions collapse to an instant swap */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* View Transitions (route navigation): the whole-page crossfade and the
+   run-row → brief shared-element morph both ride the house curve. */
+::view-transition-group(*) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }

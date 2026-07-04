@@ -201,8 +201,14 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       <div className="mt-3 flex flex-1 flex-col gap-6 pb-10">
         <PriorTurns turns={priorTurns} />
 
-        {/* current turn — your ask, then Clannon's response */}
-        <div className="flex flex-col items-end gap-1.5">
+        {/* current turn — your ask, then Clannon's response. The brief bubble
+            carries the shared view-transition-name, so the clicked run row in
+            the rail MORPHS into it on navigation (the run opening from the
+            list into the page). Keyed per run id; paired with the row. */}
+        <div
+          className="flex flex-col items-end gap-1.5"
+          style={{ viewTransitionName: `run-open-${id.replace(/[^a-zA-Z0-9]/g, "-")}` }}
+        >
           <UserMessage>{run.brief}</UserMessage>
           {run.inputs && run.inputs.length > 0 && (
             <ul className="flex max-w-[85%] flex-wrap justify-end gap-2" aria-label="Attached files">
