@@ -560,7 +560,7 @@ async def hydration_preview(
             session_id="",   # preview: no session, no run — provenance stays empty
             user_id=user.id,
             normalized=NormalizedInput(modality="text", content_type="text/plain", content=text),
-            wiki=tuple((e["title"], e["content"]) for e in wiki_entries),
+            wiki=HydrationRequest.wiki_pairs(wiki_entries),
         ))
     except Exception:  # noqa: BLE001 — best-effort preview, never an error surface
         return []

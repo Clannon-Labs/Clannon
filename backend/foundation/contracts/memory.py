@@ -65,9 +65,12 @@ class HydrationRequest:
     wiki: tuple[tuple[str, str], ...] = ()
 
     @staticmethod
-    def _wiki_pairs(entries: object) -> tuple[tuple[str, str], ...]:
-        """(title, content) pairs from a context's `wiki_entries`, skipping any
-        non-dict noise. The single place wiki entries are shaped for hydration."""
+    def wiki_pairs(entries: object) -> tuple[tuple[str, str], ...]:
+        """(title, content) pairs from a caller's `wiki_entries`, skipping any
+        non-dict noise. THE single place wiki entries are shaped for hydration —
+        use it wherever a `HydrationRequest.wiki` is built (turn stages via
+        `for_turn`, and direct constructions like the hydration-preview endpoint
+        that have no ctx object)."""
         return tuple(
             (e.get("title", ""), e.get("content", ""))
             for e in (entries or [])  # type: ignore[union-attr]
@@ -87,7 +90,7 @@ class HydrationRequest:
             session_id=getattr(ctx, "session_id", "") or "",
             user_id=getattr(ctx, "user_id", "") or "",
             normalized=normalized,
-            wiki=cls._wiki_pairs(getattr(ctx, "wiki_entries", None)),
+            wiki=cls.wiki_pairs(getattr(ctx, "wiki_entries", None)),
         )
 
 
