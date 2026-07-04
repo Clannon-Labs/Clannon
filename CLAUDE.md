@@ -13,6 +13,19 @@ ROOT MANAGER agent.
 > Important: YOU must be careful to not let any merge conflicts happen or,
 > Overwrite the work of the frontend agent !!
 
+## ACTIVE MISSION (multi-session — check at session start)
+
+A long-running backend mission is in progress: **Premium-Parity + V1 Capability
+Pass**. Its durable, resumable map is `docs/benchmarks/mission/README.md` — read
+it (and `docs/benchmarks/V1_GAP_ANALYSIS.md` for the priority order) at the start
+of any session that continues this work. Phase files live in
+`docs/benchmarks/mission/`; a phase moved to `docs/benchmarks/reached/` is done
+(outcome recorded inside). The owner's full brief is local at
+`proposals/to-backend/BACKEND_PARITY.md` (gitignored). Priority order:
+CB5 → CB1(+EB1) → CB4(audit mirror) → CB6 → CB2/CB3/EB3(graph, propose-first).
+Always: suite green before every commit; backend only; propose-first for any
+contract/security/structural change (all graph work).
+
 ## PROPOSAL PROTOCOL (cross-agent channel — no owner relay)
 
 Two interactive sessions work this repo: the BACKEND agent (this file's reader,
