@@ -5,6 +5,8 @@
 This CLAUDE.md belongs to the repository root and is intended for the
 ROOT MANAGER agent.
 
+> conversation(s)/ was changed to reports/
+
 > There is a separate instance for the frontend so if you are not specifically
 > assigned to work on the frontend, NEVER make any changes on it.
 
@@ -17,9 +19,9 @@ Two interactive sessions work this repo: the BACKEND agent (this file's reader,
 root + backend/) and the FRONTEND agent (frontend/). They exchange work through
 proposal FILES — never by editing the other side's code, never by asking the
 owner to carry a message. Format spec + worked example: `proposals/README.md`
-(filename `YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary; body
-with contract + acceptance criteria; receiver appends `## Response`, flips
-Status, archives).
+(filename `YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary + an
+optional `Wake:` line; body with contract + acceptance criteria; receiver
+appends `## Response`, flips Status, archives).
 
 **At the START of every user interaction, BEFORE anything else, check your
 inbox:**
@@ -41,13 +43,16 @@ agent's inbox (`proposals/to-frontend/` or `proposals/to-backend/`), note it in
 your report, and design around the gap until answered. Do NOT relay through the
 owner. Proposals are the ONLY cross-agent channel.
 
-**Auto-wake:** writing to an inbox automatically types a `[auto-wake] New
-proposal in your inbox — …` message into the target agent's tmux session
-(`clannon-backend` / `clannon-frontend`; see `proposals/README.md` §Wake
-System). If you receive an `[auto-wake]` message, treat it EXACTLY like the
-owner saying "check your inbox": run the inbox check above and handle what you
-find. Don't wait for a wake to check — the start-of-interaction check still
-applies (the wake only covers you being idle).
+**Auto-wake:** writing to an inbox automatically types a message into the target
+agent's tmux session (`clannon-backend` / `clannon-frontend`; see
+`proposals/README.md` §Wake System). **You choose the message:** put a one-line
+`Wake:` header in the proposal and that exact line is typed (as `[auto-wake]
+<your line>`) — ping the other agent in your own words about what you need or
+what changed. Omit `Wake:` for the generic "New proposal in your inbox" default.
+If you receive an `[auto-wake]` message, treat it EXACTLY like the owner saying
+"check your inbox": run the inbox check above and handle what you find. Don't
+wait for a wake to check — the start-of-interaction check still applies (the
+wake only covers you being idle).
 
 The root manager is responsible for:
 

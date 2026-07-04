@@ -29,15 +29,18 @@ log() { echo "clannon-wake[$SIDE]: $*"; }   # goes to the user journal
 # Anything actually pending? Re-scan instead of trusting the event: dotfiles,
 # editor swap/backup files (.swp, ~), and non-.md noise never count, and a
 # directory event caused by ARCHIVING (a file moving OUT) finds no pending
-# file and exits silently.
-pending=0
+# file and exits silently. Track the NEWEST pending file — it is the one that
+# just triggered us, and its optional `Wake:` line drives the typed message.
+newest=""
 for f in "$INBOX"/*.md; do
   [ -e "$f" ] || continue
   base="$(basename "$f")"
   case "$base" in .*|*~|*.swp|*.swo) continue ;; esac
-  pending=1; break
+  if [ -z "$newest" ] || [ "$f" -nt "$newest" ]; then
+    newest="$f"
+  fi
 done
-if [ "$pending" -eq 0 ]; then
+if [ -z "$newest" ]; then
   exit 0
 fi
 
@@ -60,13 +63,26 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
 fi
 
 echo "$now" > "$STAMP"
-MSG="[auto-wake] New proposal in your inbox — read the pending file(s) in proposals/to-$SIDE/, handle per the Proposal Protocol in CLAUDE.md, respond in the proposal file, and archive when done."
-# The TEXT goes in one send-keys call so it lands as one message. Enter is sent
-# SEPARATELY after a beat: Claude Code's TUI reads a text+Enter burst as one
-# stdin chunk and treats it as a PASTE (inserts a newline instead of
-# submitting) — verified live 2026-07-04; a detached Enter is a real keypress
-# and submits.
-tmux send-keys -t "$SESSION" "$MSG"
+
+# The sender may author the ping: a single-line `Wake:` header in the proposal
+# becomes the typed message (prefixed with [auto-wake] so the recipient still
+# recognizes it as a system ping and runs its inbox check per CLAUDE.md). No
+# `Wake:` line ⇒ the generic default. One line only — richer detail belongs in
+# the proposal body, which the recipient reads anyway. \r stripped (CRLF files).
+custom="$(grep -m1 -oP '^Wake:\s*\K.*' "$newest" 2>/dev/null | tr -d '\r' || true)"
+if [ -n "$custom" ]; then
+  MSG="[auto-wake] $custom"
+else
+  MSG="[auto-wake] New proposal in your inbox — read the pending file(s) in proposals/to-$SIDE/, handle per the Proposal Protocol in CLAUDE.md, respond in the proposal file, and archive when done."
+fi
+
+# The TEXT goes in one send-keys call so it lands as one message; `-l` types it
+# LITERALLY so an author-written message can never be misread as a tmux key name
+# (e.g. a bare "Enter" or "C-c"). Enter is sent SEPARATELY after a beat: Claude
+# Code's TUI reads a text+Enter burst as one stdin chunk and treats it as a
+# PASTE (inserts a newline instead of submitting) — verified live 2026-07-04; a
+# detached Enter is a real keypress and submits.
+tmux send-keys -t "$SESSION" -l "$MSG"
 sleep 0.5
 tmux send-keys -t "$SESSION" Enter
-log "woke $SESSION"
+log "woke $SESSION (custom=${custom:+yes})"
