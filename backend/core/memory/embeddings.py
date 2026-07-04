@@ -57,7 +57,8 @@ async def warm() -> bool:
 
 
 def is_ready() -> bool:
-    """True if the embedding model is currently loaded (not backing off after a failure)."""
+    """True if the embedding model is currently loaded. Note: this checks only that
+    the model object exists — it does NOT inspect the failure backoff window."""
     return _model is not None
 
 

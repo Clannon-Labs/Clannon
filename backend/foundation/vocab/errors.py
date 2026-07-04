@@ -81,7 +81,7 @@ class UnsupportedModalityError(InputError):
 class InputTooLargeError(InputError):
     """
     Input exceeds configured size limits.
-    Check constants.py: MAX_INPUT_SIZE_BYTES, MAX_INPUT_TOKENS.
+    Check constants.py: MAX_INPUT_SIZE_BYTES.
     """
 
 
@@ -236,7 +236,7 @@ class ExpertNotPermittedError(OrchestratorError):
 class MaxRetriesExceededError(OrchestratorError):
     """
     The orchestrator or output filter retry loop hit its limit.
-    Check constants.py: MAX_FILTER_RETRIES, MAX_TOOL_RETRIES.
+    Check constants.py: FILTER_MAX_RETRIES, TOOL_MAX_RETRIES, ORCHESTRATOR_MAX_RETRIES.
     """
 
 
