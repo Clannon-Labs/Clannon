@@ -37,16 +37,17 @@ single-source-of-truth / clarity gaps.
       unguarded api/app.py preview site — now guarded). (commit a483453 + this)
 
 ### Low-risk, behavior-preserving — DO
-- [ ] Wire the DEAD single-source constants: store._BREAKER_S ->
+- [x] Wire the DEAD single-source constants: store._BREAKER_S ->
       CB_RECOVERY_TIMEOUT_S; orchestrator build_tool_agent(retries=
-      ORCHESTRATOR_MAX_RETRIES) (0 uses, silently defaults to 2); writer.py distill
-      retries off a memory-owned constant (not the filter's); span ids via
-      SPAN_ID_LENGTH where importable. Values unchanged.
-- [ ] Foundation docs/deadcode/comments (pure doc): stale constant names in
-      errors.py docstrings; BlockReason docstring add MALFORMED_INPUT; span_id
-      docstrings; is_ready docstring; annotate unwired constants (BACKPRESSURE /
-      DEAD-LETTER / MEMORY_MAX_ENTRY_CHARS / MEMORY_WRITE_TIMEOUT_S) # PLANNED;
-      house-style reason comment on the 3 bare best-effort catches.
+      ORCHESTRATOR_MAX_RETRIES); writer.py distill retries -> new
+      MEMORY_DISTILL_MAX_RETRIES (not the filter's); MEMORY_MAX_ENTRY_CHARS /
+      MEMORY_WRITE_MAX_RETRIES annotated PLANNED. (commit bde4e18) — span-id
+      length wiring SKIPPED (primitives.py can't import constants; partial wiring
+      would split the source — left as-is, low leverage).
+- [x] Foundation docstring fixes (the actively-misdirecting ones): errors.py stale
+      constant names; BlockReason add MALFORMED_INPUT; is_ready docstring. (commit
+      7305ad5). REMAINING (low value): span_id record-local docstrings; the "sauce"
+      comment; house-style reason comment on the 3 bare best-effort catches.
 - [ ] flow.py DRY: _advance(origin, started) for the 4 transition methods;
       PayloadHandle.of(payload) for the 2 construction sites.
 - [ ] Shared elapsed_ms(started) (replaces round((monotonic-started)*1000,2) at
