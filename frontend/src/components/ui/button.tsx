@@ -13,15 +13,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<Variant, string> = {
+  // filled controls lift a hair on hover (intent) and press down (give)
   primary:
-    "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm",
+    "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm hover:-translate-y-px hover:shadow-md",
   secondary:
     "bg-muted text-foreground hover:bg-border",
   outline:
     "border border-border-strong bg-transparent text-foreground hover:bg-muted",
   ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
   destructive:
-    "bg-destructive text-destructive-foreground hover:bg-destructive-hover shadow-sm",
+    "bg-destructive text-destructive-foreground hover:bg-destructive-hover shadow-sm hover:-translate-y-px hover:shadow-md",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -40,8 +41,11 @@ export function buttonClasses(
 ) {
   return cn(
     "inline-flex cursor-pointer items-center justify-center rounded-md font-medium",
-    "transition-[background-color,color,opacity,transform] duration-150 active:scale-[0.98]",
-    "disabled:pointer-events-none disabled:opacity-45",
+    // physical give: hover eases on the house curve, press snaps in fast then
+    // releases — not the browser-default linear transform
+    "transition-[background-color,color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+    "active:scale-[0.97] active:duration-75 active:ease-out",
+    "disabled:pointer-events-none disabled:opacity-45 disabled:hover:translate-y-0 disabled:active:scale-100",
     variantClasses[variant],
     sizeClasses[size],
     className,

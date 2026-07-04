@@ -349,7 +349,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       className="absolute inset-x-0 bottom-[-1px] h-px origin-left bg-primary/50"
                       initial={{ scaleX: 0 }}
                       animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.6, ease: EASE }}
+                      transition={{ duration: 0.55, ease: EASE, delay: 0.1 }}
                     />
                   )}
                   {live.reportDone && (
@@ -360,17 +360,33 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       className="flex items-center gap-1"
                     >
                       <span className="tag-label mr-1 flex items-center gap-2 text-primary sm:mr-2">
-                        {/* the seal PRESSES in — scale + a settle rotation, so
-                            it lands like a stamp; sized to anchor the masthead,
-                            not sit as a caption beside the icons */}
-                        <motion.span
-                          initial={reduce ? false : { scale: 0.5, opacity: 0, rotate: 8 }}
-                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                          transition={{ type: "spring", stiffness: 380, damping: 18 }}
-                          className="inline-flex"
-                        >
-                          <VerifiedSeal className="size-8" />
-                        </motion.span>
+                        {/* the seal is the LAST beat: after the rule strikes
+                            across the masthead (0.35s below), it presses in —
+                            scale + settle rotation like a stamp landing by hand,
+                            with a moss emboss bloom ringing out behind it */}
+                        <span className="relative inline-flex">
+                          {!reduce && (
+                            <motion.span
+                              aria-hidden
+                              className="absolute inset-0 rounded-full bg-primary/25 blur-[3px]"
+                              initial={{ scale: 0.5, opacity: 0 }}
+                              animate={{ scale: [0.5, 1.6], opacity: [0, 0.7, 0] }}
+                              transition={{ duration: 0.7, ease: EASE, delay: 0.45, times: [0, 0.4, 1] }}
+                            />
+                          )}
+                          <motion.span
+                            initial={reduce ? false : { scale: 0.5, opacity: 0, rotate: 10 }}
+                            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                            transition={
+                              reduce
+                                ? undefined
+                                : { type: "spring", stiffness: 420, damping: 17, delay: 0.45 }
+                            }
+                            className="inline-flex"
+                          >
+                            <VerifiedSeal className="size-8" />
+                          </motion.span>
+                        </span>
                         <span className="sr-only sm:not-sr-only">Verified</span>
                       </span>
                       <InfoTip

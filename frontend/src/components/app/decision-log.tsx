@@ -62,9 +62,10 @@ function LogEntry({
 
   return (
     <motion.li
-      initial={reduce || !animate ? false : { opacity: 0, y: 7 }}
+      initial={reduce || !animate ? false : { opacity: 0, y: 9 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.34, ease: EASE }}
+      // a weighted settle — the entry lands with mass as the pipeline writes it
+      transition={reduce ? { duration: 0.2 } : { type: "spring", stiffness: 340, damping: 30 }}
       className={cn(
         "group grid grid-cols-[2.9rem_1fr] sm:grid-cols-[3.6rem_1fr]",
         major && !reduce && "animate-ignite rounded-sm",
@@ -97,6 +98,21 @@ function LogEntry({
           )}
           aria-hidden
         />
+        {/* a kind-coloured bloom rings out from the tick as the entry lands —
+            the mark being pressed into the ledger (same grammar as hydration) */}
+        {animate && !reduce && (
+          <motion.span
+            aria-hidden
+            className={cn(
+              "absolute rounded-full",
+              major ? "-left-[4.5px] top-[11px] size-[9px]" : "-left-[3.5px] top-[12px] size-[7px]",
+              meta.dot,
+            )}
+            initial={{ scale: 1, opacity: 0.5 }}
+            animate={{ scale: 3, opacity: 0 }}
+            transition={{ duration: 0.6, ease: EASE }}
+          />
+        )}
         <p className="flex items-baseline gap-2">
           <span className={cn("shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.16em]", flagged ? "" : meta.ink)}>
             {meta.label}
