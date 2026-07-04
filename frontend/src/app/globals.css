@@ -27,6 +27,7 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-edge-light: var(--edge-light);
+  --color-ring-line: var(--ring-line);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-destructive-hover: var(--destructive-hover);
@@ -314,7 +315,10 @@ body {
 .truncate-fade {
   overflow: hidden;
   white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 1.75rem), transparent);
   mask-image: linear-gradient(to right, black calc(100% - 1.75rem), transparent);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* two-line preview clamp that FADES its last line out instead of printing
@@ -324,13 +328,15 @@ body {
   display: block;
   overflow: hidden;
   max-height: calc(2 * 1lh);
-  mask-image:
-    linear-gradient(black, black),
+  --clamp-mask: linear-gradient(black, black),
     linear-gradient(to right, black calc(100% - 3.5rem), transparent);
-  mask-size:
-    100% calc(100% - 1lh),
-    100% 1lh;
+  -webkit-mask-image: var(--clamp-mask);
+  mask-image: var(--clamp-mask);
+  -webkit-mask-size: 100% calc(100% - 1lh), 100% 1lh;
+  mask-size: 100% calc(100% - 1lh), 100% 1lh;
+  -webkit-mask-position: top, bottom;
   mask-position: top, bottom;
+  -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
 
@@ -339,16 +345,26 @@ body {
    a row. -y masks both ends of a vertical scrollport; -bottom only the
    end (for viewports whose top edge is a real border/masthead). */
 .scroll-fade-y {
-  mask-image: linear-gradient(
+  --sfy-mask: linear-gradient(
     to bottom,
     transparent 0,
     black 1.25rem,
     black calc(100% - 1.25rem),
     transparent 100%
   );
+  -webkit-mask-image: var(--sfy-mask);
+  mask-image: var(--sfy-mask);
 }
 .scroll-fade-bottom {
-  mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent 100%);
+  --sfb-mask: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent 100%);
+  -webkit-mask-image: var(--sfb-mask);
+  mask-image: var(--sfb-mask);
+}
+/* horizontal scroll edge — tab strips and inline tables fade at the right */
+.scroll-fade-x {
+  --sfx-mask: linear-gradient(to right, black calc(100% - 2rem), transparent 100%);
+  -webkit-mask-image: var(--sfx-mask);
+  mask-image: var(--sfx-mask);
 }
 
 /* the z-axis contract (DESIGN_SYSTEM §11): content meeting the docked
@@ -387,10 +403,14 @@ body {
   line-height: 1.75;
   max-width: 58ch;
 }
-/* the card provides the breathing room — a leading heading must not add its
-   own 1.8em on top of it */
+/* the card provides the breathing room — the prose must not add its own
+   1.8em above the first block or below the last (which double-spaced the
+   memory card's body→timestamp gap) */
 .report-prose > :first-child {
   margin-top: 0;
+}
+.report-prose > :last-child {
+  margin-bottom: 0;
 }
 .report-prose h1,
 .report-prose h2,

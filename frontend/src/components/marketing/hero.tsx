@@ -48,7 +48,8 @@ export function MarketingHero() {
               lines (390), the dot hangs on the FIRST line, not the block's middle */}
           <p className="tag-label inline-flex items-start gap-2 text-primary">
             <span className="mt-[0.3em] size-1.5 shrink-0 animate-pulse-dot rounded-full bg-primary" aria-hidden />
-            <TypeSet immediate>Workflow automation for freelancers &amp; agencies</TypeSet>
+            {/* nbsp-bind so "&" never ends a line at 390 */}
+            <TypeSet immediate>Workflow automation for freelancers&nbsp;&amp;&nbsp;agencies</TypeSet>
           </p>
           <Rule immediate className="mt-3 max-w-[15rem]" delay={0.15} />
 

@@ -22,6 +22,7 @@ import { RunStatusBadge } from "@/components/app/run-status";
 import { RunActivity } from "@/components/app/run-activity";
 import { UserMessage } from "@/components/app/thread";
 import { Mark } from "@/components/brand/logo";
+import { VerifiedSeal } from "@/components/brand/verified-seal";
 import { cn, formatTokens } from "@/lib/utils";
 
 /** An icon per starter, in the order DEMO_BRIEFS defines them. */
@@ -265,7 +266,7 @@ export function DemoConversation() {
               {s.reportText && (
                 <section
                   aria-label="Report"
-                  className="mx-auto mt-6 max-w-[40rem] rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]"
+                  className="mx-auto mt-6 max-w-[40rem] rounded-lg border border-border-strong bg-sheet [box-shadow:inset_0_1px_0_0_rgb(255_255_255/0.9),0_16px_38px_-14px_rgb(45_38_18/0.3)] dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]"
                 >
                   <header className="flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                     <h2 className="tag-label text-muted-foreground">
@@ -274,7 +275,12 @@ export function DemoConversation() {
                         {s.reportDone ? " — passed output filter" : " — streaming"}
                       </span>
                     </h2>
-                    {s.reportDone && <span className="tag-label text-primary">Verified</span>}
+                    {s.reportDone && (
+                      <span className="tag-label flex items-center gap-1.5 text-primary">
+                        <VerifiedSeal className="size-6" />
+                        <span className="sr-only sm:not-sr-only">Verified</span>
+                      </span>
+                    )}
                   </header>
                   <div className="px-5 py-6 sm:px-8 sm:py-8">
                     <Report markdown={preview} streaming={!s.reportDone} ornate={s.reportDone} />

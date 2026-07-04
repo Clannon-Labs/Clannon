@@ -88,7 +88,8 @@ function LogEntry({
         <span
           className={cn(
             "absolute rounded-full ring-4 ring-surface",
-            major ? "-left-[5.5px] top-[10px] size-[11px]" : "-left-[4.5px] top-[11px] size-[9px]",
+            // the tick kisses the hairline spine — not straddles it
+            major ? "-left-[4.5px] top-[11px] size-[9px]" : "-left-[3.5px] top-[12px] size-[7px]",
             meta.dot,
             live && !major && "animate-pulse-dot",
             // the heartbeat — a landing entry's tick swells once
@@ -236,7 +237,7 @@ export function DecisionLog({
                     --:--:--
                   </span>
                   <span className="relative border-l border-border/60 pb-3 pl-4 pt-2">
-                    <span className="absolute -left-[4.5px] top-[11px] size-[9px] rounded-full border border-border bg-surface" />
+                    <span className="absolute -left-[3.5px] top-[12px] size-[7px] rounded-full border border-border bg-surface" />
                     <span className="mt-1.5 block h-px w-2/3 bg-border/60" style={{ width: `${66 - i * 14}%` }} />
                   </span>
                 </li>

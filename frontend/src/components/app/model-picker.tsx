@@ -487,16 +487,17 @@ export function SessionModelPicker({
                             setAnchor(null);
                           }}
                           className={cn(
-                            "flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                            "flex min-h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
                             selected ? "bg-primary-soft" : "hover:bg-muted",
                           )}
                         >
-                          <span className="min-w-0">
-                            <span className={cn("block truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
+                          <span className="flex min-w-0 items-baseline gap-2">
+                            <span className={cn("truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
                               {prettyModel(opt)}
                             </span>
+                            {/* a trailing tag, not a second line — rows stay one rhythm */}
                             {orchestrator.default === opt && (
-                              <span className="block text-[11px] text-faint">Recommended</span>
+                              <span className="shrink-0 text-[10px] text-faint">Recommended</span>
                             )}
                           </span>
                           {selected && <Check className="size-4 shrink-0 text-primary" aria-hidden />}
@@ -599,16 +600,16 @@ export function SessionModelPicker({
                             back(parentOf(current));
                           }}
                           className={cn(
-                            "flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                            "flex min-h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
                             selected ? "bg-primary-soft" : "hover:bg-muted",
                           )}
                         >
-                          <span className="min-w-0">
-                            <span className={cn("block truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
+                          <span className="flex min-w-0 items-baseline gap-2">
+                            <span className={cn("truncate text-[13px]", selected ? "font-medium text-primary" : "text-foreground")}>
                               {prettyModel(opt)}
                             </span>
                             {current.default === opt && (
-                              <span className="block text-[11px] text-faint">Recommended</span>
+                              <span className="shrink-0 text-[10px] text-faint">Recommended</span>
                             )}
                           </span>
                           {selected && <Check className="size-4 shrink-0 text-primary" aria-hidden />}

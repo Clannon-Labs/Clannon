@@ -45,14 +45,14 @@ export function MemoryRings({
             cy="100"
             r={r}
             fill="none"
-            strokeWidth={isActive ? 3.5 : isFlash ? 2.5 : 1.25}
+            strokeWidth={isActive ? 3.5 : isFlash ? 2.5 : 1.4}
             className={cn(
               "transition-[stroke-width,opacity,color] duration-300",
-              isActive || isFlash ? "text-memory opacity-100" : "text-border-strong opacity-70",
+              isActive || isFlash ? "text-memory opacity-100" : "text-ring-line opacity-100",
             )}
             stroke="currentColor"
             initial={reduce || !drawOnView ? false : { pathLength: 0, opacity: 0 }}
-            whileInView={drawOnView ? { pathLength: 1, opacity: isActive ? 1 : 0.7 } : undefined}
+            whileInView={drawOnView ? { pathLength: 1, opacity: 1 } : undefined}
             animate={drawOnView ? undefined : { pathLength: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 1.1, ease: EASE, delay: i * 0.14 }}

@@ -41,6 +41,9 @@ const light: TokenSet = {
   border: "#d1c8b2",
   "border-strong": "#a3987b",
   "edge-light": "rgba(255, 255, 255, 0.65)",
+  /* the dendrochronology line — a structural ink line that stays legible on
+     paper (border-strong washes out at ring stroke widths). ~4:1 on surface. */
+  "ring-line": "#7a7052",
   ring: "#285539",
 
   destructive: "#a83a28",
@@ -94,6 +97,7 @@ const dark: TokenSet = {
   border: "rgba(233, 237, 224, 0.11)",
   "border-strong": "rgba(233, 237, 224, 0.24)",
   "edge-light": "rgba(240, 244, 230, 0.09)",
+  "ring-line": "rgba(233, 237, 224, 0.32)",
   ring: "#74c08a",
 
   destructive: "#e0735c",

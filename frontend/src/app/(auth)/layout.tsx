@@ -21,7 +21,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               read at all */}
           <Mark className="size-44 text-primary opacity-[0.13] dark:opacity-30" />
           <blockquote className="mt-8 max-w-sm">
-            <p className="display-soft text-[1.8rem] leading-[1.12]">
+            {/* hang the opening quote into the margin so "Every" aligns to the
+                block's left edge, not the quote mark */}
+            <p className="display-soft text-[1.8rem] leading-[1.12] [text-indent:-0.42em]">
               “Every run lays down a ring. By the tenth, it knows your clients
               better than your notes do.”
             </p>

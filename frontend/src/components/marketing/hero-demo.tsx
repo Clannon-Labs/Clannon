@@ -82,13 +82,15 @@ export function HeroDemo() {
         </div>
 
         {/* log body — unfilled lines render as ghost rules (ledger paper
-            waiting to be written) so the card is never half empty */}
-        <div className="flex h-[280px] flex-col justify-end gap-0.5 overflow-hidden px-4 py-3 font-mono text-[13px] leading-relaxed sm:h-[300px]">
+            waiting to be written) so the card is never half empty. The body
+            (not each row) carries the right-edge fade: masking the container
+            is reliable where masking an inline row is not. */}
+        <div className="scroll-fade-x flex h-[280px] flex-col justify-end gap-0.5 overflow-hidden py-3 pl-4 pr-0 font-mono text-[13px] leading-relaxed sm:h-[300px]">
+          {/* unwritten rules — faint dotted leaders so the card is never
+              half-empty, reading as ledger paper waiting, not broken data */}
           {Array.from({ length: Math.max(0, 8 - entries.length) }).map((_, i) => (
-            <div key={`ghost-${i}`} aria-hidden className="flex items-center gap-2.5 py-[3px]">
-              <span className="hidden shrink-0 text-[13px] text-faint/50 sm:inline">--:--.-</span>
-              <span className="inline-block size-1.5 shrink-0 rounded-full border border-border" />
-              <span className="h-px flex-1 bg-border/60" />
+            <div key={`ghost-${i}`} aria-hidden className="flex items-center py-[3px]">
+              <span className="h-px flex-1 border-t border-dotted border-border/70" />
             </div>
           ))}
           {entries.map((entry, i) => {
@@ -108,8 +110,9 @@ export function HeroDemo() {
                     {style.label}
                   </span>
                 </span>
-                {/* §11.3: overflow fades out — never "1.9k…" mid-figure */}
-                <span className="truncate-fade text-foreground">
+                {/* nowrap so the row runs off the right edge and the body's
+                    scroll-fade-x dissolves it — never a hard mid-word clip */}
+                <span className="whitespace-nowrap text-foreground">
                   {entry.text}
                   {entry.detail && (
                     <span className="ml-2 hidden text-faint md:inline">· {entry.detail}</span>

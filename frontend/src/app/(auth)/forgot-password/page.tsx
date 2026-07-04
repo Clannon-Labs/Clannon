@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="animate-fade-up">
-      <h1 className="display-soft text-3xl">
+      <h1 className="display text-[2.4rem] leading-[1.0]">
         Reset your password
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">

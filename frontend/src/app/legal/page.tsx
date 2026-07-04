@@ -13,14 +13,17 @@ export default function LegalIndexPage() {
       </h1>
       <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
         Written to be read, not to bury you. If anything here is unclear,
-        ask us at{" "}
-        <a
-          href={`mailto:${siteConfig.contact.legal}`}
-          className="text-primary underline underline-offset-2"
-        >
-          {siteConfig.contact.legal}
-        </a>
-        .
+        {/* keep "at <address>." together so the link never orphans on its own line */}
+        <span className="whitespace-nowrap">
+          {" "}ask us at{" "}
+          <a
+            href={`mailto:${siteConfig.contact.legal}`}
+            className="text-primary underline underline-offset-2"
+          >
+            {siteConfig.contact.legal}
+          </a>
+          .
+        </span>
       </p>
       <LegalIndexLinks />
     </div>

@@ -223,7 +223,7 @@ export const SEED_RUNS: Run[] = [
         kind: "warning",
         title: "Sanitizer flag — PII",
         detail: "Pasted spreadsheet contains 240+ unredacted email addresses",
-        meta: { worker: "text", threat: "high" },
+        meta: { workers: "text", threat: "high" },
       },
       {
         id: "seedlog_blocked_3",

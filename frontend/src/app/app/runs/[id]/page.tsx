@@ -5,7 +5,6 @@ import { use, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ShieldAlert,
-  Check,
   Copy,
   Download,
   Square,
@@ -32,6 +31,7 @@ import { PriorTurns } from "@/components/app/prior-turns";
 import { UserMessage } from "@/components/app/thread";
 import { ArtifactPreview } from "@/components/app/artifact-preview";
 import { Mark } from "@/components/brand/logo";
+import { VerifiedSeal } from "@/components/brand/verified-seal";
 import type { Run, Artifact } from "@/lib/api";
 import { formatBytes, formatTokens } from "@/lib/utils";
 
@@ -332,7 +332,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                   the thread so the desk shows around it (a page of paper, not a
                   full-bleed panel), with its own warm-cast surface, edge-light,
                   and a real shadow. The measure fills the sheet — no dead gutter. */}
-              <Reveal className="mx-auto max-w-[40rem] rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]">
+              <Reveal className="mx-auto max-w-[40rem] rounded-lg border border-border-strong bg-sheet [box-shadow:inset_0_1px_0_0_rgb(255_255_255/0.9),0_16px_38px_-14px_rgb(45_38_18/0.3)] dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]">
                 <header className="relative flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                   {/* a tag-label never wraps — below sm the gate suffix goes, not the line */}
                   <h2 className="tag-label text-muted-foreground">
@@ -360,14 +360,15 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       className="flex items-center gap-1"
                     >
                       <span className="tag-label mr-1 flex items-center gap-1.5 text-primary sm:mr-2">
-                        {/* the seal — lands with a brief press, then rests */}
+                        {/* the seal PRESSES in — scale + a settle rotation, so
+                            it lands like a stamp, not a fade */}
                         <motion.span
-                          initial={reduce ? false : { scale: 0.4, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                          initial={reduce ? false : { scale: 0.5, opacity: 0, rotate: 8 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          transition={{ type: "spring", stiffness: 380, damping: 18 }}
                           className="inline-flex"
                         >
-                          <Check className="size-3.5" aria-hidden />
+                          <VerifiedSeal className="size-6" />
                         </motion.span>
                         <span className="sr-only sm:not-sr-only">Verified</span>
                       </span>
