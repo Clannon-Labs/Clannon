@@ -8,7 +8,7 @@ import { useDeleteMemory, useHydrationPreview, useMemoryEntries } from "@/lib/ap
 import type { MemoryEntry } from "@/lib/api";
 import { TIER_LABELS, type MemoryTier } from "@/config/plans";
 import { MemoryRings } from "@/components/brand/memory-rings";
-import { Rule } from "@/components/motion";
+import { Rule, EASE } from "@/components/motion";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -124,31 +124,69 @@ function HydrationItem({
   return (
     <motion.li
       layout={!reduce}
-      initial={reduce ? false : { opacity: 0, y: 10 }}
+      initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduce ? undefined : { opacity: 0, x: 10, height: 0, marginTop: 0 }}
-      transition={{ duration: 0.32, delay: stageDelay }}
-      style={reduce ? undefined : { animationDelay: `${stageDelay + 0.1}s` }}
-      className={cn(
-        "grid grid-cols-[auto_1fr] gap-3 rounded-sm border-t border-border/60 py-3 first:border-t-0",
-        // each memory "burns in" as it arrives — the amber wash cooling off
-        !reduce && "animate-ignite",
-      )}
+      // a weighted settle — the row arrives with mass, not a linear fade
+      transition={
+        reduce
+          ? { duration: 0.2, delay: stageDelay }
+          : { type: "spring", stiffness: 320, damping: 30, delay: stageDelay }
+      }
+      className="relative grid grid-cols-[auto_1fr] gap-3 rounded-sm border-t border-border/60 py-3 first:border-t-0"
     >
+      {/* the amber trace — memory being WRITTEN into context: a thin line inks
+          across beneath the row as it lands, then cools to the hairline border */}
+      {!reduce && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left bg-memory"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: [0, 0.9, 0] }}
+          transition={{ duration: 0.7, ease: EASE, delay: stageDelay + 0.05, times: [0, 0.35, 1] }}
+        />
+      )}
+
       {/* pin the tick+label to the title's first line, not the block's center */}
       <span className="flex items-center gap-2 self-start pt-[3px]">
-        <span
-          className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier], !reduce && "animate-tick-pulse")}
-          style={reduce ? undefined : { animationDelay: `${stageDelay + 0.1}s` }}
-          aria-hidden
-        />
+        {/* the tick LEADS the beat — an amber point pops in first (memory
+            located in the archive), with a bloom that cools; the content
+            unfurls after it */}
+        <span className="relative flex size-1.5 items-center justify-center">
+          {!reduce && (
+            <motion.span
+              aria-hidden
+              className={cn("absolute inset-0 rounded-full", TIER_TICK[entry.tier])}
+              initial={{ scale: 1, opacity: 0.55 }}
+              animate={{ scale: 3.2, opacity: 0 }}
+              transition={{ duration: 0.65, ease: EASE, delay: stageDelay }}
+            />
+          )}
+          <motion.span
+            className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier])}
+            initial={reduce ? false : { scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={
+              reduce ? undefined : { type: "spring", stiffness: 520, damping: 18, delay: stageDelay }
+            }
+            aria-hidden
+          />
+        </span>
         <span className="tag-label w-[4.5rem] text-faint">
           {TIER_LABELS[entry.tier]}
         </span>
       </span>
 
       <div className="min-w-0">
-        <p className="text-[13px] font-medium leading-snug text-foreground">{entry.title}</p>
+        {/* the memory unfurls a beat after its tick lands */}
+        <motion.p
+          className="text-[13px] font-medium leading-snug text-foreground"
+          initial={reduce ? false : { opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={reduce ? undefined : { duration: 0.3, ease: EASE, delay: stageDelay + 0.12 }}
+        >
+          {entry.title}
+        </motion.p>
         {/* §11.3: the clamp fades its last line out — a "…" would collide
             with whatever sentence period it happens to land on ("(CMO)….") */}
         <p className="clamp-fade-2 mt-0.5 text-[12px] leading-snug text-muted-foreground">
@@ -280,7 +318,8 @@ export function HydrationPanel({
     if (reduce || listening || surfaced.length === 0) return;
     const timers: number[] = [];
     surfaced.forEach((entry, i) => {
-      const at = (0.12 + i * 0.14) * 1000 + 100;
+      // fire the dial flash the instant the row's tick lands (same stagger)
+      const at = (0.15 + i * 0.18) * 1000 + 90;
       timers.push(window.setTimeout(() => setFlashTier(entry.tier), at));
       timers.push(window.setTimeout(() => setFlashTier(null), at + 450));
     });
@@ -390,7 +429,7 @@ export function HydrationPanel({
                           key={entry.id}
                           entry={entry}
                           reduce={reduce}
-                          stageDelay={0.12 + i * 0.14}
+                          stageDelay={0.15 + i * 0.18}
                           expanded={expandedId === entry.id}
                           onToggle={() => setExpandedId((id) => (id === entry.id ? null : entry.id))}
                           onCorrect={() => correct(entry)}
