@@ -194,3 +194,26 @@ Deliberately uneven investment — these three moments carry the product's feel:
    verified mark — the one ornament, earned at the end.
 
 Everything else stays quiet so these can speak.
+
+---
+
+## 11. v2 addendum (Pass 2, 2026-07-04 — from CRITIQUE_PASS2.md)
+
+1. **Dark-first workspace.** `/app` defaults dark (the instrument room);
+   light is a first-class choice and stays the marketing default. Dark uses
+   the full elevation ladder: `background → surface → surface-raised` + the
+   two shadow tiers + hairlines. Never one depth token for everything.
+2. **Machine register is law.** Every numeral that means something wears
+   `.figure` (tabular, tracking-0) — never letterspaced, never proportional
+   in columns. Model names render through `prettyModel()` everywhere
+   (settings included). Brand casing map lives with it (GPT, not Gpt).
+3. **Truncation contract.** Clamps cut on word boundaries with a real "…";
+   never mid-word, never "….", never a clipped row without a fade. Streaming
+   carets are separated from following punctuation by a space.
+4. **Z-axis contract.** Content meeting a floating layer (composer, palette
+   list, sheets) always gets a scrim/fade and scroll padding — nothing shears
+   mid-line. Overlays never collide with reserved UI insets.
+5. **The signatures own the motion budget:** hydration assembly, the living
+   ledger, the delivered artifact (storyboards in CRITIQUE_PASS2.md §Phase 2,
+   with named curves EASE / EASE_ARRIVE and 200–400ms beats). Everything else
+   got QUIETER in Pass 2, not fancier.
