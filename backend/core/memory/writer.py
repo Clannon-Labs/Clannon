@@ -65,7 +65,7 @@ async def distill(task: str, answer: str, findings: list[str]) -> list[MemoryWri
         "memory",
         output_type=MemoryExtraction,
         prompt_name="memory",
-        retries=constants.FILTER_MAX_RETRIES,
+        retries=constants.MEMORY_DISTILL_MAX_RETRIES,
     )
     try:
         result = await run_structured(

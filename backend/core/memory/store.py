@@ -16,7 +16,7 @@ import time
 import uuid
 from typing import Any
 
-from foundation import MemoryStore
+from foundation import MemoryStore, constants
 
 from .embeddings import DIMS
 
@@ -32,7 +32,7 @@ COLLECTIONS: dict[MemoryStore, str] = {
     MemoryStore.PROCEDURAL: "vraksha_procedural",
 }
 
-_BREAKER_S = 30.0
+_BREAKER_S = constants.CB_RECOVERY_TIMEOUT_S   # circuit-breaker recovery window (single source)
 _client = None
 _down_until = 0.0
 _ensured: set[str] = set()

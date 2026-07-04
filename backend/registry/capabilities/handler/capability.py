@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 from dataclasses import dataclass
 
-from foundation import MaxRetriesExceededError, VrakshaContext
+from foundation import MaxRetriesExceededError, VrakshaContext, constants
 
 from .. import CapabilityKind, registry as default_registry
 from .experts import ExpertHandler
@@ -101,6 +101,7 @@ class Capabilities:
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
             ),
             deps_type=OrchestratorDeps,
+            retries=constants.ORCHESTRATOR_MAX_RETRIES,
         )
         try:
             return await run_structured(
@@ -115,6 +116,7 @@ class Capabilities:
                 system_prompt=system_prompt + _FORCE_ANSWER,
                 tools=[],
                 deps_type=OrchestratorDeps,
+                retries=constants.ORCHESTRATOR_MAX_RETRIES,
             )
             return await run_structured(
                 forced, user_prompt, deps=deps, max_turns=1, model=model,

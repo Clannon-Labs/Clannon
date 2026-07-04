@@ -189,8 +189,9 @@ MEMORY_SEARCH_TOP_K         = 10     # candidates fetched per inferred tier at h
 MEMORY_RELEVANCE_FLOOR      = 0.30   # drop hits below this raw cosine before ranking;
                                      # conservative for nomic-768 (related text >~0.4),
                                      # tunable — see docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md L3
-MEMORY_MAX_ENTRY_CHARS      = 10_000 # single memory entry size cap
-MEMORY_WRITE_MAX_RETRIES    = 3      # retries on write failure before ERROR
+MEMORY_MAX_ENTRY_CHARS      = 10_000 # PLANNED — not yet wired (manager caps at its own _MAX_CONTENT_CHARS)
+MEMORY_WRITE_MAX_RETRIES    = 3      # PLANNED — not yet wired (record_write_proposals is not retry-bounded yet)
+MEMORY_DISTILL_MAX_RETRIES  = 2      # malformed-output retries for the background distillation agent (writer.py)
 
 
 # ---------------------------------------------------------------------------
