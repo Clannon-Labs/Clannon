@@ -48,8 +48,8 @@ single-source-of-truth / clarity gaps.
       constant names; BlockReason add MALFORMED_INPUT; is_ready docstring. (commit
       7305ad5). REMAINING (low value): span_id record-local docstrings; the "sauce"
       comment; house-style reason comment on the 3 bare best-effort catches.
-- [ ] flow.py DRY: _advance(origin, started) for the 4 transition methods;
-      PayloadHandle.of(payload) for the 2 construction sites.
+- [x] flow.py DRY: Flow._advance(origin, started) for the 4 transition methods +
+      PayloadHandle.of(payload) for the 2 construction sites. (commit c7e4054)
 - [ ] Shared elapsed_ms(started) (replaces round((monotonic-started)*1000,2) at
       ~6 handler sites + flow._duration).
 - [ ] Registry DRY: _unwrap(record) in support.py; store._specs_of(kind) generator
@@ -74,6 +74,20 @@ single-source-of-truth / clarity gaps.
 - [ ] Real span_id wiring into records; current_stage advancing in Flow.next/warn
       (stuck at INTAKE); SSE event-type enum + run_driver emit helpers (FE-contract
       surface); env-var central registry (ops surface).
+
+## Reviews (Phase 6 gate on the contract-touching changes)
+
+2026-07-04, on the write-door + MemoryPort + discover() commits (a483453~1..HEAD):
+- **security-review: PASS** — user_id fail-closed intact, no phantom writes,
+  single-door preserved, discover() isolation can't half-register a capability;
+  noted the timeout under-reports (safe) rather than over-reports.
+- **architecture-boundary: PASS** — foundation still imports nothing upward,
+  all new imports point down, protocol/impl signatures match, no new coupling.
+
+**Remaining low-risk backlog (next pass):** elapsed_ms helper; registry _unwrap /
+_specs_of / _REMEMBER_MAX_CHARS; manager _pack_tiers extraction + constant moves +
+_SUBSTANTIVE/_SECONDS_PER_DAY naming + persist_turn_memory singleton; the
+str(exc)[:200] clip helper. All behavior-preserving; see backlog above.
 
 **Acceptance:** the load-bearing modules pass a re-audit (modular, non-redundant,
 documented); suite green; a short "foundation stability audit" section in the
