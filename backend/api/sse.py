@@ -23,11 +23,12 @@ async def sse_stream(run: RunState) -> AsyncGenerator[str, None]:
         for event in list(run.events):
             yield f"data: {json.dumps(event)}\n\n"
         # A reconnect to a finished run has nothing more coming — replay, then close.
-        # The one exception is a `delivered` run still streaming its report (status
-        # flips to delivered while report stays None until the final delta): keep that
-        # stream open so a mid-report reconnect gets the rest. Every no-report terminal
-        # (blocked / failed / cancelled) closes cleanly here instead of hanging on the
-        # queue forever (the old `report is not None` guard never closed them).
+        # Since the terminal-order fix (report_done strictly BEFORE status:delivered —
+        # run_driver.py, pinned by tests/sse_terminal_order.py) a delivered run always
+        # has its report by the time status flips, so a live delivered-but-report-None
+        # window can't occur; the guard stays as defense for legacy/partial state.
+        # Every no-report terminal (blocked / failed / cancelled) closes cleanly here
+        # instead of hanging on the queue forever.
         if run.status in TERMINAL_STATUSES and not (run.status == "delivered" and run.report is None):
             return
         while True:

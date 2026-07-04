@@ -353,8 +353,13 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                     for finding in ctx.expert_findings
                     for art in (finding.metadata or {}).get("artifacts", [])
                 ]
-                run.on_status("delivered")
+                # Contract order (api/README.md /runs/:id/stream): the report streams
+                # FIRST, the terminal status comes LAST — report_delta×N → report_done
+                # → status:delivered. Flipping these painted a DELIVERED badge over a
+                # still-streaming report in the UI (frontend pinned the moment to the
+                # terminal status event).
                 await run.stream_report(str(text))
+                run.on_status("delivered")
 
     except asyncio.CancelledError:
         # cooperative cancel via POST /runs/:id/cancel: the task was cancelled, which
