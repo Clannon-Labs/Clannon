@@ -41,6 +41,14 @@ agent's inbox (`proposals/to-frontend/` or `proposals/to-backend/`), note it in
 your report, and design around the gap until answered. Do NOT relay through the
 owner. Proposals are the ONLY cross-agent channel.
 
+**Auto-wake:** writing to an inbox automatically types a `[auto-wake] New
+proposal in your inbox — …` message into the target agent's tmux session
+(`clannon-backend` / `clannon-frontend`; see `proposals/README.md` §Wake
+System). If you receive an `[auto-wake]` message, treat it EXACTLY like the
+owner saying "check your inbox": run the inbox check above and handle what you
+find. Don't wait for a wake to check — the start-of-interaction check still
+applies (the wake only covers you being idle).
+
 The root manager is responsible for:
 
 * repository-wide planning

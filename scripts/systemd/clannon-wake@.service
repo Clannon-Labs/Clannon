@@ -1,0 +1,10 @@
+# clannon-wake@<side>.service — one-shot: inject the [auto-wake] message into
+# the side's tmux session. Triggered by clannon-wake@<side>.path; never runs
+# claude or any AI process (see scripts/proposal-wake.sh).
+
+[Unit]
+Description=Clannon %i agent wake — tmux send-keys into clannon-%i
+
+[Service]
+Type=oneshot
+ExecStart=%h/Vault/projects/Clannon/scripts/proposal-wake.sh %i
