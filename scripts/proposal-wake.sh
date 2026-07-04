@@ -61,6 +61,12 @@ fi
 
 echo "$now" > "$STAMP"
 MSG="[auto-wake] New proposal in your inbox — read the pending file(s) in proposals/to-$SIDE/, handle per the Proposal Protocol in CLAUDE.md, respond in the proposal file, and archive when done."
-# ONE send-keys call so it arrives as one message; Enter submits it.
-tmux send-keys -t "$SESSION" "$MSG" Enter
+# The TEXT goes in one send-keys call so it lands as one message. Enter is sent
+# SEPARATELY after a beat: Claude Code's TUI reads a text+Enter burst as one
+# stdin chunk and treats it as a PASTE (inserts a newline instead of
+# submitting) — verified live 2026-07-04; a detached Enter is a real keypress
+# and submits.
+tmux send-keys -t "$SESSION" "$MSG"
+sleep 0.5
+tmux send-keys -t "$SESSION" Enter
 log "woke $SESSION"
