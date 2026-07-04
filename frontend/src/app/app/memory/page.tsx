@@ -21,7 +21,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Skeleton, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { Report } from "@/components/app/report";
-import { formatRelativeTime } from "@/lib/utils";
+import { MemoryRings } from "@/components/brand/memory-rings";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 const TIER_ORDER: MemoryTier[] = ["wiki", "semantic", "episodic", "procedural"];
 
@@ -48,6 +49,72 @@ const TIER_COPY: Record<MemoryTier, { hint: string; locked: string }> = {
    Imported files can be whole documents; the card shows a preview and the
    reader opens the rest in place. */
 const ENTRY_PREVIEW_PX = 176;
+
+/**
+ * The archive's dial — the brand's growth rings as REAL information design:
+ * one ring per tier, the open tier burning amber, live counts in the legend.
+ * Selecting a ring row switches the tier tabs; the dial and the tabs are one
+ * instrument. Desktop-only (the tabs alone carry the phone).
+ */
+function ArchiveDial({
+  active,
+  counts,
+  unlocked,
+  onSelect,
+}: {
+  active: MemoryTier;
+  counts: Map<MemoryTier, MemoryEntry[]>;
+  unlocked: MemoryTier[];
+  onSelect: (tier: MemoryTier) => void;
+}) {
+  return (
+    <aside className="sticky top-8 hidden w-60 shrink-0 lg:block" aria-label="Memory tiers">
+      <div className="relative mx-auto size-48">
+        <MemoryRings active={active} drawOnView={false} />
+      </div>
+      <ul className="mt-5 border-t border-border">
+        {TIER_ORDER.map((tier) => {
+          const isActive = active === tier;
+          const isLocked = !unlocked.includes(tier);
+          return (
+            <li key={tier} className="border-b border-border">
+              <button
+                type="button"
+                onClick={() => onSelect(tier)}
+                aria-current={isActive || undefined}
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-2.5 px-1 py-2.5 text-left transition-colors",
+                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full transition-colors",
+                    isActive ? "bg-memory" : "border border-border-strong",
+                  )}
+                  aria-hidden
+                />
+                <span className={cn("flex-1 text-[13px]", isActive && "font-medium")}>
+                  {TIER_LABELS[tier]}
+                </span>
+                {isLocked ? (
+                  <Lock className="size-3 text-faint" aria-hidden />
+                ) : (
+                  <span className={cn("font-mono text-[12px] tabular", isActive ? "text-memory" : "text-faint")}>
+                    {counts.get(tier)?.length ?? 0}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 text-[11px] leading-relaxed text-faint">
+        Outer rings hold the oldest trust — your wiki outranks everything inside it.
+      </p>
+    </aside>
+  );
+}
 
 function EntryCard({
   entry,
@@ -157,6 +224,8 @@ export default function MemoryPage() {
   const [editing, setEditing] = useState<Partial<MemoryEntry> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<MemoryEntry | null>(null);
   const [query, setQuery] = useState("");
+  // controlled so the dial and the tabs stay one instrument
+  const [openTier, setOpenTier] = useState<MemoryTier>("wiki");
 
   const currentPlan = useEffectivePlan(user?.plan);
   const unlockedTiers = currentPlan?.memoryTiers ?? [];
@@ -233,7 +302,13 @@ export default function MemoryPage() {
         />
       </div>
 
-      <Tabs defaultValue="wiki" className="mt-5">
+      <div className="mt-5 flex items-start gap-10">
+      <Tabs
+        defaultValue="wiki"
+        value={openTier}
+        onValueChange={(v) => setOpenTier(v as MemoryTier)}
+        className="min-w-0 flex-1"
+      >
         {/* the tier row scrolls on a phone — no scrollbar, a right-edge fade
             says "more" instead of a hard clip */}
         <div className="relative max-w-full">
@@ -273,7 +348,8 @@ export default function MemoryPage() {
               ) : (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+                    {/* measure capped so the last line never orphans one word */}
+                    <p className="max-w-[52ch] text-[13px] leading-relaxed text-muted-foreground">
                       {TIER_COPY[tier].hint}
                     </p>
                     {isWiki && (
@@ -369,6 +445,14 @@ export default function MemoryPage() {
           );
         })}
       </Tabs>
+
+      <ArchiveDial
+        active={openTier}
+        counts={byTier}
+        unlocked={unlockedTiers}
+        onSelect={setOpenTier}
+      />
+      </div>
 
       {/* wiki editor */}
       <Dialog
