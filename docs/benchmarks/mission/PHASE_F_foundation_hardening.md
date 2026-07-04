@@ -62,16 +62,15 @@ single-source-of-truth / clarity gaps.
 - [ ] Cross-cut: one _clip_error/MAX_STRUCTURED_ERROR_CHARS for the str(exc)[:200]
       copies (file_read/file_write/sandbox); short_trace() for trace_id[:8].
 
-### Propose-first — FLAGGED, do NOT do silently (behavior/contract changes)
-- [ ] record_write_proposals returns what it PERSISTED (Mission Phase 1 / CB1
-      honesty) — MemoryPort contract change. #1 flagged item.
-- [ ] Bound the write path with a timeout (MEMORY_WRITE_TIMEOUT_S exists, unwired)
-      — a stalled Qdrant can hang the delivered-path write; reads are bounded,
-      writes aren't.
-- [ ] discover() import-fault isolation — one capability module raising at IMPORT
-      time takes down the WHOLE roster; the registry CLAUDE.md invariant says
-      discovery "must never crash." High-value for a batch layer dropping in
-      modules; recommend doing next (with a test).
+### Propose-first — APPROVED by owner + DONE (each with a test)
+- [x] record_write_proposals returns what it PERSISTED (CB1 honesty) — MemoryPort
+      contract change; /memory view surfaces ctx.memory_writes_persisted. (0e3ff74)
+- [x] Bound the write path with MEMORY_WRITE_TIMEOUT_S — a stalled store degrades
+      instead of hanging the delivered path (symmetric with the read deadline). (0e3ff74)
+- [x] discover() import-fault isolation — one module raising at import no longer
+      takes down the roster; failures recorded in import_failures(). (4418f99)
+
+### Still propose-first — NOT done (need their own pass)
 - [ ] Real span_id wiring into records; current_stage advancing in Flow.next/warn
       (stuck at INTAKE); SSE event-type enum + run_driver emit helpers (FE-contract
       surface); env-var central registry (ops surface).
