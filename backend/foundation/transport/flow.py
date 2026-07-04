@@ -131,6 +131,15 @@ class PayloadHandle(Generic[T]):
         """
         self._cached = None
 
+    @classmethod
+    def of(cls, payload: T) -> "PayloadHandle[T]":
+        """Wrap an in-memory payload in a handle: a safe-to-log descriptor plus a
+        loader that returns it on demand. THE single construction site for an eager
+        payload handle (used by Flow.new / Flow.next) — stages never build one directly."""
+        async def _loader() -> T:
+            return payload
+        return cls(descriptor=_describe(payload), _loader=_loader)
+
 
 # ---------------------------------------------------------------------------
 # Journal entry
@@ -236,15 +245,7 @@ class Flow(Generic[T]):
         Example:
             flow = Flow.new(raw_input, session_id=session.id)
         """
-        _payload = payload  # captured for closure
-
-        async def _loader() -> T:
-            return _payload
-
-        handle = PayloadHandle(
-            descriptor=_describe(payload),
-            _loader=_loader,
-        )
+        handle = PayloadHandle.of(payload)
         meta = Meta(
             trace_id=trace_id or uuid4().hex,
             span_id=uuid4().hex[:8],
@@ -287,6 +288,16 @@ class Flow(Generic[T]):
     # Transitions — always return a new Flow, always write a journal entry
     # ------------------------------------------------------------------
 
+    def _advance(self, origin: Origin, started_at: float | None) -> tuple[Meta, float | None]:
+        """The identical preamble every transition (next/block/fail/warn) shares:
+        mint the next span's Meta and stamp this stage's duration onto it. Returns
+        (new_meta, duration) so a future transition never has to re-copy the block."""
+        duration = _duration(started_at)
+        new_meta = self.meta.next_span(origin)
+        if duration is not None:
+            new_meta.duration_ms = duration
+        return new_meta, duration
+
     def next(
         self,
         payload: U,
@@ -307,17 +318,8 @@ class Flow(Generic[T]):
         """
         self.handle.offload()
 
-        async def _loader() -> U:
-            return payload
-
-        new_handle = PayloadHandle(
-            descriptor=_describe(payload),
-            _loader=_loader,
-        )
-        duration = _duration(started_at)
-        new_meta  = self.meta.next_span(origin)
-        if duration is not None:
-            new_meta.duration_ms = duration
+        new_handle = PayloadHandle.of(payload)
+        new_meta, duration = self._advance(origin, started_at)
 
         entry = JournalEntry(
             origin=origin,
@@ -354,10 +356,7 @@ class Flow(Generic[T]):
         Usage:
             return flow.block(BlockReason.MALICIOUS_CONTENT, ThreatLevel.HIGH, Origin.SANITIZER)
         """
-        duration = _duration(started_at)
-        new_meta = self.meta.next_span(origin)
-        if duration is not None:
-            new_meta.duration_ms = duration
+        new_meta, duration = self._advance(origin, started_at)
 
         self.ctx.mark_blocked(reason.value)
         # stages after a block never run, so nothing will load this payload again —
@@ -403,10 +402,7 @@ class Flow(Generic[T]):
                 return flow.fail(e, Origin.VERIFIER)
         """
         error_str = _truncate(str(error), constants.MAX_ERROR_LENGTH)
-        duration = _duration(started_at)
-        new_meta = self.meta.next_span(origin)
-        if duration is not None:
-            new_meta.duration_ms = duration
+        new_meta, duration = self._advance(origin, started_at)
 
         self.ctx.mark_failed(error_str)
         self.handle.offload()  # skipped stages never load this payload again
@@ -450,10 +446,7 @@ class Flow(Generic[T]):
             return flow.warn("low confidence score", ThreatLevel.LOW, Origin.VERIFIER)
         """
         reason = _truncate(reason, constants.MAX_REASON_LENGTH)
-        duration = _duration(started_at)
-        new_meta = self.meta.next_span(origin)
-        if duration is not None:
-            new_meta.duration_ms = duration
+        new_meta, duration = self._advance(origin, started_at)
 
         entry = JournalEntry(
             origin=origin,
