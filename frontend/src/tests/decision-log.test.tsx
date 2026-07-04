@@ -41,9 +41,18 @@ function makeEntry(overrides: Partial<DecisionLogEntry> = {}): DecisionLogEntry 
 // ---- DecisionLog component tests -------------------------------------------
 
 describe("DecisionLog", () => {
-  it("shows the waiting message when the entries array is empty", () => {
+  // Pass 3: an empty LIVE ledger reserves its geometry with ghost rules
+  // (no caption — the status band is the only voice); an empty settled
+  // ledger states the fact plainly.
+  it("shows the empty-history line when a settled run has no entries", () => {
     render(<DecisionLog entries={[]} live={false} />);
-    expect(screen.getByText(/Waiting for the pipeline/i)).toBeInTheDocument();
+    expect(screen.getByText(/No decisions were logged/i)).toBeInTheDocument();
+  });
+
+  it("reserves ghost rows (no caption) when live with no entries yet", () => {
+    const { container } = render(<DecisionLog entries={[]} live={true} />);
+    expect(screen.queryByText(/No decisions were logged/i)).not.toBeInTheDocument();
+    expect(container.querySelectorAll("ol[aria-hidden] li").length).toBeGreaterThan(0);
   });
 
   it("renders each entry's title", () => {

@@ -142,6 +142,7 @@ export function DecisionLog({
   entries,
   live,
   settled,
+  runId,
   className,
 }: {
   entries: DecisionLogEntry[];
@@ -149,6 +150,9 @@ export function DecisionLog({
   /** Terminal outcome, for the settle moment: the spine draws once in moss
    *  when a run delivers, in the destructive ink when it's blocked. */
   settled?: "delivered" | "blocked" | null;
+  /** When given, the masthead carries the run's mark in the machine register
+   *  ("RUN_4C2A · 6 entries") — the marketing card's grammar, in the product. */
+  runId?: string;
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -185,8 +189,14 @@ export function DecisionLog({
           <h2 className="display-soft text-[15px] leading-none text-foreground">
             Decision log
           </h2>
-          <span className="text-[10px] text-faint">
-            <span className="tabular tracking-wide">{entries.length} entries</span>
+          <span className="font-mono text-[10px] tracking-wide text-faint">
+            {runId && (
+              <span className="uppercase">
+                run_{runId.replace(/[^a-z0-9]/gi, "").slice(-4)}
+                <span className="mx-1.5 text-faint/60">·</span>
+              </span>
+            )}
+            <span className="tabular">{entries.length} entries</span>
           </span>
         </div>
         <div className="mt-2.5 rule-strong" />
@@ -216,23 +226,34 @@ export function DecisionLog({
           />
         )}
         {entries.length === 0 ? (
-          <p className="px-1 py-8 font-mono text-[12px] text-faint">
-            Waiting for the pipeline to accept the brief
-            <span className="caret" />
-          </p>
+          live ? (
+            /* the ledger's geometry, reserved from second zero — ghost rules
+               the pipeline will ink into, not a void with a caption */
+            <ol aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="grid grid-cols-[2.9rem_1fr] sm:grid-cols-[3.6rem_1fr]">
+                  <span className="select-none pr-2 pt-2 text-right text-[10px] leading-tight text-faint/50 tabular">
+                    --:--:--
+                  </span>
+                  <span className="relative border-l border-border/60 pb-3 pl-4 pt-2">
+                    <span className="absolute -left-[4.5px] top-[11px] size-[9px] rounded-full border border-border bg-surface" />
+                    <span className="mt-1.5 block h-px w-2/3 bg-border/60" style={{ width: `${66 - i * 14}%` }} />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="px-1 py-8 font-mono text-[12px] text-faint">
+              No decisions were logged for this run.
+            </p>
+          )
         ) : (
+          /* NOTE: no pending "orchestrating…" row — the status voice lives in
+             the RunActivity band alone, and the count above stays honest */
           <ol className="divide-y divide-border/40">
             {entries.map((entry, i) => (
               <LogEntry key={entry.id} entry={entry} live={live} animate={i >= mountCount} />
             ))}
-            {live && (
-              <li className="grid grid-cols-[2.9rem_1fr] sm:grid-cols-[3.6rem_1fr]">
-                <span aria-hidden />
-                <p className="border-l border-border/60 py-2 pl-4 font-mono text-[12px] text-faint">
-                  orchestrating<span className="caret" />
-                </p>
-              </li>
-            )}
           </ol>
         )}
       </div>

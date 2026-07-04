@@ -320,6 +320,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             live={live.live}
             isTerminal={isTerminal}
             resetKey={run.id}
+            runId={run.id}
           />
 
           {/* report — the hero */}

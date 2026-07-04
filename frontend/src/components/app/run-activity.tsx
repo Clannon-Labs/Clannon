@@ -117,6 +117,7 @@ export function RunActivity({
   live,
   isTerminal,
   resetKey,
+  runId,
   className,
 }: {
   log: DecisionLogEntry[];
@@ -126,13 +127,19 @@ export function RunActivity({
   live: boolean;
   isTerminal: boolean;
   resetKey: string;
+  /** Threaded into the ledger masthead's machine register. */
+  runId?: string;
   className?: string;
 }) {
-  const [showProcess, setShowProcess] = useState(false);
+  // null = the user hasn't chosen; the energy curve decides (open while the
+  // machine works, yield to the artifact after the settle beat)
+  const [choice, setChoice] = useState<boolean | null>(null);
   const [decidedFor, setDecidedFor] = useState<string | null>(null);
+  const [settledAway, setSettledAway] = useState(false);
   if (resetKey !== decidedFor) {
     setDecidedFor(resetKey);
-    setShowProcess(false);
+    setChoice(null);
+    setSettledAway(false);
   }
 
   const elapsed = useElapsed(log[0]?.ts, live);
@@ -145,20 +152,40 @@ export function RunActivity({
         : null
     : null;
 
+  // watched runs: let the spine-ignite play, then the ledger yields to the
+  // report — unless the user has explicitly pinned it open
+  useEffect(() => {
+    if (!settled || settled === "blocked") return;
+    const t = window.setTimeout(() => setSettledAway(true), 2200);
+    return () => window.clearTimeout(t);
+  }, [settled]);
+
+  // open while live (the glass box IS the product); terminal runs collapse —
+  // after the settle beat when watched, immediately when opened cold
+  const showProcess = choice ?? (!isTerminal ? true : settled ? !settledAway : false);
+
   return (
     <div className={className}>
       <div className="mt-4">
-        {!isTerminal && !showProcess ? (
+        {!isTerminal ? (
+          /* live: ONE voice — verb + caret + clock — whether the box is open
+             or shut; the button only decides how much of the work shows */
           <>
-            {/* the one status voice: verb + caret + clock, expandable */}
             <button
               type="button"
-              onClick={() => setShowProcess(true)}
-              aria-expanded={false}
-              aria-label="Show the agent's work"
+              onClick={() => setChoice(!showProcess)}
+              aria-expanded={showProcess}
+              aria-label={showProcess ? "Hide the agent's work" : "Show the agent's work"}
               className="group inline-flex min-h-9 cursor-pointer items-center gap-2.5 text-[13px] transition-colors"
             >
-              <Mark className="size-4 shrink-0 animate-pulse-dot text-primary" aria-hidden />
+              {showProcess ? (
+                <ChevronRight
+                  className="size-3.5 shrink-0 rotate-90 text-faint transition-transform duration-200"
+                  aria-hidden
+                />
+              ) : (
+                <Mark className="size-4 shrink-0 animate-pulse-dot text-primary" aria-hidden />
+              )}
               <span className="font-medium text-foreground">
                 {liveVerb(log, status)}
                 {/* the caret ::after adds width — mr-1 keeps it off the interpunct */}
@@ -167,20 +194,24 @@ export function RunActivity({
               {elapsed && (
                 <span className="font-mono text-[11px] text-faint tabular">{elapsed}</span>
               )}
-              <span className="text-faint transition-colors group-hover:text-muted-foreground">
-                · Show work
-              </span>
-              <ChevronRight
-                className="size-3.5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5"
-                aria-hidden
-              />
+              {!showProcess && (
+                <>
+                  <span className="text-faint transition-colors group-hover:text-muted-foreground">
+                    · Show work
+                  </span>
+                  <ChevronRight
+                    className="size-3.5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5"
+                    aria-hidden
+                  />
+                </>
+              )}
             </button>
-            <ExpertPresence experts={experts} live={live} />
+            {!showProcess && <ExpertPresence experts={experts} live={live} />}
           </>
         ) : (
           <button
             type="button"
-            onClick={() => setShowProcess((s) => !s)}
+            onClick={() => setChoice(!showProcess)}
             aria-expanded={showProcess}
             className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -193,9 +224,6 @@ export function RunActivity({
             />
             <ListTree className="size-3.5 shrink-0" aria-hidden />
             {showProcess ? "Hide work" : "Show work"}
-            {!isTerminal && elapsed && (
-              <span className="font-mono text-[11px] font-normal text-faint tabular">{elapsed}</span>
-            )}
           </button>
         )}
       </div>
@@ -203,7 +231,7 @@ export function RunActivity({
       {showProcess && (
         <div className="mt-3 flex flex-col gap-4">
           {/* hugs its content — grows with entries, scrolls past 60vh */}
-          <DecisionLog entries={log} live={live} settled={settled} className="max-h-[60vh]" />
+          <DecisionLog entries={log} live={live} settled={settled} runId={runId} className="max-h-[60vh]" />
           <div className="grid gap-4 sm:grid-cols-2">
             <ExpertPanel experts={experts} />
             <SourcesPanel sources={sources} />

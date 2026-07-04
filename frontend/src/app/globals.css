@@ -173,15 +173,15 @@
   }
 }
 
+/* breathe with opacity ONLY — a scale pulse means any still frame shows two
+   dot sizes on one spine, breaking "same element, same size" (§1.2) */
 @keyframes pulse-dot {
   0%,
   100% {
     opacity: 1;
-    transform: scale(1);
   }
   50% {
-    opacity: 0.45;
-    transform: scale(0.82);
+    opacity: 0.4;
   }
 }
 
