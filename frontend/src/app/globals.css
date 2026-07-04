@@ -62,6 +62,38 @@
   --animate-sheet-in: sheet-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-sheet-out: sheet-out 0.16s ease-in both;
   --animate-toast-out: toast-out 0.18s ease-in both;
+  /* the ledger's heartbeat — a tick swells once as its entry lands */
+  --animate-tick-pulse: tick-pulse 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* terminal settle — the spine rule draws top-to-bottom once, then cools */
+  --animate-spine-ignite: spine-ignite 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tick-pulse {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* drawn with transform so it stays compositor-only; origin top */
+@keyframes spine-ignite {
+  from {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 0;
+  }
 }
 
 @keyframes sheet-in {

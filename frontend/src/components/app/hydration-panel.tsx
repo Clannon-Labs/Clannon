@@ -137,7 +137,11 @@ function HydrationItem({
     >
       {/* pin the tick+label to the title's first line, not the block's center */}
       <span className="flex items-center gap-2 self-start pt-[3px]">
-        <span className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier])} aria-hidden />
+        <span
+          className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier], !reduce && "animate-tick-pulse")}
+          style={reduce ? undefined : { animationDelay: `${stageDelay + 0.1}s` }}
+          aria-hidden
+        />
         <span className="tag-label w-[4.5rem] text-faint">
           {TIER_LABELS[entry.tier]}
         </span>
@@ -262,6 +266,23 @@ export function HydrationPanel({
 
   const activeTier = (listening ? previewHits[0]?.tier : surfaced[0]?.tier) ?? null;
   const matched = listening ? previewHits.length > 0 : surfaced.length > 0;
+
+  // ring↔list connection: as each recap row lands, its tier's ring brightens
+  // for a beat — the dial and the list are one instrument. Timed to the same
+  // stagger the rows print with; skipped entirely under reduced motion.
+  const [flashTier, setFlashTier] = useState<MemoryTier | null>(null);
+  const surfacedKey = surfaced.map((e) => e.id).join("|");
+  useEffect(() => {
+    if (reduce || listening || surfaced.length === 0) return;
+    const timers: number[] = [];
+    surfaced.forEach((entry, i) => {
+      const at = (0.12 + i * 0.14) * 1000 + 100;
+      timers.push(window.setTimeout(() => setFlashTier(entry.tier), at));
+      timers.push(window.setTimeout(() => setFlashTier(null), at + 450));
+    });
+    return () => timers.forEach((t) => window.clearTimeout(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by ids, not array identity
+  }, [surfacedKey, listening, reduce]);
   // sparse: little to nothing remembered yet (early in a relationship).
   const sparse = !listening && surfaced.length === 0;
 
@@ -371,7 +392,7 @@ export function HydrationPanel({
 
             {/* the rings — the active tier burns amber */}
             <div className="hidden w-28 shrink-0 self-start sm:block lg:w-36">
-              <MemoryRings active={activeTier} drawOnView />
+              <MemoryRings active={activeTier} flash={flashTier} drawOnView />
               <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-faint">
                 {sparse ? "4 tiers · empty" : activeTier ? `${TIER_LABELS[activeTier]} forward` : "4 tiers"}
               </p>

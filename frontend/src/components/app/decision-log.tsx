@@ -91,6 +91,8 @@ function LogEntry({
             major ? "-left-[5.5px] top-[10px] size-[11px]" : "-left-[4.5px] top-[11px] size-[9px]",
             meta.dot,
             live && !major && "animate-pulse-dot",
+            // the heartbeat — a landing entry's tick swells once
+            animate && "animate-tick-pulse",
           )}
           aria-hidden
         />
@@ -139,10 +141,14 @@ function LogEntry({
 export function DecisionLog({
   entries,
   live,
+  settled,
   className,
 }: {
   entries: DecisionLogEntry[];
   live: boolean;
+  /** Terminal outcome, for the settle moment: the spine draws once in moss
+   *  when a run delivers, in the destructive ink when it's blocked. */
+  settled?: "delivered" | "blocked" | null;
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -179,17 +185,8 @@ export function DecisionLog({
           <h2 className="display-soft text-[15px] leading-none text-foreground">
             Decision log
           </h2>
-          <span className="flex items-center gap-1.5 text-[10px] text-faint">
-            <span
-              className={cn(
-                "size-1.5 rounded-full transition-colors duration-500",
-                live ? "animate-pulse-dot bg-primary" : "bg-faint",
-              )}
-              aria-hidden
-            />
-            <span className="tabular tracking-wide">
-              {live ? "LIVE" : "DONE"} · {entries.length}
-            </span>
+          <span className="text-[10px] text-faint">
+            <span className="tabular tracking-wide">{entries.length} entries</span>
           </span>
         </div>
         <div className="mt-2.5 rule-strong" />
@@ -203,10 +200,21 @@ export function DecisionLog({
           pinned.current = nearBottom;
           setAtBottom(nearBottom);
         }}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-2"
+        className="relative min-h-24 flex-1 overflow-y-auto px-4 py-2"
         aria-live="polite"
         aria-atomic="false"
       >
+        {/* terminal settle — the spine ignites top-to-bottom once, then cools */}
+        {settled && entries.length > 0 && (
+          <span
+            key={settled}
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute bottom-2 left-[3.9rem] top-2 w-px origin-top animate-spine-ignite sm:left-[4.6rem]",
+              settled === "delivered" ? "bg-primary" : "bg-destructive",
+            )}
+          />
+        )}
         {entries.length === 0 ? (
           <p className="px-1 py-8 font-mono text-[12px] text-faint">
             Waiting for the pipeline to accept the brief

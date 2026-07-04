@@ -21,10 +21,14 @@ const RINGS: { tier: MemoryTier; r: number }[] = [
  */
 export function MemoryRings({
   active,
+  flash,
   className,
   drawOnView = true,
 }: {
   active?: MemoryTier | null;
+  /** Momentary emphasis — the hydration panel flashes each tier's ring as its
+   *  memory row lands, so the dial and the list read as one instrument. */
+  flash?: MemoryTier | null;
   className?: string;
   drawOnView?: boolean;
 }) {
@@ -33,6 +37,7 @@ export function MemoryRings({
     <svg viewBox="0 0 200 200" className={cn("size-full", className)} aria-hidden>
       {RINGS.map(({ tier, r }, i) => {
         const isActive = active === tier;
+        const isFlash = flash === tier;
         return (
           <motion.circle
             key={tier}
@@ -40,10 +45,10 @@ export function MemoryRings({
             cy="100"
             r={r}
             fill="none"
-            strokeWidth={isActive ? 3.5 : 1.25}
+            strokeWidth={isActive ? 3.5 : isFlash ? 2.5 : 1.25}
             className={cn(
-              "transition-[stroke-width,opacity] duration-500",
-              isActive ? "text-memory opacity-100" : "text-border-strong opacity-70",
+              "transition-[stroke-width,opacity,color] duration-300",
+              isActive || isFlash ? "text-memory opacity-100" : "text-border-strong opacity-70",
             )}
             stroke="currentColor"
             initial={reduce || !drawOnView ? false : { pathLength: 0, opacity: 0 }}

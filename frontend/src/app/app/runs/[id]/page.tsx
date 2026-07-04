@@ -299,7 +299,9 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           {/* report — the hero */}
           {showReport && (
             <section aria-label="Report" className="mt-6">
-              <Reveal className="rounded-lg border border-border bg-surface">
+              {/* the payoff frame — the artifact sits raised off the desk:
+                  stronger border, raised surface, a hairline top light in dark */}
+              <Reveal className="rounded-lg border border-border-strong bg-surface-raised shadow-md dark:shadow-lg dark:[box-shadow:inset_0_1px_0_0_var(--border),0_10px_30px_-12px_rgb(0_0_0/0.5)]">
                 <header className="relative flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                   <h2 className="tag-label text-muted-foreground">
                     {live.reportDone ? "Report — passed output filter" : "Report — streaming"}
@@ -323,7 +325,15 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       className="flex items-center gap-1"
                     >
                       <span className="tag-label mr-1 flex items-center gap-1.5 text-primary sm:mr-2">
-                        <Check className="size-3.5" aria-hidden />
+                        {/* the seal — lands with a brief press, then rests */}
+                        <motion.span
+                          initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                          className="inline-flex"
+                        >
+                          <Check className="size-3.5" aria-hidden />
+                        </motion.span>
                         <span className="sr-only sm:not-sr-only">Verified</span>
                       </span>
                       <InfoTip

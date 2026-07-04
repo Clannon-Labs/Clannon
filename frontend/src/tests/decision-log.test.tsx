@@ -76,23 +76,21 @@ describe("DecisionLog", () => {
     expect(screen.getByText("WARN")).toBeInTheDocument();
   });
 
-  it("shows the LIVE indicator when live=true", () => {
-    render(<DecisionLog entries={[makeEntry()]} live={true} />);
-    expect(screen.getByText(/LIVE/)).toBeInTheDocument();
-  });
-
-  it("shows the DONE indicator when live=false", () => {
-    render(<DecisionLog entries={[makeEntry()]} live={false} />);
-    expect(screen.getByText(/DONE/)).toBeInTheDocument();
-  });
-
-  it("shows the entry count in the header alongside the live/done badge", () => {
+  // Pass 2: the LIVE/DONE badge left the masthead — RunActivity's status band
+  // is the one status voice. The ledger header carries only the entry count.
+  it("shows the entry count in the header", () => {
     const entries = [
       makeEntry({ id: "log_1", kind: "route" }),
       makeEntry({ id: "log_2", kind: "expert_spawn" }),
     ];
     render(<DecisionLog entries={entries} live={false} />);
-    expect(screen.getByText(/·\s*2/)).toBeInTheDocument();
+    expect(screen.getByText(/2 entries/)).toBeInTheDocument();
+  });
+
+  it("does not render its own LIVE/DONE badge (the status band owns status)", () => {
+    render(<DecisionLog entries={[makeEntry()]} live={true} />);
+    expect(screen.queryByText(/LIVE/)).toBeNull();
+    expect(screen.queryByText(/DONE/)).toBeNull();
   });
 
   it("shows entry detail text when present", () => {
