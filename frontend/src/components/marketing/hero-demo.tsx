@@ -81,8 +81,16 @@ export function HeroDemo() {
           <span className="tag-label hidden text-faint sm:block">run_4c2a · 3 experts</span>
         </div>
 
-        {/* log body */}
+        {/* log body — unfilled lines render as ghost rules (ledger paper
+            waiting to be written) so the card is never half empty */}
         <div className="flex h-[280px] flex-col justify-end gap-0.5 overflow-hidden px-4 py-3 font-mono text-[13px] leading-relaxed sm:h-[300px]">
+          {Array.from({ length: Math.max(0, 8 - entries.length) }).map((_, i) => (
+            <div key={`ghost-${i}`} aria-hidden className="flex items-center gap-2.5 py-[3px]">
+              <span className="hidden shrink-0 text-[13px] text-faint/50 sm:inline">--:--.-</span>
+              <span className="inline-block size-1.5 shrink-0 rounded-full border border-border" />
+              <span className="h-px flex-1 bg-border/60" />
+            </div>
+          ))}
           {entries.map((entry, i) => {
             const style = KIND_STYLE[entry.kind];
             return (
@@ -100,7 +108,8 @@ export function HeroDemo() {
                     {style.label}
                   </span>
                 </span>
-                <span className="truncate text-foreground">
+                {/* §11.3: overflow fades out — never "1.9k…" mid-figure */}
+                <span className="truncate-fade text-foreground">
                   {entry.text}
                   {entry.detail && (
                     <span className="ml-2 hidden text-faint md:inline">· {entry.detail}</span>

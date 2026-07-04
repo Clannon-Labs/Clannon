@@ -325,12 +325,17 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           {/* report — the hero */}
           {showReport && (
             <section ref={reportRef} aria-label="Report" className="mt-6 scroll-mt-4">
-              {/* the payoff frame — the artifact sits raised off the desk:
-                  stronger border, raised surface, a hairline top light in dark */}
-              <Reveal className="rounded-lg border border-border-strong bg-surface-raised shadow-md dark:shadow-lg dark:[box-shadow:inset_0_1px_0_0_var(--border),0_10px_30px_-12px_rgb(0_0_0/0.5)]">
+              {/* the payoff frame — the lit sheet on the dark desk: the report
+                  gets its OWN surface (warm paper-cast in dark), edge-light,
+                  and a real shadow. The climax is a material event. */}
+              <Reveal className="rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_16px_40px_-16px_rgb(0_0_0/0.65)]">
                 <header className="relative flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
+                  {/* a tag-label never wraps — below sm the gate suffix goes, not the line */}
                   <h2 className="tag-label text-muted-foreground">
-                    {live.reportDone ? "Report — passed output filter" : "Report — streaming"}
+                    Report
+                    <span className="hidden sm:inline">
+                      {live.reportDone ? " — passed output filter" : " — streaming"}
+                    </span>
                   </h2>
                   {/* the filter passing is the payoff — a moss rule strikes
                       across the masthead as the verified mark rises in */}
@@ -456,7 +461,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       {/* docked composer — ALWAYS visible, like every chat app. While the run is
           in flight the send button becomes Stop and you can type your next
           message; on mobile the bottom nav steps aside (see Sidebar). */}
-      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
         <RunComposer
           runId={run.id}
           busy={!isTerminal}

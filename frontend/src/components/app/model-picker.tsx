@@ -17,8 +17,9 @@ const BRAND_CASING: Record<string, string> = {
 };
 
 /** A friendlier display name for a model id — "gemini-2.5-flash" → "Gemini 2.5
- *  Flash", "claude-opus-4-8" → "Claude Opus 4.8", "gpt-5.5" → "GPT 5.5".
- *  Display only; the raw id is always what gets sent. */
+ *  Flash", "claude-opus-4-8" → "Claude Opus 4.8", "gpt-5.5" → "GPT-5.5" (OpenAI
+ *  hyphenates its brand; the others don't). Display only; the raw id is always
+ *  what gets sent. */
 export function prettyModel(id: string): string {
   return id
     .split("-")
@@ -27,7 +28,8 @@ export function prettyModel(id: string): string {
       BRAND_CASING[p] ?? (/^\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)),
     )
     .join(" ")
-    .replace(/(\b\d) (\d\b)/g, "$1.$2"); // "4 8" → "4.8"
+    .replace(/(\b\d) (\d\b)/g, "$1.$2") // "4 8" → "4.8"
+    .replace(/^GPT (?=\d)/, "GPT-"); // brand hyphen: "GPT 5.5" → "GPT-5.5"
 }
 
 /** Provider grouping for model lists — a flat wall of 16 ids reads like an
@@ -407,9 +409,10 @@ export function SessionModelPicker({
     });
   }
 
-  // cap the scrolling list so the whole menu fits in the gap (room minus the
-  // header/back-row above the list)
-  const listMaxH = anchor ? Math.max(120, anchor.maxH - 104) : 280;
+  // cap the scrolling list so the whole menu fits in the gap — room minus the
+  // chrome around it. The main view carries more chrome (header + customize
+  // row + two-line caption); under-reserving guillotines the caption (§11.4).
+  const listMaxH = anchor ? Math.max(120, anchor.maxH - (view === "main" ? 150 : 104)) : 280;
 
   return (
     <>

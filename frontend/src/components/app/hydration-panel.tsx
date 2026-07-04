@@ -149,7 +149,11 @@ function HydrationItem({
 
       <div className="min-w-0">
         <p className="text-[13px] font-medium leading-snug text-foreground">{entry.title}</p>
-        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">{entry.content}</p>
+        {/* §11.3: the clamp fades its last line out — a "…" would collide
+            with whatever sentence period it happens to land on ("(CMO)….") */}
+        <p className="clamp-fade-2 mt-0.5 text-[12px] leading-snug text-muted-foreground">
+          {entry.content}
+        </p>
 
         {/* the two affordances the spec asks for: provenance on demand, and a
             one-tap correction. Inferred memory can be "outdated"; wiki is yours

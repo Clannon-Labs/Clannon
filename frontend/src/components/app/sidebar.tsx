@@ -240,13 +240,15 @@ function RailBody({
                     aria-current={active ? "page" : undefined}
                     title={session.title}
                     className={cn(
-                      "block truncate rounded-md py-1.5 pl-3 pr-9 text-[13px] transition-colors",
+                      "block rounded-md py-1.5 pl-3 pr-9 text-[13px] transition-colors",
                       active
                         ? "bg-primary-soft font-medium text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
-                    {session.title}
+                    {/* §11.3: fade out, never a mid-word "…" — the fade must sit on
+                        the text's own box (inside pr-9), not the padded link edge */}
+                    <span className="truncate-fade block">{session.title}</span>
                   </Link>
                   {/* the "⋯" actions menu — revealed on hover (PC); always
                       tappable at the right edge on mobile (the drawer is below md) */}

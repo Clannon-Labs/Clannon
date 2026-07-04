@@ -198,7 +198,7 @@ export function CommandPalette() {
         </kbd>
       </div>
 
-      <ul ref={listRef} id="cmd-listbox" className="max-h-[40dvh] overflow-y-auto p-2 pb-3" role="listbox">
+      <ul ref={listRef} id="cmd-listbox" className="scroll-fade-bottom max-h-[40dvh] overflow-y-auto p-2 pb-4" role="listbox">
         {filtered.length === 0 && (
           <li className="px-3 py-6 text-center text-sm text-faint">
             Nothing matches “{query}”.

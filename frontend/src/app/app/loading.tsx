@@ -16,7 +16,7 @@ export default function WorkspaceLoading() {
         </div>
         <Skeleton className="mt-12 h-24 rounded-lg" />
       </div>
-      <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
         <Skeleton className="h-[68px] w-full rounded-xl" />
       </div>
     </div>

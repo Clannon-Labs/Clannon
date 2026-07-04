@@ -144,7 +144,7 @@ export default function WorkspacePage() {
       </div>
 
       {/* docked composer — same control set as the run reply, same place too */}
-      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
         <Composer
           value={brief}
           onChange={setBrief}

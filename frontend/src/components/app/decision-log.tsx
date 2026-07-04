@@ -200,7 +200,7 @@ export function DecisionLog({
           pinned.current = nearBottom;
           setAtBottom(nearBottom);
         }}
-        className="relative min-h-24 flex-1 overflow-y-auto px-4 py-2"
+        className="scroll-fade-y relative min-h-24 flex-1 overflow-y-auto px-4 py-2"
         aria-live="polite"
         aria-atomic="false"
       >

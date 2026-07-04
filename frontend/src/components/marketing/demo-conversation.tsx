@@ -258,12 +258,19 @@ export function DemoConversation() {
                 resetKey={String(runKey)}
               />
 
-              {/* the report — buffered, arrives after the filter passes */}
+              {/* the report — buffered, arrives after the filter passes; the
+                  same lit-sheet payoff frame as the run page so they can't drift */}
               {s.reportText && (
-                <section aria-label="Report" className="mt-6 rounded-lg border border-border bg-surface">
+                <section
+                  aria-label="Report"
+                  className="mt-6 rounded-lg border border-border-strong bg-sheet shadow-md dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_16px_40px_-16px_rgb(0_0_0/0.65)]"
+                >
                   <header className="flex items-center justify-between border-b border-border px-5 py-3.5 sm:px-8">
                     <h2 className="tag-label text-muted-foreground">
-                      {s.reportDone ? "Report — passed output filter" : "Report — streaming"}
+                      Report
+                      <span className="hidden sm:inline">
+                        {s.reportDone ? " — passed output filter" : " — streaming"}
+                      </span>
                     </h2>
                     {s.reportDone && <span className="tag-label text-primary">Verified</span>}
                   </header>
@@ -312,7 +319,9 @@ export function DemoConversation() {
       {/* the composer — preset only. Looks like the workspace, but you select
           a starter instead of typing (a free demo of the real pipeline would be
           a great way to go bankrupt). */}
-      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      {/* opaque, not glass: content must FADE at the scrim, never ghost
+          half-legible through a blur behind the chips (§11.4) */}
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
         {watched >= NUDGE_AFTER && (
           <div className="mb-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/25 bg-primary-soft/40 px-3 py-2 text-center text-[12px] text-muted-foreground">
             <span>You&apos;ve watched {watched} runs — the real one would remember every one.</span>

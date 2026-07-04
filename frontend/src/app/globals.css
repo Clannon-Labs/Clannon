@@ -307,16 +307,67 @@ body {
   display: none;
 }
 
+/* THE TRUNCATION CONTRACT (§11.3), as one utility. Single-line machine-
+   register rows never cut mid-word with a raw "…" — they fade out at the
+   clipped edge instead, which is width-responsive and can't produce
+   "1.9k…" / "(CMO)…." artifacts. Pair with min-w-0 like `truncate`. */
+.truncate-fade {
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, black calc(100% - 1.75rem), transparent);
+}
+
+/* two-line preview clamp that FADES its last line out instead of printing
+   "…" — which collides with sentence periods ("(CMO)….", §11.3). The second
+   mask layer fades only the final line-box's tail. */
+.clamp-fade-2 {
+  display: block;
+  overflow: hidden;
+  max-height: calc(2 * 1lh);
+  mask-image:
+    linear-gradient(black, black),
+    linear-gradient(to right, black calc(100% - 3.5rem), transparent);
+  mask-size:
+    100% calc(100% - 1lh),
+    100% 1lh;
+  mask-position: top, bottom;
+  mask-repeat: no-repeat;
+}
+
+/* THE Z-AXIS CONTRACT (§11.4), as one primitive. A scroll viewport whose
+   content meets a clipped edge fades at that edge instead of guillotining
+   a row. -y masks both ends of a vertical scrollport; -bottom only the
+   end (for viewports whose top edge is a real border/masthead). */
+.scroll-fade-y {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 1.25rem,
+    black calc(100% - 1.25rem),
+    transparent 100%
+  );
+}
+.scroll-fade-bottom {
+  mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent 100%);
+}
+
 /* the z-axis contract (DESIGN_SYSTEM §11): content meeting the docked
    composer fades out above the bar instead of shearing mid-line */
 .composer-scrim::before {
   content: "";
   position: absolute;
   inset-inline: 0;
-  top: -2rem;
-  height: 2rem;
+  top: -3rem;
+  height: 3rem;
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--background));
+  /* reach ~90% opacity by the two-thirds mark: a line under the scrim reads
+     as "gone", never as ghosted half-glyphs (§11.4) */
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--background) 90%, transparent) 66%,
+    var(--background)
+  );
 }
 
 /* the instrument-panel cue: raised dark surfaces catch light on their top
