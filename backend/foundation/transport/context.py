@@ -277,7 +277,12 @@ class VrakshaContext:
 
     memory_writes_requested: list[Any] = field(default_factory=list)
                                               # foundation.MemoryWriteProposal
-                                              # items the orchestrator flagged for memory
+                                              # items the orchestrator flagged for memory (PROPOSED)
+    memory_writes_persisted: list[Any] = field(default_factory=list)
+                                              # foundation.MemoryWriteProposal — the subset the
+                                              # Memory Manager ACTUALLY wrote (set post-filter by
+                                              # persist_turn_memory). The /memory view surfaces
+                                              # THIS, never the proposals, so no phantom writes show.
 
     # ------------------------------------------------------------------
     # OUTPUT FILTER

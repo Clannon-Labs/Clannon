@@ -337,13 +337,15 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 # /memory view is populated ONLY here. A blocked or failed draft wrote
                 # nothing to memory, and its proposals (e.g. an in-flight `remember`) must
                 # not appear in the view — run.memory_writes stays its empty default.
+                # Surface the PERSISTED set (what the Manager actually wrote), never the
+                # proposals: a proposal the write policy dropped is not a real memory.
                 run.memory_writes = [
                     {
                         "content": getattr(w, "content", str(w)),
                         "rationale": getattr(w, "rationale", ""),
                         "ts": _now(),
                     }
-                    for w in ctx.memory_writes_requested
+                    for w in ctx.memory_writes_persisted
                 ]
                 # surface the delivered output artifacts (experts captured them to
                 # durable storage; here we just collect their refs for the API).

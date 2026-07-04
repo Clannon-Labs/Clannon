@@ -237,9 +237,20 @@ class MemoryManager:
 
     async def record_write_proposals(
         self, user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
-    ) -> None:
+    ) -> list[MemoryWriteProposal]:
+        """Persist the proposals that clear the write policy; return the subset that
+        was ACTUALLY written.
+
+        A proposal is DROPPED (absent from the return) when it is WORKING tier, is
+        semantic/procedural below `_MIN_ACCEPT_CONFIDENCE`, has empty content, or
+        the store/embeddings are down. Callers surface ONLY the returned set, so the
+        `/memory` view can never show a memory that was proposed but not persisted
+        (delivered-path honesty — no phantom writes). Each write is bounded by
+        `MEMORY_WRITE_TIMEOUT_S`: a stalled store degrades (drops the rest) instead
+        of hanging the delivered path — symmetric with the read path's deadline."""
+        persisted: list[MemoryWriteProposal] = []
         if not proposals or not user_id:
-            return
+            return persisted
         for proposal in proposals:
             tier = proposal.store
             if tier == MemoryStore.WORKING:
@@ -252,32 +263,54 @@ class MemoryManager:
             content = proposal.content.strip()[:_MAX_CONTENT_CHARS]
             if not content:
                 continue
+            try:
+                wrote = await asyncio.wait_for(
+                    self._persist_one(tier, user_id, session_id, content, proposal),
+                    timeout=constants.MEMORY_WRITE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                log.warning(
+                    "memory write timed out after %ss (store stalled) — dropping remaining writes",
+                    constants.MEMORY_WRITE_TIMEOUT_S,
+                )
+                break  # a stalled store fails every write; bail like the embeddings-down path
+            if not wrote:
+                break  # embeddings down — every remaining embed would fail too
+            persisted.append(proposal)
+        return persisted
 
-            vectors = await embeddings.embed([content])
-            if not vectors:
-                return  # embeddings down — drop quietly, breaker logs it
-
-            # dedup: refresh a near-identical memory instead of inserting
-            existing = await asyncio.to_thread(store.search, tier, user_id, vectors[0], 1)
-            point_id = None
-            confidence = proposal.confidence
-            if existing and existing[0]["score"] >= _DEDUP_SIMILARITY:
-                point_id = existing[0]["id"]
-                confidence = max(confidence, float(existing[0].get("confidence", 0)))
-
-            await asyncio.to_thread(
-                store.upsert,
-                tier,
-                user_id=user_id,
-                session_id=session_id,
-                trace_id="",  # trace plumbed when proposals carry it
-                vector=vectors[0],
-                content=content,
-                rationale=proposal.rationale,
-                confidence=confidence,
-                trust=_TIER_TRUST[tier],
-                point_id=point_id,
-            )
+    async def _persist_one(
+        self, tier: MemoryStore, user_id: str, session_id: str,
+        content: str, proposal: MemoryWriteProposal,
+    ) -> bool:
+        """Embed + dedup-aware upsert one already-policy-cleared proposal. Returns
+        False when embeddings are down (the caller stops); a store stall surfaces as
+        a TimeoutError to the caller's `wait_for`. The single place a proposal is
+        actually written to the store."""
+        vectors = await embeddings.embed([content])
+        if not vectors:
+            return False  # embeddings down — drop quietly, breaker logs it
+        # dedup: refresh a near-identical memory instead of inserting
+        existing = await asyncio.to_thread(store.search, tier, user_id, vectors[0], 1)
+        point_id = None
+        confidence = proposal.confidence
+        if existing and existing[0]["score"] >= _DEDUP_SIMILARITY:
+            point_id = existing[0]["id"]
+            confidence = max(confidence, float(existing[0].get("confidence", 0)))
+        await asyncio.to_thread(
+            store.upsert,
+            tier,
+            user_id=user_id,
+            session_id=session_id,
+            trace_id="",  # trace plumbed when proposals carry it
+            vector=vectors[0],
+            content=content,
+            rationale=proposal.rationale,
+            confidence=confidence,
+            trust=_TIER_TRUST[tier],
+            point_id=point_id,
+        )
+        return True
 
     async def learn(
         self, user_id: str, session_id: str, *, task: str, answer: str, findings: list[str]

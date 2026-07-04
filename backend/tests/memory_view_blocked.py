@@ -19,8 +19,12 @@ from api.run_state import RunState
 import api.run_driver as rd
 
 
-def _fake_flow(*, blocked=False, failed=False, proposals=()):
-    """A finished Flow as run_driver sees it: only the fields execute() reads."""
+def _fake_flow(*, blocked=False, failed=False, proposed=(), persisted=()):
+    """A finished Flow as run_driver sees it: only the fields execute() reads.
+
+    `proposed` = what the orchestrator flagged (ctx.memory_writes_requested);
+    `persisted` = what the Manager actually wrote (ctx.memory_writes_persisted).
+    The /memory view surfaces ONLY the persisted set — the split is the point."""
     ctx = SimpleNamespace(
         blocked=blocked,
         sanitization_blocked=False,
@@ -30,7 +34,8 @@ def _fake_flow(*, blocked=False, failed=False, proposals=()):
         failure_error=None,
         orchestrator_response=SimpleNamespace(text="the draft answer", message=""),
         final_response="the draft answer",
-        memory_writes_requested=list(proposals),
+        memory_writes_requested=list(proposed),
+        memory_writes_persisted=list(persisted),
         expert_findings=[],
         expert_calls=[],
     )
@@ -57,7 +62,8 @@ def test_blocked_turn_surfaces_zero_phantom_memories(monkeypatch):
     phantom = MemoryWriteProposal(
         store=MemoryStore.SEMANTIC, content="a fact the user never actually got", confidence=0.95,
     )
-    run = _drive(monkeypatch, _fake_flow(blocked=True, proposals=[phantom]))
+    # proposed but never persisted (the turn blocked before persist_turn_memory ran)
+    run = _drive(monkeypatch, _fake_flow(blocked=True, proposed=[phantom]))
 
     assert run.status == "blocked"
     assert run.block_stage == "filter"
@@ -68,7 +74,7 @@ def test_failed_turn_surfaces_zero_memories(monkeypatch):
     leftover = MemoryWriteProposal(
         store=MemoryStore.SEMANTIC, content="unpersisted on a failed turn", confidence=0.95,
     )
-    run = _drive(monkeypatch, _fake_flow(failed=True, proposals=[leftover]))
+    run = _drive(monkeypatch, _fake_flow(failed=True, proposed=[leftover]))
 
     assert run.status == "failed"
     assert run.memory_writes == []
@@ -79,7 +85,22 @@ def test_delivered_turn_still_surfaces_its_memory_writes(monkeypatch):
     written = MemoryWriteProposal(
         store=MemoryStore.EPISODIC, content="a real delivered memory", confidence=0.8,
     )
-    run = _drive(monkeypatch, _fake_flow(blocked=False, proposals=[written]))
+    run = _drive(monkeypatch, _fake_flow(proposed=[written], persisted=[written]))
 
     assert run.status == "delivered"
     assert [w["content"] for w in run.memory_writes] == ["a real delivered memory"]
+
+
+def test_delivered_turn_surfaces_only_what_persisted_not_the_proposals(monkeypatch):
+    # honesty: on a delivered turn the Manager may drop a proposal (low confidence /
+    # dedup / store down). Only the PERSISTED subset surfaces — never the dropped one.
+    written = MemoryWriteProposal(
+        store=MemoryStore.EPISODIC, content="the memory that landed", confidence=0.9,
+    )
+    dropped = MemoryWriteProposal(
+        store=MemoryStore.SEMANTIC, content="proposed but rejected by the write policy", confidence=0.1,
+    )
+    run = _drive(monkeypatch, _fake_flow(proposed=[written, dropped], persisted=[written]))
+
+    assert run.status == "delivered"
+    assert [w["content"] for w in run.memory_writes] == ["the memory that landed"]

@@ -30,6 +30,7 @@ def _fake_flow(text="word " * 40):
         orchestrator_response=SimpleNamespace(text=text, message=""),
         final_response=text,
         memory_writes_requested=[],
+        memory_writes_persisted=[],   # what the Manager actually wrote (surfaced on delivery)
         expert_findings=[],
         expert_calls=[],
     )

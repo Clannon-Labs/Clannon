@@ -101,5 +101,5 @@ def test_record_write_proposals_is_a_noop_without_user_id(monkeypatch):
 
     out = asyncio.run(mgr.record_write_proposals("", "sess", proposals))
 
-    assert out is None              # no-op, returns nothing
+    assert out == []                # no-op: nothing persisted (empty persisted set)
     assert breaches == []           # no embedding, no store write

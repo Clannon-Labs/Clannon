@@ -184,7 +184,7 @@ FILTER_MAX_REVISIONS        = 2      # THE single output-filter recovery budget 
 # ---------------------------------------------------------------------------
 
 MEMORY_READ_TIMEOUT_S       = 5.0
-MEMORY_WRITE_TIMEOUT_S      = 10.0
+MEMORY_WRITE_TIMEOUT_S      = 10.0   # hard deadline per proposal write (record_write_proposals); mirrors the read deadline
 MEMORY_SEARCH_TOP_K         = 10     # candidates fetched per inferred tier at hydration
 MEMORY_RELEVANCE_FLOOR      = 0.30   # drop hits below this raw cosine before ranking;
                                      # conservative for nomic-768 (related text >~0.4),

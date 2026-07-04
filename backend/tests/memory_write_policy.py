@@ -401,6 +401,63 @@ def test_upsert_carries_correct_tier_and_trust(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# (i) Return contract — record_write_proposals returns ONLY what it persisted
+# ---------------------------------------------------------------------------
+
+async def _run_returning(
+    user_id, proposals, *, monkeypatch, embed_fn=None, search_fn=None,
+):
+    rec = _Recorder()
+    monkeypatch.setattr(emb_mod, "embed", embed_fn or _embed_ok())
+    monkeypatch.setattr(store_mod, "search", search_fn or _search_miss())
+    monkeypatch.setattr(store_mod, "upsert", rec)
+    result = await MemoryManager().record_write_proposals(user_id, "sess-test", proposals)
+    return rec, result
+
+
+def test_returns_only_the_persisted_subset(monkeypatch):
+    kept = _p(store=MemoryStore.EPISODIC, content="kept", confidence=0.9)
+    dropped = _p(store=MemoryStore.SEMANTIC, content="dropped", confidence=_MIN_ACCEPT_CONFIDENCE - 0.01)
+    rec, result = asyncio.run(_run_returning("u1", [kept, dropped], monkeypatch=monkeypatch))
+    # the low-confidence semantic proposal is dropped; only the episodic write returns
+    assert [p.content for p in result] == ["kept"]
+    assert len(rec.calls) == 1
+
+
+def test_returns_empty_when_embedder_down(monkeypatch):
+    _, result = asyncio.run(_run_returning("u1", [_p()], monkeypatch=monkeypatch, embed_fn=_embed_down()))
+    assert result == [], "embedder-down persists nothing and returns an empty list"
+
+
+def test_returns_empty_on_missing_scope(monkeypatch):
+    _, result = asyncio.run(_run_returning("", [_p()], monkeypatch=monkeypatch))
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# (j) Write path is BOUNDED — a stalled store times out, drops the rest, no hang
+# ---------------------------------------------------------------------------
+
+def test_write_timeout_drops_remaining_writes(monkeypatch):
+    from foundation import constants as fconst   # the exact module manager reads
+
+    async def _hanging_embed(texts):
+        await asyncio.sleep(5)   # far longer than the (patched) write deadline
+        return [_DUMMY_VEC for _ in texts]
+
+    monkeypatch.setattr(fconst, "MEMORY_WRITE_TIMEOUT_S", 0.05)
+    rec, result = asyncio.run(
+        _run_returning(
+            "u1", [_p(content="a"), _p(content="b")],
+            monkeypatch=monkeypatch, embed_fn=_hanging_embed,
+        )
+    )
+    # a stalled store must not hang the delivered path: bounded, persists nothing
+    assert result == []
+    assert not rec.calls
+
+
+# ---------------------------------------------------------------------------
 # Policy summary table
 # ---------------------------------------------------------------------------
 

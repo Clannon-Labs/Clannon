@@ -147,7 +147,10 @@ async def persist_turn_memory(ctx) -> None:
                 )
             )
         if ctx.memory_writes_requested:
-            await ports.memory.record_write_proposals(
+            # the Manager returns only what it ACTUALLY persisted; the delivered-path
+            # /memory view surfaces THIS set, so a proposal the policy dropped (low
+            # confidence / store down) never shows as a phantom write.
+            ctx.memory_writes_persisted = await ports.memory.record_write_proposals(
                 ctx.user_id, ctx.session_id, ctx.memory_writes_requested
             )
     except Exception as exc:  # noqa: BLE001 — answer already delivered; memory is best-effort

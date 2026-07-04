@@ -143,9 +143,12 @@ class MemoryPort(Protocol):
 
     async def record_write_proposals(
         self, user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
-    ) -> None:
+    ) -> list[MemoryWriteProposal]:
         """Hand proposed writes (scoped to a user + session) to the manager; it
-        decides whether/where to persist."""
+        decides whether/where to persist. Returns the subset ACTUALLY persisted
+        (the manager may drop a proposal below the confidence floor, or when the
+        store/embeddings are down) so a caller surfaces only real writes, never a
+        phantom — see `MemoryManager.record_write_proposals`."""
         ...
 
     async def learn(
