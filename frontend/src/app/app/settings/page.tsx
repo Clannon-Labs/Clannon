@@ -223,7 +223,13 @@ function BillingTab() {
               <p className="mt-1 text-[12px] text-faint">
                 {formatTokens(plan.tokenBudget)} tokens · {plan.memoryTiers.length}/4 memory tiers
               </p>
-              {!isCurrent && (
+              {isCurrent ? (
+                /* the same footer slot as its siblings, so the grid keeps
+                   one rhythm — a statement instead of a button */
+                <p className="mt-4 flex h-8 items-center justify-center rounded-md border border-primary/30 text-[12px] text-primary">
+                  Your plan — resets with your billing date
+                </p>
+              ) : (
                 <Button
                   variant={plan.monthlyUsd > (currentPlan?.monthlyUsd ?? 0) ? "primary" : "outline"}
                   size="sm"
@@ -299,6 +305,17 @@ function SettingsInner() {
               Name and email editing arrive with cloud accounts — changes will
               need re-verification.
             </p>
+
+            <dl className="divide-y divide-border/60 rounded-lg border border-border bg-surface px-5">
+              <div className="grid grid-cols-[6rem_1fr] items-baseline gap-3 py-3.5">
+                <dt className="tag-label text-faint">Plan</dt>
+                <dd className="text-sm font-medium capitalize text-foreground">{user?.plan ?? "—"}</dd>
+              </div>
+              <div className="grid grid-cols-[6rem_1fr] items-baseline gap-3 py-3.5">
+                <dt className="tag-label text-faint">Workspace</dt>
+                <dd className="truncate text-sm text-foreground">Personal</dd>
+              </div>
+            </dl>
 
             <div className="mt-2 border-t border-border pt-5">
               <p className="text-sm font-medium">Appearance</p>

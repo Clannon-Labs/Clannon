@@ -30,6 +30,48 @@ export function prettyModel(id: string): string {
     .replace(/(\b\d) (\d\b)/g, "$1.$2"); // "4 8" → "4.8"
 }
 
+/** Provider grouping for model lists — a flat wall of 16 ids reads like an
+ *  unstyled <select>. Order: the recommended model's provider first, then by
+ *  first appearance. Recommended is pinned to the top of its group. */
+const PROVIDERS: [RegExp, string][] = [
+  [/^claude/i, "Anthropic"],
+  [/^gemini/i, "Google"],
+  [/^(gpt|o\d)/i, "OpenAI"],
+  [/^glm/i, "Zhipu"],
+];
+function providerOf(id: string): string {
+  for (const [re, name] of PROVIDERS) if (re.test(id)) return name;
+  return "Other";
+}
+export function groupModelOptions(
+  options: string[],
+  recommended?: string,
+): { provider: string; options: string[] }[] {
+  const groups = new Map<string, string[]>();
+  for (const opt of options) {
+    const key = providerOf(opt);
+    if (!groups.has(key)) groups.set(key, []);
+    if (opt === recommended) groups.get(key)!.unshift(opt);
+    else groups.get(key)!.push(opt);
+  }
+  const order = [...groups.keys()];
+  if (recommended) {
+    const first = providerOf(recommended);
+    order.sort((a, b) => (a === first ? -1 : b === first ? 1 : 0));
+  }
+  return order.map((provider) => ({ provider, options: groups.get(provider)! }));
+}
+
+/** The quiet taxonomy row above each provider's models. Presentation-only —
+ *  it must not register as an option in the listbox. */
+function ProviderLabel({ name }: { name: string }) {
+  return (
+    <li role="presentation" aria-hidden className="px-3 pb-0.5 pt-2 first:pt-1">
+      <span className="tag-label text-faint">{name}</span>
+    </li>
+  );
+}
+
 /**
  * A themed model dropdown for the Settings page — a real menu in OUR styling,
  * not a native <select> (whose option list can't be themed). Expands in place.
@@ -40,12 +82,15 @@ function ModelDropdown({
   onChange,
   disabled,
   label,
+  recommended,
 }: {
   value: string;
   options: string[];
   onChange: (model: string) => void;
   disabled?: boolean;
   label: string;
+  /** The role's default — pinned first in its provider group. */
+  recommended?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -82,7 +127,9 @@ function ModelDropdown({
           role="listbox"
           className="absolute z-20 mt-1 flex max-h-64 w-full flex-col gap-0.5 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-lg"
         >
-          {options.map((option) => {
+          {groupModelOptions(options, recommended).map((group) => [
+            <ProviderLabel key={`h-${group.provider}`} name={group.provider} />,
+            ...group.options.map((option) => {
             const selected = option === value;
             return (
               <li key={option}>
@@ -104,7 +151,8 @@ function ModelDropdown({
                 </button>
               </li>
             );
-          })}
+            }),
+          ])}
         </ul>
       )}
     </div>
@@ -174,6 +222,7 @@ export function ModelRoleList({
                 onChange={(m) => onSelect(layer, m)}
                 disabled={pending}
                 label={layer.label}
+                recommended={layer.default}
               />
             )}
           </div>
@@ -417,7 +466,9 @@ export function SessionModelPicker({
                   className="overflow-y-auto overscroll-contain"
                   style={{ maxHeight: listMaxH }}
                 >
-                  {orchestrator.options.map((opt) => {
+                  {groupModelOptions(orchestrator.options, orchestrator.default).map((group) => [
+                    <ProviderLabel key={`h-${group.provider}`} name={group.provider} />,
+                    ...group.options.map((opt) => {
                     const selected = valueFor(orchestrator) === opt;
                     return (
                       <li key={opt}>
@@ -446,7 +497,8 @@ export function SessionModelPicker({
                         </button>
                       </li>
                     );
-                  })}
+                    }),
+                  ])}
                 </ul>
                 {experts.length > 0 && (
                   <>
@@ -524,7 +576,9 @@ export function SessionModelPicker({
                   role="listbox"
                   aria-label={`${current.label} model`}
                 >
-                  {current.options.map((opt) => {
+                  {groupModelOptions(current.options, current.default).map((group) => [
+                    <ProviderLabel key={`h-${group.provider}`} name={group.provider} />,
+                    ...group.options.map((opt) => {
                     const selected = valueFor(current) === opt;
                     return (
                       <li key={opt}>
@@ -553,7 +607,8 @@ export function SessionModelPicker({
                         </button>
                       </li>
                     );
-                  })}
+                    }),
+                  ])}
                 </ul>
               </div>
             ) : null}

@@ -198,7 +198,7 @@ export function CommandPalette() {
         </kbd>
       </div>
 
-      <ul ref={listRef} id="cmd-listbox" className="max-h-[40dvh] overflow-y-auto p-2" role="listbox">
+      <ul ref={listRef} id="cmd-listbox" className="max-h-[40dvh] overflow-y-auto p-2 pb-3" role="listbox">
         {filtered.length === 0 && (
           <li className="px-3 py-6 text-center text-sm text-faint">
             Nothing matches “{query}”.
@@ -219,12 +219,19 @@ export function CommandPalette() {
                     onMouseEnter={() => setSelected(index)}
                     onClick={() => command.run()}
                     className={cn(
-                      "flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm",
+                      "relative flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm",
                       selected === index
                         ? "bg-primary-soft text-primary"
                         : "text-foreground",
                     )}
                   >
+                    {/* the tick — the archive's selection mark, not just a wash */}
+                    {selected === index && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary"
+                      />
+                    )}
                     <command.icon className="size-4 shrink-0 opacity-70" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{command.label}</span>
                     {command.hint && (
@@ -237,6 +244,16 @@ export function CommandPalette() {
           </li>
         ))}
       </ul>
+
+      {/* the quiet legend — keyboard grammar, machine register */}
+      <p
+        aria-hidden
+        className="flex items-center gap-3 border-t border-border px-4 py-2 font-mono text-[10px] tracking-wide text-faint"
+      >
+        <span>↑↓ navigate</span>
+        <span>↵ run</span>
+        <span>esc close</span>
+      </p>
     </dialog>
   );
 }

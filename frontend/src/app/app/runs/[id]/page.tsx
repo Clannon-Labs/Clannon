@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip, InfoTip } from "@/components/ui/tooltip";
 import { useRun, useLiveRun, useRunThread, useDownloadArtifact, useCancelRun } from "@/lib/api/hooks";
@@ -233,21 +234,31 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           )}
 
           {isFailure && (
-            <div
-              role="alert"
-              className="mt-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4"
-            >
-              <ShieldAlert className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
-              <div>
-                <p className="text-sm font-semibold text-destructive">
-                  {live.status === "blocked" ? blockMessage(run.blockStage).title : "Run failed"}
-                </p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {live.status === "blocked"
-                    ? blockMessage(run.blockStage).body
-                    : "A pipeline stage failed before delivery. Your token budget was not charged for incomplete work."}
-                </p>
-              </div>
+            /* set in the ledger's own language — a struck rule, a kicker, and
+               ONE way forward — instead of an alert box shouting */
+            <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
+              <p className="tag-label flex items-center gap-1.5 text-destructive">
+                <ShieldAlert className="size-3.5" aria-hidden />
+                {live.status === "blocked"
+                  ? `Blocked — ${run.blockStage ?? "security"} gate`
+                  : "Run failed"}
+              </p>
+              <p className="mt-1.5 text-sm font-medium text-foreground">
+                {live.status === "blocked" ? blockMessage(run.blockStage).title : "Run failed"}
+              </p>
+              <p className="mt-1 max-w-prose text-sm leading-relaxed text-muted-foreground">
+                {live.status === "blocked"
+                  ? blockMessage(run.blockStage).body
+                  : "A pipeline stage failed before delivery. Your token budget was not charged for incomplete work."}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => document.getElementById("composer-input")?.focus()}
+              >
+                Edit and resubmit
+              </Button>
             </div>
           )}
 
