@@ -138,7 +138,7 @@ export function DemoConversation() {
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-3xl flex-col px-4 sm:px-6">
-      <div className="flex flex-1 flex-col gap-6 pb-6 pt-6">
+      <div className="flex flex-1 flex-col gap-6 pb-10 pt-6">
         {!started ? (
           /* EMPTY STATE — welcome + the pre-defined starters (pick one) */
           <div className="pt-[6vh] sm:pt-[10vh]">
@@ -185,26 +185,34 @@ export function DemoConversation() {
             <div className="mx-auto mt-12 max-w-md" aria-hidden>
               <p className="tag-label text-center text-faint">What you&apos;ll watch</p>
               <div className="mt-3 rounded-lg border border-border bg-surface px-5 py-3">
-                {(
-                  [
-                    { label: "MEM", dot: "bg-log-memory", ink: "text-log-memory", copy: "context loads before planning starts" },
-                    { label: "ROUTE", dot: "bg-log-route", ink: "text-log-route", copy: "the brief splits into domains" },
-                    { label: "EXPERT", dot: "bg-log-expert", ink: "text-log-expert", copy: "specialists work in parallel" },
-                    { label: "ANSWER", dot: "bg-log-answer", ink: "text-foreground", copy: "a filtered report lands" },
-                  ] as const
-                ).map((row) => (
-                  <div key={row.label} className="relative border-l border-border py-2 pl-4">
-                    <span
-                      className={cn("absolute -left-[4.5px] top-[13px] size-[9px] rounded-full ring-4 ring-surface", row.dot)}
-                    />
-                    <span className="flex items-baseline gap-3">
-                      <span className={cn("w-14 shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.16em]", row.ink)}>
-                        {row.label}
+                {/* one spine, drawn tick-to-tick — no dangling segment above the
+                    first entry or below the last */}
+                <div className="relative">
+                  <span
+                    aria-hidden
+                    className="absolute bottom-[17px] left-0 top-[17px] w-px bg-border"
+                  />
+                  {(
+                    [
+                      { label: "MEM", dot: "bg-log-memory", ink: "text-log-memory", copy: "context loads before planning starts" },
+                      { label: "ROUTE", dot: "bg-log-route", ink: "text-log-route", copy: "the brief splits into domains" },
+                      { label: "EXPERT", dot: "bg-log-expert", ink: "text-log-expert", copy: "specialists work in parallel" },
+                      { label: "ANSWER", dot: "bg-log-answer", ink: "text-foreground", copy: "a filtered report lands" },
+                    ] as const
+                  ).map((row) => (
+                    <div key={row.label} className="relative py-2 pl-4">
+                      <span
+                        className={cn("absolute -left-[4px] top-[13px] size-[9px] rounded-full ring-4 ring-surface", row.dot)}
+                      />
+                      <span className="flex items-baseline gap-3">
+                        <span className={cn("w-14 shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.16em]", row.ink)}>
+                          {row.label}
+                        </span>
+                        <span className="text-[12px] text-muted-foreground">{row.copy}</span>
                       </span>
-                      <span className="text-[12px] text-muted-foreground">{row.copy}</span>
-                    </span>
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -304,7 +312,7 @@ export function DemoConversation() {
       {/* the composer — preset only. Looks like the workspace, but you select
           a starter instead of typing (a free demo of the real pipeline would be
           a great way to go bankrupt). */}
-      <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         {watched >= NUDGE_AFTER && (
           <div className="mb-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/25 bg-primary-soft/40 px-3 py-2 text-center text-[12px] text-muted-foreground">
             <span>You&apos;ve watched {watched} runs — the real one would remember every one.</span>

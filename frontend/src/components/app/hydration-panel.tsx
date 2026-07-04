@@ -135,7 +135,8 @@ function HydrationItem({
         !reduce && "animate-ignite",
       )}
     >
-      <span className="flex items-center gap-2 pt-px">
+      {/* pin the tick+label to the title's first line, not the block's center */}
+      <span className="flex items-center gap-2 self-start pt-[3px]">
         <span className={cn("size-1.5 rounded-full", TIER_TICK[entry.tier])} aria-hidden />
         <span className="tag-label w-[4.5rem] text-faint">
           {TIER_LABELS[entry.tier]}

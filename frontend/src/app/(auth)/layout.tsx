@@ -8,8 +8,10 @@ import { LEGAL_PAGES } from "@/components/legal/legal-doc";
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh">
-      {/* brand panel */}
-      <aside className="relative hidden w-[44%] flex-col justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex">
+      {/* brand panel — pinned to the viewport (h-dvh + sticky) so the ring and
+          quote sit at the SAME y on login/signup/forgot, however tall the form
+          column runs */}
+      <aside className="sticky top-0 hidden h-dvh w-[44%] flex-col justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex">
         <Link href="/" aria-label={`${siteConfig.name} home`}>
           <Wordmark />
         </Link>

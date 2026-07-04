@@ -364,9 +364,11 @@ function RailBody({
                   style={{ width: `${pct}%` }}
                 />
               </div>
+              {/* a sentence, not a column — tabular here would slot-space the
+                  decimal point ("5 . 4M") */}
               <p
                 className={cn(
-                  "mt-2 text-[11px] tabular",
+                  "mt-2 text-[11px]",
                   pct > 90 ? "text-memory" : "text-faint",
                 )}
               >

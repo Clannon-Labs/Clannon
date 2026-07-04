@@ -160,7 +160,9 @@ export function CommandPalette() {
       )}
       aria-label="Command palette"
     >
-      <div className="flex items-center gap-3 border-b border-border px-4">
+      {/* the header row IS the field — the input draws no chrome of its own,
+          and focus reads off the row's bottom accent */}
+      <div className="flex items-center gap-3 border-b border-border px-4 transition-colors focus-within:border-primary/40">
         <Search className="size-4 shrink-0 text-faint" aria-hidden />
         <input
           ref={inputRef}
@@ -188,6 +190,7 @@ export function CommandPalette() {
           aria-controls="cmd-listbox"
           aria-autocomplete="list"
           aria-activedescendant={filtered.length > 0 ? `cmd-opt-${selected}` : undefined}
+          data-no-focus-ring=""
           className="h-12 w-full bg-transparent text-[15px] placeholder:text-faint focus:outline-none"
         />
         <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[11px] text-faint sm:block">

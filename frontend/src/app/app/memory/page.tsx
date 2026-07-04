@@ -234,17 +234,25 @@ export default function MemoryPage() {
       </div>
 
       <Tabs defaultValue="wiki" className="mt-5">
-        <TabsList className="max-w-full overflow-x-auto">
-          {TIER_ORDER.map((tier) => (
-            <TabsTrigger key={tier} value={tier}>
-              <span className="flex items-center gap-1.5">
-                {!unlockedTiers.includes(tier) && <Lock className="size-3" aria-hidden />}
-                {TIER_LABELS[tier]}
-                <span className="text-faint tabular">{byTier.get(tier)?.length ?? 0}</span>
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* the tier row scrolls on a phone — no scrollbar, a right-edge fade
+            says "more" instead of a hard clip */}
+        <div className="relative max-w-full">
+          <TabsList className="scrollbar-none max-w-full overflow-x-auto">
+            {TIER_ORDER.map((tier) => (
+              <TabsTrigger key={tier} value={tier} className="shrink-0">
+                <span className="flex items-center gap-1.5">
+                  {!unlockedTiers.includes(tier) && <Lock className="size-3" aria-hidden />}
+                  {TIER_LABELS[tier]}
+                  <span className="text-faint tabular">{byTier.get(tier)?.length ?? 0}</span>
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-md bg-gradient-to-l from-muted to-transparent sm:hidden"
+          />
+        </div>
 
         {TIER_ORDER.map((tier) => {
           const unlocked = unlockedTiers.includes(tier);

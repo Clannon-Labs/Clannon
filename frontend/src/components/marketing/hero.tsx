@@ -23,8 +23,9 @@ export function MarketingHero() {
   const { data: user } = useMe();
   return (
     // force the dark "deep" stage regardless of page theme — a cinematic band on
-    // the light page; the header goes transparent over it (scroll-aware)
-    <section className="stage dark relative isolate overflow-hidden text-foreground">
+    // the light page; the landing header floats fixed and transparent over it
+    // (scroll-aware), so pt-16 absorbs the header's height
+    <section className="stage dark relative isolate overflow-hidden pt-16 text-foreground">
       {/* scoped grain — texture on the stage, no page-wide overlay */}
       <div
         aria-hidden

@@ -34,7 +34,8 @@ export default function LandingPage() {
     /* Theme follows the toggle (default: light — see public/theme.js). The
        hero and closing CTA are .stage surfaces and adapt to either theme. */
     <div className="bg-background text-foreground">
-      <MarketingHeader />
+      {/* fixed over the hero so the dark stage runs under the transparent state */}
+      <MarketingHeader overHero />
       <main id="main">
         <MarketingHero />
 
@@ -72,7 +73,7 @@ export default function LandingPage() {
             <h2 className="display mx-auto max-w-3xl text-balance text-[2.6rem] leading-[0.98] sm:text-[4.2rem]">
               The first run is good.
               <br />
-              The tenth one <em className="glow-word not-italic">knows your clients.</em>
+              The tenth one <em className="glow-word not-italic">knows your&nbsp;clients.</em>
             </h2>
             <p className="mx-auto mt-6 max-w-md text-[15px] leading-relaxed text-muted-foreground">
               Start free. Run a real brief. Watch the decision log and decide for

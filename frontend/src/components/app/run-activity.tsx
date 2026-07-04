@@ -100,7 +100,8 @@ export function RunActivity({
             <Mark className="size-4 shrink-0 animate-pulse-dot text-primary" aria-hidden />
             <span className="font-medium text-foreground">
               {liveVerb(log, status)}
-              <span className="caret" />
+              {/* the caret ::after adds width — mr-1 keeps it off the interpunct */}
+              <span className="caret mr-1" />
             </span>
             <span className="text-faint transition-colors group-hover:text-muted-foreground">
               · Show work

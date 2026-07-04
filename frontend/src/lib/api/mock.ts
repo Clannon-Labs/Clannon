@@ -238,7 +238,11 @@ export class MockClient implements ClannonClient {
       throw new ApiError("Brief is too short — give the pipeline something to work with.", 422);
     }
     const id = nextId("run");
-    const title = trimmed.length > 64 ? `${trimmed.slice(0, 61).trimEnd()}…` : trimmed;
+    // clamp on a word boundary — never a mid-word cut before the ellipsis
+    const title =
+      trimmed.length > 64
+        ? `${trimmed.slice(0, 61).replace(/\s+\S*$/, "").trimEnd()}…`
+        : trimmed;
     const inputs = files.map((f) => ({
       name: f.name,
       modality: modalityOf(f),

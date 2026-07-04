@@ -13,11 +13,12 @@ import { workspaceUrl } from "@/config/app.config";
 import { useFocusTrap, useScrollLock } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
-export function MarketingHeader() {
+export function MarketingHeader({ overHero = false }: { overHero?: boolean }) {
   const [open, setOpen] = useState(false);
   // already signed in? the whole site lets you slip straight into the workspace
   const { data: user } = useMe();
-  // transparent (light-on-dark) over the hero, solid once scrolled past it
+  // transparent (light-on-dark) over the hero, solid once scrolled past it —
+  // only meaningful when the page actually puts a dark hero under the header
   const [scrolled, setScrolled] = useState(false);
 
   // keep focus (and scroll) inside the open panel; the trap hands focus back
@@ -40,13 +41,18 @@ export function MarketingHeader() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // when open on mobile, the panel needs a solid backdrop even at the top
-  const solid = scrolled || open;
+  // the transparent light-on-dark state exists ONLY over the landing hero —
+  // everywhere else the backdrop is cream, and light ink would ghost into it.
+  // When open on mobile, the panel needs a solid backdrop even at the top.
+  const solid = !overHero || scrolled || open;
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 transition-colors duration-300",
+        "top-0 z-50 transition-colors duration-300",
+        // over the hero the header floats (fixed) so the dark stage runs
+        // underneath it; the hero compensates with its own top padding
+        overHero ? "fixed inset-x-0" : "sticky",
         solid
           ? "border-b border-border bg-background/85 backdrop-blur-md"
           : "dark border-b border-transparent text-foreground",

@@ -14,7 +14,7 @@ import {
   useSetModelLayer,
   useUsage,
 } from "@/lib/api/hooks";
-import { ModelRoleList } from "@/components/app/model-picker";
+import { ModelRoleList, prettyModel } from "@/components/app/model-picker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeSegment } from "@/components/theme";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ function UsageChart() {
 
       <div className="rounded-lg border border-border bg-surface p-5">
         <h3 className="tag-label text-muted-foreground">Daily spend — last 14 days</h3>
-        <div className="mt-4 flex h-36 items-end gap-1.5">
+        <div className="mt-4 flex h-36 items-end gap-1.5 border-b border-border">
           {usage.byDay.map((day) => (
             // each bar is a Tab stop with the day+value as its label, so the
             // per-day numbers aren't hover-only
@@ -81,9 +81,17 @@ function UsageChart() {
               aria-label={`${dayLabel(day.date)} — ${formatTokens(day.tokens)} tokens`}
               className="group relative flex-1"
             >
+              {/* zero days get a faint stub — lighter than data, never darker */}
               <div
-                className="w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary group-focus-within:bg-primary"
-                style={{ height: `${Math.max(4, (day.tokens / max) * 128)}px` }}
+                className={cn(
+                  "w-full rounded-t-sm transition-colors",
+                  day.tokens === 0
+                    ? "bg-primary/20"
+                    : "bg-primary/70 group-hover:bg-primary group-focus-within:bg-primary",
+                )}
+                style={{
+                  height: day.tokens === 0 ? "3px" : `${Math.max(4, (day.tokens / max) * 128)}px`,
+                }}
               />
               <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block group-focus-within:block">
                 {formatTokens(day.tokens)}
@@ -129,7 +137,7 @@ function ModelsTab() {
               onSuccess: () =>
                 toast({
                   title: `${l.label} model updated`,
-                  description: `New runs use ${model} for ${l.label.toLowerCase()}.`,
+                  description: `New runs use ${prettyModel(model)} for ${l.label.toLowerCase()}.`,
                   tone: "success",
                 }),
             },
@@ -266,7 +274,7 @@ function SettingsInner() {
         onValueChange={(v) => router.replace(`/app/settings?tab=${v}`, { scroll: false })}
         className="mt-8"
       >
-        <TabsList className="max-w-full overflow-x-auto">
+        <TabsList className="scrollbar-none max-w-full overflow-x-auto">
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>

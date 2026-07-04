@@ -93,7 +93,7 @@ export default function WorkspacePage() {
        carries the full control set (model picker, attach). History is in the
        sidebar, not here. */
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col pb-10">
         <div className="pt-[9vh] sm:pt-[10vh]">
           <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2.15rem] leading-[1.1] sm:text-[2.6rem]">
             <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
@@ -144,7 +144,7 @@ export default function WorkspacePage() {
       </div>
 
       {/* docked composer — same control set as the run reply, same place too */}
-      <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         <Composer
           value={brief}
           onChange={setBrief}

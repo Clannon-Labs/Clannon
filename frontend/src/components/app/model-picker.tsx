@@ -9,14 +9,23 @@ import type { LayerModelConfig } from "@/lib/api";
 import { useFocusTrap } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
+/* brand casing the naive title-case gets wrong ("gpt" → "Gpt") — applied per
+   token; anything unmapped keeps the plain title-case treatment */
+const BRAND_CASING: Record<string, string> = {
+  gpt: "GPT",
+  glm: "GLM",
+};
+
 /** A friendlier display name for a model id — "gemini-2.5-flash" → "Gemini 2.5
- *  Flash", "claude-opus-4-8" → "Claude Opus 4.8". Display only; the raw id is
- *  always what gets sent. */
-function prettyModel(id: string): string {
+ *  Flash", "claude-opus-4-8" → "Claude Opus 4.8", "gpt-5.5" → "GPT 5.5".
+ *  Display only; the raw id is always what gets sent. */
+export function prettyModel(id: string): string {
   return id
     .split("-")
     .filter((p) => !/^\d{5,}$/.test(p)) // drop date-like groups (e.g. 20251001)
-    .map((p) => (/^\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .map((p) =>
+      BRAND_CASING[p] ?? (/^\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)),
+    )
     .join(" ")
     .replace(/(\b\d) (\d\b)/g, "$1.$2"); // "4 8" → "4.8"
 }
@@ -59,9 +68,10 @@ function ModelDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Model for ${label}`}
-        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border-strong bg-surface-raised px-3 py-2 font-mono text-[13px] text-foreground transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 disabled:opacity-50"
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border-strong bg-surface-raised px-3 py-2 text-[13px] text-foreground transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 disabled:opacity-50"
       >
-        <span className="truncate">{value}</span>
+        {/* display name up front; the raw id lives in the title for the curious */}
+        <span className="truncate" title={value}>{prettyModel(value)}</span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 text-faint transition-transform duration-200", open && "rotate-180")}
           aria-hidden
@@ -85,11 +95,11 @@ function ModelDropdown({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left font-mono text-[13px] transition-colors",
+                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[13px] transition-colors",
                     selected ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  <span className="truncate">{option}</span>
+                  <span className="truncate" title={option}>{prettyModel(option)}</span>
                   {selected && <Check className="size-3.5 shrink-0" aria-hidden />}
                 </button>
               </li>
@@ -144,15 +154,18 @@ export function ModelRoleList({
             <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{layer.description}</p>
             {layer.default && !layer.locked && (
               <p className="mt-1 text-[12px] text-faint">
-                Recommended: <span className="font-mono">{layer.default}</span>
+                Recommended: <span title={layer.default}>{prettyModel(layer.default)}</span>
               </p>
             )}
           </div>
 
           <div className="shrink-0">
             {layer.locked ? (
-              <span className="inline-flex h-10 items-center rounded-md border border-border bg-background px-3 font-mono text-[13px] text-muted-foreground">
-                {layer.model}
+              <span
+                title={layer.model}
+                className="inline-flex h-10 items-center rounded-md border border-border bg-background px-3 text-[13px] text-muted-foreground"
+              >
+                {prettyModel(layer.model)}
               </span>
             ) : (
               <ModelDropdown

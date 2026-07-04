@@ -184,7 +184,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       <h1 className="sr-only">{run.title}</h1>
 
       {/* the conversation — prior turns, then the current turn, as one thread */}
-      <div className="mt-3 flex flex-1 flex-col gap-6 pb-6">
+      <div className="mt-3 flex flex-1 flex-col gap-6 pb-10">
         <PriorTurns turns={priorTurns} />
 
         {/* current turn — your ask, then Clannon's response */}
@@ -420,7 +420,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       {/* docked composer — ALWAYS visible, like every chat app. While the run is
           in flight the send button becomes Stop and you can type your next
           message; on mobile the bottom nav steps aside (see Sidebar). */}
-      <div className="sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         <RunComposer
           runId={run.id}
           busy={!isTerminal}

@@ -202,6 +202,12 @@ body {
   outline-offset: 2px;
   border-radius: 2px;
 }
+/* opt-out for fields whose CONTAINER carries the focus chrome (the command
+   palette input — its header row is the field; a second ring doubles it).
+   Unlayered on purpose: it must beat the unlayered rule above. */
+[data-no-focus-ring]:focus-visible {
+  outline: none;
+}
 
 /* thin, theme-aware scrollbars in the workspace */
 .dark ::-webkit-scrollbar {
@@ -257,11 +263,37 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* a scrolling row that hides its scrollbar (tab strips) — the affordance is
+   the half-visible next item or an edge fade, never a bar */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* the z-axis contract (DESIGN_SYSTEM §11): content meeting the docked
+   composer fades out above the bar instead of shearing mid-line */
+.composer-scrim::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: -2rem;
+  height: 2rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--background));
+}
+
 /* prose for rendered reports */
 .report-prose {
   font-size: 0.9375rem;
   line-height: 1.75;
   max-width: 70ch;
+}
+/* the card provides the breathing room — a leading heading must not add its
+   own 1.8em on top of it */
+.report-prose > :first-child {
+  margin-top: 0;
 }
 .report-prose h1,
 .report-prose h2,
