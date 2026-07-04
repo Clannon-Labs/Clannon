@@ -584,14 +584,22 @@ export class MockClient implements ClannonClient {
     const used = runs.reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
 
     const days = 14;
+    // a plausible fortnight of activity so the chart reads as a real
+    // distribution, not two spikes over an empty axis — deterministic
+    // (no Math.random, which would reshuffle every render), with a couple of
+    // quiet days and a couple of peaks
+    const BASELINE = [
+      88_000, 0, 142_000, 205_000, 64_000, 0, 176_000,
+      238_000, 121_000, 96_000, 31_000, 158_000, 297_000, 184_000,
+    ];
     const byDay = Array.from({ length: days }, (_, i) => {
       const date = new Date(Date.now() - (days - 1 - i) * 86_400_000)
         .toISOString()
         .slice(0, 10);
-      const tokens = runs
+      const fromRuns = runs
         .filter((r) => r.createdAt.slice(0, 10) === date)
         .reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
-      return { date, tokens };
+      return { date, tokens: fromRuns + (BASELINE[i] ?? 0) };
     });
 
     return {

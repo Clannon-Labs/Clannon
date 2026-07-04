@@ -2,52 +2,39 @@ import { cn } from "@/lib/utils";
 
 /**
  * The verified seal — the promise ("checked against its source before it
- * reaches you") made into an OBJECT, not a status badge. Concentric stamp
- * rings echo the memory dendrochronology; a serrated outer edge reads as a
- * pressed seal; the check is struck through the middle. Rendered in moss
- * (verified is always moss), embossed into the sheet with a faint highlight
- * so it looks pressed, not printed. The tiny counter-rotation keeps it from
- * feeling machine-perfect — a stamp landed by hand.
+ * reaches you") made into an OBJECT. It speaks the product's ONE visual
+ * language: smooth concentric growth rings (the dendrochronology mark, the
+ * archive target), NOT a certificate sunburst. Verification is another ring
+ * laid down. The check is pressed at the dead centre; the whole stamp is
+ * embossed into the sheet (a letterpress highlight below the ink) and tilted
+ * a few degrees so it reads as landed by hand, not printed by a template.
  */
 export function VerifiedSeal({ className }: { className?: string }) {
-  // 24 serration ticks around the rim — the stamp's milled edge
-  const ticks = Array.from({ length: 24 }, (_, i) => {
-    const a = (i / 24) * Math.PI * 2;
-    const r1 = 21.5;
-    const r2 = 23;
-    return {
-      x1: 24 + Math.cos(a) * r1,
-      y1: 24 + Math.sin(a) * r1,
-      x2: 24 + Math.cos(a) * r2,
-      y2: 24 + Math.sin(a) * r2,
-    };
-  });
   return (
     <svg
       viewBox="0 0 48 48"
-      className={cn("text-primary [filter:drop-shadow(0_0.5px_0_rgb(255_255_255/0.55))] dark:[filter:none]", className)}
-      style={{ transform: "rotate(-7deg)" }}
+      className={cn(
+        "text-primary",
+        // letterpress: a highlight below the ink reads as "pressed into" the
+        // sheet. Light sheet → white highlight; dark sheet → a dark deboss.
+        "[filter:drop-shadow(0_0.6px_0_rgb(255_255_255/0.6))]",
+        "dark:[filter:drop-shadow(0_0.6px_0.5px_rgb(0_0_0/0.55))]",
+        className,
+      )}
+      style={{ transform: "rotate(-6deg)" }}
       aria-hidden
     >
-      {ticks.map((t, i) => (
-        <line
-          key={i}
-          x1={t.x1}
-          y1={t.y1}
-          x2={t.x2}
-          y2={t.y2}
-          stroke="currentColor"
-          strokeWidth="1"
-          opacity="0.55"
-        />
-      ))}
-      <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-      <circle cx="24" cy="24" r="16" fill="none" stroke="currentColor" strokeWidth="2" />
+      {/* the rings — same family as the brand mark, laid down oldest (faint,
+          outer) to newest (bold, inner) */}
+      <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" strokeWidth="1.3" opacity="0.38" />
+      <circle cx="24" cy="24" r="16.5" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.62" />
+      <circle cx="24" cy="24" r="12" fill="none" stroke="currentColor" strokeWidth="2.3" />
+      {/* the check, struck through the pith */}
       <path
-        d="M16.5 24.5 L21.5 29.5 L32 18"
+        d="M17.5 24.5 L22 29 L31 17.5"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.6"
+        strokeWidth="2.7"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

@@ -323,9 +323,11 @@ export default function MemoryPage() {
               </TabsTrigger>
             ))}
           </TabsList>
+          {/* fade to the PAGE background (not muted) so the clipped tab
+              dissolves instead of hiding behind a tan block */}
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-20 rounded-r-md bg-gradient-to-l from-muted via-muted/85 to-transparent sm:hidden"
+            className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background via-background/90 to-transparent sm:hidden"
           />
         </div>
 

@@ -359,16 +359,17 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       transition={{ duration: 0.25, ease: EASE }}
                       className="flex items-center gap-1"
                     >
-                      <span className="tag-label mr-1 flex items-center gap-1.5 text-primary sm:mr-2">
+                      <span className="tag-label mr-1 flex items-center gap-2 text-primary sm:mr-2">
                         {/* the seal PRESSES in — scale + a settle rotation, so
-                            it lands like a stamp, not a fade */}
+                            it lands like a stamp; sized to anchor the masthead,
+                            not sit as a caption beside the icons */}
                         <motion.span
                           initial={reduce ? false : { scale: 0.5, opacity: 0, rotate: 8 }}
                           animate={{ scale: 1, opacity: 1, rotate: 0 }}
                           transition={{ type: "spring", stiffness: 380, damping: 18 }}
                           className="inline-flex"
                         >
-                          <VerifiedSeal className="size-6" />
+                          <VerifiedSeal className="size-8" />
                         </motion.span>
                         <span className="sr-only sm:not-sr-only">Verified</span>
                       </span>

@@ -42,7 +42,9 @@ export function Report({
             </a>
           ),
           table: ({ children }) => (
-            <div className="my-4 overflow-x-auto rounded-md border border-border">
+            // scroll-fade-x: on a narrow screen the last column dissolves at
+            // the right edge, signalling the table scrolls (§11.4)
+            <div className="scroll-fade-x my-4 overflow-x-auto rounded-md border border-border">
               <table className="w-full border-collapse text-sm">{children}</table>
             </div>
           ),

@@ -9,6 +9,7 @@ import { Mark } from "@/components/brand/logo";
 import { Composer } from "@/components/app/composer";
 import { HydrationPanel } from "@/components/app/hydration-panel";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
+import { cn } from "@/lib/utils";
 
 // Greetings that read fine in front of ", <name>" (and standalone, when there's
 // no name). Time-aware lines respect the clock; the rest are just for fun.
@@ -93,7 +94,11 @@ export default function WorkspacePage() {
        carries the full control set (model picker, attach). History is in the
        sidebar, not here. */
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
-      <div className="flex flex-1 flex-col pb-10">
+      {/* while a brief is being typed the recap recedes to a chip and the
+          block is short — centre it so the space above the composer reads as
+          intentional breathing room, not a dead void. At rest (tall recap) the
+          content fills the column and centring is a no-op. */}
+      <div className={cn("flex flex-1 flex-col pb-10", brief.trim() && "justify-center")}>
         <div className="pt-[3vh] sm:pt-[10vh]">
           <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2.15rem] leading-[1.1] sm:text-[2.6rem]">
             <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
