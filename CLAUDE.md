@@ -20,11 +20,22 @@ Pass**. Its durable, resumable map is `docs/benchmarks/mission/README.md` — re
 it (and `docs/benchmarks/V1_GAP_ANALYSIS.md` for the priority order) at the start
 of any session that continues this work. Phase files live in
 `docs/benchmarks/mission/`; a phase moved to `docs/benchmarks/reached/` is done
-(outcome recorded inside). The owner's full brief is local at
-`proposals/to-backend/BACKEND_PARITY.md` (gitignored). Priority order:
-CB5 → CB1(+EB1) → CB4(audit mirror) → CB6 → CB2/CB3/EB3(graph, propose-first).
-Always: suite green before every commit; backend only; propose-first for any
-contract/security/structural change (all graph work).
+(outcome recorded inside).
+
+**Two owner briefs feed it** (raw text local + gitignored in
+`proposals/to-backend/`; durably settled into committed docs so nothing is lost):
+- `BACKEND_PARITY.md` → settled as the phase map + `V1_GAP_ANALYSIS.md`.
+- `BATCH_ARCHITECTURE.md` → settled as `docs/architecture/BATCH_ARCHITECTURE.md`
+  (`[PROPOSED]` — a batch layer between orchestrator and experts; the structural
+  frame for the graph-blocked benchmarks; propose-first + stability-first, nothing
+  built).
+
+Priority order: CB5 → CB1(+EB1) → CB4(audit mirror) → CB6 → CB2/CB3/EB3 (batch
+architecture + graph, propose-first). **Standing rule — Prime Directive:**
+stability before new surface area (verify the layer beneath is stable/correct/
+honest before building on it; fix or flag a shaky foundation first). Always: suite
+green before every commit; backend only; propose-first for any contract/security/
+structural change (all batch + graph work).
 
 ## PROPOSAL PROTOCOL (cross-agent channel — no owner relay)
 

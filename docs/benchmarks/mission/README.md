@@ -34,6 +34,17 @@ authoritative, resumable plan.
 | 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | not started |
 | 6 — Verify | `mission/PHASE_6_verify.md` | ongoing (per commit) |
 
+## Structural frame & standing rules
+
+- **Batch Architecture** (`docs/architecture/BATCH_ARCHITECTURE.md`, `[PROPOSED]`,
+  owner-authored 2026-07-04) — a batch layer between the central orchestrator and
+  experts; it is largely HOW the graph-blocked benchmarks (CB2/CB3) get built.
+  Propose-first + stability-first; nothing built. Supersedes the *intent* of
+  Phase 5's capability work; see `mission/PHASE_5_capability.md`.
+- **Prime Directive (standing):** stability before new surface area — verify the
+  layer beneath is stable/correct/honest before building on it; a shaky foundation
+  is fixed or flagged first, never built over.
+
 ## Priority order (from the gap analysis)
 
 CB5 (near-pass) → CB1 (+EB1) → CB4 (audit mirror, +CB6/EB2) → CB6 (this pass) →

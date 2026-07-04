@@ -141,3 +141,36 @@ what it actually persisted, so `run.memory_writes` never shows a phantom (CB1
 honesty); (b) **earn the seal** — expose the filter's real groundedness verdict
 (CB5 visibility). Both are additive/reductive, no security-invariant risk, and
 directly feed the frontend's honesty story.
+
+---
+
+## How the Batch Architecture changes these paths
+
+The `[PROPOSED]` **Batch Architecture** (`docs/architecture/BATCH_ARCHITECTURE.md`,
+owner-authored 2026-07-04) is largely *how* the graph-blocked benchmarks get built,
+and it reframes the priority tail — but changes **nothing** about the near-term
+non-graph wins above (CB5/CB1/CB4 advance the same way regardless).
+
+- **CB2 (ABSENT → build via an engineering batch).** Instead of a bare Kuzu web,
+  CB2 becomes a batch: engineering expert(s) + heavy deterministic tools (AST-aware
+  search, dependency-graph traversal, precise patch-apply) that **navigate** a repo
+  larger than any context window rather than ingest it. The graph is still the
+  substrate for dependency traversal, but the *capability shape* is now an
+  expert-drives-tools batch, not a raw graph query. Still propose-first + big.
+- **CB3 / EB3 (ABSENT → media batch over the shared graph).** Unchanged dependency
+  on the knowledge-web for shared entities/relationships; the batch layer supplies
+  the coordinating media batch once the graph exists.
+- **CB6 (PARTIAL → strengthened).** Batches must stay contract-compatible with each
+  other and the central orchestrator — the same Integration-Contract discipline,
+  applied *internally between batches*. This makes CB6 a live, ongoing test of the
+  batch layer, not just the frontend/backend seam.
+- **CB1 / EB2 (PARTIAL → prerequisite for the whole thing).** The persistence +
+  compaction that let a weeks-long batch-coordinated mission survive session
+  restarts *are* CB1/EB2 — so advancing CB1 now (fact/assumption + temporal typing)
+  is also foundational for the batch architecture, not just its own benchmark.
+
+**Sequencing:** the batch layer does not jump the queue. It is gated by (0) a
+stability audit of the foundations it sits on, (1) the Mission Engine (#5), and (2)
+the cross-batch memory contract — all propose-first. Near-term work stays: CB5 →
+CB1 → CB4, each of which also *feeds* the batch architecture when it is eventually
+built. See `docs/architecture/BATCH_ARCHITECTURE.md` §8 for the build sequence.
