@@ -69,7 +69,9 @@ export function Composer({
       <div
         {...attach.dropZoneProps}
         className={cn(
-          "relative overflow-hidden rounded-3xl border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary",
+          // dark: edge-light + a real drop shadow — the composer is an instrument
+          // on the desk, not an outline on the wall
+          "relative overflow-hidden rounded-3xl border border-border-strong bg-surface-raised shadow-sm transition-colors focus-within:border-primary dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_8px_24px_-12px_rgb(0_0_0/0.6)]",
           attach.dragOver && "border-primary ring-2 ring-primary/30",
         )}
       >

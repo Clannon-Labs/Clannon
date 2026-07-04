@@ -15,12 +15,16 @@ const light: TokenSet = {
   /* paper + ink — paper slightly cooler/brighter so ink pops.
      Secondary text runs DARK here on purpose: small warm-gray type on warm
      paper reads muddy, so light mode matches dark mode's clarity (~9:1 for
-     muted, ~7.5:1 for faint) instead of the usual pale-gray treatment. */
-  background: "#f3efe4",
+     muted, ~7.5:1 for faint) instead of the usual pale-gray treatment.
+     Pass 3: background sits a full step BELOW surface so cards physically
+     lift instead of leaning on hairlines — same temperature, lower value. */
+  background: "#eee9db",
   surface: "#fcfaf4",
   "surface-raised": "#ffffff",
+  /* the artifact surface — the delivered report's own paper */
+  sheet: "#ffffff",
   foreground: "#121b14",
-  muted: "#e8e2d2",
+  muted: "#e3dcc8",
   "muted-foreground": "#39432f",
   "faint-foreground": "#48533d",
 
@@ -34,8 +38,9 @@ const light: TokenSet = {
   memory: "#6e4a0e",
   "memory-soft": "#f1e6cd",
 
-  border: "#d4ccb8",
-  "border-strong": "#bbb097",
+  border: "#d1c8b2",
+  "border-strong": "#a3987b",
+  "edge-light": "rgba(255, 255, 255, 0.65)",
   ring: "#285539",
 
   destructive: "#a83a28",
@@ -54,7 +59,7 @@ const light: TokenSet = {
   /* the stage — the hero/CTA atmosphere (light: a sunlit conservatory;
      see the dark set for the cinematic counterpart). Consumed by the
      .stage / .glass / .glow-word utilities in globals.css. */
-  "stage-bg": "#ede8d7",
+  "stage-bg": "#e8e2ce",
   "stage-bloom": "rgba(40, 85, 57, 0.13)",
   "stage-ember": "rgba(124, 84, 16, 0.10)",
   "stage-vignette": "rgba(22, 33, 26, 0.12)",
@@ -64,26 +69,32 @@ const light: TokenSet = {
 };
 
 const dark: TokenSet = {
-  /* green-cast ink, never slate */
-  background: "#0c120d",
-  surface: "#121a13",
-  "surface-raised": "#18221a",
+  /* green-cast ink, never slate. Pass 3: the elevation ladder is REAL now —
+     canvas deepened (warmer-black, cast intact), raised lifted ~+5 L*, and a
+     dedicated `sheet` for the delivered artifact (warm paper-cast, the "lit
+     sheet on a dark desk"). Raised dark surfaces may carry shadows + a 1px
+     `edge-light` top hairline (the instrument-panel cue). */
+  background: "#0a0f0b",
+  surface: "#131c15",
+  "surface-raised": "#1d2a20",
+  sheet: "#262e21",
   foreground: "#e9ede0",
-  muted: "#1c271e",
-  "muted-foreground": "#a3b29a",
-  "faint-foreground": "#8b9a83",
+  muted: "#182219",
+  "muted-foreground": "#a6b59d",
+  "faint-foreground": "#8d9c85",
 
-  primary: "#6fb583",
-  "primary-hover": "#84c597",
+  primary: "#74c08a",
+  "primary-hover": "#89cf9d",
   "primary-foreground": "#0b1410",
-  "primary-soft": "#1a2a1e",
+  "primary-soft": "#1b2d20",
 
-  memory: "#d9a84e",
-  "memory-soft": "#2a2214",
+  memory: "#ddab4f",
+  "memory-soft": "#2c2313",
 
-  border: "rgba(233, 237, 224, 0.1)",
-  "border-strong": "rgba(233, 237, 224, 0.22)",
-  ring: "#6fb583",
+  border: "rgba(233, 237, 224, 0.11)",
+  "border-strong": "rgba(233, 237, 224, 0.24)",
+  "edge-light": "rgba(240, 244, 230, 0.09)",
+  ring: "#74c08a",
 
   destructive: "#e0735c",
   "destructive-hover": "#e88a72",
@@ -92,21 +103,25 @@ const dark: TokenSet = {
   success: "#6fb583",
   warning: "#d9a84e",
 
-  "log-route": "#6fb583",
-  "log-expert": "#a795d9",
-  "log-tool": "#6cb9c7",
-  "log-memory": "#d9a84e",
+  /* the log spectrum is the strongest anti-default signal — one notch of
+     extra chroma so it survives 11px mono on ink */
+  "log-route": "#74c08a",
+  "log-expert": "#b5a1ee",
+  "log-tool": "#61c6d9",
+  "log-memory": "#ddab4f",
   "log-answer": "#e9ede0",
 
   /* the stage — dark: "the deep", a green-black field lit from within
-     by a moss bloom and an amber ember, edges falling into shadow */
-  "stage-bg": "#070d08",
-  "stage-bloom": "rgba(111, 181, 131, 0.20)",
-  "stage-ember": "rgba(217, 168, 78, 0.12)",
+     by a moss bloom and an amber ember, edges falling into shadow.
+     Also the 4th elevation step: one BELOW background, behind hero
+     moments, so raised objects have somewhere to float from. */
+  "stage-bg": "#060a07",
+  "stage-bloom": "rgba(116, 192, 138, 0.20)",
+  "stage-ember": "rgba(221, 171, 79, 0.12)",
   "stage-vignette": "rgba(0, 0, 0, 0.55)",
-  "glass-bg": "rgba(12, 18, 13, 0.72)",
+  "glass-bg": "rgba(10, 15, 11, 0.72)",
   "glass-border": "rgba(233, 237, 224, 0.10)",
-  glow: "rgba(111, 181, 131, 0.45)",
+  glow: "rgba(116, 192, 138, 0.45)",
 };
 
 export const themeConfig = { light, dark };

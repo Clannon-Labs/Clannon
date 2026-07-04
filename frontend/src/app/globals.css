@@ -12,6 +12,8 @@
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-sheet: var(--sheet);
+  --color-stage: var(--stage-bg);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -24,6 +26,7 @@
   --color-memory-soft: var(--memory-soft);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-edge-light: var(--edge-light);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-destructive-hover: var(--destructive-hover);
@@ -316,11 +319,22 @@ body {
   background: linear-gradient(to bottom, transparent, var(--background));
 }
 
-/* prose for rendered reports */
+/* the instrument-panel cue: raised dark surfaces catch light on their top
+   edge. A no-op in light (edge-light is near-white on white). This sets
+   box-shadow directly, so it does NOT stack with Tailwind shadow-* classes —
+   a surface needing both writes the combined arbitrary form:
+   [box-shadow:inset_0_1px_0_0_var(--edge-light),<shadow>] */
+.edge-lit {
+  box-shadow: inset 0 1px 0 0 var(--edge-light);
+}
+
+/* prose for rendered reports — the canon's measure is ~70 CHARACTERS per
+   line; in a proportional face `ch` (the width of "0") overshoots average
+   glyph width by ~20%, so 58ch is what actually lands the 70-char sweep */
 .report-prose {
   font-size: 0.9375rem;
   line-height: 1.75;
-  max-width: 70ch;
+  max-width: 58ch;
 }
 /* the card provides the breathing room — a leading heading must not add its
    own 1.8em on top of it */

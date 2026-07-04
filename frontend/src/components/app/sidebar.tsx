@@ -495,7 +495,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       {/* desktop rail */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface md:flex",
+          // dark: the rail recedes BELOW the canvas (stage step) so the work is
+          // the lit plane — the elevation ladder, spent
+          "fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-surface dark:bg-stage md:flex",
           collapsed && "md:hidden",
         )}
       >

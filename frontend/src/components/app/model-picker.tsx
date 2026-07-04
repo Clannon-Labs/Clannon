@@ -188,13 +188,14 @@ export function ModelRoleList({
           <div className="min-w-0 sm:flex-1">
             <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
               {layer.locked ? (
-                <ShieldCheck className="size-4 shrink-0 text-memory" aria-hidden />
+                <ShieldCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               ) : (
                 <Cpu className="size-4 shrink-0 text-primary" aria-hidden />
               )}
               {layer.label}
               {layer.locked && (
-                <span className="tag-label rounded-full bg-memory-soft px-2 py-0.5 text-memory">
+                // neutral, not amber: this is system status, and amber is memory's
+                <span className="tag-label rounded-full border border-border bg-muted px-2 py-0.5 text-muted-foreground">
                   System managed
                 </span>
               )}
