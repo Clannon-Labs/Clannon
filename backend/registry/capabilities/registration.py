@@ -11,6 +11,7 @@ capability registers as BROKEN (recorded, logged, excluded) rather than crashing
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 
 from foundation import PermissionLevel
@@ -18,7 +19,14 @@ from foundation import PermissionLevel
 from .specs import CapabilityKind, ExpertSpec, ToolSpec, validate
 from .store import registry
 
+log = logging.getLogger(__name__)
+
 _CAPABILITY_PACKAGES = ("tools", "experts")
+
+# (module_name, error) for capability modules that raised AT IMPORT time during
+# discover(). Surfaced via import_failures() so a skipped module is visible, not
+# silent — the import-time analogue of the registry's BROKEN (malformed-metadata) list.
+_import_failures: list[tuple[str, str]] = []
 
 
 def tool(cls: type | None = None, *, enabled: bool = True) -> type:
@@ -91,18 +99,37 @@ _discovered = False
 
 
 def discover() -> None:
-    """Import all tool/expert modules once (idempotent) so the decorators fire."""
+    """Import all tool/expert modules once (idempotent) so the decorators fire.
+
+    A single capability module that raises AT IMPORT time (top-level error, bad
+    dependency, syntax error) is logged, recorded in `import_failures()`, and
+    SKIPPED — it must never take down the rest of the roster. This is the registry's
+    core invariant ("a broken capability is recorded and excluded, never fatal")
+    applied at import time; decorator-time validation (malformed metadata) is handled
+    separately via the BROKEN registry. A batch layer dropping in new capability
+    modules relies on exactly this isolation."""
     global _discovered
     if _discovered:
         return
     for package_name in _CAPABILITY_PACKAGES:
         package = importlib.import_module(package_name)
         for module in pkgutil.walk_packages(package.__path__, prefix=package.__name__ + "."):
-            importlib.import_module(module.name)
+            try:
+                importlib.import_module(module.name)
+            except Exception as exc:  # noqa: BLE001 — one bad module must not sink discovery
+                log.warning("capability module %s failed to import (skipped): %s", module.name, exc)
+                _import_failures.append((module.name, str(exc)))
     _discovered = True
+
+
+def import_failures() -> list[tuple[str, str]]:
+    """(module, error) for capability modules that failed to import during discover().
+    Empty on a clean roster; a non-empty list means those modules were skipped."""
+    return list(_import_failures)
 
 
 def reset_discovery() -> None:
     """Allow re-discovery (tests/tooling only)."""
     global _discovered
     _discovered = False
+    _import_failures.clear()

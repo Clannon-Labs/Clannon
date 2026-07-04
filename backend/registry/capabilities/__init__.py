@@ -23,7 +23,7 @@ from .schemas import (
     ToolRequest,
 )
 from .store import CapabilityRegistry, registry
-from .registration import discover, expert, reset_discovery, tool
+from .registration import discover, expert, import_failures, reset_discovery, tool
 
 __all__ = [
     # specs
@@ -40,6 +40,7 @@ __all__ = [
     "tool",
     "expert",
     "discover",
+    "import_failures",
     "reset_discovery",
     # invocation contracts (what to emit to call a capability + what it returns)
     "ToolRequest",
