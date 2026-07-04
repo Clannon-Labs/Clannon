@@ -16,14 +16,23 @@ export type Theme = "light" | "dark" | "system";
 
 const listeners = new Set<() => void>();
 
+/** Unstored default, decided once per page load (matches public/theme.js):
+ *  the workspace is dark-first — the instrument room (DESIGN_SYSTEM §11) —
+ *  while marketing keeps the warm-paper light. Captured at module init so
+ *  client-side navigation never flips the theme mid-session. */
+const DEFAULT_THEME: Theme =
+  typeof window !== "undefined" && window.location.pathname.startsWith("/app")
+    ? "dark"
+    : "light";
+
 function readTheme(): Theme {
   if (typeof window === "undefined") return "system";
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") return stored;
-    return "light"; // brand default — crisp, readable warm paper
+    return DEFAULT_THEME;
   } catch {
-    return "light";
+    return DEFAULT_THEME;
   }
 }
 
