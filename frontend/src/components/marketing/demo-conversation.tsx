@@ -361,7 +361,7 @@ export function DemoConversation() {
         >
           <p
             className={cn(
-              "min-w-0 flex-1 truncate text-[15px]",
+              "min-w-0 flex-1 truncate-fade text-[15px]",
               selected !== null ? "text-foreground" : "text-faint",
             )}
           >

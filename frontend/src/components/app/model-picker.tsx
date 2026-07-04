@@ -469,7 +469,7 @@ export function SessionModelPicker({
                 <ul
                   role="listbox"
                   aria-label="Conversation model"
-                  className="overflow-y-auto overscroll-contain"
+                  className="scroll-fade-bottom overflow-y-auto overscroll-contain"
                   style={{ maxHeight: listMaxH }}
                 >
                   {groupModelOptions(orchestrator.options, orchestrator.default).map((group) => [
@@ -542,6 +542,8 @@ export function SessionModelPicker({
                   The specialists the orchestrator can spawn — pick one to set its model.
                 </p>
                 <div className="mx-1 mb-1 h-px bg-border" />
+                {/* no fade here: ~5 expert rows never overflow, and the mask
+                    would dim the last row for nothing */}
                 <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: listMaxH }}>
                   {experts.map((role) => (
                     <button
@@ -577,7 +579,7 @@ export function SessionModelPicker({
                 )}
                 <div className="mx-1 mb-1 h-px bg-border" />
                 <ul
-                  className="overflow-y-auto overscroll-contain"
+                  className="scroll-fade-bottom overflow-y-auto overscroll-contain"
                   style={{ maxHeight: listMaxH }}
                   role="listbox"
                   aria-label={`${current.label} model`}

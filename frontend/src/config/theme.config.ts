@@ -77,7 +77,7 @@ const dark: TokenSet = {
   background: "#0a0f0b",
   surface: "#131c15",
   "surface-raised": "#1d2a20",
-  sheet: "#262e21",
+  sheet: "#2c3424",
   foreground: "#e9ede0",
   muted: "#182219",
   "muted-foreground": "#a6b59d",
