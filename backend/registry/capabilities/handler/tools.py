@@ -41,17 +41,8 @@ class MemorySearcher:
         from foundation import HydrationPackage, HydrationRequest, NormalizedInput
 
         try:
-            request = HydrationRequest(
-                session_id=getattr(self._ctx, "session_id", "") or "",
-                user_id=getattr(self._ctx, "user_id", "") or "",
-                normalized=NormalizedInput(modality="text", content_type="text/plain", content=query),
-                wiki=tuple(
-                    (e.get("title", ""), e.get("content", ""))
-                    for e in (getattr(self._ctx, "wiki_entries", None) or [])
-                    if isinstance(e, dict)
-                ),
-            )
-            return await manager.hydrate(request)
+            query_input = NormalizedInput(modality="text", content_type="text/plain", content=query)
+            return await manager.hydrate(HydrationRequest.for_turn(self._ctx, query_input))
         except Exception:  # noqa: BLE001 — a memory fault degrades recall, never the run
             return HydrationPackage(degraded=True, notes="memory temporarily unavailable")
 

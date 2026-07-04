@@ -35,16 +35,7 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
         normalized = getattr(ctx, "normalized_input", None)
         if normalized is not None and getattr(ctx, "user_id", ""):
-            request = HydrationRequest(
-                session_id=getattr(ctx, "session_id", "") or "",
-                user_id=ctx.user_id,
-                normalized=normalized,
-                wiki=tuple(
-                    (e.get("title", ""), e.get("content", ""))
-                    for e in (getattr(ctx, "wiki_entries", None) or [])
-                    if isinstance(e, dict)
-                ),
-            )
+            request = HydrationRequest.for_turn(ctx, normalized)
             # fire-and-track: the orchestrator awaits ctx.hydration_future
             ctx.hydration_future = asyncio.ensure_future(manager.hydrate(request))
     except Exception as exc:  # noqa: BLE001 — prefetch is best-effort; orchestrator falls back

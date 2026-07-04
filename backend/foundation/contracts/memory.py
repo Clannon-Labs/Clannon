@@ -64,6 +64,32 @@ class HydrationRequest:
     # highest-trust tier. Empty when the caller has no wiki to offer.
     wiki: tuple[tuple[str, str], ...] = ()
 
+    @staticmethod
+    def _wiki_pairs(entries: object) -> tuple[tuple[str, str], ...]:
+        """(title, content) pairs from a context's `wiki_entries`, skipping any
+        non-dict noise. The single place wiki entries are shaped for hydration."""
+        return tuple(
+            (e.get("title", ""), e.get("content", ""))
+            for e in (entries or [])  # type: ignore[union-attr]
+            if isinstance(e, dict)
+        )
+
+    @classmethod
+    def for_turn(cls, ctx: object, normalized: NormalizedInput | None) -> "HydrationRequest":
+        """Build a turn's hydration request from a context object + the input to
+        search on. THE single source of truth for turning a ctx (`session_id`,
+        `user_id`, `wiki_entries`) into the request shape — used by the prefetch
+        stage, the orchestrator's serial hydration fallback, and the mid-task
+        `memory.search` tool, so the session/user/wiki extraction lives in exactly
+        one place. `ctx` is duck-typed (read via `getattr`); foundation imports no
+        context type. Callers keep their own guards (e.g. skip when no user_id)."""
+        return cls(
+            session_id=getattr(ctx, "session_id", "") or "",
+            user_id=getattr(ctx, "user_id", "") or "",
+            normalized=normalized,
+            wiki=cls._wiki_pairs(getattr(ctx, "wiki_entries", None)),
+        )
+
 
 @dataclass(slots=True)
 class HydrationPackage:

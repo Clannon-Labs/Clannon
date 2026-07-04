@@ -139,16 +139,7 @@ async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         if future is not None:
             hydration = await future
         else:
-            hydration = await ports.memory.hydrate(HydrationRequest(
-                session_id=ctx.session_id,
-                user_id=ctx.user_id,
-                normalized=normalized,
-                wiki=tuple(
-                    (e.get("title", ""), e.get("content", ""))
-                    for e in (ctx.wiki_entries or [])
-                    if isinstance(e, dict)
-                ),
-            ))
+            hydration = await ports.memory.hydrate(HydrationRequest.for_turn(ctx, normalized))
     except Exception as exc:  # noqa: BLE001 — memory degrades silently, never fails a turn
         log.warning("memory hydration degraded: %s", exc)
         hydration = HydrationPackage(degraded=True, notes="memory temporarily unavailable")
