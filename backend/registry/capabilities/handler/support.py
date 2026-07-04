@@ -331,6 +331,9 @@ def _make_say_tool(on_message: Callable) -> Callable:
     return say
 
 
+_REMEMBER_MAX_CHARS = 2000   # cap on one remembered fact/preference (proposal content)
+
+
 def _make_remember_tool() -> Callable:
     """A tool the orchestrator calls to save a durable fact or preference to long-term
     memory — when the user asks it to remember something, or when it learns something
@@ -344,7 +347,7 @@ def _make_remember_tool() -> Callable:
         store = MemoryStore.PROCEDURAL if kind == "preference" else MemoryStore.SEMANTIC
         ctx.deps.ctx.memory_writes_requested.append(MemoryWriteProposal(
             store=store,
-            content=text[:2000],
+            content=text[:_REMEMBER_MAX_CHARS],
             rationale="user asked to remember it, or a durable fact the orchestrator chose to keep",
             confidence=0.95,   # high: an explicit, considered save — clears the write-policy floor
         ))

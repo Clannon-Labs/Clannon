@@ -126,7 +126,7 @@ def _user_filter(user_id: str):
 
 
 def search(
-    tier: MemoryStore, user_id: str, vector: list[float], limit: int = 8
+    tier: MemoryStore, user_id: str, vector: list[float], limit: int = constants.MEMORY_SEARCH_TOP_K
 ) -> list[dict[str, Any]]:
     """Top-K for one tier, scoped to user_id. Returns payload dicts + score."""
     client = _qdrant()

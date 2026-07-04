@@ -13,13 +13,15 @@ import time
 
 from foundation import HydrationPackage, NormalizedInput
 
+_SECONDS_PER_DAY = 86_400
+
 
 def _age(created_at: float) -> str:
     """A short 'learned when' hint for a memory item — provenance the model can
     use to weigh recency. Empty when unknown (text/wiki tier carries no ts)."""
     if not created_at:
         return ""
-    days = (time.time() - created_at) / 86_400
+    days = (time.time() - created_at) / _SECONDS_PER_DAY
     if days < 1:
         return ", today"
     if days < 2:

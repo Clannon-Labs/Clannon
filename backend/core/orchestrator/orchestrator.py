@@ -58,6 +58,12 @@ async def _learn(ports, user_id: str, session_id: str, *, task: str, answer: str
         log.warning("memory learning dropped: %s", exc)
 
 
+# A turn with no expert/tool work still counts as substantive if either side of the
+# exchange is non-trivial — a real question or a real answer, not a greeting.
+_SUBSTANTIVE_TASK_CHARS = 40
+_SUBSTANTIVE_ANSWER_CHARS = 200
+
+
 def _is_substantive_turn(normalized, response, ctx) -> bool:
     """Worth recording to episodic memory / distilling from: the turn did real work
     (experts or tools ran) or exchanged something non-trivial. A bare greeting or a
@@ -66,7 +72,7 @@ def _is_substantive_turn(normalized, response, ctx) -> bool:
         return True
     task = (getattr(normalized, "content", "") or "").strip()
     answer = (getattr(response, "text", "") or "").strip()
-    return len(task) >= 40 or len(answer) >= 200
+    return len(task) >= _SUBSTANTIVE_TASK_CHARS or len(answer) >= _SUBSTANTIVE_ANSWER_CHARS
 
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
