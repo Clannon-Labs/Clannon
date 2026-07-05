@@ -36,6 +36,12 @@ from .contracts.graph import (
     GraphResult,
     GraphPort,
 )
+from .contracts.budget import (
+    BudgetScope,
+    TokenBudget,
+    BudgetReservation,
+    BudgetPort,
+)
 from .contracts.workspace import RunResult, WorkspacePort
 from .contracts.artifact import ArtifactRef, ArtifactStore
 from .contracts.input_file import InputFile
@@ -76,6 +82,7 @@ from .vocab.errors import (
     ModelUnavailableError,
     MemoryStoreError,
     CircuitOpenError,
+    BudgetExhausted,
     SandboxError,
     ConfigError,
 )
@@ -110,6 +117,10 @@ __all__ = [
     "GraphEdge",
     "GraphResult",
     "GraphPort",
+    "BudgetScope",
+    "TokenBudget",
+    "BudgetReservation",
+    "BudgetPort",
     "RunResult",
     "WorkspacePort",
     "ArtifactRef",
@@ -149,6 +160,7 @@ __all__ = [
     "ModelUnavailableError",
     "MemoryStoreError",
     "CircuitOpenError",
+    "BudgetExhausted",
     "SandboxError",
     "ConfigError",
 

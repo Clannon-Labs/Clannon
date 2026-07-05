@@ -313,6 +313,47 @@ class CircuitOpenError(InfrastructureError):
         return " | ".join(parts)
 
 
+class BudgetExhausted(InfrastructureError):
+    """
+    A token-budget ceiling can't cover an LLM call, so the call is refused
+    (fail-closed, ADR-0004 — a paid product protects its margin over
+    overspending). Enforced below the orchestrator, at the per-call layer, so it
+    can trip on any call (verifier, orchestrator, expert) — an infrastructure-layer
+    resource refusal, the money sibling of the whole-turn wall clock.
+
+    Two triggers, two log levels (like SanitizationError):
+      ceiling genuinely hit:  expected, user-facing ("out of budget"). Log INFO/WARNING.
+      store unreachable:      fail-closed because we couldn't CHECK the ceiling. Log at
+                              ERROR — an ops fault wearing exhaustion's face; surface it.
+
+    Carry which ceiling tripped and when it resets:
+        raise BudgetExhausted(
+            "user billing ceiling reached",
+            ceiling="user", retry_after=3600.0, trace_id=...,
+        )
+    """
+    def __init__(
+        self,
+        message: str,
+        trace_id: str | None = None,
+        cause: BaseException | None = None,
+        ceiling: str | None = None,          # "user" | "mission"
+        retry_after: float | None = None,    # seconds until the ceiling resets
+    ) -> None:
+        super().__init__(message, trace_id, cause)
+        self.ceiling = ceiling
+        self.retry_after = retry_after
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        parts = [base]
+        if self.ceiling:
+            parts.append(f"ceiling={self.ceiling}")
+        if self.retry_after is not None:
+            parts.append(f"retry_after={self.retry_after}s")
+        return " | ".join(parts)
+
+
 class SandboxError(InfrastructureError):
     """
     The tool execution sandbox failed to start, timed out, or crashed.

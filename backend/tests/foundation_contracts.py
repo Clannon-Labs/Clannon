@@ -1,9 +1,14 @@
 import ast
+from dataclasses import FrozenInstanceError
 
 import pytest
 
 import foundation
-from foundation import Flow, Origin, ThreatLevel, ConfigError, constants
+from foundation import (
+    Flow, Origin, ThreatLevel, ConfigError, constants,
+    BudgetScope, TokenBudget, BudgetReservation, BudgetPort, BudgetExhausted,
+    InfrastructureError, VrakshaError,
+)
 from registry.config import ModelRegistry
 
 
@@ -88,6 +93,49 @@ def test_flow_block_and_fail_release_the_cached_payload():
         assert failed.handle._cached is None
 
     asyncio.run(go())
+
+
+# --- budget contract (foundation/contracts/budget.py) — inert seam, no impl yet ---
+
+def test_budget_scope_defaults_and_is_frozen():
+    scope = BudgetScope(user_id="u1")
+    assert scope.mission_id == ""                 # user-only turn: no mission ceiling
+    with pytest.raises(FrozenInstanceError):
+        scope.user_id = "attacker"                # identity-set-once: immutable
+
+
+def test_token_budget_defaults():
+    budget = TokenBudget(user_remaining=1000)
+    assert budget.mission_remaining is None       # None = no mission ceiling in play
+    assert budget.period == ""
+
+
+def test_budget_reservation_carries_scope_and_estimate():
+    scope = BudgetScope(user_id="u1", mission_id="m1")
+    res = BudgetReservation(reservation_id="r1", scope=scope, estimated=500)
+    assert res.scope.mission_id == "m1"
+    assert res.estimated == 500
+
+
+def test_budget_port_is_runtime_checkable():
+    class _Impl:
+        async def reserve(self, scope, estimate): ...
+        async def reconcile(self, reservation, actual): ...
+        async def remaining(self, scope): ...
+
+    assert isinstance(_Impl(), BudgetPort)         # duck-typed sole broker satisfies it
+    assert not isinstance(object(), BudgetPort)    # missing the door → not a BudgetPort
+
+
+def test_budget_exhausted_is_infrastructure_and_carries_context():
+    err = BudgetExhausted(
+        "user billing ceiling reached", ceiling="user", retry_after=3600.0,
+    )
+    assert isinstance(err, InfrastructureError)    # 4xx: fail-closed resource refusal
+    assert isinstance(err, VrakshaError)
+    assert err.ceiling == "user"
+    assert err.retry_after == 3600.0
+    assert "ceiling=user" in str(err) and "retry_after=3600.0s" in str(err)
 
 
 def test_all_mirrors_the_import_block():
