@@ -44,11 +44,13 @@ class CapabilityRegistry:
         return self._ok.get((CapabilityKind.EXPERT, key))
 
     def catalog(self, kind: CapabilityKind) -> list[dict]:
-        """OK capabilities of a kind, as a compact list (key/description/domain/tags)."""
+        """OK capabilities of a kind, as a compact list (key/label/description/
+        domain/tags) — a projection of `cards()` (one source of shape, not a
+        separately hand-maintained dict; Law 1)."""
         return [
-            {"key": s.key, "description": s.description, "domain": s.domain, "tags": list(s.tags)}
-            for (k, _), s in self._ok.items()
-            if k == kind
+            {"key": c["key"], "label": c["label"], "description": c["description"],
+             "domain": c["domain"], "tags": c["tags"]}
+            for c in self.cards(kind)
         ]
 
     def cards(self, kind: CapabilityKind) -> list[dict]:
@@ -56,7 +58,9 @@ class CapabilityRegistry:
         Robust, machine-readable cards: each OK capability with its input JSON
         Schema (what to emit to call it) plus a status. The gateway uses these to
         build the orchestrator's native tools; broken capabilities are surfaced
-        separately via `unavailable()`.
+        separately via `unavailable()`. This is the canonical metadata shape —
+        `catalog()` projects from it, so a new field added here is automatically
+        available to both (the Expert→UI discovery-metadata contract).
         """
         cards: list[dict] = []
         for (k, _), s in self._ok.items():
@@ -64,6 +68,7 @@ class CapabilityRegistry:
                 continue
             cards.append({
                 "key": s.key,
+                "label": s.label,
                 "kind": s.kind.value,
                 "description": s.description,
                 "domain": s.domain,

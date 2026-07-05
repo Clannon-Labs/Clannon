@@ -8,9 +8,13 @@
 > "what breaks if X is removed / what depends on Y / why was Z chosen."
 > **Authority level:** Tier 5 (Subsystem). Inherits
 > [../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) and the Invariants.
-> **Status:** ⚠️ **PROPOSED — not implemented.** No code exists for this pillar
-> today. This document is its home and target spec, not a description of a built
-> feature. Tracked by
+> **Status:** 🛠 **PARTIALLY BUILT.** The **dependency-graph slice** is built: the
+> `GraphPort`/Kuzu substrate (`core/memory/graph_store.py`, `graph_manager.py`) + the
+> ast import-graph extractor, answering `depends_on` / `dependents_of` /
+> `breaks_if_removed` over a real repo (53 graph tests; demo
+> `scripts/cb2_repo_intelligence_demo.py`; the CB2 benchmark harness is in progress).
+> The **remaining graphs** (file, architectural, decision, ownership) and
+> natural-language explanation remain the target spec below — unbuilt. Tracked by
 > [../../decisions/proposed/0008-repository-intelligence.md](../../decisions/proposed/0008-repository-intelligence.md).
 > **Related:** [../../vision/ATTENTION_THRESHOLD.md](../../vision/ATTENTION_THRESHOLD.md)
 > (Pillar 3) · [../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md](../../benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md)
@@ -57,6 +61,8 @@ ingestion.
 
 ## What is NOT claimed
 
-No file/dependency/decision graph is built. Today's repo understanding is
-whatever the code expert + tools achieve per-run. Do not present this pillar as
-shipped until Benchmark 2's pass requirements are met.
+The **dependency graph** is built (the thin slice — import/dependency edges +
+depends-on / breaks-if-removed traversal over Kuzu). The **file, architectural,
+decision, and ownership** graphs are NOT, nor is natural-language architectural
+explanation (that is an LLM-synthesis layer above the graph, not the substrate).
+Do not present the full pillar as shipped until Benchmark 2's pass requirements are met.

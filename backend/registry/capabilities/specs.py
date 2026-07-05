@@ -55,6 +55,15 @@ class CapabilitySpec:
         """Domain-qualified identity, unique per kind."""
         return f"{self.domain}.{self.name}"
 
+    @property
+    def label(self) -> str:
+        """Human-readable display name derived from `key`, e.g. "media.analyst" ->
+        "Media analyst". One canonical place for this so every consumer (a UI
+        surface, a picker, a future capabilities view) gets the same label instead
+        of re-deriving it — mirrors the transform `api/config.py::_expert_label`
+        already computed ad hoc for the model-settings picker before this existed."""
+        return self.key.replace(".", " ").replace("_", " ").capitalize()
+
 
 @dataclass(frozen=True)
 class ToolSpec(CapabilitySpec):

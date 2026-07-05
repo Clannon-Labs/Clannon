@@ -105,6 +105,28 @@ def test_invalid_marked_broken_and_excluded():
     assert status.value == "broken" and reason == "bad thing"
 
 
+# --- Expert->UI discovery metadata: label + catalog/cards consistency ---
+
+def test_label_derived_from_key():
+    reg = CapabilityRegistry()
+    reg.register(_tool_spec(name="analyst", domain="media"), None)
+    spec = reg.get_tool("media.analyst")
+    assert spec.label == "Media analyst"
+
+
+def test_catalog_is_a_projection_of_cards():
+    """catalog() must never drift from cards() -- it's a subset view, not a
+    separately hand-maintained dict (Law 1)."""
+    reg = CapabilityRegistry()
+    reg.register(_tool_spec(name="analyst", domain="media", description="d"), None)
+    card = reg.cards(CapabilityKind.TOOL)[0]
+    entry = reg.catalog(CapabilityKind.TOOL)[0]
+    assert entry == {
+        "key": card["key"], "label": card["label"],
+        "description": card["description"], "domain": card["domain"], "tags": card["tags"],
+    }
+
+
 # --- discovery (global registry, idempotent) ---
 
 def test_discover_populates_real_capabilities():
