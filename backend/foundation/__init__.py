@@ -26,6 +26,16 @@ from .contracts.memory import (
     MemoryWriteProposal,
     MemoryPort,
 )
+from .contracts.graph import (
+    NodeLabel,
+    EdgeLabel,
+    EdgeOrigin,
+    GraphScope,
+    GraphNode,
+    GraphEdge,
+    GraphResult,
+    GraphPort,
+)
 from .contracts.workspace import RunResult, WorkspacePort
 from .contracts.artifact import ArtifactRef, ArtifactStore
 from .contracts.input_file import InputFile
@@ -92,6 +102,14 @@ __all__ = [
     "HydrationPackage",
     "MemoryWriteProposal",
     "MemoryPort",
+    "NodeLabel",
+    "EdgeLabel",
+    "EdgeOrigin",
+    "GraphScope",
+    "GraphNode",
+    "GraphEdge",
+    "GraphResult",
+    "GraphPort",
     "RunResult",
     "WorkspacePort",
     "ArtifactRef",
