@@ -33,6 +33,7 @@ def _fake_flow(text="word " * 40):
         memory_writes_persisted=[],   # what the Manager actually wrote (surfaced on delivery)
         expert_findings=[],
         expert_calls=[],
+        tool_calls=[],                # read by run_driver._collect_sources on delivery
     )
     return SimpleNamespace(ctx=ctx)
 

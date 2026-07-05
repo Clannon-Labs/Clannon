@@ -38,6 +38,7 @@ def _fake_flow(*, blocked=False, failed=False, proposed=(), persisted=()):
         memory_writes_persisted=list(persisted),
         expert_findings=[],
         expert_calls=[],
+        tool_calls=[],                     # read by run_driver._collect_sources on delivery
     )
     return SimpleNamespace(ctx=ctx)
 

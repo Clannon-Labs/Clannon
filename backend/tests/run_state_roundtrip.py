@@ -56,6 +56,7 @@ PERSISTED = {
     "block_stage",
     "session_id",
     "project_id",
+    "sources",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -113,6 +114,8 @@ def _fully_populated_run() -> RunState:
     run.block_stage = "filter"
     run.session_id = "run_session01"
     run.project_id = "proj_xyz"
+    run.sources = [{"id": "src_1", "title": "example.com — clannon",
+                    "url": "https://example.com/clannon", "domain": "example.com"}]
     return run
 
 
