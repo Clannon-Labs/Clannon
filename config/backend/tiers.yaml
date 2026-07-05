@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/tiers.yaml — plans, pricing, feature flags.  BACKEND-CONTROLLED.
+# The owner's dials for what the product sells. Served to the frontend via GET /config
+# so the UI never drifts from what the backend believes; a bypassed client cannot change
+# any of this. Change a plan/price/flag HERE and it applies everywhere.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Plan assigned to a new signup ("pro" unlocks all memory tiers — handy in dev; prod keeps
+# "free" until billing drives upgrades). A deployment may override via SERVER_DEFAULT_PLAN env.
+default_plan: free
+
+# Feature flags surfaced to the frontend via /config.
+features:
+  demo: true
+  billing: true
+
+# Pricing / tiers.  Each: id · display name · monthly USD · monthly token budget · which memory
+# tiers it unlocks · tagline · marketing feature bullets.
+plans:
+  - id: free
+    name: Seedling
+    monthlyUsd: 0
+    tokenBudget: 100000
+    tagline: "Feel the continuity. Three real runs a month."
+    memoryTiers: [episodic]
+    features:
+      - "100k tokens / month"
+      - "Single research workflow"
+      - "Community support"
+  - id: starter
+    name: Starter
+    monthlyUsd: 29
+    tokenBudget: 2000000
+    tagline: "For the freelancer with recurring clients."
+    memoryTiers: [episodic, wiki]
+    features:
+      - "2M tokens / month"
+      - "Episodic + Wiki memory"
+      - "Editable client wiki — your facts outrank inference"
+      - "All research workflows"
+      - "Email delivery"
+  - id: pro
+    name: Pro
+    monthlyUsd: 79
+    tokenBudget: 6000000
+    tagline: "The full memory system. This is where it compounds."
+    memoryTiers: [episodic, wiki, semantic, procedural]
+    highlight: true
+    features:
+      - "6M tokens / month"
+      - "All four memory tiers"
+      - "Semantic graph — facts, sources, provenance"
+      - "Procedural memory — it learns how you work"
+      - "Per-layer model configuration"
+      - "Priority queue"
+  - id: agency
+    name: Agency
+    monthlyUsd: 199
+    tokenBudget: 20000000
+    tagline: "Every client, every project, one growing archive."
+    memoryTiers: [episodic, wiki, semantic, procedural]
+    features:
+      - "20M tokens / month"
+      - "All four memory tiers"
+      - "Unlimited client workspaces"
+      - "MCP integrations — context flows in automatically"
+      - "Team seats (up to 5)"
+      - "Dedicated support"

@@ -1,0 +1,15 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/limits.yaml — product input limits.  BACKEND-CONTROLLED (server-enforced).
+# Surfaced to the UI via GET /config.limits so the client validates against the EXACT numbers
+# the server enforces — never a drifting client copy, never bumpable from the browser.
+# Bump a limit HERE and both server enforcement and the UI follow.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# briefMinChars is intentionally low — a message can be as short as "hi"; the workspace is a
+# conversation, not a form.
+briefMinChars: 2
+briefMaxChars: 20000          # run + follow-up brief length cap (chars)
+maxInputFiles: 10             # files attachable to one run
+wikiUploadMaxFiles: 10        # files per bulk wiki import
+wikiUploadMaxBytes: 524288    # 512 KiB per wiki-import file
+wikiUploadExtensions: [".md", ".markdown", ".txt"]

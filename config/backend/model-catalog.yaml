@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/model-catalog.yaml — the user-SELECTABLE model catalog.  BACKEND-CONTROLLED.
+# What Settings → Models offers a user to drive the text/reasoning + media layers. Curating this
+# list is a business/product decision. (The SECURITY layers — verifier, output filter — are
+# system-managed and NOT user-selectable; that lock lives in api/. The model each layer actually
+# RUNS comes from models.yaml routing — a separate concern that moves into config/ in a later step.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Text/reasoning models (orchestrator, research, planning, code).
+selectable:
+  # Google
+  - gemini-3.5-flash
+  - gemini-3.1-pro-preview
+  - gemini-3.1-flash-lite
+  - gemini-2.5-pro
+  - gemini-2.5-flash
+  - gemini-2.5-flash-lite
+  # Anthropic
+  - claude-fable-5
+  - claude-opus-4-8
+  - claude-opus-4-7
+  - claude-opus-4-6
+  - claude-sonnet-4-6
+  - claude-haiku-4-5
+  # OpenAI
+  - gpt-5.5
+  - gpt-5.4
+  - gpt-5.4-mini
+  - gpt-5.4-nano
+
+# Multimodal models for media/document understanding (image/audio/video/PDF). Gemini reads
+# everything, so it leads; the cross-provider vision models cover image + PDF.
+media:
+  - gemini-2.5-flash
+  - gemini-2.5-pro
+  - gemini-3.5-flash
+  - gemini-2.5-flash-lite
+  - claude-opus-4-8
+  - claude-sonnet-4-6
+  - gpt-5.4
