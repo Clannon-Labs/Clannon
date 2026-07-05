@@ -22,8 +22,9 @@ of any session that continues this work. Phase files live in
 `docs/benchmarks/mission/`; a phase moved to `docs/benchmarks/reached/` is done
 (outcome recorded inside).
 
-**Two owner briefs feed it** (raw text local + gitignored in
-`proposals/to-backend/`; durably settled into committed docs so nothing is lost):
+**Two owner briefs feed it** (raw text local + gitignored, kept as source in
+`proposals/owner-briefs-settled/` — moved OUT of the active inbox once settled;
+the committed docs below are canonical, so nothing is lost):
 - `BACKEND_PARITY.md` → settled as the phase map + `V1_GAP_ANALYSIS.md`.
 - `BATCH_ARCHITECTURE.md` → settled as `docs/architecture/BATCH_ARCHITECTURE.md`
   (`[PROPOSED]` — a batch layer between orchestrator and experts; the structural
