@@ -5,15 +5,15 @@ from registry.capabilities import discover, registry
 
 
 def test_documentation_and_summarization_register():
+    # tool_grants + permission are pinned once, for every expert, in
+    # tests/expert_contract.py::test_expert_registration_pins_least_privilege --
+    # not duplicated here (Law 1). This test covers what that one doesn't: model_role.
     discover()
     docs = registry.get_expert("docs.writer")
     assert docs is not None and docs.model_role == "planner"
-    # reads sources, writes + delivers the doc; memory arrives pushed (sole-broker)
-    assert tuple(docs.tool_grants) == ("fs.read", "fs.write")
 
     summ = registry.get_expert("summary.condenser")
     assert summ is not None and summ.model_role == "research"
-    assert tuple(summ.tool_grants) == ()                        # pure reasoning, no tools
 
     assert {"docs.writer", "summary.condenser"} & {b.key for b in registry.broken()} == set()
 

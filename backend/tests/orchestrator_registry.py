@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel
 
+from foundation import PermissionLevel
 from registry.capabilities import (
     CapabilityKind,
     CapabilityRegistry,
@@ -112,3 +113,31 @@ def test_discover_populates_real_capabilities():
     experts = {c["key"] for c in registry.catalog(CapabilityKind.EXPERT)}
     assert {"search.web", "web.fetch_url", "code.python_exec", "math.calculator"} <= tools
     assert {"web.research", "synthesis.writer"} <= experts
+
+
+# The security-sensitive tools (NETWORK/EXECUTE/WRITE) with no dedicated per-tool test
+# file pinning their permission (chart/diff/delivery/memory/calculator each already pin
+# their own — see their dedicated test files; duplicating those here would be Law-1
+# redundancy). Pinned so a downgrade (e.g. web.fetch_url silently dropped to READ,
+# skipping invariant-A re-sanitization) regresses loudly rather than at the next audit.
+_EXPECTED_TOOL_PERMISSION: dict[str, PermissionLevel] = {
+    "web.fetch_url": PermissionLevel.NETWORK,
+    "code.python_exec": PermissionLevel.EXECUTE,
+    "search.web": PermissionLevel.NETWORK,
+    "code.run": PermissionLevel.EXECUTE,
+    "fs.read": PermissionLevel.READ,
+    "fs.write": PermissionLevel.WRITE,
+}
+
+
+def test_security_sensitive_tool_permissions_pinned():
+    discover()
+    problems = []
+    for key, expected in _EXPECTED_TOOL_PERMISSION.items():
+        spec = registry.get_tool(key)
+        if spec is None:
+            problems.append(f"{key}: not registered")
+            continue
+        if spec.permission is not expected:
+            problems.append(f"{key}: permission {spec.permission!r} != expected {expected!r}")
+    assert not problems, "tool permission drifted from its pin:\n  " + "\n  ".join(problems)
