@@ -1,0 +1,195 @@
+"""
+The Kuzu wrapper — behavioural proof that `core.memory.graph_store` enforces
+the ratified GraphPort scoping model
+(`proposals/archive/to-backend/2026-07-05_graph-port-design.md` §6,
+ratified in `to-memory/2026-07-05_graph-design-ratified-build-slice.md`) and
+degrades the way `store.py` degrades a dead Qdrant.
+
+Unlike Qdrant, Kuzu is embedded — no server, no `qdrant not reachable` skip.
+Every test below runs against a REAL Kuzu database in a fresh tmp_path, not a
+mock, so a schema/query typo fails here.
+
+  ✓ a missing user_id is refused fail-closed (§V.20) — read AND write, before
+    the database is even touched
+  ✓ composite scope: repo_id is an AND-ed sub-filter UNDER user_id, never a
+    scope on its own — same user_id, different repo_id, cannot see each
+    other's files
+  ✓ repo_id="" is the user's default/only repo — a strict subset, not a
+    wildcard that also matches a named repo
+  ✓ write -> read round-trip is correct: depends_on / dependents_of /
+    breaks_if_removed on a real on-disk graph
+  ✓ replace_code_graph is a FULL rebuild, not a merge — a file dropped from
+    one build to the next actually disappears
+  ✓ a hop request beyond MAX_HOPS_CEILING is clamped, not rejected/crashed
+  ✓ Kuzu unavailable degrades cleanly (degraded=True, empty paths), never
+    raises
+
+Run:
+    cd backend && .venv/bin/python -m pytest tests/memory_graph_store.py -v
+"""
+from __future__ import annotations
+
+import pytest
+
+import core.memory.graph_store as graph_store
+from core.memory.graph_extract import CodeImportGraph
+from core.memory.graph_store import GraphScope
+
+
+@pytest.fixture(autouse=True)
+def _fresh_graph_store(tmp_path, monkeypatch):
+    """Point the module's lazy singleton at a fresh on-disk db per test and
+    reset it after, so tests never see another test's Kuzu state."""
+    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(tmp_path / "graph_db"))
+    graph_store._db = None
+    graph_store._conn = None
+    graph_store._schema_ready = False
+    graph_store.DISABLED = False
+    yield
+    graph_store._db = None
+    graph_store._conn = None
+    graph_store._schema_ready = False
+
+
+def _chain_graph() -> CodeImportGraph:
+    """c.py -> b.py -> a.py (c depends on b, b depends on a)."""
+    return CodeImportGraph(
+        nodes=frozenset({"a.py", "b.py", "c.py"}),
+        edges=frozenset({("b.py", "a.py"), ("c.py", "b.py")}),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fail-closed scoping
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_missing_user_id_refuses_read_fail_closed():
+    scope = GraphScope(user_id="")
+
+    result = graph_store.depends_on(scope, "a.py")
+
+    assert result.degraded is True
+    assert result.paths == frozenset()
+
+
+def test_missing_user_id_refuses_write_fail_closed(tmp_path):
+    scope = GraphScope(user_id="")
+
+    ok = graph_store.replace_code_graph(scope, _chain_graph())
+
+    assert ok is False
+    # Nothing was written — a read under a VALID scope sees no data.
+    valid = GraphScope(user_id="someone")
+    assert graph_store.depends_on(valid, "c.py").paths == frozenset()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Write -> read round trip
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_write_then_read_round_trip():
+    scope = GraphScope(user_id="u1", repo_id="r1")
+    assert graph_store.replace_code_graph(scope, _chain_graph()) is True
+
+    assert graph_store.depends_on(scope, "c.py", max_hops=1).paths == frozenset({"b.py"})
+    assert graph_store.depends_on(scope, "c.py", max_hops=2).paths == frozenset({"b.py", "a.py"})
+    assert graph_store.dependents_of(scope, "a.py", max_hops=1).paths == frozenset({"b.py"})
+    assert graph_store.dependents_of(scope, "a.py", max_hops=2).paths == frozenset({"b.py", "c.py"})
+    assert graph_store.breaks_if_removed(scope, "a.py").paths == frozenset({"b.py", "c.py"})
+    assert graph_store.breaks_if_removed(scope, "c.py").paths == frozenset()
+
+
+def test_hop_request_beyond_ceiling_is_clamped_not_rejected():
+    scope = GraphScope(user_id="u1")
+    graph_store.replace_code_graph(scope, _chain_graph())
+
+    # Absurdly large max_hops must not crash or hang — it's clamped to
+    # MAX_HOPS_CEILING internally, and the 2-hop chain still resolves fully.
+    result = graph_store.depends_on(scope, "c.py", max_hops=10_000)
+
+    assert result.degraded is False
+    assert result.paths == frozenset({"b.py", "a.py"})
+
+
+def test_replace_is_a_full_rebuild_not_a_merge():
+    scope = GraphScope(user_id="u1")
+    graph_store.replace_code_graph(scope, _chain_graph())
+
+    # b.py is removed from the tree entirely on the next build.
+    smaller = CodeImportGraph(
+        nodes=frozenset({"a.py", "c.py"}),
+        edges=frozenset(),
+    )
+    graph_store.replace_code_graph(scope, smaller)
+
+    assert graph_store.dependents_of(scope, "a.py", max_hops=5).paths == frozenset()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Composite (user_id, repo_id) scoping
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_repo_id_is_an_and_ed_subfilter_not_a_standalone_scope():
+    same_user_repo_a = GraphScope(user_id="u1", repo_id="alpha")
+    same_user_repo_b = GraphScope(user_id="u1", repo_id="beta")
+    graph_store.replace_code_graph(same_user_repo_a, _chain_graph())
+
+    # Same user_id, different repo_id — must NOT see alpha's graph.
+    assert graph_store.depends_on(same_user_repo_b, "c.py").paths == frozenset()
+    # The original scope is unaffected.
+    assert graph_store.depends_on(same_user_repo_a, "c.py").paths == frozenset({"b.py"})
+
+
+def test_default_repo_id_is_a_distinct_scope_from_a_named_repo():
+    default_repo = GraphScope(user_id="u1", repo_id="")
+    named_repo = GraphScope(user_id="u1", repo_id="clannon-self")
+    graph_store.replace_code_graph(named_repo, _chain_graph())
+
+    # repo_id="" is the user's default repo — a strict subset, not a
+    # wildcard that also matches "clannon-self".
+    assert graph_store.depends_on(default_repo, "c.py").paths == frozenset()
+    assert graph_store.depends_on(named_repo, "c.py").paths == frozenset({"b.py"})
+
+
+def test_different_users_never_see_each_others_graph_even_with_same_paths():
+    user_a = GraphScope(user_id="alice")
+    user_b = GraphScope(user_id="bob")
+    graph_store.replace_code_graph(user_a, _chain_graph())
+    graph_store.replace_code_graph(user_b, _chain_graph())
+
+    # Both wrote identical file paths; each must only ever see their own.
+    graph_store.replace_code_graph(
+        user_a, CodeImportGraph(nodes=frozenset({"a.py"}), edges=frozenset())
+    )
+    assert graph_store.dependents_of(user_a, "a.py").paths == frozenset()
+    assert graph_store.dependents_of(user_b, "a.py").paths == frozenset({"b.py"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Degrade-never-fail
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_kuzu_disabled_degrades_read_and_write_cleanly(monkeypatch):
+    monkeypatch.setattr(graph_store, "DISABLED", True)
+    scope = GraphScope(user_id="u1")
+
+    read = graph_store.depends_on(scope, "a.py")
+    write_ok = graph_store.replace_code_graph(scope, _chain_graph())
+
+    assert read.degraded is True
+    assert write_ok is False
+
+
+def test_kuzu_connection_failure_degrades_instead_of_raising(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    graph_store.replace_code_graph(scope, _chain_graph())
+
+    def _broken():
+        return None
+
+    monkeypatch.setattr(graph_store, "_kuzu", _broken)
+
+    result = graph_store.depends_on(scope, "c.py")
+
+    assert result.degraded is True
+    assert result.paths == frozenset()
