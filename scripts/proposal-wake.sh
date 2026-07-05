@@ -77,10 +77,14 @@ echo "$now" > "$STAMP"
 # `Wake:` line ⇒ the generic default. One line only — richer detail belongs in
 # the proposal body, which the recipient reads anyway. \r stripped (CRLF files).
 custom="$(grep -m1 -oP '^Wake:\s*\K.*' "$newest" 2>/dev/null | tr -d '\r' || true)"
+# Name the SENDER in the wake itself (from the proposal's `From:` header) so the
+# recipient never has to infer who pinged it. Falls back to a bare tag if absent.
+sender="$(grep -m1 -oP '^From:\s*\K\S+' "$newest" 2>/dev/null | tr -d '\r' || true)"
+tag="[auto-wake${sender:+ from $sender}]"
 if [ -n "$custom" ]; then
-  MSG="[auto-wake] $custom"
+  MSG="$tag $custom"
 else
-  MSG="[auto-wake] New proposal in your inbox — read the pending file(s) in proposals/to-$SIDE/, handle per the Proposal Protocol in CLAUDE.md, respond in the proposal file, and archive when done."
+  MSG="$tag New proposal in your inbox — read the pending file(s) in proposals/to-$SIDE/, handle per the Proposal Protocol in CLAUDE.md, respond in the proposal file, and archive when done."
 fi
 
 # The TEXT goes in one send-keys call so it lands as one message; `-l` types it

@@ -54,12 +54,21 @@ for side in "${sides[@]}"; do
     echo "clannon-standup: $session already up — will wake (not relaunching claude)."
   else
     dir="$(dir_for "$side")"
+    # Model tiering: the two backend SPECIALISTS (implementors) run on Sonnet 5 to
+    # cut token burn; backend (coordinator/reviewer/net) + frontend stay on their
+    # default (Opus). The quality net is the backend agent's Opus review of every
+    # specialist proposal + merge — not the model. Reversible: drop the flag to
+    # bump a specialist back to Opus.
+    launch="claude --dangerously-skip-permissions"
+    case "$side" in
+      memory|orchestration) launch="$launch --model claude-sonnet-5" ;;
+    esac
     tmux new-session -d -s "$session" -c "$dir"
     # type the launch command literally, then a detached Enter to submit it
-    tmux send-keys -t "$session" -l "claude --dangerously-skip-permissions"
+    tmux send-keys -t "$session" -l "$launch"
     sleep 0.3
     tmux send-keys -t "$session" Enter
-    echo "clannon-standup: launched $session (cwd $dir) with bypass permissions."
+    echo "clannon-standup: launched $session (cwd $dir) [$launch]."
     created=1
   fi
 done
