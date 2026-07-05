@@ -29,6 +29,13 @@ class NodeLabel(str, Enum):
     FACT = "fact"
     CLAIM = "claim"
     MEDIA_SEGMENT = "media_segment"
+    # Mission Engine (batch phase) — a mission + its tasks as durable graph nodes.
+    # A MISSION's intent/success_criteria are write-once; a TASK's status is a
+    # mutable cursor (in-place, no transition history) while non-terminal, asserted
+    # once terminal. mission_id lives as a node PROPERTY (a filter under user_id),
+    # not a GraphScope dimension — read via members(scope, TASK, parent_id=mission_id).
+    MISSION = "mission"
+    TASK = "task"
 
 
 class EdgeLabel(str, Enum):
@@ -39,6 +46,10 @@ class EdgeLabel(str, Enum):
     CONTRADICTS = "contradicts"
     DERIVED_FROM = "derived_from"
     AUTHORED_BY = "authored_by"
+    # Mission Engine (batch phase) — typed task dependencies.
+    BLOCKS = "blocks"            # task A blocks task B (B waits on A)
+    FEEDS = "feeds"             # task A's output feeds task B
+    SUPERSEDES = "supersedes"    # a re-planned task supersedes the one it replaces
 
 
 class EdgeOrigin(str, Enum):
@@ -122,15 +133,22 @@ class GraphPort(Protocol):
         self, scope: GraphScope, *, label: NodeLabel | None = None,
         vector_id: str = "", natural_key: str = "",
     ) -> GraphResult:
-        """Point lookup — by label, by vector_id (the node<->vector hop, inert until the
-        fusion phase), or by a label-specific natural key (e.g. a file path)."""
+        """POINT lookup of ONE node — requires a `vector_id` (the node<->vector hop, inert
+        until the fusion phase) or a label-specific `natural_key` (e.g. a file path). `label`
+        ALONE is NOT a bulk read — it returns empty by construction. The bulk "every node of a
+        label in scope" read (`members()`, the Mission Engine's "all tasks for mission X") is
+        added to this Protocol together with its GraphManager implementer — placing it here
+        before that would break the sole implementer's `isinstance(GraphPort)` check."""
         ...
 
     async def write(
         self, scope: GraphScope, nodes: list[GraphNode], edges: list[GraphEdge]
     ) -> GraphResult:
-        """The sole write path. Batch upsert; INFERRED edges may be superseded by a later
-        batch, ASSERTED edges are immutable to this call (the manager no-ops/rejects an
-        overwrite rather than silently accepting it). Returns what was actually persisted —
-        the same 'no phantom writes' discipline as `record_write_proposals`."""
+        """The sole write path. Batch upsert. A NODE's properties mutate IN PLACE on a repeat
+        write to the same `node_id` (verified against Kuzu's `MERGE ... ON MATCH SET` — the
+        Mission Engine relies on this for a TASK's mutable `status`; no transition history is
+        kept, by design). INFERRED edges may be superseded by a later batch; ASSERTED edges are
+        immutable to this call (the manager no-ops/rejects an overwrite rather than silently
+        accepting it). Returns what was actually persisted — the same 'no phantom writes'
+        discipline as `record_write_proposals`."""
         ...
