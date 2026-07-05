@@ -60,14 +60,14 @@ class _MemStore:
     def upsert(
         self, tier, user_id, session_id, trace_id, vector, content,
         rationale, confidence, trust, point_id=None,
-        *, kind="unspecified", valid_at=0.0, source="", superseded_by="",
+        *, kind="unspecified", valid_at=0.0, source="", superseded_by="", participants="",
     ) -> str:
         row = {
             "user_id": user_id, "session_id": session_id,
             "trace_id": trace_id, "content": content, "rationale": rationale,
             "confidence": confidence, "trust": trust, "created_at": 1000.0,
             "kind": kind, "valid_at": valid_at, "source": source,
-            "superseded_by": superseded_by,
+            "superseded_by": superseded_by, "participants": participants,
         }
         if point_id is not None:  # refresh path — replace in place (like the real store)
             for p in self._data[tier]:
@@ -162,6 +162,34 @@ def test_typed_proposal_round_trips_through_hydrate():
     assert item.valid_at == 456.0, f"valid_at not surfaced: {item.valid_at}"
     assert item.source == "doc://adr-0002", f"source not surfaced: {item.source!r}"
     assert item.superseded_by == ""  # inert
+
+
+def test_decision_kind_and_participants_round_trip_through_hydrate():
+    """CB4: a kind=DECISION proposal carrying `participants` round-trips through
+    the real write/read path and is distinguishable as a category — the exact
+    property EB2's 'recent decisions' query needs."""
+    from core.memory.manager import MemoryManager
+
+    mem = _MemStore()
+    proposal = MemoryWriteProposal(
+        store=MemoryStore.SEMANTIC,
+        content="We chose Option B: graph-first retrieval.",
+        rationale="performance benchmarks favored graph traversal", confidence=0.95,
+        kind=MemoryKind.DECISION, source="architecture-debate-2026-07-05",
+        participants="alice (proposer), bob (reviewer)",
+    )
+    s, u, i, e = _with_double(mem)
+    with s, u, i, e:
+        manager = MemoryManager()
+        asyncio.run(manager.record_write_proposals(_USER, _SESSION, [proposal]))
+        pkg = _hydrate(manager, _USER)
+
+    assert pkg.items, "decision memory was not recalled"
+    item = pkg.items[0]
+    assert item.kind is MemoryKind.DECISION
+    assert item.participants == "alice (proposer), bob (reviewer)"
+    decisions = [i for i in pkg.items if i.kind is MemoryKind.DECISION]
+    assert len(decisions) == 1, "a DECISION must be identifiable as a category, not just prose"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

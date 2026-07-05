@@ -197,13 +197,15 @@ def upsert(
     valid_at: float = 0.0,
     source: str = "",
     superseded_by: str = "",
+    participants: str = "",
 ) -> str | None:
     """Insert (or refresh, when point_id given) one memory. None on failure.
 
     Typed-knowledge (CB1) is additive: `kind`/`valid_at`/`source` ride the payload
     beside the existing provenance; defaults (`unspecified`/0.0/"") preserve legacy
     records read back through `.get(key, default)`. `superseded_by` is plumbed but
-    inert in CB1 — EB1's manager-owned invalidation is the only writer of it."""
+    inert in CB1 — EB1's manager-owned invalidation is the only writer of it.
+    `participants` (CB4) is likewise additive and carried, not populated here."""
     client = _qdrant()
     collection = COLLECTIONS.get(tier)
     if client is None or collection is None or not user_id:
@@ -245,6 +247,7 @@ def upsert(
                         "valid_at": valid_at,
                         "source": source,
                         "superseded_by": superseded_by,
+                        "participants": participants,
                     },
                 )
             ],

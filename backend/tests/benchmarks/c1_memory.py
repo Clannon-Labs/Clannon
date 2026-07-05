@@ -162,7 +162,7 @@ class _FakeStore:
     def upsert(
         self, tier, user_id, session_id, trace_id, vector, content,
         rationale, confidence, trust, point_id=None,
-        *, kind="unspecified", valid_at=0.0, source="", superseded_by="",
+        *, kind="unspecified", valid_at=0.0, source="", superseded_by="", participants="",
     ) -> str:
         bucket = self.points[tier]
         if point_id is not None:  # refresh path (real store replaces in place)
@@ -171,7 +171,7 @@ class _FakeStore:
                     p.update(content=content, rationale=rationale,
                              confidence=confidence, vector=vector,
                              kind=kind, valid_at=valid_at, source=source,
-                             superseded_by=superseded_by)
+                             superseded_by=superseded_by, participants=participants)
                     return point_id
         self._seq += 1
         pid = f"pt-{self._seq}"
@@ -182,7 +182,7 @@ class _FakeStore:
             "created_at": self.clock, "vector": vector,
             # typed-knowledge (CB1) — round-trip so hydrate reads them back
             "kind": kind, "valid_at": valid_at, "source": source,
-            "superseded_by": superseded_by,
+            "superseded_by": superseded_by, "participants": participants,
         })
         return pid
 

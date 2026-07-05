@@ -96,8 +96,18 @@ _SUPERSESSION_TIMEOUT_S = 5.0
 
 # Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a
 # barer re-write of a source-backed fact never silently downgrades it to an
-# inferred assumption (symmetric with confidence=max on refresh).
-_KIND_RANK = {MemoryKind.UNSPECIFIED: 0, MemoryKind.ASSUMPTION: 1, MemoryKind.FACT: 2}
+# inferred assumption (symmetric with confidence=max on refresh). DECISION is a
+# CATEGORY not an epistemic status (a decision is itself asserted), so it ranks
+# with FACT — but DECISION never actually reaches this comparison in practice,
+# since decision-involved pairs skip the merge branch entirely (see
+# _persist_one). Ranked anyway, and every lookup is .get(kind, 0)-safe, so nothing
+# KeyErrors if that invariant is ever loosened.
+_KIND_RANK = {
+    MemoryKind.UNSPECIFIED: 0,
+    MemoryKind.ASSUMPTION: 1,
+    MemoryKind.FACT: 2,
+    MemoryKind.DECISION: 2,
+}
 
 
 def _coerce_kind(raw: object) -> MemoryKind:
@@ -240,6 +250,7 @@ class MemoryManager:
                         valid_at=float(hit.get("valid_at", 0.0)),
                         source=hit.get("source", ""),
                         superseded_by=hit.get("superseded_by", ""),
+                        participants=hit.get("participants", ""),
                     ))
 
         items.sort(key=lambda i: (i.trust, i.score), reverse=True)
@@ -334,17 +345,29 @@ class MemoryManager:
         point_id = None
         confidence = proposal.confidence
         kind, valid_at, source = proposal.kind, proposal.valid_at, proposal.source
-        if existing and existing[0]["score"] >= _DEDUP_SIMILARITY:
+        participants = proposal.participants
+        existing_kind = _coerce_kind(existing[0].get("kind")) if existing else MemoryKind.UNSPECIFIED
+        # CB4: a DECISION record is append-only in EITHER direction — a DECISION
+        # proposal never merges into an existing point, AND an existing DECISION is
+        # never merged into by anything else (an ordinary fact that happens to
+        # resemble a decision's wording must not silently overwrite it either). No
+        # matter how closely they resemble each other, this always inserts fresh and
+        # offers itself to the EB1 supersession judge below instead (both records
+        # retained, linked) — never the silent content/rationale overwrite
+        # dedup-merge would otherwise do (CB4's "reasoning is lost" fail condition).
+        decision_involved = proposal.kind == MemoryKind.DECISION or existing_kind == MemoryKind.DECISION
+        if existing and existing[0]["score"] >= _DEDUP_SIMILARITY and not decision_involved:
             point_id = existing[0]["id"]
             prev = existing[0]
             confidence = max(confidence, float(prev.get("confidence", 0)))
             # keep the stronger typed signal on refresh (never downgrade a
             # source-backed fact into a barer re-write's assumption)
-            prev_kind = _coerce_kind(prev.get("kind"))
-            if _KIND_RANK[prev_kind] > _KIND_RANK[kind]:
+            prev_kind = existing_kind
+            if _KIND_RANK.get(prev_kind, 0) > _KIND_RANK.get(kind, 0):
                 kind = prev_kind
             source = source or prev.get("source", "")
             valid_at = valid_at or float(prev.get("valid_at", 0.0))
+            participants = participants or prev.get("participants", "")
         memory_id = await asyncio.to_thread(
             store.upsert,
             tier,
@@ -365,6 +388,7 @@ class MemoryManager:
             kind=kind.value,
             valid_at=valid_at,
             source=source,
+            participants=participants,
         )
         # EB1: `existing` was searched BEFORE this upsert, so it can never be this
         # same memory — self-supersession is structurally impossible here, not
@@ -372,18 +396,26 @@ class MemoryManager:
         # was None going in — a dedup-merge is a refresh of the SAME fact, not a
         # competing one) is a candidate.
         if memory_id and point_id is None and tier in _SUPERSESSION_TIERS and existing:
-            await self._maybe_mark_superseded(tier, user_id, memory_id, content, existing[0])
+            await self._maybe_mark_superseded(tier, user_id, memory_id, content, existing[0], kind=kind)
         return memory_id
 
     async def _maybe_mark_superseded(
-        self, tier: MemoryStore, user_id: str, memory_id: str, content: str, candidate: dict,
+        self, tier: MemoryStore, user_id: str, memory_id: str, content: str,
+        candidate: dict, *, kind: MemoryKind,
     ) -> None:
         """EB1, best-effort: judge whether the memory just written supersedes the
         closest existing hit found before the write. Any fault here — judge or
         mark, including this step's own timeout — must never surface: the
         underlying write already landed and this is pure annotation on top of it."""
         score = candidate.get("score", 0.0)
-        if not (_SUPERSESSION_FLOOR <= score < _DEDUP_SIMILARITY):
+        if score < _SUPERSESSION_FLOOR:
+            return
+        # CB4: a DECISION never took the merge branch (see _persist_one), so ANY
+        # resemblance — including >= _DEDUP_SIMILARITY, the exact band a merge
+        # would otherwise silently overwrite in — is a supersession candidate.
+        # Every other kind keeps the existing upper bound: that band means "the
+        # same fact, already merged," not a competing claim to judge.
+        if kind != MemoryKind.DECISION and score >= _DEDUP_SIMILARITY:
             return
         try:
             supersedes = await asyncio.wait_for(

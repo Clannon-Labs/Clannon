@@ -69,6 +69,7 @@ class _Recorder:
         valid_at: float = 0.0,
         source: str = "",
         superseded_by: str = "",
+        participants: str = "",
     ) -> str:
         self.calls.append(
             dict(

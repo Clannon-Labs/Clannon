@@ -78,6 +78,7 @@ class _MemStore:
         valid_at: float = 0.0,
         source: str = "",
         superseded_by: str = "",
+        participants: str = "",
     ) -> str | None:
         pid = point_id or str(uuid.uuid4())
         self._data[tier].append(
@@ -96,6 +97,7 @@ class _MemStore:
                 "valid_at": valid_at,
                 "source": source,
                 "superseded_by": superseded_by,
+                "participants": participants,
             }
         )
         return pid

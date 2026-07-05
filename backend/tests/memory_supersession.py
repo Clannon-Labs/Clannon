@@ -33,7 +33,7 @@ import core.memory.store as store_mod
 import core.memory.writer as writer_mod
 from core.memory import store
 from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _SUPERSESSION_FLOOR
-from foundation import HydrationRequest, MemoryStore, MemoryWriteProposal, NormalizedInput
+from foundation import HydrationRequest, MemoryKind, MemoryStore, MemoryWriteProposal, NormalizedInput
 
 # NOT `import core.memory.manager as manager_mod`: core/memory/__init__.py does
 # `from .manager import MemoryManager, manager`, which shadows the `manager`
@@ -368,13 +368,13 @@ class _E2EStore:
 
     def upsert(self, tier, user_id, session_id, trace_id, vector, content,
                rationale, confidence, trust, point_id=None, *,
-               kind="unspecified", valid_at=0.0, source="", superseded_by="") -> str:
+               kind="unspecified", valid_at=0.0, source="", superseded_by="", participants="") -> str:
         pid = point_id or f"pt-{len(self._rows) + 1}"
         row = dict(
             id=pid, user_id=user_id, session_id=session_id, trace_id=trace_id,
             content=content, rationale=rationale, confidence=confidence, trust=trust,
             created_at=1_000.0, kind=kind, valid_at=valid_at, source=source,
-            superseded_by=superseded_by,
+            superseded_by=superseded_by, participants=participants,
         )
         if point_id is not None:
             for r in self._rows:
@@ -428,3 +428,89 @@ def test_superseded_item_stays_surfaced_on_retrieval(monkeypatch):
     assert old_item.superseded_by, "the old item must carry a visible superseded_by link"
     assert old_item.superseded_by == double._rows[1]["id"], "must point at the memory that replaced it"
     assert new_item.superseded_by == "", "the current item is not itself superseded"
+
+
+# ---------------------------------------------------------------------------
+# 5. CB4 — MemoryKind.DECISION is append-only: the keystone guarantee. A
+#    near-identical revision at or above _DEDUP_SIMILARITY must NEVER take the
+#    silent merge-overwrite path (which replaces content/rationale with no
+#    trace — CB4's own "reasoning is lost" fail condition). It must always
+#    insert fresh and go through the EB1 supersession judge instead.
+# ---------------------------------------------------------------------------
+
+def test_decision_at_dedup_similarity_never_merges(monkeypatch):
+    """A DECISION proposal scoring >= _DEDUP_SIMILARITY against an existing point
+    must still insert FRESH (point_id=None), never reuse the existing point_id —
+    the exact band a merge would otherwise silently overwrite in."""
+    monkeypatch.setattr(emb_mod, "embed", _embed_ok())
+    monkeypatch.setattr(store_mod, "search", _search_hit(
+        score=_DEDUP_SIMILARITY, existing_id="decision-v1", content="We chose Option B: graph-first retrieval."
+    ))
+
+    upserts = []
+
+    def fake_upsert(tier, *, user_id, session_id, trace_id, vector, content, rationale,
+                     confidence, trust, point_id=None, kind="unspecified", valid_at=0.0,
+                     source="", superseded_by="", participants=""):
+        upserts.append(dict(content=content, point_id=point_id, kind=kind))
+        return "decision-v2"
+
+    monkeypatch.setattr(store_mod, "upsert", fake_upsert)
+
+    async def fake_judge(new_content, existing_content):
+        return True
+
+    monkeypatch.setattr(writer_mod, "judge_supersession", fake_judge)
+    monkeypatch.setattr(store_mod, "mark_superseded", lambda *a, **k: True)
+
+    proposal = MemoryWriteProposal(
+        store=MemoryStore.SEMANTIC, kind=MemoryKind.DECISION, confidence=0.9,
+        content="We chose Option B: graph-first retrieval, revised scope.",
+        rationale="performance benchmarks favored graph traversal",
+    )
+    result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess", [proposal]))
+
+    assert len(result) == 1, "the revision must still be reported as persisted"
+    assert len(upserts) == 1, "exactly one upsert call — the original point is never touched"
+    assert upserts[0]["point_id"] is None, "a DECISION must never merge — always a fresh insert"
+    assert upserts[0]["kind"] == "decision"
+
+
+def test_existing_decision_protected_from_a_different_kind_merge(monkeypatch):
+    """An EXISTING decision must not be merge-overwritten either, even by an
+    ordinary (non-DECISION) proposal that happens to score >= _DEDUP_SIMILARITY
+    against it — append-only protects the existing record regardless of what
+    kind the new, competing write claims to be."""
+    monkeypatch.setattr(emb_mod, "embed", _embed_ok())
+    monkeypatch.setattr(store_mod, "search", _search_hit(
+        score=_DEDUP_SIMILARITY, existing_id="decision-v1", content="We chose Option B."
+    ))
+
+    upserts = []
+
+    def fake_upsert(tier, *, user_id, session_id, trace_id, vector, content, rationale,
+                     confidence, trust, point_id=None, kind="unspecified", valid_at=0.0,
+                     source="", superseded_by="", participants=""):
+        upserts.append(dict(point_id=point_id))
+        return "fact-1"
+
+    monkeypatch.setattr(store_mod, "upsert", fake_upsert)
+    # existing[0] carries kind="decision" in its payload — the FakeSearch helper
+    # below doesn't set it, so patch search directly for this one case.
+    def search_with_decision_kind(tier, user_id, vector, limit):
+        return [{"id": "decision-v1", "score": _DEDUP_SIMILARITY, "content": "We chose Option B.",
+                  "kind": "decision", "confidence": 0.9}]
+    monkeypatch.setattr(store_mod, "search", search_with_decision_kind)
+
+    proposal = _p(content="We chose Option B, restated.", confidence=0.9)  # ordinary FACT/default kind
+    result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess", [proposal]))
+
+    assert len(result) == 1
+    assert upserts[0]["point_id"] is None, (
+        "an existing DECISION must never be merged into, even by a non-DECISION proposal"
+    )
+
+
+def test_kind_rank_has_decision_ranked_with_fact():
+    from core.memory.manager import _KIND_RANK
+    assert _KIND_RANK[MemoryKind.DECISION] == _KIND_RANK[MemoryKind.FACT]

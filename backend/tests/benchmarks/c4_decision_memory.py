@@ -817,17 +817,22 @@ def test_report_maps_five_c4_requirements_and_marks_reasoning_and_tradeoffs():
 
 
 def test_no_new_memory_schema_is_introduced():
-    """C4 must use existing primitives only: episodic tier + the existing
-    MemoryWriteProposal fields. Guard against a regression that sneaks a new tier
-    or a non-existent proposal field into the ingest path."""
+    """C4's OWN ADR-ingestion path (this file) must use existing primitives only:
+    episodic tier + the documented MemoryWriteProposal fields. Guard against a
+    regression that sneaks a new tier or a non-existent proposal field into ITS
+    ingest path specifically — not a freeze on the contract forever.
+
+    `participants` is a deliberate, ratified exception: the CB4 storage layer
+    (core/memory, 2026-07-05) added it to carry who-was-involved on a
+    `kind=DECISION` write. This harness doesn't use DECISION yet (it ingests ADRs
+    as plain EPISODIC prose — the orchestrator bridge from a real DecisionRecord
+    to a `kind=DECISION` proposal isn't wired here), so the field is listed but
+    inert for this path; the assertion is updated to the real contract, not
+    loosened to `>=`, so a genuinely accidental future field still fails here."""
     proposal = MemoryWriteProposal(store=MemoryStore.EPISODIC, content="x", confidence=0.9)
     assert set(MemoryStore.__members__) >= {"WIKI", "SEMANTIC", "EPISODIC", "PROCEDURAL", "WORKING"}
-    # the proposal carries only the documented primitives — no C4-specific decision
-    # schema. The typed-knowledge fields (kind/valid_at/source, CB1/#16) are now part
-    # of the standard proposal contract; C4 must still not introduce a NEW tier or a
-    # decision-only field beyond these.
     assert {f for f in proposal.__dataclass_fields__} == {
-        "store", "content", "rationale", "confidence", "kind", "valid_at", "source"
+        "store", "content", "rationale", "confidence", "kind", "valid_at", "source", "participants"
     }
 
 
