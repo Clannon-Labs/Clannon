@@ -36,6 +36,13 @@ for f in "$INBOX"/*.md; do
   [ -e "$f" ] || continue
   base="$(basename "$f")"
   case "$base" in .*|*~|*.swp|*.swo) continue ;; esac
+  # Only a PENDING proposal wakes. This is what prevents a SELF-WAKE: when the
+  # receiving agent edits a file in its own inbox to respond (flip Status to
+  # accepted/rejected/done, append its Response), that write re-fires this path
+  # unit — but the file is no longer `pending`, so it is skipped. It also skips
+  # settled reference files (owner briefs) and absorbs partial-write races (a
+  # half-written file has no Status line yet, so it waits for the complete write).
+  grep -qiE '^Status:[[:space:]]*pending([[:space:]]|$)' "$f" || continue
   if [ -z "$newest" ] || [ "$f" -nt "$newest" ]; then
     newest="$f"
   fi
