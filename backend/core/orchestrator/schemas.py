@@ -53,3 +53,31 @@ class DecisionLogEntry(BaseModel):
     message: str
     turn: int = 0
     detail: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- CB4: the durable decision-record contract ------------------------------
+
+class DecisionRecord(BaseModel):
+    """
+    A durable, queryable record of ONE decision point in a turn — the CB4
+    audit-mirror contract (institutional decision memory). Derived from a
+    `DecisionLogEntry` via `derive_record()` (utils/decision_log.py); NOT every
+    entry produces one — system/conversational narration derives to `None`.
+
+    Lean by design: every field is derivable from what the loop already knows.
+    No field requires a new LLM call. `tradeoffs` (discrete alternatives + risks
+    the orchestrator considered and rejected) is DELIBERATELY ABSENT — today's
+    native tool-calling gives the model no channel to report that; capturing it
+    needs a prompt/schema decision (e.g. asking the model to narrate
+    alternatives via `say()`), not a log-schema change. Flagged, not assumed.
+
+    This is a DERIVED PROJECTION of the live log, not a parallel path —
+    `DecisionLogEntry` stays the single source of truth; a persistent sink calls
+    `derive_record()` alongside the existing live emit, purely additively.
+    """
+    decision: str                                            # what was decided/done
+    participants: list[str] = Field(default_factory=list)    # tool/expert key(s) involved
+    reasoning: str = ""                                       # best-effort: preceding say() text, if any — never fabricated
+    ts: float                                                 # wall-clock (time.time()) at derivation
+    turn: int = 0                                             # mirrors DecisionLogEntry.turn
+    kind: DecisionLogKind                                     # which decision-log kind this derived from
