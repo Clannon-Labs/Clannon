@@ -305,14 +305,16 @@ class MemoryManager:
     async def _persist_one(
         self, tier: MemoryStore, user_id: str, session_id: str,
         content: str, proposal: MemoryWriteProposal,
-    ) -> bool:
+    ) -> str | None:
         """Embed + dedup-aware upsert one already-policy-cleared proposal. Returns
-        False when embeddings are down (the caller stops); a store stall surfaces as
-        a TimeoutError to the caller's `wait_for`. The single place a proposal is
-        actually written to the store."""
+        the memory_id actually persisted, or None when nothing was — embeddings
+        down, or the store itself refused/failed the upsert (a store stall instead
+        surfaces as a TimeoutError to the caller's `wait_for`). The single place a
+        proposal is actually written to the store; callers must treat None as "not
+        persisted" (no phantom writes — the manager's own invariant)."""
         vectors = await embeddings.embed([content])
         if not vectors:
-            return False  # embeddings down — drop quietly, breaker logs it
+            return None  # embeddings down — drop quietly, breaker logs it
         # dedup: refresh a near-identical memory instead of inserting
         existing = await asyncio.to_thread(store.search, tier, user_id, vectors[0], 1)
         point_id = None
@@ -329,7 +331,7 @@ class MemoryManager:
                 kind = prev_kind
             source = source or prev.get("source", "")
             valid_at = valid_at or float(prev.get("valid_at", 0.0))
-        await asyncio.to_thread(
+        memory_id = await asyncio.to_thread(
             store.upsert,
             tier,
             user_id=user_id,
@@ -350,7 +352,7 @@ class MemoryManager:
             valid_at=valid_at,
             source=source,
         )
-        return True
+        return memory_id
 
     async def learn(
         self, user_id: str, session_id: str, *, task: str, answer: str, findings: list[str]

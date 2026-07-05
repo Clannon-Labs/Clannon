@@ -441,6 +441,21 @@ def test_returns_empty_on_missing_scope(monkeypatch):
     assert result == []
 
 
+def test_returns_empty_when_upsert_fails_midflight(monkeypatch):
+    """store.upsert returning None (a live Qdrant fault mid-call, or a refused
+    tenant-mismatched point) must NOT be reported as persisted — regression for the
+    phantom-write bug where _persist_one discarded upsert's return value and always
+    returned True regardless of what actually happened at the store."""
+    def failing_upsert(*a, **k) -> None:
+        return None
+
+    monkeypatch.setattr(emb_mod, "embed", _embed_ok())
+    monkeypatch.setattr(store_mod, "search", _search_miss())
+    monkeypatch.setattr(store_mod, "upsert", failing_upsert)
+    result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess-test", [_p()]))
+    assert result == [], "a store.upsert failure must not be reported as a persisted write"
+
+
 # ---------------------------------------------------------------------------
 # (j) Write path is BOUNDED — a stalled store times out, drops the rest, no hang
 # ---------------------------------------------------------------------------
