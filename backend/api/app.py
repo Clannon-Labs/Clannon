@@ -41,6 +41,7 @@ from security.sanitizers import uploads as upload_scan
 from . import audit as _audit, auth, config, runs
 from .run_state import TERMINAL_STATUSES
 from .config_validation import fail_fast_if_strict
+from .hardening import install_hardening
 
 fail_fast_if_strict()
 
@@ -99,6 +100,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+install_hardening(app)
 
 
 # ---------- infrastructure (unauthenticated; expose ONLY process + dependency state) ----------
