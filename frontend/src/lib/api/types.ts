@@ -236,6 +236,14 @@ export interface LayerModelConfig {
   locked?: boolean;
   /** The best-for-task default the backend uses when the user hasn't chosen. */
   default?: string;
+  /**
+   * The registered experts this role drives, registry-derived by the backend
+   * (`GET /settings/models`) — it auto-updates when a backend expert is added or
+   * renamed, so the UI can explain the role→capability mapping with no frontend
+   * change. Informational; absent for roles that drive none (orchestrator, the
+   * locked gates). `label` is display-ready; `key` is the stable registry id.
+   */
+  experts?: { key: string; label: string }[];
 }
 
 /* ---------- remote config (backend → frontend, read-only) ---------- */

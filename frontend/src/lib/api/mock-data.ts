@@ -383,6 +383,8 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     model: "claude-haiku-4-5",
     default: "claude-haiku-4-5",
     options: SELECTABLE_MODELS,
+    // the orchestrator routes; it drives no experts of its own
+    experts: [],
   },
   {
     layer: "research",
@@ -391,6 +393,14 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     model: "claude-haiku-4-5",
     default: "claude-haiku-4-5",
     options: SELECTABLE_MODELS,
+    // registry-derived on the real backend; mirrored here so mock mode carries
+    // the same wire shape. Key-sorted, matching the backend's ordering.
+    experts: [
+      { key: "notification", label: "Notification" },
+      { key: "summarization", label: "Summarization" },
+      { key: "verification", label: "Verification" },
+      { key: "web.research", label: "Web research" },
+    ],
   },
   {
     layer: "planner",
@@ -399,6 +409,10 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     model: "claude-sonnet-4-6",
     default: "claude-sonnet-4-6",
     options: SELECTABLE_MODELS,
+    experts: [
+      { key: "documentation", label: "Documentation" },
+      { key: "writer", label: "Writer" },
+    ],
   },
   {
     layer: "code",
@@ -407,6 +421,10 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     model: "claude-sonnet-4-6",
     default: "claude-sonnet-4-6",
     options: SELECTABLE_MODELS,
+    experts: [
+      { key: "code", label: "Code" },
+      { key: "data.analysis", label: "Data analysis" },
+    ],
   },
   {
     layer: "media_expert",
@@ -415,6 +433,7 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     model: "gemini-2.5-flash",
     default: "gemini-2.5-flash",
     options: VISION_MODELS,
+    experts: [{ key: "media", label: "Media" }],
   },
   {
     layer: "verifier",
@@ -425,6 +444,7 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     default: "gemini-2.5-flash-lite",
     options: [],
     locked: true,
+    experts: [],
   },
   {
     layer: "filter",
@@ -435,5 +455,6 @@ export const SEED_MODEL_CONFIG: LayerModelConfig[] = [
     default: "gemini-2.5-flash-lite",
     options: [],
     locked: true,
+    experts: [],
   },
 ];
