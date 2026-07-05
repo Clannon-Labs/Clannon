@@ -6,10 +6,11 @@ the port's public `GraphNode`/`GraphEdge`/`GraphResult`, and every promise the
 placed contract makes actually holds THROUGH THE PORT (not just in the
 internal `graph_store` primitives already covered by `memory_graph_store.py`).
 
-Every test runs against a REAL embedded Kuzu db (fresh tmp_path per test),
-same as `memory_graph_store.py` — no mocks for the happy paths. Async
-`GraphPort` methods are driven via `asyncio.run()` inside plain `def` tests
-(this codebase's convention — see `memory_store_fault.py`/
+Every test runs against a REAL embedded Kuzu db (fresh tmp_path per test —
+the `_fresh_graph_store` autouse fixture lives in `tests/conftest.py`, shared
+with `memory_graph_store.py` rather than duplicated), no mocks for the happy
+paths. Async `GraphPort` methods are driven via `asyncio.run()` inside plain
+`def` tests (this codebase's convention — see `memory_store_fault.py`/
 `memory_typed_knowledge.py` — no pytest-asyncio/anyio test plugin is wired
 in, so a bare `async def test_...` silently fails to run at all).
 
@@ -51,19 +52,6 @@ from foundation import (
 )
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
-
-
-@pytest.fixture(autouse=True)
-def _fresh_graph_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(tmp_path / "graph_db"))
-    graph_store._db = None
-    graph_store._conn = None
-    graph_store._schema_ready = False
-    graph_store.DISABLED = False
-    yield
-    graph_store._db = None
-    graph_store._conn = None
-    graph_store._schema_ready = False
 
 
 @pytest.fixture

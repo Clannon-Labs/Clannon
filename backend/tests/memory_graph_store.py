@@ -7,7 +7,9 @@ degrades the way `store.py` degrades a dead Qdrant.
 
 Unlike Qdrant, Kuzu is embedded — no server, no `qdrant not reachable` skip.
 Every test below runs against a REAL Kuzu database in a fresh tmp_path, not a
-mock, so a schema/query typo fails here.
+mock, so a schema/query typo fails here. The `_fresh_graph_store` autouse
+fixture lives in `tests/conftest.py` (shared with `memory_graph_manager.py`
+rather than duplicated).
 
   ✓ a missing user_id is refused fail-closed (§V.20) — read AND write, before
     the database is even touched
@@ -50,21 +52,6 @@ import pytest
 import core.memory.graph_store as graph_store
 from core.memory.graph_extract import CodeImportGraph
 from core.memory.graph_store import GraphScope
-
-
-@pytest.fixture(autouse=True)
-def _fresh_graph_store(tmp_path, monkeypatch):
-    """Point the module's lazy singleton at a fresh on-disk db per test and
-    reset it after, so tests never see another test's Kuzu state."""
-    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(tmp_path / "graph_db"))
-    graph_store._db = None
-    graph_store._conn = None
-    graph_store._schema_ready = False
-    graph_store.DISABLED = False
-    yield
-    graph_store._db = None
-    graph_store._conn = None
-    graph_store._schema_ready = False
 
 
 def _chain_graph() -> CodeImportGraph:

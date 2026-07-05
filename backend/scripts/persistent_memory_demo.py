@@ -61,19 +61,11 @@ nomic-embed-text embedder and a local Qdrant instance.
 from __future__ import annotations
 
 # ── path bootstrap (works from any CWD: repo root or backend/) ───────────────
-import os
-import sys
+# Python always puts a directly-run script's own directory (scripts/) on
+# sys.path[0], so this sibling import resolves before backend/ itself does.
+from _pathboot import ensure_backend_on_path
 
-_HERE = os.path.abspath(os.path.dirname(__file__))
-# Walk up from scripts/ until we find the directory that contains
-# foundation/ (the backend package root). This works from any CWD.
-_BACKEND = _HERE
-while _BACKEND != os.path.dirname(_BACKEND):
-    if os.path.isdir(os.path.join(_BACKEND, "foundation")):
-        break
-    _BACKEND = os.path.dirname(_BACKEND)
-if _BACKEND not in sys.path:
-    sys.path.insert(0, _BACKEND)
+ensure_backend_on_path()
 
 # ── stdlib ────────────────────────────────────────────────────────────────────
 import argparse
@@ -303,6 +295,11 @@ class _InMemoryStore:
         confidence: float,
         trust: int,
         point_id: str | None = None,
+        *,
+        kind: str = "unspecified",
+        valid_at: float = 0.0,
+        source: str = "",
+        superseded_by: str = "",
     ) -> str | None:
         import uuid
 
@@ -322,6 +319,11 @@ class _InMemoryStore:
                 "created_at": created_at,
                 "confidence": confidence,
                 "trust": trust,
+                # typed-knowledge (CB1) — round-trip so hydrate reads them back
+                "kind": kind,
+                "valid_at": valid_at,
+                "source": source,
+                "superseded_by": superseded_by,
             }
         )
         return pid

@@ -14,6 +14,8 @@ import sys
 
 import pytest
 
+import core.memory.graph_store as _graph_store_mod
+
 
 @pytest.fixture(autouse=True)
 def _isolate_shared_rate_limits():
@@ -27,3 +29,21 @@ def _isolate_shared_rate_limits():
             if limiter is not None:
                 limiter._requests.clear()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _fresh_graph_store(tmp_path, monkeypatch):
+    """Kuzu's db handle is a lazy module-level singleton (same shape as
+    store.py's Qdrant client) — point it at a fresh on-disk db per test and
+    reset it after, so no test sees another test's Kuzu state. Shared here
+    (not per-file) so memory_graph_store.py and memory_graph_manager.py stop
+    duplicating this fixture verbatim (LAW 1)."""
+    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(tmp_path / "graph_db"))
+    _graph_store_mod._db = None
+    _graph_store_mod._conn = None
+    _graph_store_mod._schema_ready = False
+    _graph_store_mod.DISABLED = False
+    yield
+    _graph_store_mod._db = None
+    _graph_store_mod._conn = None
+    _graph_store_mod._schema_ready = False

@@ -57,21 +57,16 @@ the Qdrant memory demo there is no --live/hermetic distinction to make.
 from __future__ import annotations
 
 # ── path bootstrap (works from any CWD: repo root or backend/) ──────────────
-import os
-import sys
+# Python always puts a directly-run script's own directory (scripts/) on
+# sys.path[0], so this sibling import resolves before backend/ itself does.
+from _pathboot import ensure_backend_on_path
 
-_HERE = os.path.abspath(os.path.dirname(__file__))
-_BACKEND = _HERE
-while _BACKEND != os.path.dirname(_BACKEND):
-    if os.path.isdir(os.path.join(_BACKEND, "foundation")):
-        break
-    _BACKEND = os.path.dirname(_BACKEND)
-if _BACKEND not in sys.path:
-    sys.path.insert(0, _BACKEND)
+_BACKEND = ensure_backend_on_path()
 
 # ── stdlib ────────────────────────────────────────────────────────────────────
 import argparse
 import asyncio
+import os
 import shutil
 import tempfile
 from pathlib import Path
