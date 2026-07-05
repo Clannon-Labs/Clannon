@@ -23,6 +23,12 @@ mock, so a schema/query typo fails here.
   ✓ a hop request beyond MAX_HOPS_CEILING is clamped, not rejected/crashed
   ✓ Kuzu unavailable degrades cleanly (degraded=True, empty paths), never
     raises
+  ✓ upsert_nodes / upsert_edges (the incremental primitives graph_manager's
+    GraphPort.write() uses) — idempotent (no duplicate parallel edges on a
+    repeat call), an existing ASSERTED edge is immutable (§5.2, "asserted
+    always wins" — a later inferred write never overwrites it), an edge
+    naming a nonexistent endpoint silently fails to apply rather than
+    erroring, and a row whose own scope fields don't match is dropped
 
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_graph_store.py -v
@@ -190,6 +196,127 @@ def test_kuzu_connection_failure_degrades_instead_of_raising(monkeypatch):
     monkeypatch.setattr(graph_store, "_kuzu", _broken)
 
     result = graph_store.depends_on(scope, "c.py")
+
+    assert result.degraded is True
+    assert result.paths == frozenset()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# upsert_nodes / upsert_edges — the incremental primitives GraphPort.write() uses
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _node_row(scope: GraphScope, path: str) -> dict:
+    return {
+        "id": graph_store.node_id(scope, path),
+        "user_id": scope.user_id,
+        "repo_id": scope.repo_id,
+        "path": path,
+    }
+
+
+def test_upsert_nodes_then_edges_round_trips_through_depends_on():
+    scope = GraphScope(user_id="u1", repo_id="r1")
+
+    applied_nodes = graph_store.upsert_nodes(
+        scope, [_node_row(scope, "a.py"), _node_row(scope, "b.py")]
+    )
+    assert set(applied_nodes) == {
+        graph_store.node_id(scope, "a.py"), graph_store.node_id(scope, "b.py")
+    }
+
+    edge = {
+        "src": graph_store.node_id(scope, "b.py"),
+        "dst": graph_store.node_id(scope, "a.py"),
+        "origin": "inferred",
+    }
+    applied_edges = graph_store.upsert_edges(scope, [edge])
+
+    assert applied_edges == [edge]
+    assert graph_store.depends_on(scope, "b.py").paths == frozenset({"a.py"})
+
+
+def test_upsert_edges_is_idempotent_no_duplicate_parallel_edge():
+    scope = GraphScope(user_id="u1")
+    graph_store.upsert_nodes(scope, [_node_row(scope, "a.py"), _node_row(scope, "b.py")])
+    edge = {
+        "src": graph_store.node_id(scope, "b.py"),
+        "dst": graph_store.node_id(scope, "a.py"),
+        "origin": "inferred",
+    }
+
+    graph_store.upsert_edges(scope, [edge])
+    graph_store.upsert_edges(scope, [edge])
+    graph_store.upsert_edges(scope, [edge])
+
+    # Still exactly one hop — a naive repeated CREATE would have produced 3
+    # parallel edges; MERGE-by-connectivity must not duplicate.
+    assert graph_store.depends_on(scope, "b.py").paths == frozenset({"a.py"})
+
+
+def test_asserted_edge_is_immutable_to_a_later_inferred_upsert():
+    scope = GraphScope(user_id="u1")
+    graph_store.upsert_nodes(scope, [_node_row(scope, "a.py"), _node_row(scope, "b.py")])
+    src, dst = graph_store.node_id(scope, "b.py"), graph_store.node_id(scope, "a.py")
+
+    applied = graph_store.upsert_edges(scope, [{"src": src, "dst": dst, "origin": "asserted"}])
+    assert applied  # the asserted write itself succeeds
+
+    # A later INFERRED write attempting the same edge must be refused —
+    # asserted always wins (§5.2) — and report nothing applied, not a
+    # phantom success.
+    rejected = graph_store.upsert_edges(scope, [{"src": src, "dst": dst, "origin": "inferred"}])
+    assert rejected == []
+
+
+def test_upsert_edge_with_missing_endpoint_silently_fails_to_apply():
+    scope = GraphScope(user_id="u1")
+    graph_store.upsert_nodes(scope, [_node_row(scope, "b.py")])
+    ghost_edge = {
+        "src": graph_store.node_id(scope, "b.py"),
+        "dst": graph_store.node_id(scope, "ghost.py"),  # never upserted
+        "origin": "inferred",
+    }
+
+    applied = graph_store.upsert_edges(scope, [ghost_edge])
+
+    assert applied == []
+
+
+def test_upsert_nodes_drops_rows_with_mismatched_scope_fields():
+    scope = GraphScope(user_id="u1", repo_id="r1")
+    foreign_row = {
+        "id": "not-actually-scoped",
+        "user_id": "someone-else",
+        "repo_id": "",
+        "path": "x.py",
+    }
+
+    applied = graph_store.upsert_nodes(scope, [foreign_row])
+
+    assert applied == []
+
+
+def test_upsert_nodes_and_edges_refuse_fail_closed_on_missing_user_id():
+    scope = GraphScope(user_id="")
+
+    assert graph_store.upsert_nodes(scope, [_node_row(scope, "a.py")]) == []
+    assert graph_store.upsert_edges(scope, [{"src": "a", "dst": "b", "origin": "inferred"}]) == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# lookup_by_path — the primitive behind GraphPort.lookup()
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_lookup_by_path_finds_an_existing_node_and_misses_a_nonexistent_one():
+    scope = GraphScope(user_id="u1")
+    graph_store.upsert_nodes(scope, [_node_row(scope, "a.py")])
+
+    assert graph_store.lookup_by_path(scope, "a.py").paths == frozenset({"a.py"})
+    assert graph_store.lookup_by_path(scope, "nope.py").paths == frozenset()
+
+
+def test_lookup_by_path_refuses_fail_closed_on_missing_user_id():
+    result = graph_store.lookup_by_path(GraphScope(user_id=""), "a.py")
 
     assert result.degraded is True
     assert result.paths == frozenset()
