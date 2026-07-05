@@ -5,8 +5,8 @@
 > (mission `proposals/to-backend/BATCH_ARCHITECTURE.md`, 2026-07-04); it completes
 > and supersedes the intent behind the Premium-Parity mission's Phase 5 capability
 > work. Extends — does not reopen — the locked decisions in
-> `.claude/contexts/CONTEXT.md`: Mission Engine (#5, PROPOSED), sole-broker memory
-> (#9, BUILT at one tier), entropy-as-advisory (#6, PROPOSED).
+> `docs/ARCHITECTURE.md`: Mission Engine (§6, PROPOSED), sole-broker memory
+> (§7.3, BUILT at one tier), entropy-as-advisory (§7.2, PROPOSED).
 > **Build discipline: propose-first + stability-first (see §Prime Directive).**
 > Nothing here may be implemented before its design sub-spec is proposed and the
 > foundation it sits on is verified stable.
@@ -44,9 +44,9 @@ orchestrator's context exploding. The **batch** is the missing grouping layer.
   coordinates hand-offs. Coordinator of coordinators, not a micromanager.
 - **Entropy-as-advisory at the batch tier**: compute domain-similarity signals
   across *batches* (not just experts), surface as evidence, let judgment decide
-  routing — never a hard math gate (consistent with CONTEXT.md #6).
+  routing — never a hard math gate (entropy-as-advisory — docs/ARCHITECTURE.md §7.2).
 
-## 4. Two-tier sole-broker memory `[PROPOSED]` (extends #9, does NOT violate it)
+## 4. Two-tier sole-broker memory `[PROPOSED]` (extends sole-broker, does NOT violate it)
 
 The sole-broker principle applies at **two tiers**, still one principle:
 
@@ -80,14 +80,14 @@ The sole-broker principle applies at **two tiers**, still one principle:
 - A **fresh session days later** must resume a batch's / the mission's state from
   durable memory + the mission graph, never from conversation replay. This is the
   direct link to **CB1** (persistent cross-session memory) and the **Mission
-  Engine** (#5): batches plug into the Mission Engine's persistent state-machine,
+  Engine** (docs/ARCHITECTURE.md §6): batches plug into its persistent state-machine,
   **not** a separate parallel system.
 
 ## 6. Long-horizon operation `[PROPOSED]`
 
 The point of batches + Mission Engine + compaction: Clannon works a broad mission
 for weeks and still delivers *what was actually intended*, not a drifted/forgotten
-version. The mission's original intent + success criteria (Mission Engine, #5)
+version. The mission's original intent + success criteria (the Mission Engine)
 remain the anchor it re-checks against after many compactions and restarts.
 **Anything that could break under a week+ mission (context loss, drift, a forgotten
 original ask) is a stability BUG, not a future improvement** (see §Prime Directive).
@@ -114,7 +114,7 @@ of the layer beneath it:
 0. **Stability audit** of the foundations batches sit on — orchestrator loop,
    capability handler, sole-broker memory door, the gate chain — *before* any batch
    code (per §Prime Directive).
-1. **Mission Engine** (#5, PROPOSED) — the persistent state-machine batches plug
+1. **Mission Engine** (docs/ARCHITECTURE.md §6, PROPOSED) — the persistent state-machine batches plug
    into. Prerequisite; batches are not a parallel system.
 2. **Cross-batch awareness memory contract** (§4 sub-spec) — propose as a
    ROBUST_MEMORY extension.
@@ -132,7 +132,7 @@ not a one-time gate:
   done underneath ⇒ STOP, fix or flag the foundation first. Never layer new
   capability on a wobbly base.
 - "Stable" = correct under normal AND edge input, fails closed/honest on faults
-  (CONTEXT.md invariants), has a test proving it, not just the happy path.
+  (the security invariants — docs/ARCHITECTURE.md §8), has a test proving it, not just the happy path.
 - A big foundation fix is proposed and absorbed into the plan as a prerequisite,
   never done silently or skipped.
 - Recursive: a new expert on a new tool on a shaky hook is three layers of risk.
@@ -160,7 +160,7 @@ that would weaken them ⇒ STOP and propose.
 
 ## Authoritative references
 
-`.claude/contexts/CONTEXT.md` (locked decisions #5/#6/#9), `docs/ARCHITECTURE.md`
+`docs/ARCHITECTURE.md` (locked decisions: Mission Engine §6, entropy-advisory §7.2, sole-broker §7.3)
 (§6 Mission Engine, §7 orchestration/routing, §7.3 sole-broker),
 `docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md` (memory contract to
 extend), `docs/benchmarks/V1_GAP_ANALYSIS.md` (benchmark paths),

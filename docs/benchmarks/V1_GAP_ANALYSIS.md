@@ -26,8 +26,7 @@
 
 Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **0 Critical
 PASS, 4 PARTIAL, 2 ABSENT.** The three ABSENT benchmarks (CB2/CB3/EB3) all block
-on the same missing subsystem — the Kuzu knowledge-web (PROPOSED, CONTEXT.md
-decision 2) — so the Critical set cannot fully pass without a graph pass. The
+on the same missing subsystem — the Kuzu knowledge-web (PROPOSED — docs/ARCHITECTURE.md §5.2) — so the Critical set cannot fully pass without a graph pass. The
 four PARTIAL benchmarks are advanceable now, no graph, and two of them (CB1, CB4)
 unlock two Exceptionals (EB1, EB2).
 
@@ -58,7 +57,7 @@ non-graph win; also unlocks EB1.**
 ### CB2 — Large Repository Understanding — ABSENT
 **No harness** (`run_all.py:134` registers it NOT-MEASURED), no dependency-graph,
 no traversal capability. This is precisely the Kuzu knowledge-web's reason to
-exist (CONTEXT.md decision 2, PROPOSED). Answering "what breaks if X is removed /
+exist (the knowledge-web, PROPOSED — docs/ARCHITECTURE.md §5.2). Answering "what breaks if X is removed /
 transitive deps" without full-context ingestion **requires graph traversal**.
 **Path:** the graph-web — big structural, **propose-first** per mission. A *thin
 credible slice* that could pass a minimal CB2 without full Kuzu: a code-only

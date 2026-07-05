@@ -55,8 +55,8 @@ inbox:**
 - Frontend agent: `proposals/to-frontend/` and `frontend/proposals/`.
 
 If pending proposals exist: tell the owner in one line — "N pending proposals:
-<slugs>" — then handle them (accept / reject / act, per their Priority and your
-CONTEXT.md rules) unless the owner's current request is urgent, in which case
+<slugs>" — then handle them (accept / reject / act, per their Priority and the working
+rules in this file) unless the owner's current request is urgent, in which case
 ask which comes first. Never leave a proposal pending that you could have
 handled; when done, append your `## Response`, flip Status, and move the file
 to `proposals/archive/<your-inbox-name>/`.
