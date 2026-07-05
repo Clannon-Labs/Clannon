@@ -79,6 +79,20 @@ _DEDUP_SIMILARITY = 0.97
 _MAX_CONTENT_CHARS = 2000
 _CHARS_PER_TOKEN = 4
 
+# EB1 — supersession candidate band: close enough (by raw cosine) to plausibly be
+# the same specific fact/preference restated with a changed value, but below
+# _DEDUP_SIMILARITY (which is already treated as "the same point, refresh it").
+# Below this floor, two memories are just topically related — not worth an LLM
+# judgment (that's _RELEVANCE_FLOOR's much looser job, at retrieval time).
+_SUPERSESSION_FLOOR = 0.85
+# Only durable-knowledge tiers are "supersedable" facts/preferences; EPISODIC
+# entries are turn history (each its own point in time, not a competing claim).
+_SUPERSESSION_TIERS = frozenset({MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL})
+# Bounds the optional judge+mark step independently of MEMORY_WRITE_TIMEOUT_S, so
+# a slow judge call can never cause record_write_proposals to mistake an
+# already-successful upsert for a stalled store and drop a real write.
+_SUPERSESSION_TIMEOUT_S = 5.0
+
 
 # Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a
 # barer re-write of a source-backed fact never silently downgrades it to an
@@ -352,7 +366,39 @@ class MemoryManager:
             valid_at=valid_at,
             source=source,
         )
+        # EB1: `existing` was searched BEFORE this upsert, so it can never be this
+        # same memory — self-supersession is structurally impossible here, not
+        # merely excluded by the similarity band. Only a fresh insert (point_id
+        # was None going in — a dedup-merge is a refresh of the SAME fact, not a
+        # competing one) is a candidate.
+        if memory_id and point_id is None and tier in _SUPERSESSION_TIERS and existing:
+            await self._maybe_mark_superseded(tier, user_id, memory_id, content, existing[0])
         return memory_id
+
+    async def _maybe_mark_superseded(
+        self, tier: MemoryStore, user_id: str, memory_id: str, content: str, candidate: dict,
+    ) -> None:
+        """EB1, best-effort: judge whether the memory just written supersedes the
+        closest existing hit found before the write. Any fault here — judge or
+        mark, including this step's own timeout — must never surface: the
+        underlying write already landed and this is pure annotation on top of it."""
+        score = candidate.get("score", 0.0)
+        if not (_SUPERSESSION_FLOOR <= score < _DEDUP_SIMILARITY):
+            return
+        try:
+            supersedes = await asyncio.wait_for(
+                writer.judge_supersession(content, candidate.get("content", "")),
+                timeout=_SUPERSESSION_TIMEOUT_S,
+            )
+            if not supersedes:
+                return
+            ok = await asyncio.to_thread(
+                store.mark_superseded, tier, user_id, candidate["id"], memory_id
+            )
+            if not ok:
+                log.warning("supersession mark failed for %s -> %s", candidate["id"], memory_id)
+        except Exception as exc:  # noqa: BLE001 — best-effort annotation, never affects the write that landed
+            log.warning("supersession judgment/mark failed: %s", exc)
 
     async def learn(
         self, user_id: str, session_id: str, *, task: str, answer: str, findings: list[str]

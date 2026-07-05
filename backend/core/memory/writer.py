@@ -56,6 +56,18 @@ class MemoryExtraction(BaseModel):
     procedural: list[_Extracted] = Field(default_factory=list)
 
 
+class _SupersessionVerdict(BaseModel):
+    """The judge's verdict on whether NEW replaces EXISTING (EB1)."""
+    supersedes: bool = False
+    confident: bool = False
+    rationale: str = ""
+
+
+# the judged strings are already-distilled memories (short); keep the call cheap
+_MAX_SUPERSESSION_CONTENT_CHARS = 1500
+_SUPERSESSION_MAX_OUTPUT_TOKENS = 200
+
+
 def _build_prompt(task: str, answer: str, findings: list[str]) -> str:
     parts = [
         "A turn just finished (it may be research, a task, or a plain exchange). Distil "
@@ -112,3 +124,37 @@ async def distill(task: str, answer: str, findings: list[str]) -> list[MemoryWri
                     source=(item.source or "").strip(),
                 ))
     return proposals
+
+
+def _build_supersession_prompt(new_content: str, existing_content: str) -> str:
+    return (
+        f"## NEW\n{new_content[:_MAX_SUPERSESSION_CONTENT_CHARS]}\n\n"
+        f"## EXISTING\n{existing_content[:_MAX_SUPERSESSION_CONTENT_CHARS]}\n"
+    )
+
+
+async def judge_supersession(new_content: str, existing_content: str) -> bool:
+    """EB1: does `new_content` supersede `existing_content` — a later, updated
+    version of the same specific fact/preference (not merely related content)?
+
+    FAIL-CLOSED: returns False on any doubt, malformed output, or fault. A false
+    positive would silently hide valid history — the one failure mode this
+    refuses; a false negative just leaves both memories surfaced, which EB1
+    accepts as correct (temporal truth, not erasure)."""
+    handle = build_agent(
+        "memory",
+        output_type=_SupersessionVerdict,
+        prompt_name="memory_supersession",
+        retries=constants.MEMORY_DISTILL_MAX_RETRIES,
+    )
+    try:
+        verdict = await run_structured(
+            handle,
+            _build_supersession_prompt(new_content, existing_content),
+            max_turns=1,
+            max_output_tokens=_SUPERSESSION_MAX_OUTPUT_TOKENS,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort; a fault must never mark a false supersession
+        log.warning("supersession judgment failed: %s", exc)
+        return False
+    return bool(verdict.supersedes and verdict.confident)

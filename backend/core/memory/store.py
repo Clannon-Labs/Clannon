@@ -243,6 +243,36 @@ def _owns_point(client: Any, collection: str, point_id: str, user_id: str) -> bo
     return (points[0].payload or {}).get("user_id") == user_id
 
 
+def mark_superseded(tier: MemoryStore, user_id: str, point_id: str, superseded_by: str) -> bool:
+    """Patch one existing memory's `superseded_by` field in place (EB1). A targeted
+    payload patch (Qdrant `set_payload`), not a full re-upsert, so the point's
+    vector and every other field are untouched. Manager-only, best-effort: called
+    after a confident LLM supersession judgment; a fault here must never fail the
+    write that triggered it (the caller already succeeded before this runs).
+
+    Refuses (False) when the point does not exist, or belongs to a different user.
+    Unlike `_owns_point` (whose "doesn't exist yet" -> True suits a fresh insert), a
+    mark on a point that isn't there must NOT silently succeed — the caller would
+    believe history was annotated when nothing happened."""
+    client = _qdrant()
+    collection = COLLECTIONS.get(tier)
+    if client is None or collection is None or not user_id or not point_id:
+        return False
+    try:
+        points = client.retrieve(collection, ids=[point_id], with_payload=["user_id"])
+        if not points or (points[0].payload or {}).get("user_id") != user_id:
+            log.error(
+                "refused mark_superseded on point %s in %s — missing or not owned by %r",
+                point_id, collection, user_id,
+            )
+            return False
+        client.set_payload(collection, payload={"superseded_by": superseded_by}, points=[point_id])
+        return True
+    except Exception as exc:
+        _trip(exc)
+        return False
+
+
 def delete_user(user_id: str) -> None:
     """Erase every memory for a user across all tiers (right-to-deletion)."""
     client = _qdrant()

@@ -44,3 +44,8 @@ memory:
   file: memory/system.md
   locked: false   # the memory-distillation agent — behavior, not a security boundary
 
+memory_supersession:
+  version: 1
+  file: memory/supersession.md
+  locked: false   # EB1 judge: does memory NEW replace memory EXISTING — behavior, not a security boundary
+
