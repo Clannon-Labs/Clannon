@@ -63,8 +63,19 @@ those load when you work there and bind you. Commit only files under these four 
   batch orchestrator layer, cross-batch memory slice, context discipline. **Propose-first:
   author each design sub-spec as a proposal; build nothing before it's ratified + the layer
   beneath is verified stable.**
-- Entropy-advisory routing (issue #64, option A: standalone unwired scorer), CB6
+- Entropy routing (issue #64, option A: standalone **unwired advisory** scorer), CB6
   (contract-drift), the roster (#80), the Mission Engine — all per `V1_GAP_ANALYSIS.md`.
+
+**HARD RULE — entropy routing is ADVISORY, never authoritative (owner ruling, 2026-07-05):**
+The entropy/centroid math produces a **suggestion** — structured evidence (entropy,
+centroid spread) handed to the orchestrator. **The orchestrator (the reasoning model)
+makes the final spawn/route decision and can override the suggestion entirely.** Entropy
+MUST NOT auto-fire experts or act as a hard math gate on spawn count — pure math routing is
+too fragile for long-running work and would call the wrong experts. Build it as option A: a
+standalone, well-tested, **UNWIRED** scorer the orchestrator may later consume as one signal
+among others. This matches `docs/ARCHITECTURE.md §7.2` + `SYSTEM_ARCHITECTURE.md` (both
+already say advisory) — do not regress it to authoritative. If any design step would make the
+math decide, STOP and propose.
 
 **NEVER (ownership boundaries — the #1 rule is no cross-agent conflicts):**
 - Never edit `foundation/` — the backend-agent's shared seam (`Flow` transport,
