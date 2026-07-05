@@ -19,26 +19,23 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 // ---- Mocks ------------------------------------------------------------------
 
-vi.mock("motion/react", () => ({
-  motion: {
-    div: ({
-      children,
-      className,
-    }: {
-      children?: React.ReactNode;
-      className?: string;
-    }) => <div className={className}>{children}</div>,
-    li: ({
-      children,
-      className,
-    }: {
-      children?: React.ReactNode;
-      className?: string;
-    }) => <li className={className}>{children}</li>,
-  },
-  AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  useReducedMotion: () => true,
-}));
+vi.mock("motion/react", () => {
+  // Plain passthroughs — forward children + className and DROP the animation
+  // props so they never reach the DOM. Must cover every motion.<tag> the
+  // component renders (currently div, li, p, span); a missing tag resolves to
+  // undefined and crashes the render with "element type is invalid".
+  type P = { children?: React.ReactNode; className?: string };
+  return {
+    motion: {
+      div: ({ children, className }: P) => <div className={className}>{children}</div>,
+      li: ({ children, className }: P) => <li className={className}>{children}</li>,
+      p: ({ children, className }: P) => <p className={className}>{children}</p>,
+      span: ({ children, className }: P) => <span className={className}>{children}</span>,
+    },
+    AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    useReducedMotion: () => true,
+  };
+});
 
 vi.mock("next/link", () => ({
   default: ({
