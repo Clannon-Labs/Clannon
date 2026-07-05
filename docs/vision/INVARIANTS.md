@@ -131,20 +131,26 @@ invariant here unless it is genuinely non-negotiable and sourced.
 ## V. Tenancy & Data
 
 20. **One Qdrant instance, scoped by `user_id` payload filter.** Never per-user
-    collections. The `user_id` filter is mandatory and enforced at the Memory
-    Manager boundary; no other module constructs a raw query. Unscoped access is
-    a build failure, not a convention.
+    collections. The `user_id` filter is mandatory and **enforced at runtime** at the
+    Memory Manager boundary (the single MemoryPort door; `core/memory/`); no other
+    module constructs a raw query. Unscoped access **must become** a build failure,
+    not a convention — the build-time CI (Semgrep) gate that would make it one is
+    **planned, not yet built** (issue #15); today the runtime door + a grep-based
+    stand-in (`scripts/check_invariants.py`) are the guard.
     *(Architecture → Vector Store Architecture; Hard Constraints.)*
 
-21. **Token-budget decrements are atomic.** Check-and-decrement is one
-    indivisible Redis operation (Lua / transaction). Never read-then-write.
-    Postgres is the durable source of truth; Redis is the fast enforcement layer.
+21. **Token-budget decrements must be atomic** (once billing lands). Check-and-
+    decrement is to be one indivisible Redis operation (Lua / transaction), never
+    read-then-write, with Postgres as the durable source of truth and Redis the fast
+    enforcement layer. **Aspirational: designed, not built** (ADR 0004, issue #14).
     *(Architecture → Token Budget System; Hard Constraints; Storage.)*
 
-22. **No tenant leakage through keys or rows.** Every user-scoped Redis key and
-    Postgres row carries the authenticated `user_id`; Postgres RLS scopes rows
-    via a transaction-local session variable so pooled connections cannot leak
-    scope across tenants.
+22. **No tenant leakage through keys or rows** (once RLS lands). Every user-scoped
+    Redis key and Postgres row is to carry the authenticated `user_id`, with Postgres
+    RLS scoping rows via a transaction-local session variable so pooled connections
+    cannot leak scope across tenants. **Aspirational: designed, not built** (ADR 0004,
+    issue #14). *(Note: Qdrant tenant scoping (§V.20) IS enforced at runtime today —
+    this invariant is the Postgres/Redis billing layer, which does not yet exist.)*
     *(Architecture → Security Model; Storage.)*
 
 ## VI. Provider & Media Agnosticism
