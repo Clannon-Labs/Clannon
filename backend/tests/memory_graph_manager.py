@@ -25,6 +25,8 @@ in, so a bare `async def test_...` silently fails to run at all).
     (not degraded) result — no tenant-existence oracle
   ✓ lookup() by natural_key, by an unbuilt label, and by vector_id (inert
     until the fusion phase)
+  ✓ build_code_graph refuses a nonexistent root instead of silently wiping
+    the scope's existing graph via replace_code_graph's full-rebuild
 
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_graph_manager.py -v
@@ -129,6 +131,30 @@ def test_dependents_of_is_the_inverse_through_the_port(manager, tmp_path):
 
         dependents = await manager.dependents_of(scope, a_id)
         assert {n.node_id for n in dependents.nodes} == {b_id}
+
+    asyncio.run(go())
+
+
+def test_build_code_graph_refuses_a_nonexistent_root_instead_of_wiping(manager, tmp_path):
+    async def go():
+        scope = GraphScope(user_id="u1")
+        real_root = tmp_path / "src"
+        real_root.mkdir()
+        (real_root / "a.py").write_text("VALUE = 1\n")
+        (real_root / "b.py").write_text("import a\n")
+        await manager.build_code_graph(scope, real_root)
+        b_id = graph_store.node_id(scope, "b.py")
+        assert (await manager.lookup(scope, natural_key="b.py")).nodes  # sanity: it's there
+
+        # A typo'd/removed root must refuse, not silently wipe the existing
+        # graph via replace_code_graph's full-rebuild-with-nothing.
+        result = await manager.build_code_graph(scope, tmp_path / "does-not-exist")
+
+        assert result.degraded is True
+        assert "does not exist" in result.notes
+        # The real graph built moments ago must still be intact.
+        assert (await manager.lookup(scope, natural_key="b.py")).nodes
+        assert {n.node_id for n in (await manager.dependents_of(scope, graph_store.node_id(scope, "a.py"))).nodes} == {b_id}
 
     asyncio.run(go())
 

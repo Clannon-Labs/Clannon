@@ -29,6 +29,10 @@ mock, so a schema/query typo fails here.
     always wins" — a later inferred write never overwrites it), an edge
     naming a nonexistent endpoint silently fails to apply rather than
     erroring, and a row whose own scope fields don't match is dropped
+  ✓ a malformed max_hops (not an int — a future tool-calling caller passing
+    a model-supplied argument verbatim is a realistic source) degrades to a
+    safe default instead of raising ValueError/TypeError out of a read path
+    that promises it never raises
   ✓ a pre-existing EMPTY directory at the db path (e.g. an ops script's
     blanket `mkdir -p` over every expected data path) does not permanently
     wedge the store — Kuzu refuses to open a directory at all, even an
@@ -121,6 +125,20 @@ def test_hop_request_beyond_ceiling_is_clamped_not_rejected():
 
     assert result.degraded is False
     assert result.paths == frozenset({"b.py", "a.py"})
+
+
+@pytest.mark.parametrize("bad_hops", ["not-a-number", None, [], float("nan")])
+def test_malformed_max_hops_degrades_to_a_safe_default_not_a_crash(bad_hops):
+    scope = GraphScope(user_id="u1")
+    graph_store.replace_code_graph(scope, _chain_graph())
+
+    # A future tool-calling consumer might pass max_hops straight from a
+    # model's tool-call arguments — this must never raise into the caller,
+    # same discipline as every other fault in this module.
+    result = graph_store.depends_on(scope, "c.py", max_hops=bad_hops)
+
+    assert result.degraded is False
+    assert result.paths == frozenset({"b.py"})  # falls back to max_hops=1
 
 
 def test_replace_is_a_full_rebuild_not_a_merge():

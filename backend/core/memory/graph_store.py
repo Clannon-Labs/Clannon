@@ -153,8 +153,16 @@ def node_id(scope: GraphScope, path: str) -> str:
     return f"{scope.user_id}|{scope.repo_id}|{path}"
 
 
-def _clamp_hops(max_hops: int) -> int:
-    return max(1, min(int(max_hops), MAX_HOPS_CEILING))
+def _clamp_hops(max_hops: object) -> int:
+    """Clamp to [1, MAX_HOPS_CEILING]. Never raises: a malformed max_hops
+    (e.g. a future tool-calling caller passing a model-supplied argument
+    that isn't a clean int) falls back to 1 rather than propagating a
+    ValueError/TypeError out of a read path this module promises never
+    raises."""
+    try:
+        return max(1, min(int(max_hops), MAX_HOPS_CEILING))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 1
 
 
 def replace_code_graph(scope: GraphScope, graph: CodeImportGraph) -> bool:

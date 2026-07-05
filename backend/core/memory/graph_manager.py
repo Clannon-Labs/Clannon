@@ -183,6 +183,11 @@ class GraphManager:
         signal is the read methods afterward)."""
         if not scope.user_id:
             return GraphResult(degraded=True, notes="missing user_id — refused, fail-closed")
+        if not root.is_dir():
+            # replace_code_graph is a full wipe-then-rebuild: a typo'd or
+            # since-removed root would otherwise silently empty this scope's
+            # ENTIRE existing graph rather than error — refuse instead.
+            return GraphResult(degraded=True, notes=f"root path does not exist: {root}")
         graph = await asyncio.to_thread(build_code_import_graph, root)
         ok = await asyncio.to_thread(graph_store.replace_code_graph, scope, graph)
         if not ok:
