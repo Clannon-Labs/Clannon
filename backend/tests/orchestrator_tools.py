@@ -148,6 +148,59 @@ def test_non_network_output_skips_rescan(monkeypatch):
     assert seen == []                                      # the READ path never hit the sanitizer
 
 
+class NestedOut(BaseModel):
+    findings: str
+    sources: list[str]
+    nested: dict
+
+
+def test_network_output_sanitizes_nested_content(monkeypatch):
+    """Invariant A (regression): a NETWORK tool's output is re-sanitized at EVERY string
+    leaf, not just top-level str fields. A structured result with a list of strings and a
+    nested object must have those leaves scanned too — a top-level-only pass let nested
+    external text (the batch layer's structured NETWORK tools) reach reasoning unscanned."""
+    class Net:
+        async def run(self, args):
+            return NestedOut(
+                findings="clean top-level",
+                sources=["http://evil PAYLOAD"],
+                nested={"note": "deep PAYLOAD", "count": 3, "tags": ["tag PAYLOAD"]},
+            )
+
+    seen = []
+
+    class _Scanned:
+        def __init__(self, text):
+            self.passed = "PAYLOAD" not in text
+            self.sanitized_text = None
+
+    async def spy_scan(text):
+        seen.append(text)
+        return _Scanned(text)
+    monkeypatch.setattr(handler_mod, "scan_text", spy_scan)
+
+    reg = CapabilityRegistry()
+    spec = ToolSpec(
+        name="net", kind=CapabilityKind.TOOL, description="d", domain="t", impl=Net,
+        input_schema=EchoIn, output_schema=NestedOut, permission=PermissionLevel.NETWORK,
+    )
+    reg.register(spec, validate(spec))
+    rec = asyncio.run(ToolHandler(registry=reg).call_tool(
+        ToolRequest(key="t.net", arguments={"text": "x"}), _ctx()))
+
+    assert rec.success
+    # every string leaf, at any depth, re-entered the sanitizer
+    assert set(seen) == {"clean top-level", "http://evil PAYLOAD", "deep PAYLOAD", "tag PAYLOAD"}
+    # the injection payloads (nested list + nested dict + nested-list-in-dict) are all redacted
+    assert rec.result["findings"] == "clean top-level"
+    assert "redacted" in rec.result["sources"][0]
+    assert "redacted" in rec.result["nested"]["note"]
+    assert "redacted" in rec.result["nested"]["tags"][0]
+    # structure + non-string leaves preserved
+    assert rec.result["nested"]["count"] == 3
+    assert isinstance(rec.result["sources"], list)
+
+
 def test_real_calculator():
     discover()
     ctx = _ctx()

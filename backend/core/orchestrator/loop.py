@@ -32,6 +32,12 @@ log = logging.getLogger(__name__)
 
 async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> OrchestratorResponse:
     """Run one orchestration turn and return a draft response."""
+    # Each run_loop call is a FRESH draft. On a filter-rejected → revised turn the same
+    # ctx is reused, so clear the prior attempt's `say()` voice up front — otherwise the
+    # rejected draft's conversational commentary concatenates (via on_message below) into
+    # the delivered chat bubble. The live stream already emitted per attempt; this only
+    # governs what the FINAL message carries.
+    ctx.assistant_message = ""
     hydration = await _hydrate(normalized, ports, ctx)
 
     async def on_event(event: dict) -> None:

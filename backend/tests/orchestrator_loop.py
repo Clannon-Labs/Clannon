@@ -57,6 +57,40 @@ def test_run_loop_maps_answer_logs_and_links_findings():
     assert "hydration" not in kinds                         # memory is INVISIBLE — no hydration notice
 
 
+class _SayingCaps:
+    """A fake door that emits one `say()` note (its arg) before answering — models the
+    orchestrator's conversational voice for a turn."""
+
+    def __init__(self, ctx, note):
+        self.ctx = ctx
+        self.note = note
+
+    async def run_turn(self, *, system_prompt, user_prompt, output_type, on_message=None, **kw):
+        if on_message is not None:
+            await on_message(self.note)
+        return OrchestratorAnswer(answer_text="answer body", confidence=0.5)
+
+
+def test_run_loop_resets_say_voice_across_revisions():
+    """Regression (audit finding #3): the same ctx is reused across the filter revision
+    loop, so a rejected draft's `say()` commentary must NOT bleed into the revised turn's
+    delivered message. run_loop clears ctx.assistant_message up front, so a second call on
+    the same ctx carries only the second attempt's voice."""
+    ctx = VrakshaContext.new("s")
+
+    ports1 = Ports(memory=MemoryManager(), caps=_SayingCaps(ctx, "rejected-attempt note"),
+                   log=CtxDecisionLog(ctx))
+    resp1 = asyncio.run(loop_mod.run_loop(_norm(), ports1, ctx))
+    assert resp1.message == "rejected-attempt note"
+
+    # simulate the revision: same ctx, a new attempt with different say() commentary
+    ports2 = Ports(memory=MemoryManager(), caps=_SayingCaps(ctx, "final-attempt note"),
+                   log=CtxDecisionLog(ctx))
+    resp2 = asyncio.run(loop_mod.run_loop(_norm(), ports2, ctx))
+    assert resp2.message == "final-attempt note"            # ONLY the final attempt's voice
+    assert "rejected-attempt" not in resp2.message          # the rejected draft's note did not bleed
+
+
 # --- 2. native gateway run_turn (real registry, offline) --------------------
 
 def _caps():

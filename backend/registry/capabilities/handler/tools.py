@@ -127,19 +127,28 @@ class ToolHandler:
         return record
 
     async def _sanitize(self, result: dict) -> dict:
-        """Invariant A: external text re-enters sanitization before reasoning."""
-        cleaned: dict = {}
-        for key, value in result.items():
-            if isinstance(value, str) and value:
-                scanned = await scan_text(value)
-                cleaned[key] = (
-                    "[redacted: external content failed sanitization]"
-                    if not scanned.passed
-                    else (scanned.sanitized_text or value)
-                )
-            else:
-                cleaned[key] = value
-        return cleaned
+        """Invariant A: external text re-enters sanitization before reasoning.
+
+        Recurses into nested list/dict/tuple so NO string leaf reaches the model
+        unscanned — a top-level-only pass let structured NETWORK-tool output (e.g. a
+        list of strings, or a nested object) bypass the sanitizer entirely."""
+        return await self._sanitize_value(result)
+
+    async def _sanitize_value(self, value):
+        if isinstance(value, str):
+            if not value:
+                return value
+            scanned = await scan_text(value)
+            return (
+                "[redacted: external content failed sanitization]"
+                if not scanned.passed
+                else (scanned.sanitized_text or value)
+            )
+        if isinstance(value, dict):
+            return {k: await self._sanitize_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [await self._sanitize_value(v) for v in value]
+        return value  # int/float/bool/None — nothing to scan
 
     def _cap(self, result: dict) -> dict:
         blob = json.dumps(result, default=str)
