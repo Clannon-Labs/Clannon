@@ -65,6 +65,8 @@ stress_test_agent.md
 handoff.md
 src_sample_tree_structure.md
 
+proposals/
+
 experiments/
 
 # LLM Views
@@ -79,4 +81,9 @@ llm_view_snapshot.json
 
 static_analysis_semgrep_*
 static_analysis_semgrep_*/
+
 conversation/
+# conversation/ was updated to:
+reports/
+handoff.*
+HANDOFF.*
