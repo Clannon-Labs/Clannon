@@ -29,6 +29,7 @@ has relative to `MemoryItem`/`HydrationPackage` in `manager.py`.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ MAX_HOPS_CEILING = 20
 _db = None
 _conn = None
 _schema_ready = False
+_lock = threading.Lock()
 
 
 @dataclass(slots=True)
@@ -86,25 +88,35 @@ def _clear_empty_directory_in_kuzus_way(path: str) -> None:
 
 
 def _kuzu():
-    """Lazy db + connection. Returns None while disabled/unavailable."""
-    global _db, _conn
-    if DISABLED:
-        return None
-    if _conn is None:
-        try:
-            import kuzu
+    """Lazy db + connection. Returns None while disabled/unavailable.
 
-            path = _db_path()
-            _clear_empty_directory_in_kuzus_way(path)
-            _db = kuzu.Database(path)
-            _conn = kuzu.Connection(_db)
-            _ensure_schema(_conn)
-        except Exception as exc:
-            log.warning("kuzu unavailable: %s", exc)
-            _db = None
-            _conn = None
+    Guarded by _lock (mirrors embeddings.py's _load): every caller reaches
+    this through asyncio.to_thread, so concurrent turns race the check-then-
+    act on `_conn is None` from real OS threads. Empirically verified this
+    race is live without the lock (widened the window and counted actual
+    kuzu.Database() constructions: 10 concurrent callers -> 10 separate opens
+    of the same path, each surviving individually but leaking 9 handles) —
+    exactly the failure mode the batch layer's concurrent readers would
+    multiply on every cold start."""
+    global _db, _conn
+    with _lock:
+        if DISABLED:
             return None
-    return _conn
+        if _conn is None:
+            try:
+                import kuzu
+
+                path = _db_path()
+                _clear_empty_directory_in_kuzus_way(path)
+                _db = kuzu.Database(path)
+                _conn = kuzu.Connection(_db)
+                _ensure_schema(_conn)
+            except Exception as exc:
+                log.warning("kuzu unavailable: %s", exc)
+                _db = None
+                _conn = None
+                return None
+        return _conn
 
 
 def is_down() -> bool:

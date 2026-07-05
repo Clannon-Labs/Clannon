@@ -41,11 +41,18 @@ rather than duplicated).
     empty one, so graph_store clears it out of the way first; a NON-empty
     directory is left completely untouched (never guess at deleting
     something that might be real data)
+  ✓ concurrent cold-start callers (the batch layer's multiple concurrent
+    readers) construct the underlying kuzu.Database exactly once, not once
+    per caller — a real race found auditing for batch-layer readiness
 
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_graph_store.py -v
 """
 from __future__ import annotations
+
+import asyncio
+import threading
+import time
 
 import pytest
 
@@ -370,3 +377,52 @@ def test_pre_existing_nonempty_directory_at_db_path_is_left_untouched(tmp_path, 
     # unrelated file must never be silently deleted to "fix" it.
     assert result.degraded is True
     assert sentinel.exists()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Concurrency safety — the batch layer brings MULTIPLE concurrent readers to
+# this substrate (Prime Directive audit, 2026-07-05); _kuzu()'s lazy init must
+# not race.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_concurrent_cold_start_constructs_kuzu_database_exactly_once(monkeypatch):
+    """Widen _kuzu()'s check-then-act window (simulating real disk I/O latency)
+    and prove _lock actually serializes it: N concurrent callers from a cold
+    (uninitialized) state must open the underlying kuzu.Database exactly ONCE,
+    not once per caller.
+
+    Regression for a real race found auditing for the batch layer: without the
+    lock, 10 concurrent callers each independently passed the `_conn is None`
+    check and opened 10 separate Database handles on the same path — each
+    individually survived (no crash), but 9 of the 10 handles leaked. That's
+    exactly what concurrent batch readers hitting a cold process would multiply."""
+    import kuzu as kuzu_module
+
+    real_database = kuzu_module.Database
+    construct_count = {"n": 0}
+    count_lock = threading.Lock()
+
+    class _SlowDatabase(real_database):
+        def __init__(self, path, *a, **k):
+            with count_lock:
+                construct_count["n"] += 1
+            time.sleep(0.05)  # widen the race window
+            super().__init__(path, *a, **k)
+
+    monkeypatch.setattr(kuzu_module, "Database", _SlowDatabase)
+
+    async def go():
+        return await asyncio.gather(
+            *(asyncio.to_thread(graph_store._kuzu) for _ in range(10)),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(go())
+    assert not any(isinstance(r, BaseException) for r in results), (
+        f"a concurrent cold start must never raise: {results}"
+    )
+    assert construct_count["n"] == 1, (
+        f"kuzu.Database() must be constructed exactly once under a concurrent "
+        f"cold start, got {construct_count['n']} — the lazy-init lock isn't "
+        f"serializing callers"
+    )

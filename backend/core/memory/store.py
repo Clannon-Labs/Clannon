@@ -11,6 +11,7 @@ dropped writes behind a 30s circuit breaker (§6).
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import uuid
 from typing import Any
@@ -34,23 +35,34 @@ _BREAKER_S = constants.CB_RECOVERY_TIMEOUT_S   # circuit-breaker recovery window
 _client = None
 _down_until = 0.0
 _ensured: set[str] = set()
+_lock = threading.Lock()
 
 
 def _qdrant():
-    """Lazy client + circuit breaker. Returns None while down/disabled."""
-    global _client, _down_until
-    if DISABLED or time.monotonic() < _down_until:
-        return None
-    if _client is None:
-        try:
-            from qdrant_client import QdrantClient
+    """Lazy client + circuit breaker. Returns None while down/disabled.
 
-            _client = QdrantClient(url=QDRANT_URL, timeout=5)
-        except Exception as exc:
-            log.warning("qdrant client unavailable: %s", exc)
-            _down_until = time.monotonic() + _BREAKER_S
+    Guarded by _lock (mirrors embeddings.py's _load): every caller reaches
+    this through asyncio.to_thread, so concurrent turns can race the
+    check-then-act on `_client is None` from real OS threads. Without the
+    lock this doesn't corrupt anything (empirically verified against the
+    Kuzu analogue in graph_store.py, same shape of race) but it does
+    construct and leak a redundant QdrantClient per colliding caller —
+    exactly the kind of avoidable waste the batch layer's concurrent readers
+    would otherwise multiply."""
+    global _client, _down_until
+    with _lock:
+        if DISABLED or time.monotonic() < _down_until:
             return None
-    return _client
+        if _client is None:
+            try:
+                from qdrant_client import QdrantClient
+
+                _client = QdrantClient(url=QDRANT_URL, timeout=5)
+            except Exception as exc:
+                log.warning("qdrant client unavailable: %s", exc)
+                _down_until = time.monotonic() + _BREAKER_S
+                return None
+        return _client
 
 
 def is_down() -> bool:
@@ -79,29 +91,37 @@ def _ensure(client: Any, collection: str) -> bool:
     Qdrant physically groups each user's points together (the documented
     multi-tenancy layout — faster tenant-scoped queries, better locality).
     Existing collections with a plain index are upgraded in place.
-    """
-    if collection in _ensured:
-        return True
-    from qdrant_client import models as qm
 
-    tenant_schema = qm.KeywordIndexParams(type=qm.KeywordIndexType.KEYWORD, is_tenant=True)
-    try:
-        if not client.collection_exists(collection):
-            client.create_collection(
-                collection,
-                vectors_config=qm.VectorParams(size=DIMS, distance=qm.Distance.COSINE),
-            )
-            client.create_payload_index(collection, field_name="user_id", field_schema=tenant_schema)
-            client.create_payload_index(
-                collection, field_name="session_id", field_schema=qm.PayloadSchemaType.KEYWORD
-            )
-        else:
-            _ensure_tenant_index(client, collection, tenant_schema)
-        _ensured.add(collection)
-        return True
-    except Exception as exc:
-        _trip(exc)
-        return False
+    Guarded by the same _lock as _qdrant(): the check-then-act on
+    `collection in _ensured` has the identical race shape (empirically
+    verified: 10 concurrent first-callers each issued their own
+    create_collection instead of one), and a real Qdrant server may reject
+    the losing calls' redundant create as an error — an avoidable, spurious
+    degrade on exactly the first concurrent request after a cold start.
+    """
+    with _lock:
+        if collection in _ensured:
+            return True
+        from qdrant_client import models as qm
+
+        tenant_schema = qm.KeywordIndexParams(type=qm.KeywordIndexType.KEYWORD, is_tenant=True)
+        try:
+            if not client.collection_exists(collection):
+                client.create_collection(
+                    collection,
+                    vectors_config=qm.VectorParams(size=DIMS, distance=qm.Distance.COSINE),
+                )
+                client.create_payload_index(collection, field_name="user_id", field_schema=tenant_schema)
+                client.create_payload_index(
+                    collection, field_name="session_id", field_schema=qm.PayloadSchemaType.KEYWORD
+                )
+            else:
+                _ensure_tenant_index(client, collection, tenant_schema)
+            _ensured.add(collection)
+            return True
+        except Exception as exc:
+            _trip(exc)
+            return False
 
 
 def _ensure_tenant_index(client: Any, collection: str, tenant_schema: Any) -> None:
