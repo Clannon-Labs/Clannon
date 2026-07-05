@@ -123,3 +123,11 @@ uvloop                       # faster event loop (Linux)
 fastapi                      # the API surface the frontend talks to
 uvicorn                      # ASGI server (server/README.md run command)
 python-multipart             # FastAPI UploadFile parsing (/memory/upload)
+
+# ============================================================
+# GRAPH SUBSTRATE (core/memory/graph_*) — CB2/CB3 knowledge web
+# ============================================================
+
+kuzu==0.11.3                 # embedded property-graph DB behind GraphPort; prebuilt wheel,
+                             # no native build. Verified: installs via `uv pip install`,
+                             # imports on CPython 3.12, suite green (900). Pinned for repro.
