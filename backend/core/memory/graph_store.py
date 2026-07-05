@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from foundation import GraphScope, get_root
@@ -71,6 +72,21 @@ def _db_path() -> str:
     return str(path)
 
 
+def _clear_empty_directory_in_kuzus_way(path: str) -> None:
+    """Kuzu manages its db path itself and refuses to open ANY pre-existing
+    directory there — even a freshly-created empty one (verified against
+    real Kuzu 0.11.3: 'Database path cannot be a directory'). An ops script
+    doing a blanket `mkdir -p` over every expected data path is a plausible,
+    entirely reasonable deploy convention that would otherwise make the
+    graph store fail closed forever with no recovery. An EMPTY directory
+    can't be a real database, so clear it out of Kuzu's way; a NON-empty one
+    is left completely alone — never guess at deleting something that might
+    be real data."""
+    p = Path(path)
+    if p.is_dir() and not any(p.iterdir()):
+        p.rmdir()
+
+
 def _kuzu():
     """Lazy db + connection. Returns None while disabled/unavailable."""
     global _db, _conn
@@ -80,7 +96,9 @@ def _kuzu():
         try:
             import kuzu
 
-            _db = kuzu.Database(_db_path())
+            path = _db_path()
+            _clear_empty_directory_in_kuzus_way(path)
+            _db = kuzu.Database(path)
             _conn = kuzu.Connection(_db)
             _ensure_schema(_conn)
         except Exception as exc:

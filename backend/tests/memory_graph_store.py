@@ -29,6 +29,12 @@ mock, so a schema/query typo fails here.
     always wins" — a later inferred write never overwrites it), an edge
     naming a nonexistent endpoint silently fails to apply rather than
     erroring, and a row whose own scope fields don't match is dropped
+  ✓ a pre-existing EMPTY directory at the db path (e.g. an ops script's
+    blanket `mkdir -p` over every expected data path) does not permanently
+    wedge the store — Kuzu refuses to open a directory at all, even an
+    empty one, so graph_store clears it out of the way first; a NON-empty
+    directory is left completely untouched (never guess at deleting
+    something that might be real data)
 
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_graph_store.py -v
@@ -320,3 +326,42 @@ def test_lookup_by_path_refuses_fail_closed_on_missing_user_id():
 
     assert result.degraded is True
     assert result.paths == frozenset()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Operational robustness — a pre-existing directory at the db path
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_pre_existing_empty_directory_at_db_path_does_not_wedge_the_store(tmp_path, monkeypatch):
+    # Simulate an ops script's `mkdir -p` creating the path ahead of time —
+    # NOT the fixture's usual "tmp_path/graph_db never existed" case.
+    pre_created = tmp_path / "ops-precreated-graph-db"
+    pre_created.mkdir()
+    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(pre_created))
+    graph_store._db = None
+    graph_store._conn = None
+    graph_store._schema_ready = False
+
+    scope = GraphScope(user_id="u1")
+    ok = graph_store.replace_code_graph(scope, _chain_graph())
+
+    assert ok is True
+    assert graph_store.depends_on(scope, "c.py").paths == frozenset({"b.py"})
+
+
+def test_pre_existing_nonempty_directory_at_db_path_is_left_untouched(tmp_path, monkeypatch):
+    pre_created = tmp_path / "ops-precreated-graph-db"
+    pre_created.mkdir()
+    sentinel = pre_created / "not-a-kuzu-file.txt"
+    sentinel.write_text("do not delete me")
+    monkeypatch.setenv("VRAKSHA_GRAPH_DB_PATH", str(pre_created))
+    graph_store._db = None
+    graph_store._conn = None
+    graph_store._schema_ready = False
+
+    result = graph_store.depends_on(GraphScope(user_id="u1"), "a.py")
+
+    # Kuzu's own error still surfaces as a clean degrade — but the
+    # unrelated file must never be silently deleted to "fix" it.
+    assert result.degraded is True
+    assert sentinel.exists()
