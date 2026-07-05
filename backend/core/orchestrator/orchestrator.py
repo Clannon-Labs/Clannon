@@ -19,6 +19,7 @@ from typing import Any
 
 from foundation import (
     Flow,
+    MemoryKind,
     MemoryStore,
     MemoryWriteProposal,
     NormalizedInput,
@@ -29,6 +30,7 @@ from foundation import (
 
 from .loop import run_loop
 from .schemas import DecisionLogEntry
+from .utils.decision_log import derive_record
 from .utils.recovery import build_degraded_response, classify_failure, degraded_reason
 from .utils.wiring import build_default_ports
 
@@ -73,6 +75,33 @@ def _is_substantive_turn(normalized, response, ctx) -> bool:
     task = (getattr(normalized, "content", "") or "").strip()
     answer = (getattr(response, "text", "") or "").strip()
     return len(task) >= _SUBSTANTIVE_TASK_CHARS or len(answer) >= _SUBSTANTIVE_ANSWER_CHARS
+
+
+def _decision_write_proposal(ctx) -> MemoryWriteProposal | None:
+    """CB4 runtime bridge: the turn's answer-decision, IF it had real
+    participants (an expert or tool actually ran). Bounded to AT MOST ONE per
+    turn (the turn's single `answer`-kind entry), never one per intermediate
+    `tool_call` — DECISION records are append-only (never dedup-merged), so
+    persisting every micro-step would flood memory unboundedly and drown real
+    institutional decisions in noise. A tool-free conversational answer isn't
+    gated in here either — it has no "who was involved" to institutionally
+    remember, and the EPISODIC proposal above already captures its content."""
+    answer_entry = next(
+        (e for e in reversed(ctx.decision_log) if e.kind == "answer"), None
+    )
+    if answer_entry is None:
+        return None
+    record = derive_record(answer_entry, ctx)
+    if record is None or not record.participants:
+        return None
+    return MemoryWriteProposal(
+        store=MemoryStore.EPISODIC,
+        kind=MemoryKind.DECISION,
+        content=record.decision[:500],
+        rationale=record.reasoning or "turn decision",
+        confidence=ctx.orchestrator_response.confidence if ctx.orchestrator_response else 0.0,
+        participants=", ".join(record.participants),
+    )
 
 
 async def run(flow: Flow[Any]) -> Flow[Any]:
@@ -137,6 +166,10 @@ async def persist_turn_memory(ctx) -> None:
         revised draft records what the user actually received, not the blocked draft),
         and only when the turn is SUBSTANTIVE — a trivial exchange ("hey" -> "hello")
         has nothing worth recalling cross-session and would just pollute episodic.
+      - DECISION (CB4 runtime bridge): the turn's answer-decision, additionally, when
+        it had real participants (an expert/tool actually ran) — see
+        `_decision_write_proposal`. At most one per turn; a tool-free conversational
+        answer does not get one (the EPISODIC note above already covers it).
       - the `remember` tool's writes (facts/preferences the orchestrator chose to keep,
         or the user asked it to) are already on ctx.memory_writes_requested; they
         persist together with the episodic note. On a blocked turn this function never
@@ -159,6 +192,9 @@ async def persist_turn_memory(ctx) -> None:
                     confidence=response.confidence,
                 )
             )
+            decision_proposal = _decision_write_proposal(ctx)
+            if decision_proposal is not None:
+                ctx.memory_writes_requested.append(decision_proposal)
         if ctx.memory_writes_requested:
             # the Manager returns only what it ACTUALLY persisted; the delivered-path
             # /memory view surfaces THIS set, so a proposal the policy dropped (low

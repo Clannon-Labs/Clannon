@@ -16,15 +16,18 @@ import asyncio
 from types import SimpleNamespace
 
 from foundation import (
+    MemoryKind,
     MemoryStore,
     MemoryWriteProposal,
     NormalizedInput,
     OrchestratorResponse,
+    ToolCallRecord,
     VrakshaContext,
 )
 import core.pipeline as pipeline
 from core.pipeline import Stage
 from core.orchestrator import orchestrator as stage
+from core.orchestrator.schemas import DecisionLogEntry
 
 
 # >200 chars so a turn with this answer counts as SUBSTANTIVE (worth recording)
@@ -88,6 +91,47 @@ def test_persist_writes_episodic_once_on_substantive_turn(monkeypatch):
     assert rec.proposals[0].store == MemoryStore.EPISODIC
     assert _SUBSTANTIVE_ANSWER[:30] in rec.proposals[0].content   # built from the delivered answer
     assert len(spawned) == 1                                      # learn() distillation scheduled
+    _close(spawned)
+
+
+def test_persist_skips_decision_proposal_for_a_tool_free_turn(monkeypatch):
+    """CB4 runtime bridge, flood-prevention case: a substantive turn with an
+    answer-kind decision-log entry but NO expert/tool participants gets its
+    usual EPISODIC note -- and nothing else. A long, tool-free answer isn't an
+    institutional decision; it has no "who was involved" to remember, and the
+    episodic note already covers its content."""
+    rec, spawned = _patch_memory(monkeypatch)
+    ctx = _ctx(_REAL_TASK, _SUBSTANTIVE_ANSWER)
+    ctx.decision_log.append(DecisionLogEntry(kind="answer", message=_SUBSTANTIVE_ANSWER))
+
+    asyncio.run(stage.persist_turn_memory(ctx))
+
+    assert rec.record_calls == 1
+    assert len(rec.proposals) == 1                       # EPISODIC only, no DECISION
+    assert rec.proposals[0].store == MemoryStore.EPISODIC
+    assert rec.proposals[0].kind != MemoryKind.DECISION
+    _close(spawned)
+
+
+def test_persist_writes_a_decision_proposal_when_participants_are_real(monkeypatch):
+    """CB4 runtime bridge, capture case: a substantive turn whose answer-decision
+    had a real participant (a tool ran) gets BOTH the usual EPISODIC note AND
+    exactly one DECISION proposal, with non-empty content/participants."""
+    rec, spawned = _patch_memory(monkeypatch)
+    ctx = _ctx(_REAL_TASK, _SUBSTANTIVE_ANSWER)
+    ctx.tool_calls.append(ToolCallRecord(tool_name="search.web", arguments={}, success=True))
+    ctx.decision_log.append(DecisionLogEntry(kind="answer", message=_SUBSTANTIVE_ANSWER))
+
+    asyncio.run(stage.persist_turn_memory(ctx))
+
+    assert rec.record_calls == 1
+    assert len(rec.proposals) == 2                        # EPISODIC + exactly one DECISION
+    decisions = [p for p in rec.proposals if p.kind == MemoryKind.DECISION]
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.store == MemoryStore.EPISODIC
+    assert decision.content == _SUBSTANTIVE_ANSWER[:500]
+    assert decision.participants == "search.web"
     _close(spawned)
 
 
