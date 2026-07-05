@@ -44,6 +44,9 @@ class MemoryItem:
     valid_at: float = 0.0        # unix ts the fact became true (vs created_at = when learned); 0 = unknown
     source: str = ""             # source-document attribution; "" = agent inference (resolves the old NOT-YET)
     superseded_by: str = ""      # memory_id of the record replacing this; "" = current (EB1 sets this — inert in CB1)
+    participants: str = ""       # CB4: who was involved in a DECISION record (proposer / discussion
+                                 # participants); "" when unknown. Carried, not manufactured — the ADR
+                                 # source doesn't record this today; populating it is a docs/orchestration concern
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +129,7 @@ class MemoryWriteProposal:
     kind: MemoryKind = MemoryKind.UNSPECIFIED  # writer sets FACT (source-backed) vs ASSUMPTION (inferred)
     valid_at: float = 0.0   # when the asserted fact became true; 0 = unknown (falls back to write time)
     source: str = ""        # originating document/tool; "" = agent inference
+    participants: str = ""  # CB4: who was involved (proposer / discussion participants); "" when unknown
 
 
 # ---------------------------------------------------------------------------
