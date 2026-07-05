@@ -195,11 +195,6 @@ def qualify_model(model_id: str) -> str:
     return model_id
 
 
-def _expert_label(key: str) -> str:
-    """A readable display name from a capability key, e.g. 'media.analyst' -> 'Media analyst'."""
-    return key.replace(".", " ").replace("_", " ").capitalize()
-
-
 def _discover_experts() -> list[dict]:
     """Every registered, healthy expert as {key, label, role}, from the registry. The
     model-settings UI groups these UNDER their role, so any expert added to the backend
@@ -216,7 +211,7 @@ def _discover_experts() -> list[dict]:
         spec = registry.get_expert(key)
         out.append({
             "key": key,
-            "label": _expert_label(key),
+            "label": card["label"],   # one canonical label from the registry (was ad-hoc _expert_label)
             "role": getattr(spec, "model_role", None) or "research",
         })
     return sorted(out, key=lambda e: e["key"])
