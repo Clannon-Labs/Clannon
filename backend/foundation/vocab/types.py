@@ -180,12 +180,24 @@ class MemoryStore(str, Enum):
 
 class MemoryKind(str, Enum):
     """
-    Epistemic type of a stored memory: is it asserted or inferred?
+    The kind of a stored memory.
 
-    UNSPECIFIED is the default for legacy/untyped records — a record is never
-    silently promoted to a type it was not assigned. The writer sets FACT vs
+    UNSPECIFIED / FACT / ASSUMPTION are the EPISTEMIC axis — is the record asserted
+    or inferred? UNSPECIFIED is the default for legacy/untyped records; a record is
+    never silently promoted to a type it was not assigned; the writer sets FACT vs
     ASSUMPTION explicitly at distillation time.
+
+    DECISION is a CATEGORY, not an epistemic status (a decision is itself asserted —
+    trust-rank it with FACT). It is marked distinctly because a decision record is
+    (a) queryable as a category — EB2's "recent decisions" — and (b) HISTORY-CRITICAL:
+    a decision must never be silently collapsed by the dedup-merge path. A near-identical
+    later revision SUPERSEDES via the EB1 judge (both records retained), so the original
+    reasoning is never lost — CB4's literal "reasoning is lost / discussion cannot be
+    reconstructed" fail condition. The append-only guarantee lives in the core/memory
+    dedup exemption; this value is the hook it keys on.
     """
     UNSPECIFIED = "unspecified"  # legacy / untyped — the honest default
     FACT        = "fact"         # asserted, source-backed knowledge
     ASSUMPTION  = "assumption"   # inferred / provisional; may be revised
+    DECISION    = "decision"     # institutional decision record (CB4); asserted, but
+                                 # append-only — supersede, never dedup-overwrite
