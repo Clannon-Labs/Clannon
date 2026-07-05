@@ -4,6 +4,13 @@
 
 [Unit]
 Description=Clannon %i agent wake — tmux send-keys into clannon-%i
+# Disable systemd's start-rate limiter: a busy inbox (many proposals/archives in a
+# short window) would otherwise trip the default 5-starts/10s limit and mark the unit
+# `failed`, which SILENTLY kills wakes for that side until reset. The wake script has
+# its OWN 60s debounce (per inbox), so rapid triggering is already harmless — the
+# systemd limiter is redundant here and only causes outages. (Fixed 2026-07-05 after
+# clannon-wake@backend hit start-limit-hit and stopped pinging the backend agent.)
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
