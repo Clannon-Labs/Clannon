@@ -10,7 +10,7 @@
     "does not yet stream) are reported as informational, not drift."
   ],
   "_source": {
-    "stream_events_and_nested_shapes": "frontend/src/lib/api/types.ts (RunEvent union, DecisionLogEntry, ExpertState)",
+    "stream_events_and_nested_shapes": "frontend/src/lib/api/types.ts (RunEvent union, DecisionLogEntry, ExpertState, Source)",
     "enums": "frontend/src/lib/api/types.ts (RunStatus, DecisionKind, ExpertStatus)",
     "runtime_emission": "frontend/src/lib/api/mock.ts (MockClient.streamRun)",
     "backend_declared_contract": "backend/api/README.md (the data: RunEvent frame table)"
@@ -27,7 +27,7 @@
     "message_done":  { "required_keys": [],             "backend_required": true },
     "report_delta":  { "required_keys": ["text"],       "backend_required": true },
     "report_done":   { "required_keys": [],             "backend_required": true },
-    "sources":       { "required_keys": ["sources"],    "backend_required": false },
+    "sources":       { "required_keys": ["sources"],    "backend_required": true },
     "usage":         { "required_keys": ["tokensUsed"], "backend_required": false }
   },
   "nested_shapes": {
@@ -38,6 +38,10 @@
     "ExpertState": {
       "required_keys": ["id", "name", "domain", "status", "toolCalls"],
       "optional_keys": ["summary"]
+    },
+    "Source": {
+      "required_keys": ["id", "title", "url", "domain"],
+      "optional_keys": []
     }
   },
   "decision_kinds": [

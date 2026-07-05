@@ -17,11 +17,14 @@ WHAT THIS TEST DOES
   2. Extracts the BACKEND's emitted events from the real code, two ways that must
      agree: the authoritative event-NAME set comes from source-scanning EVERY emit
      site (`run_state.py` + `run_driver.py`), and the payload SHAPES come from RUNNING
-     the real RunState mappers. A scan-vs-run reconciliation fails loudly if a new
-     emit site is ever added to `run_state.py` without being exercised by this harness
-     -- otherwise that new event type would silently escape every drift check below
-     (the exact C6 failure mode: the backend emits an event the frontend drops). Run
-     statuses / decision kinds are introspected from `ACTIVE_STAGES` / `DecisionLogKind`.
+     the real RunState mappers (plus `run_driver._collect_sources` for the `sources`
+     event's nested `Source` items -- not a RunState mapper, but still real code, run
+     for real rather than left to the shallow scan). A scan-vs-run reconciliation
+     fails loudly if a new emit site is ever added to `run_state.py` without being
+     exercised by this harness -- otherwise that new event type would silently escape
+     every drift check below (the exact C6 failure mode: the backend emits an event
+     the frontend drops). Run statuses / decision kinds are introspected from
+     `ACTIVE_STAGES` / `DecisionLogKind`.
   3. Classifies every divergence as MATERIAL (a real break) or INFORMATIONAL (a
      forward-compatible gap: the frontend declares an event the backend has not
      wired yet, which is safe because the frontend ignores events it does not know).
@@ -140,11 +143,13 @@ def _frontend_contract() -> dict:
     types_src = _strip_ts_comments(_TYPES_TS.read_text(encoding="utf-8"))
     dle_req, dle_opt = _ts_interface_fields(types_src, "DecisionLogEntry")
     exp_req, exp_opt = _ts_interface_fields(types_src, "ExpertState")
+    src_req, src_opt = _ts_interface_fields(types_src, "Source")
     return {
         "stream_events": _ts_run_event(types_src),
         "nested_shapes": {
             "DecisionLogEntry": {"required_keys": dle_req, "optional_keys": dle_opt},
             "ExpertState": {"required_keys": exp_req, "optional_keys": exp_opt},
+            "Source": {"required_keys": src_req, "optional_keys": src_opt},
         },
         "decision_kinds": _ts_union_values(types_src, "DecisionKind"),
         "run_statuses": _ts_union_values(types_src, "RunStatus"),
@@ -226,6 +231,17 @@ def _backend_contract() -> dict:
     r = _new()
     asyncio.run(r.stream_report("one two three four five six seven eight nine ten"))
     _harvest(r)
+
+    # grounded-search sources (api.run_driver._collect_sources): not a RunState
+    # mapper, but still the real code building the `sources` event's payload -- RUN
+    # it for real (like every other nested shape above) rather than leaving it to the
+    # shallow emit-literal scan below, which only ever sees the outer "sources" key
+    # and would stay silent if a Source field were ever renamed or dropped.
+    from api.run_driver import _collect_sources
+    fake_call = SimpleNamespace(success=True, result={"sources": ["https://example.com/some-page"]})
+    srcs = _collect_sources(SimpleNamespace(tool_calls=[fake_call], expert_calls=[]))
+    if srcs:
+        nested["source"] = set(srcs[0].keys())
 
     # event types the harness actually OBSERVED by running run_state's mappers above;
     # their payload shapes are therefore real, not guessed. Captured BEFORE the
@@ -326,8 +342,8 @@ def _classify_drift(fixture: dict, backend: dict) -> tuple[list[str], list[str]]
                 f"{sorted(missing)} the frontend reads (backend sends {sorted(be_keys)})."
             )
 
-    # 3b. nested shapes the backend builds (log entry, expert state)
-    nested_map = {"entry": "DecisionLogEntry", "expert": "ExpertState"}
+    # 3b. nested shapes the backend builds (log entry, expert state, source)
+    nested_map = {"entry": "DecisionLogEntry", "expert": "ExpertState", "source": "Source"}
     for be_key, shape_name in nested_map.items():
         if be_key not in backend["nested"]:
             continue
@@ -426,7 +442,7 @@ def test_fixture_matches_frontend_source():
             f"payload keys for `{etype}` drifted: "
             f"fixture={fx['stream_events'][etype]['required_keys']} frontend={keys}."
         )
-    for shape in ("DecisionLogEntry", "ExpertState"):
+    for shape in ("DecisionLogEntry", "ExpertState", "Source"):
         assert set(fx["nested_shapes"][shape]["required_keys"]) == set(fe["nested_shapes"][shape]["required_keys"]), (
             f"{shape} required keys drifted from the frontend interface: "
             f"fixture={fx['nested_shapes'][shape]['required_keys']} "
@@ -473,10 +489,11 @@ def test_backend_required_events_are_all_emitted():
 
 
 def test_backend_nested_shapes_satisfy_the_frontend():
-    """The backend-built log entry and expert payloads must carry every required key."""
+    """The backend-built log entry, expert, and source payloads must carry every
+    required key."""
     fx = _load_fixture()
     be = _backend_contract()
-    for be_key, shape in (("entry", "DecisionLogEntry"), ("expert", "ExpertState")):
+    for be_key, shape in (("entry", "DecisionLogEntry"), ("expert", "ExpertState"), ("source", "Source")):
         required = set(fx["nested_shapes"][shape]["required_keys"])
         built = set(be["nested"].get(be_key, []))
         assert required <= built, (
