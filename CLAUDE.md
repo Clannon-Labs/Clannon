@@ -1,28 +1,35 @@
 # CLAUDE.md — Clannon (production monorepo)
 
-## ⚖️ THE CODING LAWS (non-negotiable — read first, every session, every agent)
+## ⚖️ THE CODING LAWS — read first, every session, every agent, before you write a line
 
-These are LAWS, not principles. Prioritize them **relentlessly** over convenience; check
-every change against all five before it lands; a violation you find is FIXED or explicitly
-FLAGGED, never left. Full authoritative text: **`docs/LAWS.md`** (read it).
+These are **LAWS, not preferences.** You do not weigh them against convenience — the law wins.
+Check every change against ALL of them before it lands; a violation you find is **FIXED or
+explicitly FLAGGED to the owner, never silently left.** The full, detailed constitution — the
+*why*, enforceable rules, examples, and a pre-commit self-check per law — is **`LAW/README.md`**
+(read it; it is the codebase's highest authority, above any other doc or habit).
 
-1. **MODULARITY — zero redundancy.** One source of truth; one function = one job; one file =
-   one kind of job; one folder = one layer (or its utilities). No duplicate/parallel paths.
-2. **READABILITY — a developer must LOVE it.** Intuitive, the *why* explained. **Files ≤ 500
-   lines (aim ~300)**; short single-purpose functions. Split by responsibility before sprawl.
-3. **SPEED + FLOW IS THE SPINE.** Blazingly fast. `foundation/`+`Flow` is the circulatory
-   system, not a feature — if Flow/foundation can carry it, it MUST; nothing else takes its
-   job. **`core/pipeline.py` is the ONLY place the pipeline runs** — every entry point calls
-   `pipeline.run()`; nothing else re-walks the stages.
-4. **SECURITY/PRIVACY — backend governs; config single-source + private.** One config file per
-   concern (models → `models.yaml`; no config logic elsewhere), all config in one shared
-   folder, **private to the owner**. The **backend GOVERNS the frontend**: the frontend only
-   changes what the backend explicitly exposed for a normal user; bypassing/hacking the
-   frontend grants NO privilege — the backend re-checks identity+authz+validity server-side
-   and refuses anything else. `api/` is the most exposed surface — scrutinize it hardest.
-5. **PRODUCTION-GRADE by default** — do what real systems do even if unlisted: fail-closed,
-   least-privilege, bounded resources, no secrets in code/logs/responses, degrade honestly,
-   prove it with a test.
+1. **MODULARITY — one source of truth, zero redundancy.** One function = one job; one file = one
+   kind of job; one folder = one layer. No duplicate/parallel paths; no speculative surface; no
+   dead code.
+2. **READABILITY — a developer must LOVE it.** Intuitive, the *why* explained (teach, don't
+   restate). **Files ≤ 500 lines (aim ~300)**; short single-purpose functions; reads as one author.
+3. **SPEED + FLOW IS THE SPINE.** Blazingly fast, everything bounded. `foundation/`+`Flow` is the
+   circulatory system — if Flow can carry it, it MUST. **`core/pipeline.py` is the ONLY place the
+   pipeline runs** — every entry point calls `pipeline.run()`; nothing else re-walks the stages.
+4. **SECURITY/PRIVACY — the backend governs; config is central, single-source, private.** Every
+   **business** value lives in ONE central **`config/`** (the owner's control panel — plans, limits,
+   pricing, models, features); technical config stays in `foundation/`. Config is private (never
+   leaked by `api/`). The **backend GOVERNS the frontend**: a bypassed/hacked client gains NO
+   privilege — identity set once, every resource authorized by its own ownership row, only
+   exposed-for-user fields mutable, everything else refused server-side. `api/` = scrutinize hardest.
+5. **PRODUCTION-GRADE by default** — fail-closed, least-privilege, bounded, no secrets in
+   code/logs/responses, degrade honestly (never fake success), typed errors never swallowed.
+6. **PROVE IT — tests first-class, verification honest.** Every behavior proven by a test (incl.
+   the failure path); **suite green before every commit + verify green before every push**; tests
+   and benchmarks NEVER fake a pass (report PARTIAL/NOT-YET truthfully).
+
+Before every commit, run the six self-checks in `LAW/README.md`. If an answer is "no," fix it or
+flag it — never land-and-hope.
 
 ## ROOT MANAGER ROLE
 
