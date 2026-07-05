@@ -130,10 +130,7 @@ _BENCHMARKS: list[tuple[str, str, object]] = [
     (
         "C2",
         "Large Repository Understanding",
-        lambda: (
-            "NOT-MEASURED",
-            "no harness; ADR 0008 PROPOSED, blocked on maintainer decision (issue #26)",
-        ),
+        lambda: _run_standard("c2_repo_intelligence"),
     ),
     (
         "C3",

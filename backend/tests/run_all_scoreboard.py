@@ -227,10 +227,20 @@ class TestRegistry:
         ids = [b[0] for b in run_all._BENCHMARKS]
         assert ids == ["C1", "C2", "C3", "C4", "C5", "C6", "E1", "E2", "E3"]
 
-    def test_c2_is_static_not_measured(self):
-        verdict, reason = run_all._BENCHMARKS[1][2]()
-        assert verdict == "NOT-MEASURED"
-        assert "ADR 0008" in reason
+    def test_c2_now_delegates_to_run_standard(self):
+        """C2's thin-slice harness has landed (c2_repo_intelligence.py) — the
+        registry entry moved from a static NOT-MEASURED placeholder to
+        _run_standard, same as C1/C3/C4/C5/E2. Mocked, not asserted against the
+        real harness's specific current verdict — this file's own convention
+        (see TestRunE1 / test_e2_now_delegates_to_run_standard) is to test the
+        WIRING here, not couple to one harness's scenario design."""
+        report = _make_report("NOT-YET")
+        fake = types.ModuleType("benchmarks.c2_repo_intelligence")
+        fake.run = lambda: report
+        c2 = next(b for b in run_all._BENCHMARKS if b[0] == "C2")
+        with patch.dict(sys.modules, {"benchmarks.c2_repo_intelligence": fake}):
+            verdict, _ = c2[2]()
+        assert verdict == "NOT-YET"
 
     def test_c6_is_static_not_measured(self):
         # C6 is index 5
