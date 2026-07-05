@@ -7,7 +7,15 @@ Each tool is a `@tool`-decorated class that does one concrete thing and returns 
 - A tool imports ONLY `registry` + `foundation`. It must NOT import memory, expert,
   or orchestrator internals. A `wants_memory` tool gets a narrow READ-ONLY
   `MemorySearcher` injected by the handler — it never imports `core.memory`. Keeps
-  the package a leaf.
+  the package a leaf. **One sanctioned exception:** `web_search.py` imports
+  `core.llm.grounded_search` — the same `core.llm`-as-SDK-boundary seam
+  `registry/capabilities/handler/__init__.py` already depends on (never
+  `pydantic_ai` directly). `scripts/check_invariants.py` models this exact shape
+  as expected. Don't treat it as license to reach into `core.llm` for a new tool
+  without a conscious call — grounded search blurs the tools-are-deterministic /
+  experts-are-LLM-backed line (`core/orchestrator/CLAUDE.md`) on purpose, once,
+  as an accepted tradeoff; it is not a precedent to copy silently as the roster
+  grows.
 - Every network tool validates its URL through the single SSRF gate
   `tools._net.validate_public_url` — on the initial URL AND every redirect hop
   (redirects followed manually, never automatically). Don't write a second copy of
