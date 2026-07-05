@@ -1,13 +1,33 @@
 """
-Server configuration — the read-only payload served at GET /config plus
-server runtime settings. The frontend treats whatever this returns as
-authoritative over its local defaults (plans, features, limits), so this
-file is the single place pricing/budget display values live backend-side.
+api/ deployment + runtime config, plus assembly of the GET /config payload.
+
+BUSINESS values (plans, pricing, features, product limits, the user-selectable model
+catalog) live in the central `config/` control panel (LAW 4 — one central, private
+source) and are imported below — this file no longer defines them. What stays here is
+DEPLOYMENT/ops config (CORS, cookies, DB path, request-size + auth rate limits), which
+is env-driven and changes per environment, not per product decision.
 """
 
 from __future__ import annotations
 
 import os
+
+# Business values — the owner's control panel (config/business.yaml). Imported here so
+# api/ (and the /config payload) read the single source, never a private duplicate.
+from config import (
+    PLANS,
+    FEATURES,
+    LIMITS,
+    BRIEF_MIN_CHARS,
+    BRIEF_MAX_CHARS,
+    MAX_INPUT_FILES,
+    WIKI_UPLOAD_MAX_FILES,
+    WIKI_UPLOAD_MAX_BYTES,
+    WIKI_UPLOAD_EXTENSIONS,
+    SELECTABLE_MODELS,
+    MEDIA_MODELS,
+    DEFAULT_PLAN as _BUSINESS_DEFAULT_PLAN,
+)
 
 VERSION = "0.1-dev"
 
@@ -19,9 +39,9 @@ FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 CORS_ORIGINS = [
     o.strip() for o in os.getenv("SERVER_CORS_ORIGINS", FRONTEND_ORIGIN).split(",") if o.strip()
 ]
-# Plan assigned to new signups. "pro" is handy in local dev (unlocks all
-# memory tiers); production keeps "free" until Stripe drives upgrades.
-DEFAULT_PLAN = os.getenv("SERVER_DEFAULT_PLAN", "free")
+# Plan assigned to new signups — the business default (config/business.yaml), with a
+# deployment env override (SERVER_DEFAULT_PLAN) for e.g. "pro" in local dev.
+DEFAULT_PLAN = os.getenv("SERVER_DEFAULT_PLAN") or _BUSINESS_DEFAULT_PLAN
 COOKIE_NAME = "clannon_session"
 COOKIE_SECURE = os.getenv("SERVER_COOKIE_SECURE", "0") == "1"
 # Cookie domain. Unset (default) → a host-only cookie (today's same-origin dev
@@ -32,89 +52,12 @@ COOKIE_DOMAIN = os.getenv("SERVER_COOKIE_DOMAIN") or None
 SESSION_TTL_S = 60 * 60 * 24 * 14  # 14 days
 DB_PATH = os.getenv("SERVER_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "clannon.db"))
 
-# Mirrors clannon/frontend/src/config/plans.ts — served via /config so the
-# frontend never drifts from what the backend believes.
-PLANS = [
-    {
-        "id": "free",
-        "name": "Seedling",
-        "monthlyUsd": 0,
-        "tokenBudget": 100_000,
-        "tagline": "Feel the continuity. Three real runs a month.",
-        "memoryTiers": ["episodic"],
-        "features": [
-            "100k tokens / month",
-            "Single research workflow",
-            "Community support",
-        ],
-    },
-    {
-        "id": "starter",
-        "name": "Starter",
-        "monthlyUsd": 29,
-        "tokenBudget": 2_000_000,
-        "tagline": "For the freelancer with recurring clients.",
-        "memoryTiers": ["episodic", "wiki"],
-        "features": [
-            "2M tokens / month",
-            "Episodic + Wiki memory",
-            "Editable client wiki — your facts outrank inference",
-            "All research workflows",
-            "Email delivery",
-        ],
-    },
-    {
-        "id": "pro",
-        "name": "Pro",
-        "monthlyUsd": 79,
-        "tokenBudget": 6_000_000,
-        "tagline": "The full memory system. This is where it compounds.",
-        "memoryTiers": ["episodic", "wiki", "semantic", "procedural"],
-        "features": [
-            "6M tokens / month",
-            "All four memory tiers",
-            "Semantic graph — facts, sources, provenance",
-            "Procedural memory — it learns how you work",
-            "Per-layer model configuration",
-            "Priority queue",
-        ],
-        "highlight": True,
-    },
-    {
-        "id": "agency",
-        "name": "Agency",
-        "monthlyUsd": 199,
-        "tokenBudget": 20_000_000,
-        "tagline": "Every client, every project, one growing archive.",
-        "memoryTiers": ["episodic", "wiki", "semantic", "procedural"],
-        "features": [
-            "20M tokens / month",
-            "All four memory tiers",
-            "Unlimited client workspaces",
-            "MCP integrations — context flows in automatically",
-            "Team seats (up to 5)",
-            "Dedicated support",
-        ],
-    },
-]
+# PLANS + FEATURES are imported from config/ (the owner's control panel) above —
+# defined once in config/business.yaml, served here via /config.
 
-FEATURES = {"demo": True, "billing": True}
-
-# ---------------------------------------------------------------------------
-# Input limits — ONE backend source of truth. The security/quality-relevant
-# values live here (server-enforced) and are surfaced to the frontend via
-# /config.limits so the UI validates against the exact numbers the server
-# enforces, never a separate client-side copy that could drift or be bumped
-# from the browser. Bump a limit HERE and both server enforcement and the UI
-# follow. (briefMinChars floor is intentionally low: a message can be as short
-# as "hi" — the workspace is a conversation, not a form.)
-# ---------------------------------------------------------------------------
-BRIEF_MIN_CHARS = 2
-BRIEF_MAX_CHARS = 20_000          # run + follow-up brief length cap
-MAX_INPUT_FILES = 10              # files attachable to one run
-WIKI_UPLOAD_MAX_FILES = 10        # files per bulk wiki import
-WIKI_UPLOAD_MAX_BYTES = 512 * 1024
-WIKI_UPLOAD_EXTENSIONS = (".md", ".markdown", ".txt")
+# Product input limits (BRIEF_*, MAX_INPUT_FILES, WIKI_UPLOAD_*, and the LIMITS payload)
+# are imported from config/ above — server-enforced here, surfaced to the UI via
+# /config.limits so the client validates against the exact numbers the server enforces.
 
 # Transport-layer body-size ceiling enforced by hardening.BodySizeLimitMiddleware BEFORE
 # any route or pipeline stage runs.  Must exceed any legitimate payload: the largest
@@ -123,65 +66,18 @@ WIKI_UPLOAD_EXTENSIONS = (".md", ".markdown", ".txt")
 # attack at the edge.  Override at deployment with MAX_REQUEST_BODY_BYTES env var.
 MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(32 * 1024 * 1024)))
 
-LIMITS = {
-    "briefMinChars": BRIEF_MIN_CHARS,
-    "briefMaxChars": BRIEF_MAX_CHARS,
-    "maxInputFiles": MAX_INPUT_FILES,
-    "wikiUploadMaxFiles": WIKI_UPLOAD_MAX_FILES,
-    "wikiUploadMaxBytes": WIKI_UPLOAD_MAX_BYTES,
-    "wikiUploadExtensions": list(WIKI_UPLOAD_EXTENSIONS),
-}
-
 # Auth rate limit on credential endpoints (server-side only — not UI-relevant).
 AUTH_RATE_WINDOW_S = 60
 AUTH_RATE_MAX_ATTEMPTS = 10
 
-# ---------------------------------------------------------------------------
-# Model catalog — the single backend-editable source for what users see in
-# Settings → Models. Verified against provider docs June 2026.
+# The user-selectable model catalog (SELECTABLE_MODELS text/reasoning + MEDIA_MODELS
+# multimodal) is imported from config/ above — curating what users can pick is a business
+# decision, so it lives in config/business.yaml.
 #
-# locked=True marks SECURITY layers (verifier, output filter): the models
-# guarding the pipeline are system-managed — users must never be able to
-# swap in a weaker model and degrade their own input/output gates. The
-# API rejects writes to locked layers with 403; the UI shows them
-# read-only. The actual model the pipeline uses comes from models.yaml.
-# ---------------------------------------------------------------------------
-
-# User-selectable text/reasoning models (orchestrator, research, planning, code).
-SELECTABLE_MODELS = [
-    # Google
-    "gemini-3.5-flash",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    # Anthropic
-    "claude-fable-5",
-    "claude-opus-4-8",
-    "claude-opus-4-7",
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
-    # OpenAI
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.4-nano",
-]
-
-# Media/document understanding needs MULTIMODAL models. Gemini reads everything
-# (image/audio/video/PDF); the cross-provider vision models cover image + PDF. Audio
-# and video need Gemini, so it leads the list.
-MEDIA_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-3.5-flash",
-    "gemini-2.5-flash-lite",
-    "claude-opus-4-8",
-    "claude-sonnet-4-6",
-    "gpt-5.4",
-]
+# SECURITY note (unchanged): the verifier + output-filter layers are system-managed and
+# NOT user-selectable — users must never swap in a weaker model and degrade their own
+# input/output gates. The API rejects writes to those locked layers with 403; the UI shows
+# them read-only. The actual model each layer runs comes from models.yaml.
 
 
 def qualify_model(model_id: str) -> str:

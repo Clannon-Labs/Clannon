@@ -1,0 +1,129 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# business.yaml — THE OWNER'S CONTROL PANEL for the product's business values.
+#
+# Change ANY business-side value of the product here, in ONE place. The backend
+# reads this as authoritative and the frontend follows it via GET /config, so the
+# two never drift. This is the most powerful file in the repo for shaping the
+# product — pricing, what users can pick, what they're allowed to send.
+#
+# What lives here: plans/pricing/tiers, feature flags, product limits, and the
+# user-selectable model catalog.
+# What does NOT: technical config (timeouts, hop/size caps → foundation/) and
+# deployment/ops config (CORS, cookies, DB path, rate limits → api/config.py).
+# Security note: this file is private to the owner; api/ never exposes its raw
+# contents — GET /config returns only the specific values a client legitimately needs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Plan assigned to a new signup. "pro" is handy in local dev (unlocks all memory
+# tiers); production keeps "free" until billing drives upgrades. (A deployment may
+# override with the SERVER_DEFAULT_PLAN env var; this is the default source.)
+default_plan: free
+
+# Feature flags surfaced to the frontend via /config.
+features:
+  demo: true
+  billing: true
+
+# Product limits — server-enforced AND surfaced to the UI (via /config.limits) so the
+# client validates against the EXACT numbers the server enforces, never a drifting copy.
+# Bump a limit here and both server enforcement and the UI follow.
+# (briefMinChars is intentionally low: a message can be as short as "hi" — the workspace
+# is a conversation, not a form.)
+limits:
+  briefMinChars: 2
+  briefMaxChars: 20000          # run + follow-up brief length cap
+  maxInputFiles: 10             # files attachable to one run
+  wikiUploadMaxFiles: 10        # files per bulk wiki import
+  wikiUploadMaxBytes: 524288    # 512 KiB per wiki-import file
+  wikiUploadExtensions: [".md", ".markdown", ".txt"]
+
+# Pricing / tiers. Served via /config so the frontend never drifts from what the
+# backend believes. Each plan: id, display name, monthly USD, monthly token budget,
+# which memory tiers it unlocks, a tagline, and the marketing feature bullets.
+plans:
+  - id: free
+    name: Seedling
+    monthlyUsd: 0
+    tokenBudget: 100000
+    tagline: "Feel the continuity. Three real runs a month."
+    memoryTiers: [episodic]
+    features:
+      - "100k tokens / month"
+      - "Single research workflow"
+      - "Community support"
+  - id: starter
+    name: Starter
+    monthlyUsd: 29
+    tokenBudget: 2000000
+    tagline: "For the freelancer with recurring clients."
+    memoryTiers: [episodic, wiki]
+    features:
+      - "2M tokens / month"
+      - "Episodic + Wiki memory"
+      - "Editable client wiki — your facts outrank inference"
+      - "All research workflows"
+      - "Email delivery"
+  - id: pro
+    name: Pro
+    monthlyUsd: 79
+    tokenBudget: 6000000
+    tagline: "The full memory system. This is where it compounds."
+    memoryTiers: [episodic, wiki, semantic, procedural]
+    highlight: true
+    features:
+      - "6M tokens / month"
+      - "All four memory tiers"
+      - "Semantic graph — facts, sources, provenance"
+      - "Procedural memory — it learns how you work"
+      - "Per-layer model configuration"
+      - "Priority queue"
+  - id: agency
+    name: Agency
+    monthlyUsd: 199
+    tokenBudget: 20000000
+    tagline: "Every client, every project, one growing archive."
+    memoryTiers: [episodic, wiki, semantic, procedural]
+    features:
+      - "20M tokens / month"
+      - "All four memory tiers"
+      - "Unlimited client workspaces"
+      - "MCP integrations — context flows in automatically"
+      - "Team seats (up to 5)"
+      - "Dedicated support"
+
+# The user-selectable model catalog — what Settings → Models offers a user to drive
+# the text/reasoning layers (orchestrator, research, planning, code). Curating this
+# list is a business/product decision. (The SECURITY layers — verifier, output filter —
+# are system-managed and NOT user-selectable; that lock lives in api/, not here. The
+# actual model each layer runs comes from models.yaml.)
+selectable_models:
+  # Google
+  - gemini-3.5-flash
+  - gemini-3.1-pro-preview
+  - gemini-3.1-flash-lite
+  - gemini-2.5-pro
+  - gemini-2.5-flash
+  - gemini-2.5-flash-lite
+  # Anthropic
+  - claude-fable-5
+  - claude-opus-4-8
+  - claude-opus-4-7
+  - claude-opus-4-6
+  - claude-sonnet-4-6
+  - claude-haiku-4-5
+  # OpenAI
+  - gpt-5.5
+  - gpt-5.4
+  - gpt-5.4-mini
+  - gpt-5.4-nano
+
+# Multimodal models for media/document understanding (image/audio/video/PDF). Gemini
+# reads everything, so it leads; the cross-provider vision models cover image + PDF.
+media_models:
+  - gemini-2.5-flash
+  - gemini-2.5-pro
+  - gemini-3.5-flash
+  - gemini-2.5-flash-lite
+  - claude-opus-4-8
+  - claude-sonnet-4-6
+  - gpt-5.4
