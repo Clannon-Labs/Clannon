@@ -57,8 +57,17 @@ class GraphReadResult:
     """Internal read shape — graph_manager.py adapts this to the port's
     GraphResult once the contract lands. degraded=True means the graph was
     wanted but unavailable (missing scope, or Kuzu down) — distinct from a
-    healthy empty result (scope valid, store up, genuinely no edges)."""
+    healthy empty result (scope valid, store up, genuinely no edges).
+
+    `paths` is the CODE_FILE traversal shape (a bare set of paths — the
+    caller already knows the label, so a path is enough to rebuild a node).
+    `rows` is the typed-node bulk-read shape (`members()`) — a MISSION/TASK
+    node carries real properties (status, summary, …), not just one path, so
+    each match is a full property dict (including `id`) instead of a bare
+    string. The two are populated by different read paths and never both at
+    once."""
     paths: frozenset[str] = field(default_factory=frozenset)
+    rows: tuple[dict[str, Any], ...] = ()
     degraded: bool = False
     notes: str = ""
 
@@ -135,24 +144,49 @@ def _already_exists(exc: Exception) -> bool:
     return "already exists" in str(exc).lower()
 
 
+def _create_if_absent(conn: Any, ddl: str) -> None:
+    """One CREATE TABLE statement, idempotent (mirrors the pre-existing
+    CodeFile/IMPORTS try/except shape, shared so each new table isn't its own
+    copy-pasted try/except)."""
+    try:
+        conn.execute(ddl)
+    except RuntimeError as exc:
+        if not _already_exists(exc):
+            raise
+
+
 def _ensure_schema(conn: Any) -> None:
     global _schema_ready
     if _schema_ready:
         return
-    try:
-        conn.execute(
-            "CREATE NODE TABLE CodeFile("
-            "id STRING, user_id STRING, repo_id STRING, path STRING, "
-            "PRIMARY KEY(id))"
-        )
-    except RuntimeError as exc:
-        if not _already_exists(exc):
-            raise
-    try:
-        conn.execute("CREATE REL TABLE IMPORTS(FROM CodeFile TO CodeFile, origin STRING)")
-    except RuntimeError as exc:
-        if not _already_exists(exc):
-            raise
+    _create_if_absent(
+        conn,
+        "CREATE NODE TABLE CodeFile("
+        "id STRING, user_id STRING, repo_id STRING, path STRING, "
+        "PRIMARY KEY(id))",
+    )
+    _create_if_absent(conn, "CREATE REL TABLE IMPORTS(FROM CodeFile TO CodeFile, origin STRING)")
+    # Mission Engine (batch phase) — MISSION/TASK nodes, typed task-dependency
+    # edges. mission_id lives as a plain property (a filter under user_id, not
+    # a GraphScope dimension — ratified 2026-07-05); success_criteria is a
+    # native Kuzu STRING[] (Criterion is just {description: str} today, a list
+    # of strings is the whole shape, no need for a richer encoding).
+    _create_if_absent(
+        conn,
+        "CREATE NODE TABLE Mission("
+        "id STRING, user_id STRING, repo_id STRING, mission_id STRING, "
+        "intent STRING, success_criteria STRING[], status STRING, updated_at DOUBLE, "
+        "PRIMARY KEY(id))",
+    )
+    _create_if_absent(
+        conn,
+        "CREATE NODE TABLE Task("
+        "id STRING, user_id STRING, repo_id STRING, task_id STRING, mission_id STRING, "
+        "summary STRING, status STRING, evidence STRING, updated_at DOUBLE, "
+        "PRIMARY KEY(id))",
+    )
+    for rel in ("Blocks", "Feeds", "Supersedes"):
+        _create_if_absent(conn, f"CREATE REL TABLE {rel}(FROM Task TO Task, origin STRING)")
     _schema_ready = True
 
 
@@ -395,3 +429,14 @@ def upsert_edges(scope: GraphScope, rows: list[dict]) -> list[dict]:
     except Exception as exc:
         log.warning("kuzu edge upsert failed: %s", exc)
         return []
+
+
+def connection():
+    """Shared accessor to the lazy Kuzu connection for sibling internal
+    modules (`mission_graph_store.py`) that need the SAME embedded db handle
+    — Kuzu is single-writer/embedded, so a second module must never open its
+    own `kuzu.Database()` on the same path (unlike Qdrant's client-server
+    model, two handles here risk real file-lock contention, not just waste).
+    Thin, named wrapper around `_kuzu()` rather than a sibling reaching into
+    a `_`-prefixed name directly."""
+    return _kuzu()
