@@ -89,3 +89,6 @@ handoff.*
 HANDOFF.*
 # Kuzu embedded graph DB (GraphPort backing store) — never commit the db files
 backend/core/memory/data/
+
+# Owner-only compliance reports (personal, never committed)
+/LAW/

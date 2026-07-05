@@ -1,5 +1,29 @@
 # CLAUDE.md — Clannon (production monorepo)
 
+## ⚖️ THE CODING LAWS (non-negotiable — read first, every session, every agent)
+
+These are LAWS, not principles. Prioritize them **relentlessly** over convenience; check
+every change against all five before it lands; a violation you find is FIXED or explicitly
+FLAGGED, never left. Full authoritative text: **`docs/LAWS.md`** (read it).
+
+1. **MODULARITY — zero redundancy.** One source of truth; one function = one job; one file =
+   one kind of job; one folder = one layer (or its utilities). No duplicate/parallel paths.
+2. **READABILITY — a developer must LOVE it.** Intuitive, the *why* explained. **Files ≤ 500
+   lines (aim ~300)**; short single-purpose functions. Split by responsibility before sprawl.
+3. **SPEED + FLOW IS THE SPINE.** Blazingly fast. `foundation/`+`Flow` is the circulatory
+   system, not a feature — if Flow/foundation can carry it, it MUST; nothing else takes its
+   job. **`core/pipeline.py` is the ONLY place the pipeline runs** — every entry point calls
+   `pipeline.run()`; nothing else re-walks the stages.
+4. **SECURITY/PRIVACY — backend governs; config single-source + private.** One config file per
+   concern (models → `models.yaml`; no config logic elsewhere), all config in one shared
+   folder, **private to the owner**. The **backend GOVERNS the frontend**: the frontend only
+   changes what the backend explicitly exposed for a normal user; bypassing/hacking the
+   frontend grants NO privilege — the backend re-checks identity+authz+validity server-side
+   and refuses anything else. `api/` is the most exposed surface — scrutinize it hardest.
+5. **PRODUCTION-GRADE by default** — do what real systems do even if unlisted: fail-closed,
+   least-privilege, bounded resources, no secrets in code/logs/responses, degrade honestly,
+   prove it with a test.
+
 ## ROOT MANAGER ROLE
 
 This CLAUDE.md belongs to the repository root and is intended for the
