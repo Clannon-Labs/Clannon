@@ -26,11 +26,17 @@ Sections:
 
 # ---------------------------------------------------------------------------
 # PIPELINE
-# Overall request lifecycle. These are the outermost limits —
-# if a full pipeline run exceeds PIPELINE_TIMEOUT_S, it is killed.
+# Overall request lifecycle. These are the outermost limits.
 # ---------------------------------------------------------------------------
 
-PIPELINE_TIMEOUT_S          = 120.0   # max wall time for one full user turn
+# The ENFORCED whole-turn wall clock. One deadline is set at turn start
+# (`ctx.turn_deadline`); the initial orchestrator pass AND every filter-revision budget
+# their `wait_for` against the time REMAINING, so a turn can never exceed this — even
+# across revisions. (Previously each of ≤FILTER_MAX_REVISIONS revisions got a FRESH
+# ORCHESTRATOR_TIMEOUT_S, compounding to ~1440s/24min with no outer kill.) Set above
+# ORCHESTRATOR_TIMEOUT_S so a single legitimate pass is never cut short; it is a hard
+# ceiling on runaway. Budget exhausted ⇒ fail closed (no delivery). Tunable.
+TURN_WALL_CLOCK_S           = 720.0   # max wall time for ONE full user turn (incl. revisions)
 # Output-filter recovery budget — see FILTER_MAX_REVISIONS in the FILTER section.
 
 

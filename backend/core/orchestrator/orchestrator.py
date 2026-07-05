@@ -86,9 +86,16 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         flow.ctx.advance(PipelineStage.ORCHESTRATING)
         ports = build_default_ports(flow.ctx)
 
+        # Whole-turn wall clock: set ONE deadline at turn start. The initial pass (here)
+        # and every filter-revision (pipeline.recover_from_filter_block) budget their
+        # wait_for against the time remaining, so the turn can never exceed
+        # TURN_WALL_CLOCK_S even across revisions. Fresh-turn deadline is well above
+        # ORCHESTRATOR_TIMEOUT_S, so this first pass keeps its full budget.
+        flow.ctx.turn_deadline = time.monotonic() + constants.TURN_WALL_CLOCK_S
         response = await asyncio.wait_for(
             run_loop(normalized, ports, flow.ctx),
-            timeout=constants.ORCHESTRATOR_TIMEOUT_S,
+            timeout=min(constants.ORCHESTRATOR_TIMEOUT_S,
+                        max(0.0, flow.ctx.turn_deadline - time.monotonic())),
         )
 
         flow.ctx.orchestrator_response = response

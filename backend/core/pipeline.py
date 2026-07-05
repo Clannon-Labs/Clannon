@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -217,9 +218,15 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
         ctx.filter_block_reason = None
         try:
             ports = build_default_ports(ctx)
+            # Budget this revision against the WHOLE-TURN deadline set at turn start, so
+            # revisions can't compound past TURN_WALL_CLOCK_S (each used to get a fresh
+            # ORCHESTRATOR_TIMEOUT_S). Budget exhausted ⇒ wait_for times out ⇒ fail closed
+            # below. Falls back to the per-pass limit if no deadline was set (defensive).
+            _budget = (max(0.0, ctx.turn_deadline - time.monotonic())
+                       if ctx.turn_deadline else constants.ORCHESTRATOR_TIMEOUT_S)
             revised = await asyncio.wait_for(
                 run_loop(ctx.normalized_input, ports, ctx),
-                timeout=constants.ORCHESTRATOR_TIMEOUT_S,
+                timeout=min(constants.ORCHESTRATOR_TIMEOUT_S, _budget),
             )
         except Exception as exc:  # noqa: BLE001 — surface as a run failure, never crash
             ctx.failed = True

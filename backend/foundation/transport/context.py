@@ -298,6 +298,10 @@ class VrakshaContext:
     filter_feedback: str | None = None   # the filter's rejection reason, handed BACK to the
                                          # orchestrator on a bounded retry so it can revise its
                                          # draft. The filter still adjudicates every attempt.
+    turn_deadline: float = 0.0           # monotonic-clock deadline for the WHOLE turn (set once
+                                         # at orchestrator entry to now + TURN_WALL_CLOCK_S). The
+                                         # initial pass + every revision budget against the time
+                                         # remaining, so a turn can't exceed it. 0.0 = unset.
 
     # ------------------------------------------------------------------
     # FINAL OUTPUT
