@@ -21,6 +21,14 @@ import directly (`foundation` can't — it imports nothing).
 - Sandbox code-exec is OFF unless `VRAKSHA_ENABLE_SANDBOX=1`; the container is
   no-network, non-root, read-only-rootfs, memory/CPU/pids/time-bounded, paths
   confined to the workspace (no `..`/symlink escape). Don't relax those defaults.
+- A SECOND, independent code-exec path exists: `python_exec` (in-process
+  `RestrictedPython`, gated by its OWN flag `VRAKSHA_ENABLE_PYTHON_EXEC` —
+  unrelated to the Docker sandbox above). It is deliberately WEAKER (its own
+  docstring: "NOT a strong sandbox, escapes are a known risk"), OFF by default,
+  and — unlike the Docker sandbox — offered DIRECTLY to the orchestrator (no
+  `wants_workspace`). Out-of-process isolation is TODO'd before production. So
+  "is every code path Docker-sandboxed?" is NOT a blanket yes — there are two
+  gates; this is the weaker one. See `tools/python_exec.py`'s header.
 
 ## Conventions
 - `registry.config` (models/prompts) = base tier. `registry.capabilities` = specs,
