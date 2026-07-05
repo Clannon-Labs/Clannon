@@ -238,10 +238,20 @@ class TestRegistry:
         verdict, reason = c6[2]()
         assert verdict == "NOT-MEASURED"
 
-    def test_e2_is_static_not_measured(self):
+    def test_e2_now_delegates_to_run_standard(self):
+        """E2's harness has landed (e2_project_continuity.py) — the registry entry
+        moved from a static NOT-MEASURED placeholder to _run_standard, same as
+        C1/C3/C4/C5. Mocked, not asserted against the real harness's specific
+        current verdict: this file's own convention (see TestRunE1's "the real e1
+        harness HAS landed... must be mocked, never assumed from the repo state")
+        is to test the WIRING here, not couple to one harness's scenario design."""
+        report = _make_report("PARTIAL")
+        fake = types.ModuleType("benchmarks.e2_project_continuity")
+        fake.run = lambda: report
         e2 = next(b for b in run_all._BENCHMARKS if b[0] == "E2")
-        verdict, reason = e2[2]()
-        assert verdict == "NOT-MEASURED"
+        with patch.dict(sys.modules, {"benchmarks.e2_project_continuity": fake}):
+            verdict, _ = e2[2]()
+        assert verdict == "PARTIAL"
 
     def test_e3_is_static_not_measured(self):
         e3 = next(b for b in run_all._BENCHMARKS if b[0] == "E3")

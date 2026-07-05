@@ -166,10 +166,7 @@ _BENCHMARKS: list[tuple[str, str, object]] = [
     (
         "E2",
         "Autonomous Project Continuity",
-        lambda: (
-            "NOT-MEASURED",
-            "no harness yet; depends on C1 persistent-memory demo scene",
-        ),
+        lambda: _run_standard("e2_project_continuity"),
     ),
     (
         "E3",
