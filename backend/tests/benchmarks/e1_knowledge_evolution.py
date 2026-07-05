@@ -12,23 +12,30 @@ Benchmark scenario (CLANNON_V1_ATTENTION_THRESHOLD.md, Exceptional Benchmark 1):
 Required shape for a genuine PASS:
   "Historically preferred Python. Current evidence suggests Rust is now primary."
 
-Expected verdict TODAY: PARTIAL
+Expected verdict TODAY: PASS
   - The retrieval substrate IS built: vector search, recency-weighted ranking,
     relevance floor, Lagrangian budget allocation, and MemoryItem.created_at
     provenance all work. Both preference entries survive hydration because the
     30-day-old entry still clears the relevance floor after recency weighting.
   - Temporal ordering IS inferable from MemoryItem.created_at if the caller
     knows to sort by it.
-  - GAP: MemoryItem has no temporal-validity fields — no valid_until,
-    supersedes_id, or is_historical annotation. The "historically X, now Y"
-    shape cannot be asserted structurally; it requires caller-side inference.
-  - DOCUMENTED RISK: the write-path dedup threshold (_DEDUP_SIMILARITY=0.97)
-    does NOT collapse semantically distinct preferences ("Python" vs "Rust")
-    because they name different languages and their embeddings differ
-    (cosine < 0.97). Near-identical rewrites of the same preference WOULD be
-    merged, silently erasing the historical entry — a temporal collapse risk for
-    closely-worded contradictions.
-  Full temporal-validity support is gated on issue #16 (typed knowledge records).
+  - CLOSED (EB1): MemoryItem carries first-class temporal-validity fields —
+    `valid_at` (CB1) and `superseded_by` (EB1, manager-owned — an LLM judge
+    marks a memory superseded by a later one on the write path; fail-closed, see
+    core/memory/writer.py::judge_supersession). The fixtures below simulate that
+    judge having already run: the Python entry carries
+    `superseded_by="e1-rust-002"`. Retrieval keeps the superseded entry
+    SURFACED (temporal truth, not erasure) — this probe is READ-SIDE ONLY: it
+    asserts hydrate() propagates pre-set fields correctly, it does not exercise
+    the judge itself (covered by tests/memory_supersession.py).
+  - DOCUMENTED RISK (still open, orthogonal to EB1): the write-path dedup
+    threshold (_DEDUP_SIMILARITY=0.97) does NOT collapse semantically distinct
+    preferences ("Python" vs "Rust") because they name different languages and
+    their embeddings differ (cosine < 0.97). Near-identical rewrites of the same
+    preference WOULD be merged, silently erasing the historical entry instead of
+    going through the supersession judge — a temporal collapse risk for
+    closely-worded contradictions that EB1's judge (a genuinely NEW insert, not
+    a dedup-merge) does not apply to.
 """
 
 import asyncio
@@ -62,6 +69,11 @@ _PYTHON_HIT = {
     "trust": 1,
     "tier": MemoryStore.PROCEDURAL.value,
     "created_at": _T_PAST,
+    # EB1: simulates the write-side judge having already marked this superseded
+    # by the Rust entry below (id known only to this fixture — MemoryItem itself
+    # carries no id field, so the read-side check compares against this literal).
+    "valid_at": _T_PAST,
+    "superseded_by": "e1-rust-002",
 }
 _RUST_HIT = {
     "id": "e1-rust-002",
@@ -73,6 +85,8 @@ _RUST_HIT = {
     "trust": 1,
     "tier": MemoryStore.PROCEDURAL.value,
     "created_at": _NOW,
+    "valid_at": _NOW,
+    "superseded_by": "",  # current — nothing has replaced it
 }
 _FAKE_VECTOR = [0.1] * 768
 
@@ -133,9 +147,11 @@ def _verdict(package):
     Derive PASS / PARTIAL / FAIL from the hydration package and enumerate gaps.
 
     PASS  : both items returned, temporal order preserved, AND temporal-validity
-            fields (valid_until / supersedes_id / is_historical) are present.
+            fields (valid_at / superseded_by) carry real, correct VALUES — not
+            just present on the contract, but populated and readable through
+            hydrate() (CB1's valid_at, EB1's superseded_by).
     PARTIAL: both items returned and temporal order is inferable from created_at,
-             but temporal-validity fields are absent.
+             but temporal-validity fields are absent or unpopulated.
     FAIL  : history collapsed — only one (or zero) entries returned.
     """
     items = package.items
@@ -153,11 +169,16 @@ def _verdict(package):
         and python_items[0].created_at < rust_items[0].created_at
     )
 
-    # MemoryItem is a frozen dataclass with __slots__; accessing a non-existent
-    # field raises AttributeError → hasattr returns False for all gap fields.
-    has_temporal_validity = any(
-        hasattr(i, "valid_until") or hasattr(i, "supersedes_id") or hasattr(i, "is_historical")
-        for i in items
+    # Real fields, real VALUES — not `hasattr` (every MemoryItem always has these
+    # attributes; the old check tested for the wrong names entirely and could
+    # never fire). The Python entry must be dated AND marked superseded BY the
+    # Rust entry's known id; the Rust entry must be dated and NOT superseded.
+    has_temporal_validity = (
+        has_history and has_current
+        and python_items[0].valid_at > 0.0
+        and rust_items[0].valid_at > 0.0
+        and python_items[0].superseded_by == _RUST_HIT["id"]
+        and rust_items[0].superseded_by == ""
     )
 
     gaps = []
@@ -178,10 +199,10 @@ def _verdict(package):
         )
     if not has_temporal_validity:
         gaps.append(
-            "NO-TEMPORAL-VALIDITY (gated on #16): MemoryItem carries no "
-            "valid_until / supersedes_id / is_historical field; the "
-            "'historically Python, now Rust' shape must be inferred from raw "
-            "created_at timestamps rather than asserted from structured metadata"
+            "NO-TEMPORAL-VALIDITY: valid_at/superseded_by absent or unpopulated "
+            "on hydrate()'s output; the 'historically Python, now Rust' shape "
+            "must be inferred from raw created_at timestamps rather than "
+            "asserted from structured metadata"
         )
 
     # Document the write-path dedup risk without requiring real embeddings.
@@ -243,11 +264,16 @@ def test_e1_knowledge_evolution_probe():
     structure.
 
     The probe is HERMETIC: store.search and embeddings.embed are replaced with
-    deterministic stubs; no Qdrant or fastembed model is required.
+    deterministic stubs; no Qdrant or fastembed model is required. It is
+    READ-SIDE ONLY — the fixtures pre-set valid_at/superseded_by as if EB1's
+    write-side judge had already run (that judge itself is covered by
+    tests/memory_supersession.py); this probe proves hydrate() propagates the
+    real values correctly, keeping the superseded entry SURFACED rather than
+    erased.
 
-    Expected verdict: PARTIAL
+    Expected verdict: PASS
       - Substrate correct: both entries returned, temporal order inferable.
-      - Depth gap (gated on #16): no valid_until / supersedes_id / is_historical.
+      - Depth (EB1): valid_at + superseded_by carry real values through hydrate().
     """
     package = _run_probe()
     verdict, gaps = _verdict(package)
@@ -271,22 +297,28 @@ def test_e1_knowledge_evolution_probe():
         "created_at ordering not preserved — temporal reconstruction impossible"
     )
 
-    # The core gap assertion: no temporal-validity fields on MemoryItem.
-    # This is the documented structural gap, not a regression.
-    for item in items:
-        assert not hasattr(item, "valid_until"), (
-            "Unexpected valid_until found — update this probe to check PASS, "
-            "and close the #16 gate"
-        )
-        assert not hasattr(item, "supersedes_id"), (
-            "Unexpected supersedes_id found — update this probe to check PASS"
-        )
-        assert not hasattr(item, "is_historical"), (
-            "Unexpected is_historical found — update this probe to check PASS"
-        )
+    # The core depth assertion: valid_at + superseded_by carry real VALUES
+    # through hydrate(), not just attribute presence (every MemoryItem always
+    # has these attributes by contract — checking hasattr alone could never
+    # fail, which is exactly why the old version of this probe was dead).
+    assert python_items[0].valid_at > 0.0, (
+        "historical entry's valid_at not propagated through hydrate()"
+    )
+    assert rust_items[0].valid_at > 0.0, (
+        "current entry's valid_at not propagated through hydrate()"
+    )
+    assert python_items[0].superseded_by == _RUST_HIT["id"], (
+        "historical entry must carry superseded_by pointing at the memory that "
+        f"replaced it (expected {_RUST_HIT['id']!r}, got {python_items[0].superseded_by!r})"
+    )
+    assert rust_items[0].superseded_by == "", (
+        "current entry must NOT be marked superseded"
+    )
+    # Temporal truth, not erasure: the superseded entry must still be there.
+    assert python_items, "the superseded entry must stay SURFACED, not be filtered out"
 
-    assert verdict == "PARTIAL", (
-        f"Expected PARTIAL (both entries surfaced, temporal order preserved, "
-        f"depth fields absent per #16). Got {verdict!r}.\nGaps:\n"
+    assert verdict == "PASS", (
+        f"Expected PASS (both entries surfaced, temporal order preserved, "
+        f"valid_at/superseded_by populated with real values). Got {verdict!r}.\nGaps:\n"
         + "\n".join(f"  {g}" for g in gaps)
     )
