@@ -1,4 +1,4 @@
-"""Conformance test for the shared expert entry-point contract.
+"""Conformance test for the shared expert entry-point + registration contract.
 
 Every expert package under `experts/*/expert.py` exposes the SAME entry point
 (see `experts/__init__.py` and `experts/CLAUDE.md` → Conventions):
@@ -8,8 +8,12 @@ Every expert package under `experts/*/expert.py` exposes the SAME entry point
 This pins that uniform shape so an expert that drifts from it — a renamed/extra
 parameter, a synchronous `run()`, a mistyped annotation, or an `output_schema`
 that is not `ExpertOutput` — is caught here rather than at orchestration time.
-It asserts the present, registered roster, so a newly added expert is covered
-automatically with no edit to this file.
+It also pins each expert's least-privilege REGISTRATION (`permission` +
+`tool_grants`) against its documented intent, so a silent broadening (or a
+grant a permission level doesn't cover) regresses loudly instead of waiting for
+the next manual audit. Both asserts the present, registered roster, so a newly
+added expert is covered automatically with no edit to this file (a NEW expert
+must be added to `_EXPECTED_REGISTRATION` below, or the pin test fails naming it).
 
 Per QUEUE.md scope: this is a test only. If an expert ever diverges, the fix is a
 `needs-reviewer` issue, not an edit to the expert to satisfy the test.
@@ -25,6 +29,7 @@ import typing
 from pydantic import BaseModel
 
 import experts
+from foundation import PermissionLevel
 from registry.capabilities import CapabilityKind, ExpertOutput, discover, registry
 from registry.capabilities.handler import ExpertEnv
 
@@ -113,3 +118,51 @@ def test_expert_run_conforms_to_shared_contract():
             )
 
     assert not problems, "expert run() contract divergences:\n  " + "\n  ".join(problems)
+
+
+# Each expert's declared privilege: (permission, sorted tool_grants). Pinned from the
+# security-review's round-2 least-privilege audit (2026-07-05) so a later edit that
+# broadens a grant or downgrades a permission below what its tools need regresses
+# loudly here, not just at the next manual re-audit. A code-execution expert MUST be
+# EXECUTE; a NETWORK-tool-granted expert MUST be NETWORK (invariant A depends on the
+# handler seeing the true permission); a tool-less reasoner is READ.
+_EXPECTED_REGISTRATION: dict[str, tuple[PermissionLevel, tuple[str, ...]]] = {
+    "code.engineer": (PermissionLevel.EXECUTE, ("code.run", "fs.read", "fs.write")),
+    "data.analyst": (PermissionLevel.EXECUTE, ("code.run", "fs.read", "fs.write")),
+    "docs.writer": (PermissionLevel.WRITE, ("fs.read", "fs.write")),
+    "media.analyst": (PermissionLevel.READ, ("fs.read",)),
+    "delivery.notifier": (PermissionLevel.NETWORK, ("http.request",)),
+    "summary.condenser": (PermissionLevel.READ, ()),
+    "verification.claims": (PermissionLevel.NETWORK, ("search.web", "web.fetch_url")),
+    "web.research": (PermissionLevel.NETWORK, ("search.web", "web.fetch_url")),
+    "synthesis.writer": (PermissionLevel.READ, ()),
+}
+
+
+def test_expert_registration_pins_least_privilege():
+    """Each expert's `permission` + `tool_grants` match the pinned expectation, and
+    every registered expert has a pin (an unpinned expert fails this loudly, rather
+    than silently skipping the check for a newly added one)."""
+    specs = {spec.key: spec for spec in _expert_specs()}
+
+    unpinned = set(specs) - set(_EXPECTED_REGISTRATION)
+    assert not unpinned, (
+        f"expert(s) {sorted(unpinned)} have no pinned expectation in "
+        "_EXPECTED_REGISTRATION -- add one (permission, sorted tool_grants)."
+    )
+
+    problems: list[str] = []
+    for key, (expected_permission, expected_grants) in _EXPECTED_REGISTRATION.items():
+        spec = specs.get(key)
+        if spec is None:
+            problems.append(f"{key}: pinned but not registered (renamed or removed?)")
+            continue
+        if spec.permission is not expected_permission:
+            problems.append(
+                f"{key}: permission {spec.permission!r} != expected {expected_permission!r}"
+            )
+        grants = tuple(sorted(spec.tool_grants))
+        if grants != expected_grants:
+            problems.append(f"{key}: tool_grants {grants} != expected {expected_grants}")
+
+    assert not problems, "expert registration drifted from its pin:\n  " + "\n  ".join(problems)
