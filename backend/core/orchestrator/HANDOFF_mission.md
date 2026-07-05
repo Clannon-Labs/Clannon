@@ -74,23 +74,41 @@ already answered in the committed contract, not just routed:**
    with its `GraphManager` implementer** — i.e. specified, not yet present on
    `GraphPort` itself.
 
-**The actual remaining blocker, precisely:** `git status` (checked at
-handoff time) shows memory mid-flight, uncommitted, on exactly this —
-`core/memory/graph_manager.py` (modified), `core/memory/graph_store.py`
-(modified), `core/memory/mission_graph_store.py` (new),
-`tests/memory_mission_graph.py` (new). This is memory's tree, not mine — not
-touched, not read beyond `git status`. Memory is saving its own state
-tonight too, per backend.
+**Update — checked again after first writing this section, because memory
+committed while I was writing: the picture narrowed further, so trust this
+paragraph over the timeline above.** Memory's build landed and committed
+(`4d521d2`, their own handoff is `core/memory/HANDOFF_*.md` if it still
+exists tomorrow — read it, it's precise). Confirmed directly (not assumed):
+`core/memory/graph_manager.py:214` has a real, committed `members(scope,
+label, *, parent_id="")` implementation, empirically tested against Kuzu's
+`MERGE ... ON MATCH SET` for the mutation question too. **Memory's side is
+fully done.**
 
-**So: don't re-ask the two seam questions on resume — they're answered.**
-The only thing to check on resume is whether `GraphPort.members()` has
-landed on the Protocol (i.e. `foundation/contracts/graph.py` has a `members`
-method alongside `depends_on`/`lookup`/`write`) and whether
-`GraphManager.members()` is implemented + committed.
+**The actual remaining blocker, precisely, is narrower than "memory is
+building it": `GraphPort.members()` is deliberately NOT yet added to the
+Protocol in `foundation/contracts/graph.py`.** Confirmed by grep — no
+`def members` there as of this handoff. Memory's own handoff doc says this
+was the backend-agent's specified sequencing on purpose: `GraphManager`
+gets the method first (so it stays a strict superset of `GraphPort`,
+keeping every `isinstance(manager, GraphPort)` check green throughout),
+*then* the backend-agent adds the matching method to the Protocol. That
+second step is backend's, not memory's and not mine — nothing to chase from
+either of us, just something to check for on resume.
+
+**So on resume: don't re-ask the two seam questions (both answered,
+memory's side fully built+committed+tested) — check ONE thing:** does
+`foundation/contracts/graph.py` now declare `async def members(...)` on
+`GraphPort` alongside `depends_on`/`lookup`/`write`? If yes, build against
+it. If not yet, the block is purely "backend hasn't landed their one-method
+Protocol addition yet" — a nudge to backend, not new design or waiting on
+memory.
 
 ## Next steps once `members()` lands
 
-1. Confirm the landed signature matches `members(scope, label, parent_id=...) -> GraphResult` (the comment-pinned shape) — if it drifted, that's worth a quick note back to memory/backend, not a silent adaptation.
+1. Confirm `GraphPort.members()`'s Protocol signature matches the already-built,
+   already-tested `GraphManager.members(scope, label, *, parent_id="") ->
+   GraphResult` (`core/memory/graph_manager.py:214`) — if it drifted, that's
+   worth a quick note back to backend, not a silent adaptation.
 2. Build the §6 operate-step in `core/orchestrator/` (new file or extend
    `mission.py` if it stays small — check line count, aim ~300, split if not):
    read `intent`/`success_criteria` + task set via `members()`, the §7
