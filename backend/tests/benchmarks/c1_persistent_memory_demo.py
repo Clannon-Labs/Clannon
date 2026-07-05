@@ -79,6 +79,11 @@ class _MemStore:
         confidence: float,
         trust: int,
         point_id: str | None = None,
+        *,
+        kind: str = "unspecified",
+        valid_at: float = 0.0,
+        source: str = "",
+        superseded_by: str = "",
     ) -> str | None:
         pid = point_id or str(uuid.uuid4())
         created_at = time.time() + self.created_at_offset
@@ -96,6 +101,11 @@ class _MemStore:
                 "created_at": created_at,
                 "confidence": confidence,
                 "trust": trust,
+                # typed-knowledge (CB1) — round-trip so hydrate reads them back
+                "kind": kind,
+                "valid_at": valid_at,
+                "source": source,
+                "superseded_by": superseded_by,
             }
         )
         return pid

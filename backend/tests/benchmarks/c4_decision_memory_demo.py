@@ -132,6 +132,7 @@ class _MemStore:
         confidence: float,
         trust: int,
         point_id: str | None = None,
+        **_typed_kw,  # absorbs CB1's kind/valid_at/source/superseded_by (unused here)
     ) -> str | None:
         pid = point_id or str(uuid.uuid4())
         created_at = self._frozen_now + self.created_at_offset

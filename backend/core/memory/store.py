@@ -16,7 +16,7 @@ import time
 import uuid
 from typing import Any
 
-from foundation import MemoryStore, constants
+from foundation import MemoryKind, MemoryStore, constants
 
 from .embeddings import DIMS
 
@@ -174,8 +174,18 @@ def upsert(
     confidence: float,
     trust: int,
     point_id: str | None = None,
+    *,
+    kind: str = MemoryKind.UNSPECIFIED.value,
+    valid_at: float = 0.0,
+    source: str = "",
+    superseded_by: str = "",
 ) -> str | None:
-    """Insert (or refresh, when point_id given) one memory. None on failure."""
+    """Insert (or refresh, when point_id given) one memory. None on failure.
+
+    Typed-knowledge (CB1) is additive: `kind`/`valid_at`/`source` ride the payload
+    beside the existing provenance; defaults (`unspecified`/0.0/"") preserve legacy
+    records read back through `.get(key, default)`. `superseded_by` is plumbed but
+    inert in CB1 — EB1's manager-owned invalidation is the only writer of it."""
     client = _qdrant()
     collection = COLLECTIONS.get(tier)
     if client is None or collection is None or not user_id:
@@ -211,6 +221,12 @@ def upsert(
                         "confidence": confidence,
                         "trust": trust,
                         "created_at": time.time(),
+                        # typed-knowledge (CB1) — additive; legacy points lack these
+                        # keys and read back as unspecified/0.0/"" via .get(default).
+                        "kind": kind,
+                        "valid_at": valid_at,
+                        "source": source,
+                        "superseded_by": superseded_by,
                     },
                 )
             ],

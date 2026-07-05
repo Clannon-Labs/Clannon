@@ -190,8 +190,8 @@ class _FakeStore:
 
     def upsert(
         self, tier, user_id, session_id, trace_id, vector, content,
-        rationale, confidence, trust, point_id=None,
-    ) -> str:
+        rationale, confidence, trust, point_id=None, **_typed_kw,
+    ) -> str:  # _typed_kw absorbs CB1's kind/valid_at/source/superseded_by (unused here)
         bucket = self.points[tier]
         if point_id is not None:  # refresh path (real store replaces in place)
             for p in bucket:

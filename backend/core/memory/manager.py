@@ -18,6 +18,7 @@ from foundation import (
     HydrationPackage,
     HydrationRequest,
     MemoryItem,
+    MemoryKind,
     MemoryStore,
     MemoryWriteProposal,
     constants,
@@ -77,6 +78,22 @@ _MIN_ACCEPT_CONFIDENCE = 0.6   # semantic/procedural acceptance bar
 _DEDUP_SIMILARITY = 0.97
 _MAX_CONTENT_CHARS = 2000
 _CHARS_PER_TOKEN = 4
+
+
+# Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a
+# barer re-write of a source-backed fact never silently downgrades it to an
+# inferred assumption (symmetric with confidence=max on refresh).
+_KIND_RANK = {MemoryKind.UNSPECIFIED: 0, MemoryKind.ASSUMPTION: 1, MemoryKind.FACT: 2}
+
+
+def _coerce_kind(raw: object) -> MemoryKind:
+    """Map a stored `kind` payload value back to MemoryKind, fail-soft. A legacy
+    point has no `kind` (raw is None) and an unknown/garbled value must never raise
+    into a turn — both degrade to UNSPECIFIED (the honest 'untyped' default)."""
+    try:
+        return MemoryKind(raw)
+    except (ValueError, KeyError):
+        return MemoryKind.UNSPECIFIED
 
 
 def _recency(created_at: float) -> float:
@@ -203,6 +220,12 @@ class MemoryManager:
                         confidence=float(hit.get("confidence", 0.0)),
                         session_id=hit.get("session_id", ""),
                         trace_id=hit.get("trace_id", ""),
+                        # typed-knowledge (CB1) — legacy hits lack these keys and
+                        # fall back to the contract defaults via .get().
+                        kind=_coerce_kind(hit.get("kind")),
+                        valid_at=float(hit.get("valid_at", 0.0)),
+                        source=hit.get("source", ""),
+                        superseded_by=hit.get("superseded_by", ""),
                     ))
 
         items.sort(key=lambda i: (i.trust, i.score), reverse=True)
@@ -294,9 +317,18 @@ class MemoryManager:
         existing = await asyncio.to_thread(store.search, tier, user_id, vectors[0], 1)
         point_id = None
         confidence = proposal.confidence
+        kind, valid_at, source = proposal.kind, proposal.valid_at, proposal.source
         if existing and existing[0]["score"] >= _DEDUP_SIMILARITY:
             point_id = existing[0]["id"]
-            confidence = max(confidence, float(existing[0].get("confidence", 0)))
+            prev = existing[0]
+            confidence = max(confidence, float(prev.get("confidence", 0)))
+            # keep the stronger typed signal on refresh (never downgrade a
+            # source-backed fact into a barer re-write's assumption)
+            prev_kind = _coerce_kind(prev.get("kind"))
+            if _KIND_RANK[prev_kind] > _KIND_RANK[kind]:
+                kind = prev_kind
+            source = source or prev.get("source", "")
+            valid_at = valid_at or float(prev.get("valid_at", 0.0))
         await asyncio.to_thread(
             store.upsert,
             tier,
@@ -309,6 +341,14 @@ class MemoryManager:
             confidence=confidence,
             trust=_TIER_TRUST[tier],
             point_id=point_id,
+            # typed-knowledge (CB1) — carry the proposer's epistemic type +
+            # temporal validity + source through to the payload (dedup-merged
+            # above to keep the stronger signal). superseded_by is NOT threaded
+            # here: supersession is manager-owned EB1 work, never expert-proposed
+            # (MemoryWriteProposal has no such field).
+            kind=kind.value,
+            valid_at=valid_at,
+            source=source,
         )
         return True
 

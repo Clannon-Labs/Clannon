@@ -16,10 +16,19 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from foundation import MemoryStore, MemoryWriteProposal, constants
+from foundation import MemoryKind, MemoryStore, MemoryWriteProposal, constants
 from core.llm import build_agent, run_structured
 
 log = logging.getLogger(__name__)
+
+
+def _coerce_kind(raw: str) -> MemoryKind:
+    """The distiller only ever asserts FACT (source-backed) or ASSUMPTION
+    (inferred). Anything else — including a blank or a garbled value — degrades to
+    ASSUMPTION: LLM distillation is inferential by nature, so ASSUMPTION is the
+    honest floor. UNSPECIFIED is reserved for legacy/untyped records, never for a
+    memory the writer chose to keep."""
+    return MemoryKind.FACT if (raw or "").strip().lower() == "fact" else MemoryKind.ASSUMPTION
 
 # keep the distillation call cheap and bounded — it runs on every substantive turn
 _MAX_TASK_CHARS = 1200
@@ -34,6 +43,11 @@ class _Extracted(BaseModel):
     content: str
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     rationale: str = ""
+    # typed-knowledge (CB1): the agent classifies each memory. "assumption" is the
+    # honest default — a distilled memory is inferential unless it is backed by a
+    # cited source, in which case the agent says "fact" and names the `source`.
+    kind: str = "assumption"
+    source: str = ""
 
 
 class MemoryExtraction(BaseModel):
@@ -49,6 +63,9 @@ def _build_prompt(task: str, answer: str, findings: list[str]) -> str:
         "the work established, and clear preferences for how they like things done. "
         "> Note: Donot save everything.. just save the summary or important things learnt "
         "from the answer delievered.\n",
+        "For each memory, set `kind`: \"fact\" only when it is backed by a cited/"
+        "verifiable source (name that source in `source`); otherwise \"assumption\" "
+        "— an inference or a provisional belief that may later be revised.\n",
         f"## The user's request\n{(task or '')}\n",
         f"## The answer delivered\n{(answer or '')}\n",
     ]
@@ -91,5 +108,7 @@ async def distill(task: str, answer: str, findings: list[str]) -> list[MemoryWri
                     content=content,
                     rationale=item.rationale,
                     confidence=item.confidence,
+                    kind=_coerce_kind(item.kind),
+                    source=(item.source or "").strip(),
                 ))
     return proposals

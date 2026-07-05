@@ -56,6 +56,12 @@ payload: {
   confidence: float # writer's confidence (0..1)
   trust:      int   # tier trust at write time
   created_at: float # unix ts — recency decay input
+  # typed-knowledge (CB1) — additive; legacy points omit these keys and read
+  # back as the contract defaults (unspecified / 0.0 / "") via `.get(default)`.
+  kind:          str   # MemoryKind: fact | assumption | unspecified (legacy/untyped)
+  valid_at:      float # unix ts the fact became true (vs created_at = when learned); 0 = unknown
+  source:        str   # source-document attribution; "" = agent inference
+  superseded_by: str   # memory_id of the record replacing this; "" = current (EB1 sets this — inert in CB1)
 }
 ```
 
@@ -103,6 +109,14 @@ the orchestrator/experts; the manager alone decides persistence:
 - **Dedup**: before insert, search the target tier for the same user with
   similarity ≥ 0.97; on a near-duplicate, refresh that point (created_at,
   confidence = max) instead of inserting. Memories converge, never multiply.
+  The refresh keeps the **stronger typed signal**, symmetric with confidence:
+  `kind` never downgrades (fact > assumption > unspecified), and a non-empty
+  `source` / `valid_at` is not wiped by a barer re-write.
+- **Typing**: the writer (`writer.distill`) sets each proposal's `kind` —
+  `fact` only when source-backed (and names the `source`), else `assumption`
+  (the honest default for an inference). `unspecified` is never written; it is
+  the read-time fallback for legacy/untyped points. `superseded_by` is inert in
+  CB1 — EB1's manager-owned invalidation is its only writer.
 - Content is truncated to 2,000 chars before embedding (defensive cap).
 
 Writes happen post-delivery in the pipeline order, and a write failure NEVER

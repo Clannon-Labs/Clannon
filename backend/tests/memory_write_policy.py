@@ -65,6 +65,10 @@ class _Recorder:
         confidence: float,
         trust: int,
         point_id: str | None = None,
+        kind: str = "unspecified",
+        valid_at: float = 0.0,
+        source: str = "",
+        superseded_by: str = "",
     ) -> str:
         self.calls.append(
             dict(
@@ -74,6 +78,9 @@ class _Recorder:
                 confidence=confidence,
                 trust=trust,
                 point_id=point_id,
+                kind=kind,
+                valid_at=valid_at,
+                source=source,
             )
         )
         return "fake-id"
