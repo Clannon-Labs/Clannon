@@ -85,8 +85,13 @@ _CHARS_PER_TOKEN = 4
 # Below this floor, two memories are just topically related — not worth an LLM
 # judgment (that's _RELEVANCE_FLOOR's much looser job, at retrieval time).
 _SUPERSESSION_FLOOR = 0.85
-# Only durable-knowledge tiers are "supersedable" facts/preferences; EPISODIC
-# entries are turn history (each its own point in time, not a competing claim).
+# Only durable-knowledge tiers are "supersedable" facts/preferences; an ordinary
+# EPISODIC entry is turn history (each its own point in time, not a competing
+# claim) so it's excluded here — but a DECISION is supersedable regardless of
+# which tier it happens to be stored in (CB4 settled DECISION as EPISODIC; a
+# decision recorded there is still exactly the kind of thing that gets revised,
+# unlike a plain turn-history entry). See the `kind == DECISION` half of the
+# gate at the call site — this set alone is deliberately not the full story.
 _SUPERSESSION_TIERS = frozenset({MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL})
 # Bounds the optional judge+mark step independently of MEMORY_WRITE_TIMEOUT_S, so
 # a slow judge call can never cause record_write_proposals to mistake an
@@ -394,8 +399,11 @@ class MemoryManager:
         # same memory — self-supersession is structurally impossible here, not
         # merely excluded by the similarity band. Only a fresh insert (point_id
         # was None going in — a dedup-merge is a refresh of the SAME fact, not a
-        # competing one) is a candidate.
-        if memory_id and point_id is None and tier in _SUPERSESSION_TIERS and existing:
+        # competing one) is a candidate. CB4: a DECISION is always a candidate
+        # regardless of its tier (settled as EPISODIC) — see _SUPERSESSION_TIERS'
+        # own comment on why the tier check alone isn't the full story.
+        supersession_eligible = tier in _SUPERSESSION_TIERS or kind == MemoryKind.DECISION
+        if memory_id and point_id is None and supersession_eligible and existing:
             await self._maybe_mark_superseded(tier, user_id, memory_id, content, existing[0], kind=kind)
         return memory_id
 

@@ -246,8 +246,13 @@ async def _seed_scenario(fake: _FakeStore, mgr: MemoryManager) -> dict[str, str 
         # just appended to this tier's list is unambiguously this write's own.
         ids[label] = fake.points[proposal.store][-1]["id"] if persisted else None
 
+    # DECISION-kind proposals ingest to EPISODIC, matching the settled runtime tier
+    # (c4_decision_memory.py's own ADR ingestion + orchestration's ratified CB4
+    # bridge both write decisions there) — benchmark == runtime, not a SEMANTIC
+    # choice specific to this harness. Plain FACT content (status/scope/risk) stays
+    # SEMANTIC, unchanged; only the two kind=DECISION proposals moved.
     await write("vector_first", 28, MemoryWriteProposal(
-        store=MemoryStore.SEMANTIC, content=_VECTOR_FIRST, confidence=0.95,
+        store=MemoryStore.EPISODIC, content=_VECTOR_FIRST, confidence=0.95,
         kind=MemoryKind.DECISION, rationale="vector embeddings were the fastest path to a working prototype",
         source="architecture-review-2026-06-08",
     ))
@@ -256,7 +261,7 @@ async def _seed_scenario(fake: _FakeStore, mgr: MemoryManager) -> dict[str, str 
         kind=MemoryKind.FACT, rationale="scoped in the phase-one planning doc", source="planning-doc-w2",
     ))
     await write("graph_first", 14, MemoryWriteProposal(
-        store=MemoryStore.SEMANTIC, content=_GRAPH_FIRST, confidence=0.95,
+        store=MemoryStore.EPISODIC, content=_GRAPH_FIRST, confidence=0.95,
         kind=MemoryKind.DECISION, rationale="graph traversal correctly surfaces multi-hop relationships",
         source="architecture-review-2026-06-22", participants="platform-team (proposer)",
     ))
@@ -271,7 +276,7 @@ async def _seed_scenario(fake: _FakeStore, mgr: MemoryManager) -> dict[str, str 
     # real (patched) mark_superseded asserts the same downstream contract the write
     # path would have produced had the judge fired for real.
     if ids["vector_first"] and ids["graph_first"]:
-        store_mod.mark_superseded(MemoryStore.SEMANTIC, _USER, ids["vector_first"], ids["graph_first"])
+        store_mod.mark_superseded(MemoryStore.EPISODIC, _USER, ids["vector_first"], ids["graph_first"])
     await write("migration_risk", 13, MemoryWriteProposal(
         store=MemoryStore.SEMANTIC, content=_MIGRATION_RISK, confidence=0.9,
         kind=MemoryKind.FACT, rationale="flagged during migration planning", source="planning-doc-w3",

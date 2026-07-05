@@ -232,6 +232,10 @@ def test_judge_not_called_below_supersession_floor(monkeypatch):
 
 
 def test_judge_not_called_for_episodic_tier(monkeypatch):
+    """An ORDINARY (non-DECISION) EPISODIC proposal is turn history, each its own
+    point in time — not a candidate. A DECISION in EPISODIC is a different case,
+    covered by test_decision_in_episodic_tier_is_also_eligible below (CB4 settled
+    DECISION as EPISODIC; the exclusion here must not blanket-exclude the tier)."""
     monkeypatch.setattr(emb_mod, "embed", _embed_ok())
     monkeypatch.setattr(store_mod, "search", _search_hit(score=_MID_BAND))
     monkeypatch.setattr(store_mod, "upsert", lambda *a, **k: "new-id")
@@ -240,6 +244,56 @@ def test_judge_not_called_for_episodic_tier(monkeypatch):
     result = asyncio.run(MemoryManager().record_write_proposals(
         "u1", "sess", [_p(store=MemoryStore.EPISODIC)]
     ))
+    assert len(result) == 1
+
+
+def test_decision_in_episodic_tier_is_also_eligible(monkeypatch):
+    """CB4 settled MemoryKind.DECISION's tier as EPISODIC (matching c4_decision_
+    memory.py + orchestration's ratified runtime bridge). A DECISION is supersedable
+    regardless of which tier it lives in — the append-only dedup exemption was
+    already tier-agnostic, but the separate judge-invocation gate was not, and would
+    have silently never formed a link for an EPISODIC decision. Regression for that
+    gap."""
+    monkeypatch.setattr(emb_mod, "embed", _embed_ok())
+    monkeypatch.setattr(store_mod, "search", _search_hit(score=_MID_BAND))
+    monkeypatch.setattr(store_mod, "upsert", lambda *a, **k: "new-id")
+
+    marks: list[tuple] = []
+    monkeypatch.setattr(
+        store_mod, "mark_superseded",
+        lambda tier, user_id, point_id, superseded_by: marks.append((tier, point_id, superseded_by)) or True,
+    )
+
+    async def fake_judge(new_content, existing_content):
+        return True
+
+    monkeypatch.setattr(writer_mod, "judge_supersession", fake_judge)
+    proposal = MemoryWriteProposal(
+        store=MemoryStore.EPISODIC, content="revised decision", confidence=0.9,
+        kind=MemoryKind.DECISION,
+    )
+    result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess", [proposal]))
+    assert len(result) == 1
+    assert marks, (
+        "a DECISION-kind proposal in the EPISODIC tier must still form a "
+        "supersession link — the judge-invocation gate must not exclude it"
+    )
+    assert marks[0][0] == MemoryStore.EPISODIC
+
+
+def test_decision_call_site_requires_decision_kind_not_any_kind(monkeypatch):
+    """The eligibility widening is specifically kind == DECISION, not "any kind in
+    EPISODIC" — an EPISODIC proposal with an unrelated/legacy kind value must still
+    be excluded, same as test_judge_not_called_for_episodic_tier."""
+    monkeypatch.setattr(emb_mod, "embed", _embed_ok())
+    monkeypatch.setattr(store_mod, "search", _search_hit(score=_MID_BAND))
+    monkeypatch.setattr(store_mod, "upsert", lambda *a, **k: "new-id")
+    monkeypatch.setattr(writer_mod, "judge_supersession", _tripwire())
+
+    proposal = MemoryWriteProposal(
+        store=MemoryStore.EPISODIC, content="new fact", confidence=0.9, kind=MemoryKind.FACT,
+    )
+    result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess", [proposal]))
     assert len(result) == 1
 
 
