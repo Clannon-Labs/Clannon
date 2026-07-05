@@ -55,6 +55,11 @@ class MediaExpert:
     skills = ("skills",)                # baseline skills/ beside this file
     tools = ("fs.read",)               # grants a per-run workspace so attached media/docs are seeded + readable
     model_role = "media_expert"        # multimodal understanding, Gemini by default
+    # READ is right for this expert's OWN tool grants (fs.read only) — but note
+    # preprocess.py's _get_whisper() makes a one-time, fixed-target network fetch
+    # (model weights, ops-controlled target, cached after) on a cold cache. See the
+    # HONEST CAPABILITY NOTE at experts/media/preprocess.py:_WHISPER_MODEL for why
+    # this doesn't need a NETWORK grant (not request-influenceable, not exfiltration).
     permission = PermissionLevel.READ
     tags = ("media", "image", "audio", "video", "pdf", "document", "vision", "transcription")
 

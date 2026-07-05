@@ -40,6 +40,18 @@ _MAX_PDF_RENDER_PAGES = 8       # cap rendered pages so a long PDF can't explode
 # Audio/video: transcribe with faster-whisper (CTranslate2 — fast, low-memory on CPU) and
 # sample video frames with ffmpeg, so any model can understand them and a run survives the
 # multimodal provider being down. The model downloads once into a persistent cache.
+#
+# HONEST CAPABILITY NOTE (Law 5 — no hidden capability): on a cold cache, _get_whisper()
+# below makes ONE outbound fetch to Hugging Face Hub for the model weights named by
+# _WHISPER_MODEL. This is the media expert's only network touch despite its declared
+# `permission = PermissionLevel.READ` (see experts/media/expert.py) — safe to leave
+# undeclared as a grant because the target is FIXED (an ops env var, one of a small
+# named set, never request/user-derived) and the fetch is ONE-TIME per (model,
+# cache-dir): the process-global `_whisper` cache below plus the on-disk download_root
+# mean a warm environment never repeats it. Not an SSRF surface (nothing here resolves
+# a request-supplied URL) and not exfiltration (outbound-only, fetches public weights,
+# sends no user data). Flagged here so a reader auditing READ-vs-actual-behavior finds
+# this without reading faster_whisper's internals.
 _WHISPER_MODEL = os.getenv("VRAKSHA_WHISPER_MODEL", "base")    # tiny/base/small/medium/large-v3
 _WHISPER_CACHE = os.getenv("VRAKSHA_WHISPER_CACHE") or str(get_root() / "assets" / "whisper_cache")
 _MAX_TRANSCRIPT_CHARS = 50_000
