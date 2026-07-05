@@ -29,19 +29,17 @@ has relative to `MemoryItem`/`HydrationPackage` in `manager.py`.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from foundation import GraphScope, get_root
 
+from .config import GRAPH_DISABLED as DISABLED
+from .config import graph_db_path_override
 from .graph_extract import CodeImportGraph
 
 log = logging.getLogger(__name__)
-
-_DB_PATH_ENV = "VRAKSHA_GRAPH_DB_PATH"
-DISABLED = os.getenv("VRAKSHA_GRAPH_DISABLED", "0") == "1"
 
 # breaks_if_removed's hop bound — a cyclic/dense graph can't hang the door,
 # same spirit as ORCHESTRATOR_MAX_TURNS bounding the orchestrator's loop.
@@ -64,7 +62,7 @@ class GraphReadResult:
 
 
 def _db_path() -> str:
-    env = os.getenv(_DB_PATH_ENV)
+    env = graph_db_path_override()
     if env:
         return env
     path = get_root() / "core" / "memory" / "data" / "graph_db"

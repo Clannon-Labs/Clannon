@@ -13,6 +13,8 @@ import logging
 import threading
 import time
 
+from .config import EMBED_CACHE_DIR
+
 log = logging.getLogger(__name__)
 
 MODEL_NAME = "nomic-ai/nomic-embed-text-v1.5"
@@ -37,12 +39,12 @@ def _load():
         if time.monotonic() < _retry_after:   # backing off after a recent failure
             return None
         try:
-            import os
-
             from fastembed import TextEmbedding
 
-            cache_dir = os.getenv("VRAKSHA_EMBED_CACHE")  # containers persist via mount
-            _model = TextEmbedding(MODEL_NAME, cache_dir=cache_dir) if cache_dir else TextEmbedding(MODEL_NAME)
+            _model = (
+                TextEmbedding(MODEL_NAME, cache_dir=EMBED_CACHE_DIR)
+                if EMBED_CACHE_DIR else TextEmbedding(MODEL_NAME)
+            )
         except Exception as exc:  # degrade, never raise into the pipeline
             log.warning("embedding model unavailable (retry in %ss): %s", _RETRY_AFTER_S, exc)
             _retry_after = time.monotonic() + _RETRY_AFTER_S

@@ -11,19 +11,17 @@ dropped writes behind a 30s circuit breaker (§6).
 from __future__ import annotations
 
 import logging
-import os
 import time
 import uuid
 from typing import Any
 
 from foundation import MemoryKind, MemoryStore, constants
 
+from .config import MEMORY_DISABLED as DISABLED
+from .config import QDRANT_URL
 from .embeddings import DIMS
 
 log = logging.getLogger(__name__)
-
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-DISABLED = os.getenv("VRAKSHA_MEMORY_DISABLED", "0") == "1"
 
 COLLECTIONS: dict[MemoryStore, str] = {
     MemoryStore.WIKI: "vraksha_wiki",
