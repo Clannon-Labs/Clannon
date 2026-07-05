@@ -203,6 +203,20 @@ export function ModelRoleList({
               )}
             </p>
             <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{layer.description}</p>
+            {/* which registered experts this role drives — registry-derived by the
+                backend, so a newly-added expert appears here with no frontend change.
+                Muted + neutral (amber is memory's alone); absent for roles with none. */}
+            {layer.experts && layer.experts.length > 0 && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
+                <span className="tag-label">Drives</span>{" "}
+                {layer.experts.map((e, i) => (
+                  <span key={e.key}>
+                    {i > 0 && <span className="text-border-strong"> · </span>}
+                    <span className="text-muted-foreground">{e.label}</span>
+                  </span>
+                ))}
+              </p>
+            )}
             {/* say "Recommended" only when the row is NOT already on it —
                 otherwise the page repeats itself three times per row */}
             {layer.default && !layer.locked && valueFor(layer) !== layer.default && (
