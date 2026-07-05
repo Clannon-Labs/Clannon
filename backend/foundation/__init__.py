@@ -75,6 +75,7 @@ from .vocab.types import (
     BlockReason,
     PermissionLevel,
     MemoryStore,
+    MemoryKind,
     Origin,
 )
 from .vocab import constants
@@ -145,6 +146,7 @@ __all__ = [
     "BlockReason",
     "PermissionLevel",
     "MemoryStore",
+    "MemoryKind",
     "Origin",
 
     # constants (always import as module)

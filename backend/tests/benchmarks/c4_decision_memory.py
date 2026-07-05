@@ -822,8 +822,13 @@ def test_no_new_memory_schema_is_introduced():
     or a non-existent proposal field into the ingest path."""
     proposal = MemoryWriteProposal(store=MemoryStore.EPISODIC, content="x", confidence=0.9)
     assert set(MemoryStore.__members__) >= {"WIKI", "SEMANTIC", "EPISODIC", "PROCEDURAL", "WORKING"}
-    # the proposal carries only the documented fields — no decision/provenance schema
-    assert {f for f in proposal.__dataclass_fields__} == {"store", "content", "rationale", "confidence"}
+    # the proposal carries only the documented primitives — no C4-specific decision
+    # schema. The typed-knowledge fields (kind/valid_at/source, CB1/#16) are now part
+    # of the standard proposal contract; C4 must still not introduce a NEW tier or a
+    # decision-only field beyond these.
+    assert {f for f in proposal.__dataclass_fields__} == {
+        "store", "content", "rationale", "confidence", "kind", "valid_at", "source"
+    }
 
 
 def test_report_renders_structured_block(capsys):

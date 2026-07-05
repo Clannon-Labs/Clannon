@@ -396,25 +396,32 @@ def test_retrieved_items_carry_basic_timestamp_provenance():
 
 def test_not_yet_typed_provenance_and_fact_vs_assumption_absent_from_schema():
     """
-    Structural NOT-YET pin: MemoryItem and MemoryWriteProposal have NO typed
-    kind / source / author fields today. This test PASSES when those fields are
-    ABSENT — it pins the gap so we know the moment #16 ships.
-
-    When #16 is ratified and the typed-record schema lands, this test will begin
-    to fail, which is the correct signal to update both the schema and this pin.
+    Structural pin: the typed-knowledge schema (CB1 / issue #16) has LANDED at the
+    contract level. MemoryItem and MemoryWriteProposal now carry kind/valid_at/source;
+    superseded_by is MemoryItem-only (EB1 supersession — inert in CB1, never proposable).
+    Populating the fields is the core/memory impl; the CB1 verdict flips in c1_memory.py.
+    author/entry_type were never part of the ratified §7.4 set and stay absent.
     """
     item_fields = {f.name for f in dataclasses.fields(MemoryItem)}
     proposal_fields = {f.name for f in dataclasses.fields(MemoryWriteProposal)}
 
-    # These fields do NOT exist yet — gated on issue #16
-    for absent_field in ("kind", "source", "author", "entry_type"):
-        assert absent_field not in item_fields, (
-            f"NOT-YET field '{absent_field}' appeared on MemoryItem — "
-            f"update the demo and this pin now that #16 has shipped"
+    # Typed-knowledge fields — now PRESENT on both contracts (issue #16 shipped)
+    for present_field in ("kind", "valid_at", "source"):
+        assert present_field in item_fields, (
+            f"typed-knowledge field '{present_field}' missing from MemoryItem"
         )
-        assert absent_field not in proposal_fields, (
-            f"NOT-YET field '{absent_field}' appeared on MemoryWriteProposal — "
-            f"update the demo and this pin now that #16 has shipped"
+        assert present_field in proposal_fields, (
+            f"typed-knowledge field '{present_field}' missing from MemoryWriteProposal"
+        )
+    # superseded_by is MemoryItem-only — the manager owns invalidation, experts never propose it
+    assert "superseded_by" in item_fields, "superseded_by missing from MemoryItem"
+    assert "superseded_by" not in proposal_fields, (
+        "superseded_by must NOT be proposable (manager-owned EB1 invalidation)"
+    )
+    # never introduced (outside the §7.4 set)
+    for absent_field in ("author", "entry_type"):
+        assert absent_field not in item_fields and absent_field not in proposal_fields, (
+            f"unexpected field '{absent_field}' appeared on the memory contract"
         )
 
     # created_at IS present (basic temporal provenance — the one we have today)

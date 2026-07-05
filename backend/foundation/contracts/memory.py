@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
-from ..vocab.types import MemoryStore
+from ..vocab.types import MemoryStore, MemoryKind
 from .payloads import NormalizedInput
 
 
@@ -39,8 +39,11 @@ class MemoryItem:
     confidence: float = 0.0     # write-time confidence (0–1)
     session_id: str = ""        # originating session; "" for wiki / unknown
     trace_id: str = ""          # originating trace; "" when not plumbed at write time
-    # SOURCE-DOCUMENT ATTRIBUTION is NOT-YET: no source-document field exists in
-    # the current store payload. Gated on issue #16 (typed-record schema).
+    # Typed-knowledge (CB1) — additive; UNSPECIFIED/0.0/"" preserve legacy behaviour.
+    kind: MemoryKind = MemoryKind.UNSPECIFIED  # fact vs assumption; UNSPECIFIED = untyped/legacy
+    valid_at: float = 0.0        # unix ts the fact became true (vs created_at = when learned); 0 = unknown
+    source: str = ""             # source-document attribution; "" = agent inference (resolves the old NOT-YET)
+    superseded_by: str = ""      # memory_id of the record replacing this; "" = current (EB1 sets this — inert in CB1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +123,9 @@ class MemoryWriteProposal:
     content: str
     rationale: str = ""
     confidence: float = 0.0
+    kind: MemoryKind = MemoryKind.UNSPECIFIED  # writer sets FACT (source-backed) vs ASSUMPTION (inferred)
+    valid_at: float = 0.0   # when the asserted fact became true; 0 = unknown (falls back to write time)
+    source: str = ""        # originating document/tool; "" = agent inference
 
 
 # ---------------------------------------------------------------------------

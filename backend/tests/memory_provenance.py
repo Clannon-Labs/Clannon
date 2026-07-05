@@ -372,20 +372,25 @@ def test_wiki_items_carry_empty_session_provenance_by_default():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_source_document_attribution_not_yet():
-    """Source-document attribution (a 'source' field on MemoryItem) is NOT-YET.
-    This test PASSES while 'source' is absent — it pins the gap so we know the
-    moment #16 ships and the field is added."""
+def test_source_document_attribution_landed():
+    """Source-document attribution + fact/assumption typing (CB1 / issue #16) have
+    LANDED at the contract level: MemoryItem now carries `source`, `kind`, and
+    `valid_at`. (Populating them is the core/memory impl.) `author`/`entry_type`
+    were never part of the ratified §7.4 set and stay absent."""
     item_fields = {f.name for f in dataclasses.fields(MemoryItem)}
 
-    # Gated fields — must be ABSENT today
-    for absent in ("source", "author", "kind", "entry_type"):
+    # Typed-knowledge fields — now PRESENT on the contract
+    for present in ("source", "kind", "valid_at", "superseded_by"):
+        assert present in item_fields, (
+            f"typed-knowledge field '{present}' missing from MemoryItem"
+        )
+    # Never introduced (not in the §7.4 set) — stay absent
+    for absent in ("author", "entry_type"):
         assert absent not in item_fields, (
-            f"NOT-YET field '{absent}' appeared on MemoryItem — "
-            f"update this pin when #16 ships"
+            f"unexpected field '{absent}' appeared on MemoryItem"
         )
 
-    # Provenance fields that MUST be present (surfaced by this PR)
+    # Provenance fields that MUST be present (surfaced earlier by aeab3c7)
     for present in ("rationale", "confidence", "session_id", "trace_id", "created_at"):
         assert present in item_fields, (
             f"Expected provenance field '{present}' missing from MemoryItem"

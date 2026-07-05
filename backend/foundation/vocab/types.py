@@ -176,3 +176,16 @@ class MemoryStore(str, Enum):
     SEMANTIC   = "semantic"
     WIKI       = "wiki"
     PROCEDURAL = "procedural"
+
+
+class MemoryKind(str, Enum):
+    """
+    Epistemic type of a stored memory: is it asserted or inferred?
+
+    UNSPECIFIED is the default for legacy/untyped records — a record is never
+    silently promoted to a type it was not assigned. The writer sets FACT vs
+    ASSUMPTION explicitly at distillation time.
+    """
+    UNSPECIFIED = "unspecified"  # legacy / untyped — the honest default
+    FACT        = "fact"         # asserted, source-backed knowledge
+    ASSUMPTION  = "assumption"   # inferred / provisional; may be revised
