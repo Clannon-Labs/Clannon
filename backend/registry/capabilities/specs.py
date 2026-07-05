@@ -65,7 +65,18 @@ class ToolSpec(CapabilitySpec):
 @dataclass(frozen=True)
 class ExpertSpec(CapabilitySpec):
     """An expert: an agent with a co-located system prompt, skills, a model role,
-    and scoped tools. Its prompt + skills live beside its code, not in a registry."""
+    and scoped tools. Its prompt + skills live beside its code, not in a registry.
+
+    `.permission` (inherited from `CapabilitySpec`) is CATALOG/DESCRIPTIVE metadata
+    here, NOT an enforced gate — unlike `ToolSpec.permission`, which `ToolHandler`
+    checks before every call. An expert's actual access control is its scoped
+    `tool_grants`: `ExpertHandler` runs any expert the registry resolves, at the
+    orchestrator's own (full) privilege, and grants it only the tools listed here.
+    There is one construction site today (the fully-privileged orchestrator), so
+    this is not a live gap — but don't read `.permission` as a control on an
+    expert. A real per-expert privilege gate is future work if a reduced-privilege
+    caller (e.g. a batch layer) ever needs to spawn experts at less than full
+    trust — propose-first, build it then, not speculatively now."""
     model_role: str = "research"
     tool_grants: tuple[str, ...] = ()   # tool keys this expert may call
     skills: tuple[str, ...] = ()        # .md files or folders beside the expert

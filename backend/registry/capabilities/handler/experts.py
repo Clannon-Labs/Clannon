@@ -51,6 +51,11 @@ class ExpertHandler:
     async def _run_one(self, request: ExpertRequest, ctx: VrakshaContext) -> ExpertSummary:
         async with self._semaphore:
             started = time.monotonic()
+            # `spec.permission` is NOT checked here — it's catalog-only for experts
+            # (see ExpertSpec's docstring in ../specs.py). Access control is `spec.
+            # tool_grants`, scoped below in `_build_env`/`_toolbox_for`; there is one
+            # construction site for this handler (the fully-privileged orchestrator),
+            # so no reduced-privilege caller depends on a per-expert gate today.
             spec = self._registry.get_expert(request.key)
             if spec is None:
                 reason = self._registry.describe_missing(CapabilityKind.EXPERT, request.key)
