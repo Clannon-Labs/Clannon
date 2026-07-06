@@ -44,7 +44,7 @@ fi
 # what the OTHER specialist is still doing; if no safe independent work exists, leave it
 # idle (never invent busywork). A specialist is "working" iff its tmux pane shows Claude
 # Code's `esc to interrupt` hint (present only while a turn generates; a completed-turn
-# summary line is not). A 1h fallback still guarantees the coordinator is never stranded.
+# summary line is not). A 20-min fallback still guarantees the coordinator is never stranded (owner: never idle).
 if [ "$SIDE" = "backend" ]; then
   # If the coordinator itself is mid-turn, it needs no nudge — it'll finish and re-sweep.
   if tmux capture-pane -t "$SESSION" -p 2>/dev/null | grep -q "esc to interrupt"; then
@@ -53,7 +53,7 @@ if [ "$SIDE" = "backend" ]; then
   fi
 
   LAST_PING="/tmp/clannon-heartbeat-backend.last-ping"  # unix ts of last nudge (fallback clock)
-  FALLBACK_S=3600                                        # never let >1h pass with zero nudges
+  FALLBACK_S=1200                                        # never let >20min pass with zero nudges (owner: never idle)
   DWELL_S=110                                            # a specialist's idle must PERSIST this long
                                                          # (>=2 consecutive polls) before it counts — a
                                                          # single flickered frame can't accumulate it.
@@ -103,7 +103,7 @@ fi
 # unpushed. Per-side so a specialist ping tells IT to resume its own track.
 case "$SIDE" in
   backend)
-    MSG="[COORDINATOR HEARTBEAT · a specialist is idle] A specialist just went idle (or hourly safety fallback). If your live context is empty (fresh session) FIRST read docs/RESUME.md. Then, for EACH idle specialist (capture-pane clannon-memory + clannon-orchestration to see which): decide — is there queued/next work for THIS specialist that does NOT depend on what the OTHER specialist is still doing? If yes -> assign it by writing to its to-<side>/ inbox (deliver rulings there, not just an archived Response). If no safe independent work exists -> leave it idle, do NOT invent busywork. Also check proposals/to-backend/ and push any unpushed commits after the suite is green (sole pusher, explicit pathspec). If nothing is assignable and nothing is unpushed, go quiet." ;;
+    MSG="[COORDINATOR HEARTBEAT · a specialist is idle] A specialist went idle (or the 20-min safety tick). OWNER POLICY: the team NEVER sits idle — not a second wasted. If your live context is empty (fresh session) FIRST read docs/RESUME.md. Then: (1) capture-pane EVERY specialist (clannon-memory/orchestration + any you spawned) and for EACH idle one, assign its next INDEPENDENT task (one that won't collide with what another is mid-editing) via its to-<side>/ inbox — deliver rulings there, not just an archived Response; leave idle ONLY if it truly has no safe independent work. (2) check proposals/to-backend/ and push any unpushed commits after the suite is green (sole pusher, explicit pathspec). (3) THEN keep driving YOUR OWN remaining work (config-depth placements, D1 foundation moves, the mission) — do NOT go quiet while backend work remains; stop only when the whole backlog is empty for everyone." ;;
   *)
     MSG="[HEARTBEAT · auto keep-alive] 20-min tick so you never sleep. If idle: re-read your handoff (HANDOFF*.md in this dir) + charter + inbox and continue your track; if mid-task, ignore this. Report to reports/$SIDE/." ;;
 esac
