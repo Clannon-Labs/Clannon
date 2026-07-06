@@ -23,3 +23,13 @@ history_char_budget: 200000
 # Always keep at least this many of the most-recent turns VERBATIM, even mid-condense — the
 # model never loses the immediate conversational thread. Unit: turns. Safe range: ≥ 1.
 verbatim_turn_floor: 2
+
+# ── INFRA COST (decision B2b) ────────────────────────────────────────────────────────────
+# The non-LLM cost of a unit of work, folded INTO the real cost the margin ceiling checks so
+# infra is never ignored. Two components: a flat per-call charge (compute/egress/storage
+# amortization every call carries) + a per-second charge (a long tool/sandbox/mission run
+# costs more than a quick one). Unit: micro-dollars (µ$). Both ≥ 0.
+# ‼️ PLACEHOLDER values — OWNER to set conservatively (B2: "you pick + flag"). Conservative =
+# lean HIGH: over-counting infra protects margin; under-counting erodes it.
+infra_cost_per_call_micros: 50      # µ$ per LLM call (≈ $0.00005/call) — PLACEHOLDER
+infra_cost_per_second_micros: 20    # µ$ per wall-clock second of work — PLACEHOLDER

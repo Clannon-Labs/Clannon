@@ -52,6 +52,8 @@ class BudgetConfig(BaseModel):
     spend_ceiling_fraction: float = Field(gt=0.0, le=1.0)  # 0 < f ≤ 1; ≥(1-f) is locked margin
     history_char_budget: int = Field(gt=0)                 # chars before oldest turns condense
     verbatim_turn_floor: int = Field(ge=1)                 # most-recent turns always kept whole
+    infra_cost_per_call_micros: int = Field(ge=0)          # µ$ flat, every LLM call (B2b)
+    infra_cost_per_second_micros: int = Field(ge=0)        # µ$ per wall-clock second (B2b)
 
 
 def _load_budget() -> BudgetConfig:
@@ -63,10 +65,53 @@ def _load_budget() -> BudgetConfig:
         raise RuntimeError(f"config/backend/budget.yaml is invalid:\n{exc}") from exc
 
 
+class ModelPrice(BaseModel):
+    """One model's token cost, in micro-dollars per token (µ$/token)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    input_micros_per_token: float = Field(ge=0.0)
+    output_micros_per_token: float = Field(ge=0.0)
+
+
+class PricingConfig(BaseModel):
+    """Per-model LLM pricing (`config/backend/pricing.yaml`), for the real-cost budget.
+
+    FAIL-CLOSED: `price_for()` raises on a model with no entry — an un-priced model must
+    BLOCK a spend, never be charged as free (which would silently blow the margin). Adding
+    a model to the roster without a price here is a loud error, by design (decision B3).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    models: dict[str, ModelPrice]
+
+    def price_for(self, model_id: str) -> ModelPrice:
+        try:
+            return self.models[model_id]
+        except KeyError:
+            raise KeyError(
+                f"no price for model {model_id!r} in config/backend/pricing.yaml — "
+                "add it (fail-closed: an un-priced model cannot be charged)"
+            ) from None
+
+
+def _load_pricing() -> PricingConfig:
+    raw = _load_mapping("backend/pricing.yaml")
+    try:
+        return PricingConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/pricing.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
+PRICING: PricingConfig = _load_pricing()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
 SPEND_CEILING_FRACTION: float = BUDGET.spend_ceiling_fraction
 
-__all__ = ["BUDGET", "BudgetConfig", "SPEND_CEILING_FRACTION"]
+__all__ = [
+    "BUDGET", "BudgetConfig", "SPEND_CEILING_FRACTION",
+    "PRICING", "PricingConfig", "ModelPrice",
+]

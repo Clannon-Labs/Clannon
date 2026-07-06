@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/pricing.yaml — per-model LLM cost, for the real-cost margin budget.
+# BACKEND-CONTROLLED. Rates are in MICRO-DOLLARS PER TOKEN (µ$/token; µ$ = USD × 1e6),
+# e.g. a model at $3.00 per 1M input tokens → 3.0 µ$/token input.
+#
+# ‼️ PLACEHOLDER PRICES — OWNER MUST VERIFY BEFORE THE BUDGET GOES LIVE (decision B3).
+# These are rough public-list-price guesses so the machinery is testable; a wrong number
+# here directly mis-sets our margin. Correct every rate against the provider's real
+# pricing, and ADD any model the roster routes to that is missing below. The loader is
+# FAIL-CLOSED: a model with no entry here cannot be charged (it BLOCKS the call rather
+# than spending un-priced), so a missing model is safe-but-broken, never a silent leak.
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+  # Anthropic (the default-routed primary set — orchestrator/verifier/normalizer/filter/planner)
+  claude-haiku-4-5:   { input_micros_per_token: 0.80, output_micros_per_token: 4.00 }   # PLACEHOLDER
+  claude-sonnet-4-6:  { input_micros_per_token: 3.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
+  claude-opus-4-8:    { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER
+  # OpenAI (research reasoning role + selectable)
+  gpt-5.4:            { input_micros_per_token: 5.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
+  gpt-5.4-mini:       { input_micros_per_token: 0.50, output_micros_per_token: 2.00 }   # PLACEHOLDER
+  # Google (grounded search + multimodal/media roles)
+  gemini-2.5-pro:     { input_micros_per_token: 2.00, output_micros_per_token: 8.00 }   # PLACEHOLDER
+  gemini-2.5-flash:   { input_micros_per_token: 0.30, output_micros_per_token: 1.20 }   # PLACEHOLDER
+  gemini-2.5-flash-lite: { input_micros_per_token: 0.10, output_micros_per_token: 0.40 } # PLACEHOLDER
