@@ -3,7 +3,29 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest of all) — scoped-handler mechanism built
+## Update (2026-07-06 session, latest of all) — mission_compaction.py now consumes edges_of()
+
+Self-selected cleanup, not owner-assigned: `edges_of()` landed on `GraphPort`
+(`foundation/contracts/graph.py`, `45b6ab4`) explicitly to close the
+restart-survival gap flagged below and in
+`proposals/archive/to-backend/2026-07-06_task-edge-read-gap.md`. Consumed it:
+`mission_compaction.py`'s in-session-only `MissionWorkingContext.dependents`
+mirror is gone, replaced by `graph_compaction_eligible_tasks(graph, scope,
+state)` reading BLOCKS/FEEDS straight from the graph (fails closed — `None`,
+not an empty set, on a degraded read). `compact_working_context` now takes a
+precomputed `eligible` set so the ACTION itself stays pure/graph-free.
+Direction (`src=depended-on task, dst=dependent`) proven against the real
+`GraphManager`, not a hand-rolled fake — a fake would have been a circular
+oracle for exactly the thing that needed proving. Full detail:
+`reports/orchestration/report_v24.md`. Suite green before commit.
+
+**Resume: `BatchHandler`/`spawn_batch`/`ctx.batch_findings` are still the
+next real frontier item, unchanged — still blocked on backend placing
+`ctx.batch_findings` on `VrakshaContext`.** This update doesn't move that;
+it was same-tree correctness cleanup on an already-shipped, not-yet-wired
+component.
+
+## Update (2026-07-06 session, earlier) — scoped-handler mechanism built
 
 Design v2 ratified (all 5 points); built the scoped-handler mechanism
 (`ExpertHandler.scoped()`, `Capabilities.scoped_to()`, `run_turn` filtering,
