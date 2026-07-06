@@ -66,7 +66,7 @@ if [ "$SIDE" = "backend" ]; then
   # so each fresh idle period is considered exactly once.
   need=""       # peers newly sustained-idle AND not yet considered -> a reason to nudge NOW
   idle_now=""   # peers currently sustained-idle -> all marked handled on a nudge
-  for peer in memory orchestration; do
+  for peer in memory orchestration security; do
     SINCE="/tmp/clannon-hb-$peer.idle-since"
     HANDLED="/tmp/clannon-hb-$peer.handled"
     if tmux has-session -t "clannon-$peer" 2>/dev/null \
