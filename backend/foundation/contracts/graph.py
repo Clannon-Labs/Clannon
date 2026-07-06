@@ -154,6 +154,21 @@ class GraphPort(Protocol):
         implementer's `isinstance(GraphPort)` check green."""
         ...
 
+    async def edges_of(
+        self, scope: GraphScope, node_id: str, label: EdgeLabel
+    ) -> GraphResult:
+        """BULK read of every edge of `label` incident to `node_id`, EITHER direction — the
+        read-back for a persisted typed edge (`write()` can store BLOCKS/FEEDS/SUPERSEDES;
+        this is how they come back). A complete, deterministic filter-read, NOT a traversal
+        (no hop-bound — it returns the incident edges, not a walk), mirroring `members()`'s
+        framing for edges instead of nodes. Its first consumer is restart-surviving mission
+        compaction ("does this terminal TASK still feed a non-terminal one"), where the
+        durable graph must answer what an in-session mirror can't after a restart. Fail-closed
+        on a missing scope, degrade-never-fail on a store fault. Landed on `GraphManager`
+        first (a superset of this Protocol) so this declaration keeps the sole implementer's
+        `isinstance(GraphPort)` check green."""
+        ...
+
     async def write(
         self, scope: GraphScope, nodes: list[GraphNode], edges: list[GraphEdge]
     ) -> GraphResult:
