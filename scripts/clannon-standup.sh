@@ -21,7 +21,7 @@
 set -uo pipefail   # no -e: a wake to one session must not abort the rest
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-sides=(backend frontend memory orchestration)
+sides=(backend frontend memory orchestration security)
 
 dir_for() {
   case "$1" in
@@ -29,6 +29,7 @@ dir_for() {
     frontend)      echo "$ROOT/frontend" ;;
     memory)        echo "$ROOT/backend/core/memory" ;;
     orchestration) echo "$ROOT/backend/core/orchestrator" ;;
+    security)      echo "$ROOT/backend/security" ;;
   esac
 }
 
@@ -44,6 +45,8 @@ msg_for() {
       echo "[auto-wake] RESUMING MID-TASK (fresh session — live context is empty). FIRST read your handoff HANDOFF_batch.md (in this dir) to pick up EXACTLY where you paused on the Mission Engine graph build (members()/mission_graph_store — what's done + the next steps), THEN your charter (core/memory/CLAUDE.md) + inbox (proposals/to-memory/). Continue from the handoff's next-steps — do NOT restart from scratch. Report to reports/memory/." ;;
     orchestration)
       echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your handoff HANDOFF_mission.md (in this dir) to pick up your Mission Engine state + what unblocks now that memory's members() landed, THEN your charter (core/orchestrator/CLAUDE.md) + inbox (proposals/to-orchestration/). Continue from the handoff — do NOT restart. Report to reports/orchestration/." ;;
+    security)
+      echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your charter (backend/security/CLAUDE.md) + inbox (proposals/to-security/), THEN continue your config-wire (settings.SECURITY.*) + CB5 work and stand as invariant reviewer for the budget/batch designs. Do NOT restart from scratch. Report to reports/security/." ;;
   esac
 }
 
@@ -61,7 +64,7 @@ for side in "${sides[@]}"; do
     # bump a specialist back to Opus.
     launch="claude --dangerously-skip-permissions"
     case "$side" in
-      memory|orchestration) launch="$launch --model claude-sonnet-5" ;;
+      memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
     esac
     tmux new-session -d -s "$session" -c "$dir"
     # type the launch command literally, then a detached Enter to submit it
