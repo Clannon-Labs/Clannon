@@ -104,4 +104,8 @@ math decide, STOP and propose.
   A new expert on a new tool on a shaky hook is three layers of risk — verify each.
 - **Tools are CODE** (deterministic, no LLM); **experts are LLM-backed** (judgment). Never
   blur the line. Commits go out as **clannon-bot**; push is the backend-agent's job unless
-  coordinated. **Report** to `reports/orchestration/report_vN.md`.
+  coordinated. **Report** to `reports/orchestration/report_vN.md` — **one NEW file per
+  completed feature/run** (`report_v1.md`, `report_v2.md`, ...), matching the memory
+  specialist's convention (`reports/memory/report_vN.md`). Never append a new phase/update
+  to an existing report file — a report is a snapshot of one finished piece of work, not a
+  running log. Short (Task/Outcome/State/Backlog-shaped) beats long.
