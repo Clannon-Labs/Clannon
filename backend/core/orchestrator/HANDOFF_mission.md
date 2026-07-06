@@ -3,7 +3,77 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session)
+## Update (2026-07-06 session, continued) — §6 operate-step BUILT + committed
+
+`members()` landed on the Protocol (`85b4f15`); backend also ruled the
+conclude-path question (poll, not push — matches my recommendation, full
+ruling in `proposals/archive/to-backend/2026-07-06_conclude-path-signal-design.md`).
+Both resume conditions from the note below are now satisfied.
+
+**Built `core/orchestrator/mission_operate.py`** (§6 + the conclude-path):
+`create_mission`, `read_mission_state`, `apply_turn`, `write_mission_status`,
+`needs_approval` (§7 autonomy gate), `run_operate_step` (the full per-turn
+sequence), `conclude_mission`. Two real bugs caught by reading the actual
+implementer rather than trusting my own design doc's assumptions, before any
+code was written against them:
+
+1. `GraphPort.lookup()` is hard-restricted to `NodeLabel.CODE_FILE`
+   (`core/memory/graph_manager.py:104`) — a bare `label=MISSION` there is
+   ALWAYS empty, not just when missing. Fixed: `read_mission_state` reads a
+   MISSION the same way as tasks, via `members(scope, MISSION)` filtered
+   client-side on the `mission_id` property.
+2. **Node ids are never caller-supplied.** `write()`'s implementer computes
+   its own id from `scope` + a natural-key property, discarding whatever
+   `node_id` a caller sets on the `GraphNode` passed in (verified directly,
+   not assumed). An advisor review caught the trap in my first draft: I was
+   about to replicate the implementer's internal `user|repo|key` id format in
+   orchestrator code to build edges, which would (a) couple this module to
+   an undocumented format `GraphNode.node_id`'s own docstring says is opaque,
+   and (b) make my own hermetic test-double share that same assumption,
+   turning the test into a circular oracle that couldn't catch a real
+   mismatch. Fixed: `apply_turn` writes nodes first, then a SECOND pass reads
+   back their real, port-assigned ids via `members()` before writing
+   BLOCKS/FEEDS/SUPERSEDES edges. This means the module depends only on "the
+   port hands me ids I reuse" — true for any conforming `GraphPort`, fake or
+   real, so nothing here is coupled to Kuzu specifically.
+
+Also caught, same way: `success_criteria` is a native Kuzu `STRING[]` (plain
+descriptions), not a list of dicts — `core/memory/graph_store.py:172`
+confirms this directly.
+
+**Verification (`tests/mission_operate.py`, 14 tests, all green):** create+read
+round trip, §1 create-only anchor survives a repeat write, apply_turn's
+two-pass node-then-edge write (proves edges reference harvested ids, not the
+bare task_id strings), SUPERSEDES as an ASSERTED edge immune to a later
+downgrade, §7 budget pre-check pauses BEFORE any task content is written
+(not just a status check), §7 autonomy gate escalates above the
+autonomous-safe set, §4 completion gate both holds (unmet criterion) and
+concludes (all met), a no-op on an already-concluded mission, §9 restart
+survival (discard all Python state, reconstruct purely from the durable
+store, assert the anchor + a superseded-but-present task survive
+byte-for-byte), tenant isolation, and — the capstone — one test driving the
+REAL `core.memory.graph_manager.GraphManager` end-to-end (not just the
+hermetic fake), proving the node-id-harvest approach actually works against
+the real backing store. §9 step 2 (mid-run compaction) is honestly out of
+scope for this module: it acts on the orchestrator's working context, which
+this module doesn't have (pure graph read/write) — it lands with whatever
+wires this operate-step into the live turn loop.
+
+**Not done / explicitly deferred, not forgotten:**
+- **Wiring into `core/orchestrator/loop.py`** — this module is built and
+  verified but not yet called from the live turn loop. Per the Prime
+  Directive, this module + its tests are the gate the batch orchestrator
+  crosses before that wiring lands, not a shortcut past it. `run_operate_step`
+  is the entry point once that wiring is designed.
+- **§7's `awaiting_approval` -> back to `active`** (the user-approves-and-resumes
+  path) isn't built — `needs_approval` only handles the forward escalation;
+  nothing yet clears it. Flagging so it isn't assumed done.
+- Full suite green throughout (993 passed, 6 env-skips, verified in isolation
+  from an unrelated, uncommitted, in-progress collection error in
+  `backend/api/run_driver.py` — another agent's mid-edit config-centralization
+  work, not touched by or related to this build).
+
+## Update (2026-07-06 session, earlier)
 
 Re-checked the blocker fresh rather than trusting the paragraph below verbatim:
 `foundation/contracts/graph.py` still has no `def members` on `GraphPort` as of
