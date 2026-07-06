@@ -81,3 +81,13 @@ qdrant_request_timeout_s: 5
 # never hang a read regardless of what a caller asks for. Unit: hops (edge
 # count). Safe range: >= 1.
 graph_max_hops_ceiling: 20
+
+# ── D1 MOVE: memory operational knobs migrating OUT of foundation/vocab/constants.py ──────────
+# (owner ruling D1(a): product knobs leave foundation; consumers in core/memory read them here.
+# The foundation MEMORY_* constants stay until core/memory repoints, then are removed — equal
+# values throughout, behavior-preserving.)
+read_timeout_s: 5.0            # hard read deadline (embed the query) — was MEMORY_READ_TIMEOUT_S. > 0
+write_timeout_s: 10.0          # hard per-proposal write deadline — was MEMORY_WRITE_TIMEOUT_S. > 0
+search_top_k: 10              # candidates fetched per inferred tier at hydration — was MEMORY_SEARCH_TOP_K. > 0
+relevance_floor: 0.30         # drop hits below this raw cosine before ranking — was MEMORY_RELEVANCE_FLOOR. 0<=f<=1
+distill_max_retries: 2        # malformed-output retries for the background distiller — was MEMORY_DISTILL_MAX_RETRIES. >= 0

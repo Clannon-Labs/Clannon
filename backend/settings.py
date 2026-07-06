@@ -147,6 +147,12 @@ class MemoryConfig(BaseModel):
     embed_retry_after_s: float = Field(gt=0.0)
     qdrant_request_timeout_s: float = Field(gt=0.0)
     graph_max_hops_ceiling: int = Field(ge=1)
+    # D1 move — migrating out of foundation/vocab/constants.py (MEMORY_* group).
+    read_timeout_s: float = Field(gt=0.0)
+    write_timeout_s: float = Field(gt=0.0)
+    search_top_k: int = Field(gt=0)
+    relevance_floor: float = Field(ge=0.0, le=1.0)
+    distill_max_retries: int = Field(ge=0)
 
     @model_validator(mode="after")
     def _dedup_is_a_subset_of_supersession(self) -> "MemoryConfig":
