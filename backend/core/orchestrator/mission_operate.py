@@ -44,6 +44,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+import settings
 from foundation import (
     BudgetPort,
     BudgetScope,
@@ -67,14 +68,6 @@ from .mission import (
     evaluate_completion,
 )
 
-# The only PermissionLevel unambiguously "no side effects" (foundation.vocab.types
-# docstring) -- the sole default an autonomous mission may act on without
-# escalating to AWAITING_APPROVAL. Which levels beyond READ count as
-# autonomous-safe is a product/policy call (THE CODING LAWS §4: business
-# values live in config/, not hardcoded here) -- callers may widen this via
-# `run_operate_step`'s `autonomous_safe` parameter; this is only the
-# conservative default when they don't.
-DEFAULT_AUTONOMOUS_SAFE: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
 
 
 # --- shapes the operate-step reads/writes -----------------------------------
@@ -344,8 +337,10 @@ async def write_mission_status(
 
 # --- §7 autonomy gate --------------------------------------------------------
 
-def needs_approval(new_tasks: tuple[NewTask, ...],
-                    autonomous_safe: frozenset[PermissionLevel] = DEFAULT_AUTONOMOUS_SAFE) -> bool:
+def needs_approval(
+    new_tasks: tuple[NewTask, ...],
+    autonomous_safe: frozenset[PermissionLevel] = settings.SECURITY.autonomous_safe_permissions,
+) -> bool:
     """§7: a proposed task requiring a capability above the mission's
     autonomous-safe set forces `AWAITING_APPROVAL` instead of proceeding
     `ACTIVE`. A policy check over already-declared `PermissionLevel`s, not a
@@ -365,7 +360,7 @@ async def run_operate_step(
     estimate: int,
     turn: OperateStepTurn,
     *,
-    autonomous_safe: frozenset[PermissionLevel] = DEFAULT_AUTONOMOUS_SAFE,
+    autonomous_safe: frozenset[PermissionLevel] = settings.SECURITY.autonomous_safe_permissions,
 ) -> OperateStepResult:
     """The full §6 sequence for one turn on an active mission:
     read anchor+tasks -> budget pre-check -> autonomy gate -> advance/propose
