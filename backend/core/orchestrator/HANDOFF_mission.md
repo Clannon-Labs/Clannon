@@ -3,7 +3,25 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest of all) — batch-orchestrator design filed
+## Update (2026-07-06 session, latest of all) — scoped-handler mechanism built
+
+Design v2 ratified (all 5 points); built the scoped-handler mechanism
+(`ExpertHandler.scoped()`, `Capabilities.scoped_to()`, `run_turn` filtering,
+default-excludes-`remember`) — commit `5067bad`, full detail
+`reports/orchestration/report_v23.md`. Found + fixed a real composability
+bug along the way (`ToolHandler.scoped()` was replace-not-intersect;
+proved it was load-bearing by reverting and re-confirming the new test
+failed without the fix).
+
+**Resume: `BatchHandler`/`spawn_batch`/`ctx.batch_findings` are next, but
+blocked on backend placing `ctx.batch_findings` on `VrakshaContext`
+(foundation, their seam) — no rush stated, check
+`proposals/to-orchestration/` for that placement or a nudge-worthy gap
+before building it.** Memory's cross-batch awareness slice landed in
+parallel this session too (uncommitted at last check) — worth confirming
+it's committed before consuming it.
+
+## Update (2026-07-06 session, earlier) — batch-orchestrator design filed
 
 §9 held (see the update just below) and backend cleared the gate + sent the
 batch-layer split. Authored the propose-first sub-design:
