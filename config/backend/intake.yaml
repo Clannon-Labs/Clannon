@@ -17,3 +17,7 @@ rate_limit_max_tracked_keys: 10000 # cap on session keys the in-memory limiter h
 # system from a synchronized flood independent of any one session.
 global_rate_limit_window_s: 1.0    # rolling global burst window (seconds). > 0
 global_rate_limit_max_requests: 10 # max total requests inside the burst window. > 0
+
+# Hard cap on raw input size, rejected at intake before any sanitizer/normalizer/LLM does work
+# (a cheap DoS guard). Enforced by core/intake/intake.py AND security/sanitizers/uploads.py.
+max_input_size_bytes: 52428800    # 50 MiB (50 * 1024 * 1024). > 0

@@ -344,6 +344,7 @@ class IntakeConfig(BaseModel):
     rate_limit_max_tracked_keys: int = Field(gt=0)
     global_rate_limit_window_s: float = Field(gt=0.0)
     global_rate_limit_max_requests: int = Field(gt=0)
+    max_input_size_bytes: int = Field(gt=0)
 
 
 def _load_intake() -> IntakeConfig:

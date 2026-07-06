@@ -14,6 +14,7 @@ _BASE = dict(
     rate_limit_max_tracked_keys=10_000,
     global_rate_limit_window_s=1.0,
     global_rate_limit_max_requests=10,
+    max_input_size_bytes=52428800,
 )
 
 
@@ -24,6 +25,7 @@ def test_intake_values_are_behavior_preserving():
     assert i.rate_limit_max_tracked_keys == 10_000
     assert i.global_rate_limit_window_s == 1.0
     assert i.global_rate_limit_max_requests == 10
+    assert i.max_input_size_bytes == 52428800
 
 
 @pytest.mark.parametrize("bad", [
@@ -32,6 +34,7 @@ def test_intake_values_are_behavior_preserving():
     {"rate_limit_max_tracked_keys": 0},
     {"global_rate_limit_window_s": 0},
     {"global_rate_limit_max_requests": 0},
+    {"max_input_size_bytes": 0},
 ])
 def test_out_of_range_rejected(bad):
     with pytest.raises(ValidationError):
