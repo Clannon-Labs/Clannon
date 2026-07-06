@@ -81,7 +81,7 @@ class UnsupportedModalityError(InputError):
 class InputTooLargeError(InputError):
     """
     Input exceeds configured size limits.
-    Check constants.py: MAX_INPUT_SIZE_BYTES.
+    The cap is settings.INTAKE.max_input_size_bytes (config/backend/intake.yaml).
     """
 
 

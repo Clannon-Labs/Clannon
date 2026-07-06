@@ -47,11 +47,10 @@ TURN_WALL_CLOCK_S           = 720.0   # max wall time for ONE full user turn (in
 # when running multiple app containers that need shared request accounting.
 # ---------------------------------------------------------------------------
 
-# RATE LIMITER knobs — MIGRATED to config (D1, single-source): config/backend/intake.yaml ->
-# settings.INTAKE.{rate_limit_window_s, rate_limit_max_requests, rate_limit_max_tracked_keys,
-# global_rate_limit_window_s, global_rate_limit_max_requests}. core/intake/rate_limiter.py reads
-# them from there.
-MAX_INPUT_SIZE_BYTES        = 50 * 1024 * 1024   # 50 MB hard cap on raw input
+# INTAKE knobs — MIGRATED to config (D1, single-source): config/backend/intake.yaml ->
+# settings.INTAKE.* (rate-limiter window/max-requests/tracked-keys, the global burst window, and
+# max_input_size_bytes — the 50 MiB raw-input cap). core/intake/{rate_limiter,intake}.py and
+# security/sanitizers/uploads.py read them from there.
 
 # Textual MIME types that intake accepts as Modality.TEXT in addition to the
 # "text/*" family. libmagic reports structured text (JSON/XML/CSV/YAML) and

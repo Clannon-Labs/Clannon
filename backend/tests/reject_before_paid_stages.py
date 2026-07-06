@@ -38,7 +38,7 @@ import asyncio
 
 import pytest
 
-from foundation import BlockReason, HydrationPackage, Origin, ThreatLevel, constants
+from foundation import BlockReason, HydrationPackage, Origin, ThreatLevel
 import settings
 from core.intake import rate_limiter
 from security.sanitizers import pre_sanitization
@@ -152,7 +152,7 @@ def _run(payload, *, session_id="s", user_id="u"):
 
 def test_oversize_blocked_before_paid_stages(seam_counter):
     """Input exceeding MAX_INPUT_SIZE_BYTES is blocked at intake; seam never reached."""
-    big = "x" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+    big = "x" * (settings.INTAKE.max_input_size_bytes + 1)
     out = _run(big, session_id="s-oversize")
 
     assert out.status.value == "blocked"

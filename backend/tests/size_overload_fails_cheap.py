@@ -23,6 +23,7 @@ import asyncio
 import pytest
 
 from foundation import Flow, BlockReason, Origin, constants
+import settings
 from core.intake import intake, rate_limiter
 from core.normalizer import builders
 from core import normalizer, verifier, orchestrator
@@ -96,7 +97,7 @@ class TestMaxInputSizeBytes:
         Uses bytes so _input_size_bytes does len() only — no second allocation
         for UTF-8 encoding as there would be for a str.
         """
-        payload = b"A" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+        payload = b"A" * (settings.INTAKE.max_input_size_bytes + 1)
 
         out = _run_intake(payload, session="binary-oversize")
 
@@ -110,7 +111,7 @@ class TestMaxInputSizeBytes:
         Covers the encoding path: intake measures len(str.encode('utf-8')).
         """
         # ASCII: 1 char = 1 byte, so byte length == char count here.
-        payload = "X" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+        payload = "X" * (settings.INTAKE.max_input_size_bytes + 1)
 
         out = _run_intake(payload, session="str-oversize")
 
@@ -133,7 +134,7 @@ class TestMaxInputSizeBytes:
         """
         _tripwire_model_calls(monkeypatch)
 
-        payload = b"A" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+        payload = b"A" * (settings.INTAKE.max_input_size_bytes + 1)
 
         out = asyncio.run(Flow.chain(
             Flow.new(payload, "e2e-oversize"),
@@ -160,7 +161,7 @@ class TestMaxInputSizeBytes:
         """
         # ASCII str: 1 char = 1 UTF-8 byte.  _detect_modality returns TEXT without
         # libmagic, so modality detection cannot interfere with the size boundary.
-        exactly = "B" * constants.MAX_INPUT_SIZE_BYTES
+        exactly = "B" * settings.INTAKE.max_input_size_bytes
 
         out = _run_intake(exactly, session="exact-limit")
 

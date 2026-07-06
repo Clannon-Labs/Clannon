@@ -2,7 +2,8 @@ import asyncio
 
 import pytest
 
-from foundation import Flow, Modality, constants
+from foundation import Flow, Modality
+import settings
 from core.intake import intake
 from core.intake import rate_limiter
 
@@ -40,7 +41,7 @@ def test_empty_input_blocks_malformed():
 
 
 def test_oversize_blocks():
-    big = "x" * (constants.MAX_INPUT_SIZE_BYTES + 1)
+    big = "x" * (settings.INTAKE.max_input_size_bytes + 1)
     out = _run(big, session="big")
     assert out.status.value == "blocked"
     assert out.reason == "input_too_large"
