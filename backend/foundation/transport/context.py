@@ -269,6 +269,18 @@ class VrakshaContext:
                                               # bounded as batch count grows). Typed list[Any] so
                                               # foundation stays import-free of the registry tier.
 
+    mission_id: str = ""                      # set once when a Mission Engine turn is active ("" =
+                                              # no mission, the ordinary turn). The ONE trusted
+                                              # source for both the budget scope (BudgetScope.
+                                              # mission_id) and cross-batch awareness — from ctx
+                                              # only, never model output (identity-set-once): a
+                                              # batch or a budget can't forge which mission it's in.
+    batch_id: str = ""                        # set once per spawn_batch invocation ("" for the
+                                              # central orchestrator's own ctx). Per-INVOCATION
+                                              # (uuid), not per-domain, so two concurrent same-
+                                              # domain batches don't clobber each other's awareness
+                                              # status row. Server-minted, never model-supplied.
+
     orchestrator_response: Any | None = None  # foundation.OrchestratorResponse
                                               # raw response before output filtering
     assistant_message: str = ""               # the orchestrator's CONVERSATIONAL voice for
@@ -442,6 +454,8 @@ class VrakshaContext:
             "decision_log":     len(self.decision_log),
             "expert_findings":  len(self.expert_findings),
             "batch_findings":   len(self.batch_findings),
+            "mission_id":       self.mission_id,
+            "batch_id":         self.batch_id,
             "filter_retries":   self.filter_retry_count,
             "stage_durations":  self.stage_durations,
             "total_ms":         round(self.total_duration_ms, 2),
