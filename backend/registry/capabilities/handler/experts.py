@@ -35,11 +35,26 @@ _NEED_CONTEXT_MAX_ITEMS = 5               # cap per need-context recall so one r
 class ExpertHandler:
     """Implements ExpertHandlerPort over the capability registry."""
 
-    def __init__(self, registry=default_registry, tools=None, artifact_store=None) -> None:
+    def __init__(self, registry=default_registry, tools=None, artifact_store=None, allowed_keys=None) -> None:
         self._registry = registry
         self._tools = tools                          # a ToolHandler, for scoping
         self._artifacts = artifact_store             # an ArtifactStore; lazy LocalArtifactStore if None
         self._semaphore = asyncio.Semaphore(constants.EXPERT_MAX_CONCURRENT)
+        self._allowed_keys = None if allowed_keys is None else frozenset(allowed_keys)
+
+    def scoped(self, allowed_keys) -> "ExpertHandler":
+        """A handler restricted to specific expert keys (for a batch orchestrator) —
+        mirrors `ToolHandler.scoped()`, including its compose-never-widen discipline:
+        an already-scoped handler's `.scoped()` can only narrow further. Shares this
+        handler's `tools`/`artifact_store` so a scoped expert still gets a correctly
+        (and, via `ToolHandler.scoped()`'s own intersection, correctly NARROWED)
+        scoped toolbox through `_toolbox_for`."""
+        narrowed = (
+            allowed_keys if self._allowed_keys is None
+            else self._allowed_keys if allowed_keys is None
+            else self._allowed_keys & frozenset(allowed_keys)
+        )
+        return ExpertHandler(self._registry, tools=self._tools, artifact_store=self._artifacts, allowed_keys=narrowed)
 
     async def run_experts(
         self, requests: list[ExpertRequest], ctx: VrakshaContext
@@ -60,6 +75,8 @@ class ExpertHandler:
             if spec is None:
                 reason = self._registry.describe_missing(CapabilityKind.EXPERT, request.key)
                 return self._fail(request, ctx, started, reason)
+            if self._allowed_keys is not None and spec.key not in self._allowed_keys:
+                return self._fail(request, ctx, started, f"expert {spec.key!r} not granted to this caller")
 
             # Structured invocation: the arguments must satisfy the expert's
             # input_schema — never free-form text.

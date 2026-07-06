@@ -58,8 +58,23 @@ class ToolHandler:
 
     def scoped(self, allowed_keys, grants, workspace=None) -> "ToolHandler":
         """A handler restricted to specific tool keys + permission grants (for experts),
-        optionally bound to a per-run workspace that its `wants_workspace` tools use."""
-        return ToolHandler(self._registry, grants=grants, allowed_keys=allowed_keys, workspace=workspace)
+        optionally bound to a per-run workspace that its `wants_workspace` tools use.
+
+        COMPOSES with this handler's own restriction — never widens it. `scoped()`
+        can only narrow further, so nesting (an already-scoped batch orchestrator's
+        expert calling `.scoped()` again via `_toolbox_for`) can't silently escape
+        the outer scope. Without this intersection, a fresh `ToolHandler` built from
+        `self._registry` with just the new args would ignore whatever restriction
+        `self` already had — inert while `Capabilities.open()` was the only
+        construction site (always unrestricted, so narrowing from "everything" was
+        a no-op), but a real gap the moment a scoped `Capabilities` exists."""
+        narrowed_keys = (
+            allowed_keys if self._allowed_keys is None
+            else self._allowed_keys if allowed_keys is None
+            else self._allowed_keys & frozenset(allowed_keys)
+        )
+        narrowed_grants = frozenset(grants) & self._grants
+        return ToolHandler(self._registry, grants=narrowed_grants, allowed_keys=narrowed_keys, workspace=workspace)
 
     async def call_tool(self, request: ToolRequest, ctx: VrakshaContext) -> ToolCallRecord:
         started = time.monotonic()

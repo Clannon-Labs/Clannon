@@ -38,6 +38,7 @@ class Capabilities:
     ctx: VrakshaContext
     _tools: ToolHandler
     _experts: ExpertHandler
+    _allow_memory_write: bool = True   # gates the `remember` built-in; True preserves .open()'s behavior
 
     @classmethod
     def open(cls, ctx: VrakshaContext, *, registry=default_registry) -> "Capabilities":
@@ -45,6 +46,32 @@ class Capabilities:
         tools = ToolHandler(registry=registry)
         experts = ExpertHandler(registry=registry, tools=tools)
         return cls(ctx=ctx, _tools=tools, _experts=experts)
+
+    @classmethod
+    def scoped_to(
+        cls, ctx: VrakshaContext, *, expert_keys, tool_keys, grants,
+        allow_memory_write: bool = False, registry=default_registry,
+    ) -> "Capabilities":
+        """Open a gateway restricted to specific expert/tool keys and permission
+        grants — for a batch orchestrator scoped to one domain (batch-orchestrator
+        design v2, §B/§C). `expert_keys`/`tool_keys` are REQUIRED (no `None`-means-
+        unrestricted default here, unlike the handlers' own `.scoped()`) — a caller
+        must explicitly enumerate what a batch can reach, so an unrestricted batch
+        is never accidental. Built from `ToolHandler`/`ExpertHandler`'s own
+        compose-never-widen `.scoped()`, so this can be further narrowed safely
+        (e.g. nesting) without ever escaping the scope requested here.
+
+        `allow_memory_write` defaults to False (unlike `.open()`'s implicit True) —
+        closes the ratified design's F2 finding one tier down: the central
+        orchestrator's `remember` + unrestricted-NETWORK combination is a real
+        exfiltration-surface risk this codebase never extended the "no memory +
+        no egress together" rule to; a batch orchestrator's default is the safer
+        posture, with per-batch config (once it exists) able to opt back in
+        explicitly. `recall` (read-only, this session only) is unaffected — this
+        gates the WRITE side only."""
+        tools = ToolHandler(registry=registry).scoped(allowed_keys=tool_keys, grants=grants)
+        experts = ExpertHandler(registry=registry, tools=tools).scoped(allowed_keys=expert_keys)
+        return cls(ctx=ctx, _tools=tools, _experts=experts, _allow_memory_write=allow_memory_write)
 
     @property
     def _registry(self):
@@ -88,6 +115,17 @@ class Capabilities:
         # file/code work to an expert (e.g. code.engineer) that holds the workspace.
         tool_specs = [s for s in tool_specs if s and not getattr(s.impl, "wants_workspace", False)]
         expert_specs = [reg.get_expert(c["key"]) for c in reg.cards(CapabilityKind.EXPERT)]
+        # A scoped gateway (Capabilities.scoped_to, for a batch orchestrator) must not
+        # even OFFER an ungranted capability to the model — allowed_keys=None (the
+        # unscoped/central case) leaves both lists untouched, matching today's behavior
+        # exactly. The handlers themselves also refuse a call outside their scope
+        # (defense in depth), but not offering it is the tighter, cleaner behavior.
+        tool_allowed = self._tools._allowed_keys
+        if tool_allowed is not None:
+            tool_specs = [s for s in tool_specs if s.key in tool_allowed]
+        expert_allowed = self._experts._allowed_keys
+        if expert_allowed is not None:
+            expert_specs = [s for s in expert_specs if s and s.key in expert_allowed]
         deps = OrchestratorDeps(ctx=self.ctx, tools=self._tools, experts=self._experts)
 
         handle = build_tool_agent(
@@ -99,6 +137,7 @@ class Capabilities:
                 # when the user attached files this turn, surface the file-reading experts up
                 # front so the orchestrator can actually read the upload (not fall back to search)
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
+                with_memory_write=self._allow_memory_write,
             ),
             deps_type=OrchestratorDeps,
             retries=constants.ORCHESTRATOR_MAX_RETRIES,

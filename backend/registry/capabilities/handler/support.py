@@ -436,7 +436,7 @@ def _offer(fn: Callable, spec, *, files_attached: bool = False) -> "Callable | T
 
 def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None,
-    *, files_attached: bool = False,
+    *, files_attached: bool = False, with_memory_write: bool = True,
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the always-on built-ins — `remember` (long-term memory) and
@@ -444,12 +444,22 @@ def build_orchestrator_tools(
     sink is wired) the `say` conversational tool. The handler resolves the specs; support
     never imports the registry.
 
+    `with_memory_write` gates `remember` only (default True — today's unscoped central
+    orchestrator, unchanged). A scoped gateway (`Capabilities.scoped_to`, batch-orchestrator
+    design v2 §C) passes False by default: the memory-write + unrestricted-egress
+    combination is a real exfiltration-surface risk this codebase never extended its
+    "no memory + no egress together" expert-tier rule to at the orchestrator tier —
+    a batch's safer default, not a capability regression (`recall`, read-only and
+    session-scoped, is unaffected).
+
     `remember`/`recall`/`say` and the hot-path (`eager`) capabilities load up front; the
     long tail is deferred behind tool search (W2). When `files_attached`, the file-reading
     experts are ALSO eager this turn (so the orchestrator can read an upload instead of falling
     back to web search). The framework auto-adds a `search_tools` function whenever any deferred
     capability is present; every call still routes through the guarded handler on execution."""
-    fns: list = [_make_remember_tool(), _make_recall_tool()]
+    fns: list = [_make_recall_tool()]
+    if with_memory_write:
+        fns.append(_make_remember_tool())
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
     for spec in tool_specs:
