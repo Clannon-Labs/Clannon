@@ -12,8 +12,22 @@ value (behavior-preserving) — this file pins that equality AND, for the one
 call-time (not import-time-frozen) read, proves actual causation rather than
 coincidence.
 
-  ✓ manager.py's eleven ranking/acceptance/budget constants equal
-    settings.MEMORY / settings.BUDGET, not a re-hardcoded literal
+Manager-split note (2026-07-06): the constants this file pins now live in
+`hydration.py` (read side) / `write_policy.py` (write side) / `tiers.py`
+(shared TIER_TRUST/TIER_FLOOR), not `manager.py` — `manager.py` is now a
+thin `MemoryPort` door delegating to both. `_MAX_CONTENT_CHARS` exists as
+an independent module-level read in BOTH hydration.py and write_policy.py
+(each reads `settings.MEMORY.max_content_chars` directly — a bare scalar
+read, not logic worth sharing, same reasoning as `graph_extract.py`/
+`graph_store.py`'s independent `MAX_HOPS_CEILING` reads) — this file pins
+both copies.
+
+  ✓ hydration.py's read-side constants and write_policy.py's write-side
+    constants equal settings.MEMORY / settings.BUDGET, not a re-hardcoded
+    literal
+  ✓ tiers.TIER_TRUST/TIER_FLOOR equal settings.MEMORY.tier_trust/tier_floor,
+    with TIER_TRUST's int-cast preserved (flows into MemoryItem.trust, an
+    `int` field, and the Qdrant payload)
   ✓ embeddings.py's retry backoff equals settings.MEMORY.embed_retry_after_s
   ✓ graph_store.MAX_HOPS_CEILING equals settings.MEMORY.graph_max_hops_ceiling
   ✓ graph_extract.CodeImportGraph.breaks_if_removed's hop-ceiling default
@@ -23,16 +37,14 @@ coincidence.
     directly
   ✓ store.py's Qdrant client timeout is GENUINELY wired (not just
     coincidentally equal): a fake QdrantClient captures the timeout kwarg
-    it's constructed with, proving a changed config value would change what
-    the real client receives — the one constant here that's read at
-    call-time rather than frozen at import, so it's provable without a
-    module reload
+    it's constructed with — the one constant here read at call-time rather
+    than frozen at import, so it's provable without a module reload
 
 D1 slice (2026-07-06, f628a0b): the MEMORY_* group formerly in
 `foundation/vocab/constants.py` — same equality-pin / causation-proof split:
-  ✓ manager.py's _SEARCH_K/_RELEVANCE_FLOOR and store.search's default
+  ✓ hydration.py's _SEARCH_K/_RELEVANCE_FLOOR and store.search's default
     `limit` equal settings.MEMORY (import-frozen, equality-pin)
-  ✓ manager._embed_bounded's read deadline and writer.distill/
+  ✓ hydration._embed_bounded's read deadline and writer.distill/
     judge_supersession's retry count are GENUINELY wired (call-time reads,
     same causation-proof shape as the Qdrant timeout above)
 
@@ -41,63 +53,55 @@ Run:
 """
 from __future__ import annotations
 
+import inspect
+
 import settings
 import core.memory.embeddings as embeddings
 import core.memory.graph_extract as graph_extract
 import core.memory.graph_store as graph_store
+import core.memory.hydration as hydration
 import core.memory.store as store
-# core/memory/__init__.py does `from .manager import MemoryManager, manager`,
-# which reassigns the PACKAGE attribute `core.memory.manager` to the
-# singleton instance — `import core.memory.manager as manager` would then
-# bind to that instance, not the submodule. A direct `from` import of the
-# submodule's names (the same convention tests/memory_supersession.py etc.
-# already use) sidesteps this entirely.
-from core.memory.manager import (
-    _CHARS_PER_TOKEN,
-    _DEDUP_SIMILARITY,
-    _DEFAULT_BUDGET_TOKENS,
-    _MAX_CONTENT_CHARS,
-    _MIN_ACCEPT_CONFIDENCE,
-    _RECENCY_FLOOR,
-    _RECENCY_HALF_LIFE_S,
-    _RELEVANCE_FLOOR,
-    _SEARCH_K,
-    _SUPERSESSION_FLOOR,
-    _SUPERSESSION_TIMEOUT_S,
-    _TIER_FLOOR,
-    _TIER_TRUST,
-    _embed_bounded,
-)
+import core.memory.tiers as tiers
+import core.memory.write_policy as write_policy
 import core.memory.writer as writer
 from foundation import MemoryStore
 
 
-def test_manager_constants_match_settings_not_a_rehardcoded_literal():
-    assert _TIER_TRUST == {
+def test_tier_trust_and_floor_match_settings():
+    assert tiers.TIER_TRUST == {
         MemoryStore.WIKI: settings.MEMORY.tier_trust.wiki,
         MemoryStore.SEMANTIC: settings.MEMORY.tier_trust.semantic,
         MemoryStore.EPISODIC: settings.MEMORY.tier_trust.episodic,
         MemoryStore.PROCEDURAL: settings.MEMORY.tier_trust.procedural,
     }
-    # TierTrust's fields are `float` in settings.py, but _TIER_TRUST's values
+    # TierTrust's fields are `float` in settings.py, but TIER_TRUST's values
     # flow into MemoryItem.trust (an `int` field) and the Qdrant payload —
     # must stay a genuine int, not a silently-introduced 3.0.
-    assert all(isinstance(v, int) for v in _TIER_TRUST.values())
-    assert _TIER_FLOOR == {
+    assert all(isinstance(v, int) for v in tiers.TIER_TRUST.values())
+    assert tiers.TIER_FLOOR == {
         MemoryStore.WIKI: settings.MEMORY.tier_floor.wiki,
         MemoryStore.SEMANTIC: settings.MEMORY.tier_floor.semantic,
         MemoryStore.EPISODIC: settings.MEMORY.tier_floor.episodic,
         MemoryStore.PROCEDURAL: settings.MEMORY.tier_floor.procedural,
     }
-    assert _RECENCY_HALF_LIFE_S == settings.MEMORY.recency_half_life_s
-    assert _RECENCY_FLOOR == settings.MEMORY.recency_floor
-    assert _MIN_ACCEPT_CONFIDENCE == settings.MEMORY.min_accept_confidence
-    assert _DEDUP_SIMILARITY == settings.MEMORY.dedup_similarity
-    assert _MAX_CONTENT_CHARS == settings.MEMORY.max_content_chars
-    assert _SUPERSESSION_FLOOR == settings.MEMORY.supersession_floor
-    assert _SUPERSESSION_TIMEOUT_S == settings.MEMORY.supersession_timeout_s
-    assert _DEFAULT_BUDGET_TOKENS == settings.BUDGET.default_memory_budget_tokens
-    assert _CHARS_PER_TOKEN == settings.BUDGET.memory_chars_per_token
+
+
+def test_hydration_constants_match_settings_not_a_rehardcoded_literal():
+    assert hydration._RECENCY_HALF_LIFE_S == settings.MEMORY.recency_half_life_s
+    assert hydration._RECENCY_FLOOR == settings.MEMORY.recency_floor
+    assert hydration._MAX_CONTENT_CHARS == settings.MEMORY.max_content_chars
+    assert hydration._SEARCH_K == settings.MEMORY.search_top_k
+    assert hydration._RELEVANCE_FLOOR == settings.MEMORY.relevance_floor
+    assert hydration._DEFAULT_BUDGET_TOKENS == settings.BUDGET.default_memory_budget_tokens
+    assert hydration._CHARS_PER_TOKEN == settings.BUDGET.memory_chars_per_token
+
+
+def test_write_policy_constants_match_settings_not_a_rehardcoded_literal():
+    assert write_policy._MIN_ACCEPT_CONFIDENCE == settings.MEMORY.min_accept_confidence
+    assert write_policy._DEDUP_SIMILARITY == settings.MEMORY.dedup_similarity
+    assert write_policy._MAX_CONTENT_CHARS == settings.MEMORY.max_content_chars
+    assert write_policy._SUPERSESSION_FLOOR == settings.MEMORY.supersession_floor
+    assert write_policy._SUPERSESSION_TIMEOUT_S == settings.MEMORY.supersession_timeout_s
 
 
 def test_embeddings_retry_backoff_matches_settings():
@@ -112,7 +116,6 @@ def test_graph_extract_default_matches_graph_store_no_second_literal():
     """The §Phase-3.5-flagged drift fix: graph_extract's own default must
     equal graph_store's, both sourced from the SAME config value — not two
     independently hardcoded 20s that happen to match today."""
-    import inspect
     default = inspect.signature(graph_extract.CodeImportGraph.breaks_if_removed).parameters["max_hops"].default
     assert default == graph_store.MAX_HOPS_CEILING == settings.MEMORY.graph_max_hops_ceiling
 
@@ -146,17 +149,7 @@ def test_store_qdrant_timeout_is_genuinely_wired_not_coincidental(monkeypatch):
     assert captured.get("timeout") == sentinel
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# D1 slice (f628a0b) — the former foundation.constants.MEMORY_* group
-# ─────────────────────────────────────────────────────────────────────────────
-
-def test_search_k_and_relevance_floor_match_settings():
-    assert _SEARCH_K == settings.MEMORY.search_top_k
-    assert _RELEVANCE_FLOOR == settings.MEMORY.relevance_floor
-
-
 def test_store_search_default_limit_matches_settings():
-    import inspect
     default = inspect.signature(store.search).parameters["limit"].default
     assert default == settings.MEMORY.search_top_k
 
@@ -175,7 +168,7 @@ def test_embed_bounded_read_timeout_is_genuinely_wired(monkeypatch):
     patched = settings.MemoryConfig(**{**settings.MEMORY.model_dump(), "read_timeout_s": 0.05})
     monkeypatch.setattr(settings, "MEMORY", patched)
 
-    result = _asyncio.run(_embed_bounded("x"))
+    result = _asyncio.run(hydration._embed_bounded("x"))
     assert result is None, "a stalled embed must degrade via the (patched, tiny) read timeout"
 
 

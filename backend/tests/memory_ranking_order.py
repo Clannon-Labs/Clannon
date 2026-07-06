@@ -5,19 +5,19 @@ enforces but no test yet covers.
   (a) TRUST ORDERING -- on equal relevance, a higher-trust WIKI record (trust=3) must
       rank before a lower-trust EPISODIC record (trust=1). Non-Negotiable Priority:
       user-authored knowledge outranks inferred memory.
-      Contract: manager.py:195 sort(key=lambda i: (i.trust, i.score), reverse=True)
-      driven by _TIER_TRUST at manager.py:58-63: WIKI=3 > SEMANTIC=2 > EPISODIC/PROCEDURAL=1.
+      Contract: hydration.py's hydrate() sort(key=lambda i: (i.trust, i.score), reverse=True)
+      driven by tiers.TIER_TRUST: WIKI=3 > SEMANTIC=2 > EPISODIC/PROCEDURAL=1.
 
   (b) RECENCY DECAY -- at equal relevance and equal trust, a newer record must rank before
-      an older one. Contract: rank_score = raw_score * _recency(created_at) at manager.py:153,
-      where _recency() (manager.py:82-85) applies exponential half-life decay so a fresh
-      memory beats a stale one at the same cosine distance.
+      an older one. Contract: rank_score = raw_score * _recency(created_at) in hydration.py,
+      where _recency() applies exponential half-life decay so a fresh memory beats a stale
+      one at the same cosine distance.
 
 Hermetic: test-double store and embedder; no network; no paid keys.
 Every request is user_id-scoped per the MANDATORY fail-closed invariant (ADR 0002 / §V.20).
 Each test prints a ranked-order table and a trust-ordered / recency-ordered / VIOLATED verdict.
 On a genuine ordering divergence: writes a needs-reviewer note and fails loudly WITHOUT
-editing manager.py or any ranking/trust/recency/scoping logic.
+editing hydration.py or any ranking/trust/recency/scoping logic.
 
 Distinct from:
   tests/memory_tools.py    -- schema-level trust field formatting only (hardcodes trust=5/2)
@@ -33,13 +33,9 @@ from unittest.mock import patch
 import pytest
 
 from foundation import HydrationRequest, MemoryItem, MemoryStore, NormalizedInput
-from core.memory.manager import (
-    MemoryManager,
-    _RECENCY_HALF_LIFE_S,
-    _RELEVANCE_FLOOR,
-    _TIER_TRUST,
-    _recency,
-)
+from core.memory.manager import MemoryManager
+from core.memory.hydration import _RECENCY_HALF_LIFE_S, _RELEVANCE_FLOOR, _recency
+from core.memory.tiers import TIER_TRUST as _TIER_TRUST
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -103,10 +99,10 @@ def _open_needs_reviewer(violation: str) -> None:
     note = (
         "\n--- MEMORY RANKING CONTRACT VIOLATION (tests/memory_ranking_order.py) ---\n"
         f"{violation}\n"
-        "Do NOT edit manager.py to hide this. The harness pins the CONTRACT, not a workaround.\n"
+        "Do NOT edit hydration.py to hide this. The harness pins the CONTRACT, not a workaround.\n"
         "Options:\n"
         "  1. Confirm the contract changed intentionally and update this harness.\n"
-        "  2. Fix the ranking logic in core/memory/manager.py hydrate().\n"
+        "  2. Fix the ranking logic in core/memory/hydration.py hydrate().\n"
         "---\n"
     )
     try:
@@ -161,7 +157,7 @@ def test_trust_ordering_wiki_beats_episodic_at_equal_score():
     """
     WIKI (trust=3) must rank before EPISODIC (trust=1) when both carry equal
     relevance. Drives the real MemoryManager.hydrate() with test-double store
-    and embedder; asserts the final sort at manager.py:195.
+    and embedder; asserts the final sort in hydration.py's hydrate().
 
     Setup:
       - WIKI entry supplied via request.wiki (lexical path, no embedding needed).
@@ -225,7 +221,7 @@ def test_trust_ordering_wiki_beats_episodic_at_equal_score():
             f"(trust={epis_items[0].trust}, score={epis_items[0].score:.4f}) "
             f"ranked at position {epis_rank + 1}. "
             f"Expected WIKI rank < EPISODIC rank (lower index = higher priority). "
-            f"Check manager.py:195 sort and _TIER_TRUST constants at manager.py:58-63."
+            f"Check hydration.py's hydrate() sort and tiers.TIER_TRUST."
         )
         _open_needs_reviewer(violation)
         pytest.fail(violation)
@@ -393,7 +389,7 @@ def test_recency_newer_episodic_beats_older_at_equal_raw_score():
             f"(recency={old_recency:.4f}, rank_score={raw_score * old_recency:.4f}) "
             f"ranked at position {old_pos + 1}. "
             f"Expected newer at lower index (higher rank). "
-            f"Check manager.py:153 recency weighting and manager.py:195 sort."
+            f"Check hydration.py's recency weighting and hydrate() sort."
         )
         _open_needs_reviewer(violation)
         pytest.fail(violation)

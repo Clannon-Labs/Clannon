@@ -2,8 +2,8 @@
 Hermetic harness: memory WRITE-DOOR persistence policy.
 
 Drives MemoryManager.record_write_proposals() with monkeypatched test-double
-store + embedder (no live Qdrant, no network, no paid keys).  Uses the manager's
-REAL constants and branches (core/memory/manager.py:225-267).
+store + embedder (no live Qdrant, no network, no paid keys).  Uses the write
+policy's REAL constants and branches (core/memory/write_policy.py).
 
 Policy assertions:
   (a) WORKING tier — never persisted (no embed, no upsert)
@@ -29,12 +29,12 @@ import pytest
 
 import core.memory.embeddings as emb_mod
 import core.memory.store as store_mod
-from core.memory.manager import (
-    MemoryManager,
+from core.memory.manager import MemoryManager
+from core.memory.tiers import TIER_TRUST as _TIER_TRUST
+from core.memory.write_policy import (
     _DEDUP_SIMILARITY,
     _MAX_CONTENT_CHARS,
     _MIN_ACCEPT_CONFIDENCE,
-    _TIER_TRUST,
 )
 from foundation import MemoryStore, MemoryWriteProposal
 
@@ -622,7 +622,7 @@ def test_write_door_policy_table(monkeypatch):
     fmt = "| {{:{w_rule}}} | {{:{w_policy}}} | {{:{w_outcome}}} | {{:{w_verdict}}} |".format(
         w_rule=w_rule, w_policy=w_policy, w_outcome=w_outcome, w_verdict=w_verdict
     )
-    print("\n\n  Write-door persistence policy (manager.py:225-267)")
+    print("\n\n  Write-door persistence policy (core/memory/write_policy.py)")
     print(sep)
     print(fmt.format("Rule", "Policy", "Outcome class", "Verdict"))
     print(sep)

@@ -11,12 +11,12 @@ No network calls.  No paid model calls.  No Qdrant instance required.
 Fault classes
 -------------
   (a) store.search RAISES mid-query — simulated transient connection error at
-      the threaded HTTP call (manager.py:143-146).
+      the threaded HTTP call (hydration.py's hydrate()).
   (b) store.is_down() is True on entry — store circuit-breaker is open.
   (c) embeddings.embed RAISES — transient embedding model fault.
 
 KNOWN LATENT GAP — case (a) today PROPAGATES
-  asyncio.gather at manager.py:143-146 has no try/except and no
+  asyncio.gather in hydration.py's hydrate() has no try/except and no
   return_exceptions=True.  A store.search that raises inside asyncio.to_thread
   propagates straight into hydrate(), violating the degrade-never-raise contract.
 
@@ -116,8 +116,8 @@ def test_a_store_search_raises_degrades(monkeypatch):
 
 def test_b_store_is_down_degrades(monkeypatch):
     """
-    (b) When is_down() returns True the post-gather check at manager.py:161-168
-    must return a degraded package with an honest note, never raise.
+    (b) When is_down() returns True the post-gather check in hydration.py's
+    hydrate() must return a degraded package with an honest note, never raise.
 
     The store.search test-double returns [] (consistent with breaker open);
     embed succeeds so we reach the is_down branch.
@@ -145,8 +145,8 @@ def test_b_store_is_down_degrades(monkeypatch):
 def test_c_embeddings_raises_degrades(monkeypatch):
     """
     (c) A raising embeddings.embed must produce a degraded HydrationPackage;
-    _embed_bounded at manager.py:88-103 must catch it and return None so the
-    early-exit at manager.py:132-137 fires before any store call.
+    _embed_bounded in hydration.py must catch it and return None so
+    hydrate()'s early-exit fires before any store call.
 
     The store.search test-double returns [] as a safe fallback (it must not
     be reached when embed faults first, but a non-raising stub keeps the test

@@ -75,11 +75,9 @@ from core.memory import MemoryManager
 from core.memory import embeddings as embeddings_mod
 from core.memory import store as store_mod
 from core.memory.embeddings import DIMS
-# The manager truncates stored content to this many chars; importing it (rather than
-# hardcoding 2000) keeps the cap in sync. NB: `from core.memory import manager` would
-# give the singleton INSTANCE (re-exported in __init__), so we import the constant
-# straight from the module instead.
-from core.memory.manager import _MAX_CONTENT_CHARS
+# The write policy truncates stored content to this many chars; importing it
+# (rather than hardcoding 2000) keeps the cap in sync.
+from core.memory.write_policy import _MAX_CONTENT_CHARS
 
 try:  # package context (pytest collects this as benchmarks.c4_decision_memory)
     from .report import BenchmarkReport, Verdict

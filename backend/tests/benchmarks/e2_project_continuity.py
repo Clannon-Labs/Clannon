@@ -66,7 +66,7 @@ _USER = "e2-probe-synthetic-user"
 _SESSION = "e2-seed-session"
 _DAY = 86_400.0
 # REAL wall-clock "now" (matches e1_knowledge_evolution.py's convention, not C4's fixed
-# epoch): _recency() in manager.py decays against time.time(), not a simulated clock, so
+# epoch): _recency() in hydration.py decays against time.time(), not a simulated clock, so
 # a fixed past epoch would make every seeded item equally "over a year old" regardless of
 # its age_days offset — collapsing all of them to the recency floor and defeating the
 # whole point of testing that RECENT content outranks OLDER content within the project's

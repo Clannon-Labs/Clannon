@@ -42,7 +42,9 @@ import asyncio
 import time
 
 from foundation import HydrationRequest, MemoryStore, NormalizedInput
-from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _RECENCY_FLOOR, _RECENCY_HALF_LIFE_S, _RELEVANCE_FLOOR
+from core.memory.manager import MemoryManager
+from core.memory.hydration import _RECENCY_FLOOR, _RECENCY_HALF_LIFE_S, _RELEVANCE_FLOOR
+from core.memory.write_policy import _DEDUP_SIMILARITY
 
 # ---------------------------------------------------------------------------
 # Synthetic fixtures — seeded at module load to keep timestamps stable

@@ -164,10 +164,19 @@ costs one timeout per window, not one per call.
 ```
 core/memory/
   ARCHITECTURE.md   ← this document
-  manager.py        ← MemoryPort implementer; policy + budget; the only door
+  manager.py        ← MemoryPort implementer; the only door (thin adapter)
+  hydration.py      ← read-side: ranking, recency decay, Lagrangian budgeting
+  write_policy.py   ← write-side: dedup, EB1 supersession, sync_wiki
+  tiers.py          ← TIER_TRUST/TIER_FLOOR (shared by hydration + write_policy)
   embeddings.py     ← fastembed nomic-embed-text-v1.5 wrapper (lazy singleton)
   store.py          ← Qdrant access; the ONLY module that builds queries;
                       owns collections, payload indexes, user_id filters
+  writer.py         ← the background memory-agent's distillation step
+  graph_store.py / graph_manager.py / mission_graph_store.py / graph_extract.py
+                    ← GraphPort implementer (Kuzu) — code-import graph +
+                      Mission Engine substrate
+  batch_store.py / batch_awareness_manager.py
+                    ← BatchAwarenessPort implementer (cross-batch awareness slice)
 ```
 
 Config via env: `QDRANT_URL` (default `http://localhost:6333`),

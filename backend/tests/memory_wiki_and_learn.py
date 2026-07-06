@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from foundation import HydrationRequest, MemoryPort, MemoryStore, MemoryWriteProposal
 from core.memory.manager import MemoryManager
+import core.memory.hydration as hydration_mod
 import core.memory.writer as writer_mod
 
 
@@ -22,18 +23,17 @@ def test_manager_satisfies_memory_port():
 
 
 def test_select_wiki_ranks_by_relevance_and_bounds_budget():
-    m = MemoryManager()
     wiki = (
         ("Meridian Skincare", "US DTC skincare brand, ceramide serum, CMO is Priya."),
         ("Acme Legal", "UK law firm, wants a docs tool, hates jargon."),
     )
-    items = m._select_wiki(wiki, "what is meridian's hero product?", 10_000)
+    items = hydration_mod._select_wiki(wiki, "what is meridian's hero product?", 10_000)
     assert items, "relevant wiki should be selected"
     assert "Meridian" in items[0].content  # the lexically-overlapping entry leads
     assert all(i.store is MemoryStore.WIKI and i.trust == 3 for i in items)
 
     # a tiny budget admits at most one entry
-    tight = m._select_wiki(wiki, "meridian acme", 5)
+    tight = hydration_mod._select_wiki(wiki, "meridian acme", 5)
     assert len(tight) <= 1
 
 

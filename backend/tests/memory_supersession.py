@@ -12,9 +12,9 @@ Four layers, each hermetic (no live Qdrant, no network, no paid keys):
      refusal (stricter than _owns_point's insert-friendly "doesn't exist -> True").
   2. writer.judge_supersession — the LLM call's own fail-closed contract (stubbed
      build_agent/run_structured, mirroring security/filter's seam-testing convention).
-  3. manager._persist_one / _maybe_mark_superseded — the orchestration: which hits
-     are even candidates (band + tier + fresh-insert gating), and that a judge/mark
-     fault or timeout never breaks the write it's attached to.
+  3. write_policy._persist_one / _maybe_mark_superseded — the orchestration: which
+     hits are even candidates (band + tier + fresh-insert gating), and that a
+     judge/mark fault or timeout never breaks the write it's attached to.
   4. End-to-end: hydrate() already surfaces a marked item without any read-path
      change (CB1 already propagates superseded_by; nothing filters on it) — proven
      here by actually driving a write -> mark -> read round trip, not just read.
@@ -25,25 +25,25 @@ Run:
 from __future__ import annotations
 
 import asyncio
-import sys
 import time
 
 import core.memory.embeddings as emb_mod
 import core.memory.store as store_mod
+import core.memory.write_policy as write_policy_mod
 import core.memory.writer as writer_mod
 from core.memory import store
-from core.memory.manager import MemoryManager, _DEDUP_SIMILARITY, _SUPERSESSION_FLOOR
+from core.memory.manager import MemoryManager
+from core.memory.write_policy import _DEDUP_SIMILARITY, _SUPERSESSION_FLOOR
 from foundation import HydrationRequest, MemoryKind, MemoryStore, MemoryWriteProposal, NormalizedInput
 
-# NOT `import core.memory.manager as manager_mod`: core/memory/__init__.py does
-# `from .manager import MemoryManager, manager`, which shadows the `manager`
-# submodule attribute on the `core.memory` package with the singleton instance —
-# so `import core.memory.manager as x` / `from core.memory import manager as x`
-# both silently bind x to the MemoryManager() instance, not the module. Going
-# through sys.modules (already populated by the `from ... import` above) gets the
-# real module so monkeypatching its attributes actually affects what the manager's
-# own code reads at runtime.
-manager_mod = sys.modules["core.memory.manager"]
+# `import core.memory.write_policy as write_policy_mod` (above) is safe here,
+# unlike `core.memory.manager`: `core/memory/__init__.py` does `from .manager
+# import MemoryManager, manager`, which shadows the `manager` submodule
+# attribute on the `core.memory` package with the singleton instance, so an
+# `as`-import of THAT submodule silently binds to the instance instead. No
+# such rebind happens for `write_policy` (or `hydration`/`tiers`), so this
+# import genuinely is the module — monkeypatching its attributes actually
+# affects what write_policy's own functions read at runtime.
 
 _MID_BAND = (_SUPERSESSION_FLOOR + _DEDUP_SIMILARITY) / 2  # comfortably inside [floor, dedup)
 
@@ -383,7 +383,7 @@ def test_judge_timeout_is_bounded_independently(monkeypatch):
     settings.MEMORY.write_timeout_s, and must never cause
     record_write_proposals to mistake the already-successful upsert for a
     stalled store (which would incorrectly drop this AND all later writes)."""
-    monkeypatch.setattr(manager_mod, "_SUPERSESSION_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(write_policy_mod, "_SUPERSESSION_TIMEOUT_S", 0.05)
     monkeypatch.setattr(emb_mod, "embed", _embed_ok())
     monkeypatch.setattr(store_mod, "search", _search_hit(score=_MID_BAND))
     monkeypatch.setattr(store_mod, "upsert", lambda *a, **k: "new-id")
@@ -567,5 +567,5 @@ def test_existing_decision_protected_from_a_different_kind_merge(monkeypatch):
 
 
 def test_kind_rank_has_decision_ranked_with_fact():
-    from core.memory.manager import _KIND_RANK
+    from core.memory.write_policy import _KIND_RANK
     assert _KIND_RANK[MemoryKind.DECISION] == _KIND_RANK[MemoryKind.FACT]

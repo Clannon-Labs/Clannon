@@ -2,9 +2,9 @@
 Memory fails CLOSED on scope (invariant §V.20, ADR 0002): with no user_id there
 is no tenant to scope a query to, so `hydrate` returns an empty package with an
 honest "no user scope" note and a write proposal is a silent no-op — BEFORE any
-Qdrant query or embedding call. `core/memory/manager.py` guards this at the top of
-`hydrate` (the `if not request.user_id:` return) and `record_write_proposals`
-(the `if not proposals or not user_id:` return).
+Qdrant query or embedding call. `core/memory/hydration.py`'s `hydrate()` guards this at the top (the
+`if not request.user_id:` return) and `core/memory/write_policy.py`'s
+`record_write_proposals` (the `if not proposals or not user_id:` return).
 
 `tests/memory_isolation.py` covers the live-Qdrant tenant-isolation layer but is
 skipped when Qdrant is down, so this fail-closed branch had no coverage. This test
@@ -23,7 +23,8 @@ from foundation import (
     MemoryWriteProposal,
     NormalizedInput,
 )
-from core.memory.manager import MemoryManager, _DEFAULT_BUDGET_TOKENS
+from core.memory.manager import MemoryManager
+from core.memory.hydration import _DEFAULT_BUDGET_TOKENS
 
 
 def _tripwire_store_and_embeddings(monkeypatch) -> list[str]:

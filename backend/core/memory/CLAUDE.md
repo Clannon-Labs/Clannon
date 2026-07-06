@@ -25,10 +25,15 @@ The Semgrep **build-gate** meant to block unscoped queries is documented but
 CI catches an unscoped query; the single-door rule is the real guard today.
 
 ## Conventions
-- `manager.py` is the door (implements `hydrate` + `record_write_proposals`);
-  `store.py` (Qdrant), `embeddings.py` (nomic, 768-dim), `writer.py` (distillation)
-  are internals. `learn()` is the background memory-agent (best-effort, off the hot
-  path). `memory` prompt is unlocked.
+- `manager.py` is the door (implements `hydrate`/`record_write_proposals`/`learn`) —
+  a THIN `MemoryPort` adapter only (split 2026-07-06, LAW 2): `hydration.py` owns
+  the read-side ranking/budgeting internals, `write_policy.py` owns the write-side
+  dedup/supersession internals, `tiers.py` holds the `TIER_TRUST`/`TIER_FLOOR`
+  dicts both sides need. Same adapter/internals relationship `graph_manager.py`
+  has to `graph_store.py`. `store.py` (Qdrant), `embeddings.py` (nomic, 768-dim),
+  `writer.py` (distillation), `batch_store.py`/`batch_awareness_manager.py`
+  (cross-batch awareness) are the other internals. `learn()` is the background
+  memory-agent (best-effort, off the hot path). `memory` prompt is unlocked.
 
 ## Tests
 `tests/memory_isolation.py`, `tests/memory_tools.py`, `tests/memory_wiki_and_learn.py`.

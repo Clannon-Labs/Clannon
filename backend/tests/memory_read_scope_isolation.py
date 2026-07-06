@@ -63,8 +63,8 @@ from core.memory.manager import MemoryManager
 _DIMS = 768
 _VEC: list[float] = [0.0] * (_DIMS - 1) + [1.0]
 
-# Score well above the 0.30 relevance floor so hits always pass the manager's
-# floor check (manager.py:151-156).
+# Score well above the 0.30 relevance floor so hits always pass hydration.py's
+# floor check.
 _SCORE = 0.95
 
 # created_at=0 means epoch 1970; recency decay collapses to the floor (0.5),
