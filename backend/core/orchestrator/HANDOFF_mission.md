@@ -3,6 +3,34 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## Update (2026-07-06 session)
+
+Re-checked the blocker fresh rather than trusting the paragraph below verbatim:
+`foundation/contracts/graph.py` still has no `def members` on `GraphPort` as of
+this session (grepped directly). Nothing else changed — no new commits since
+`73453ea`, working tree clean, inbox (`proposals/to-orchestration/`) empty. Per
+this doc's own instruction ("a nudge to backend, not new design or waiting on
+memory"), filed `proposals/to-backend/2026-07-06_members-protocol-nudge.md`
+(high priority, exact copy-paste signature from the already-built
+`GraphManager.members()`, `core/memory/graph_manager.py:214`).
+
+Used the wait per charter ("design around the gap until answered") rather than
+idling: handoff step 3 below flags the conclude-path signal mechanism
+(push vs. poll, for memory's `clear_mission`) as genuinely unresolved by the v2
+ratification — that decision doesn't depend on `members()` landing, so filed it
+now as `proposals/to-backend/2026-07-06_conclude-path-signal-design.md`,
+recommending **poll** (self-checked by `BatchAwarenessPort`'s own implementer,
+which already has same-tree access to `GraphManager` — zero new cross-layer
+contract, and self-healing against a missed signal, unlike push which needs a
+new `MemoryPort` method and has no retry if the notification is lost).
+
+Nothing else was unblocked to build this session — confirmed the charter's
+other frontier items (entropy routing #64, both charter tools, round-2
+stability audit) are all already done per `reports/orchestration/report_v1.md`.
+Next resume: check whether `members()` landed AND whether backend ruled on the
+conclude-path signal; if both, step 2 below (the §6 operate-step) and step 3
+(conclude-path) can build in one pass instead of two round-trips.
+
 ## Ratified design
 
 `proposals/archive/to-orchestration/2026-07-05_mission-engine-v2-ratified.md`
