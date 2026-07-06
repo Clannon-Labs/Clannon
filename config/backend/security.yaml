@@ -13,3 +13,22 @@
 # NEVER be autonomous whatever this file says; widening the ceiling itself is a deliberate
 # code change with owner sign-off (docket D7, option B). Unit: PermissionLevel names.
 autonomous_safe_permissions: [read]
+
+# SANDBOX (registry/capabilities/handler/sandbox.py) — Docker container caps for sandboxed
+# code execution. Config may only TIGHTEN the six resource caps below — a hard ceiling in
+# settings.py (matching today's values) rejects, fail-loud, any config edit that RAISES them
+# (no config can grant a sandboxed job more memory/cpu/pids/tmpfs, a longer run, or a bigger
+# output flood than is safe). These are NUMBERS, not docker unit-strings, on purpose: a string
+# ceiling check would be fail-OPEN ("1024m" <= "512m" is lexically true). sandbox.py rebuilds
+# the "{n}m" strings at the call site. The two *_timeout_s below bound only how long OUR caller
+# waits on the docker CLI (not the workload), so they carry no security direction — no ceiling.
+# NOT here, never config-toggleable: the _ENABLE gate, the image, and the isolation STRUCTURE
+# (--network none / --read-only / non-root / the mount layout) — those stay in code.
+sandbox_memory_mb: 512            # ceiling 512 — container RAM (MiB)
+sandbox_cpus: 1.0                 # ceiling 1.0 — container CPU cores
+sandbox_pids: 256                 # ceiling 256 — container PID limit
+sandbox_tmpfs_mb: 64              # ceiling 64 — writable tmpfs size (MiB)
+sandbox_run_timeout_s: 60.0       # ceiling 60 — max wall-clock for the sandboxed job
+sandbox_max_output_chars: 20000   # ceiling 20000 — captured stdout/stderr cap (flood defense)
+sandbox_create_timeout_s: 180.0   # no ceiling — ops wait on `docker create`
+sandbox_teardown_timeout_s: 20.0  # no ceiling — ops wait on `docker rm -f`

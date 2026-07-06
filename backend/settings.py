@@ -281,6 +281,22 @@ def _load_tools() -> ToolsConfig:
 # with owner sign-off (docket D7, option B).
 _AUTONOMOUS_SAFE_CEILING: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
 
+# Hard ceilings on the sandbox resource caps (D8) — Python constants, NEVER YAML-overridable,
+# set to today's values. Config may only TIGHTEN a sandbox (LOWER these); a config edit that
+# RAISES any past its ceiling fails loud at load — no config can grant a sandboxed job more
+# memory/cpu/pids/tmpfs, a longer run, or a bigger output flood than is safe. They are NUMBERS,
+# not docker unit-strings, deliberately: a string ceiling ("1024m" <= "512m") is fail-OPEN.
+# (The sandbox's isolation STRUCTURE — network none / read-only / non-root / mounts / the
+# _ENABLE gate / the image — stays in code, never config-toggleable; not represented here.)
+_SANDBOX_CEILINGS: dict[str, float] = {
+    "sandbox_memory_mb": 512,
+    "sandbox_cpus": 1.0,
+    "sandbox_pids": 256,
+    "sandbox_tmpfs_mb": 64,
+    "sandbox_run_timeout_s": 60.0,
+    "sandbox_max_output_chars": 20000,
+}
+
 
 class SecurityConfig(BaseModel):
     """Security-authorization policy (`config/backend/security.yaml`). BACKEND-CONTROLLED and
@@ -290,6 +306,16 @@ class SecurityConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     autonomous_safe_permissions: frozenset[PermissionLevel]
+    # Sandbox resource caps — the six below are ceiling-bounded (config may only lower them).
+    sandbox_memory_mb: int = Field(gt=0)
+    sandbox_cpus: float = Field(gt=0.0)
+    sandbox_pids: int = Field(gt=0)
+    sandbox_tmpfs_mb: int = Field(gt=0)
+    sandbox_run_timeout_s: float = Field(gt=0.0)
+    sandbox_max_output_chars: int = Field(gt=0)
+    # Ops waits on the docker CLI (not the workload) — no security direction, no ceiling.
+    sandbox_create_timeout_s: float = Field(gt=0.0)
+    sandbox_teardown_timeout_s: float = Field(gt=0.0)
 
     @model_validator(mode="after")
     def _autonomous_within_ceiling(self) -> "SecurityConfig":
@@ -300,6 +326,16 @@ class SecurityConfig(BaseModel):
                 f"ceiling {sorted(p.value for p in _AUTONOMOUS_SAFE_CEILING)} (docket D7) — an "
                 "autonomous mission may never act beyond this without human approval"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _sandbox_caps_within_ceilings(self) -> "SecurityConfig":
+        for field, ceiling in _SANDBOX_CEILINGS.items():
+            if getattr(self, field) > ceiling:
+                raise ValueError(
+                    f"{field}={getattr(self, field)} exceeds the hard sandbox ceiling {ceiling} "
+                    "(docket D8) — config may only TIGHTEN the sandbox, never grant it more"
+                )
         return self
 
 
