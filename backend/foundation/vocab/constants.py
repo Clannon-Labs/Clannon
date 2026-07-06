@@ -186,18 +186,14 @@ FILTER_MAX_REVISIONS        = 2      # THE single output-filter recovery budget 
 
 # ---------------------------------------------------------------------------
 # MEMORY
-# Qdrant read/write/retrieve limits.
 # ---------------------------------------------------------------------------
+# The wired memory knobs (read/write timeout, search top-k, relevance floor, distill
+# retries) MOVED to config/backend/memory.yaml → settings.MEMORY.* (the D1 config-depth
+# move, owner ruling D1(a)); core/memory reads them from there now. Only these two
+# PLANNED-but-unwired values remain here (no consumer yet — nothing to externalize).
 
-MEMORY_READ_TIMEOUT_S       = 5.0
-MEMORY_WRITE_TIMEOUT_S      = 10.0   # hard deadline per proposal write (record_write_proposals); mirrors the read deadline
-MEMORY_SEARCH_TOP_K         = 10     # candidates fetched per inferred tier at hydration
-MEMORY_RELEVANCE_FLOOR      = 0.30   # drop hits below this raw cosine before ranking;
-                                     # conservative for nomic-768 (related text >~0.4),
-                                     # tunable — see docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md L3
 MEMORY_MAX_ENTRY_CHARS      = 10_000 # PLANNED — not yet wired (manager caps at its own _MAX_CONTENT_CHARS)
 MEMORY_WRITE_MAX_RETRIES    = 3      # PLANNED — not yet wired (record_write_proposals is not retry-bounded yet)
-MEMORY_DISTILL_MAX_RETRIES  = 2      # malformed-output retries for the background distillation agent (writer.py)
 
 
 # ---------------------------------------------------------------------------

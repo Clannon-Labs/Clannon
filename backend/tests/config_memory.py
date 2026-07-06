@@ -53,17 +53,15 @@ def test_memory_hydration_budget_folded_into_budget_config():
     assert settings.BUDGET.memory_chars_per_token == 4
 
 
-def test_d1_migrated_memory_knobs_equal_the_foundation_constants():
-    # The MEMORY_* group is migrating out of foundation/vocab/constants.py (D1). Until core/memory
-    # repoints + the foundation constants are removed, the config value MUST equal the constant —
-    # this locks behavior-preservation so the swap is a no-op.
-    import foundation.vocab.constants as c
+def test_d1_migrated_memory_knobs_are_present_and_at_todays_values():
+    # The MEMORY_* group finished migrating out of foundation/vocab/constants.py (D1) — the
+    # foundation constants are removed; settings.MEMORY is now the single source. Lock the values.
     m = settings.MEMORY
-    assert m.read_timeout_s == c.MEMORY_READ_TIMEOUT_S
-    assert m.write_timeout_s == c.MEMORY_WRITE_TIMEOUT_S
-    assert m.search_top_k == c.MEMORY_SEARCH_TOP_K
-    assert m.relevance_floor == c.MEMORY_RELEVANCE_FLOOR
-    assert m.distill_max_retries == c.MEMORY_DISTILL_MAX_RETRIES
+    assert m.read_timeout_s == 5.0
+    assert m.write_timeout_s == 10.0
+    assert m.search_top_k == 10
+    assert m.relevance_floor == 0.30
+    assert m.distill_max_retries == 2
 
 
 # ── the cross-field invariant (fail loud, not a silent doc note) ───────────────────────────
