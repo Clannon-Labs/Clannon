@@ -52,8 +52,8 @@ def test_pdf_render_is_bounded():
         pix.set_rect(pix.irect, (0, 0, 0))
         page.insert_image(fitz.Rect(10, 10, 30, 30), pixmap=pix)
     _texts, media = _run("big.pdf", "application/pdf", doc.tobytes())
-    from experts.media.preprocess import _MAX_PDF_RENDER_PAGES
-    assert 0 < len(media) <= _MAX_PDF_RENDER_PAGES   # capped, never one-per-page unbounded
+    import settings
+    assert 0 < len(media) <= settings.EXPERTS.max_pdf_render_pages   # capped, never one-per-page unbounded
 
 
 def test_image_passes_through_at_full_resolution():

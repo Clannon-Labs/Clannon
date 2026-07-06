@@ -28,14 +28,12 @@ import subprocess
 import tempfile
 import threading
 
+import settings
 from foundation import get_root
 
-# PDF: how much text to inline, and how many pages to render (visual content) and at what
-# resolution. 150 DPI keeps small details legible without ballooning the request.
-_MAX_DOC_CHARS = 50_000
-_MIN_PDF_TEXT = 50              # below this the PDF is effectively scanned -> render it
-_PDF_RENDER_DPI = 150
-_MAX_PDF_RENDER_PAGES = 8       # cap rendered pages so a long PDF can't explode the request
+# PDF/transcript/video bounds live in config/backend/experts.yaml (settings.EXPERTS) —
+# see there for values + rationale. Only the env-driven deployment paths below stay
+# module constants (not product dials).
 
 # Audio/video: transcribe with faster-whisper (CTranslate2 — fast, low-memory on CPU) and
 # sample video frames with ffmpeg, so any model can understand them and a run survives the
@@ -54,10 +52,6 @@ _MAX_PDF_RENDER_PAGES = 8       # cap rendered pages so a long PDF can't explode
 # this without reading faster_whisper's internals.
 _WHISPER_MODEL = os.getenv("VRAKSHA_WHISPER_MODEL", "base")    # tiny/base/small/medium/large-v3
 _WHISPER_CACHE = os.getenv("VRAKSHA_WHISPER_CACHE") or str(get_root() / "assets" / "whisper_cache")
-_MAX_TRANSCRIPT_CHARS = 50_000
-_VIDEO_FRAME_EVERY_S = 5        # sample one frame every N seconds of video
-_MAX_VIDEO_FRAMES = 8           # cap frames so a long video can't explode the request
-_FFMPEG_TIMEOUT_S = 90         # bound ffmpeg work
 _MEDIA_TMP = os.getenv("VRAKSHA_MEDIA_TMP") or None   # temp dir for av decode (None = system tmp)
 
 _whisper = None
@@ -82,11 +76,11 @@ def _pdf_sync(data: bytes) -> tuple[str, list[bytes]]:
             # render a page when it carries raster images (charts/photos) or when the
             # document has no extractable text at all (scanned) — bounded by the cap
             wants_render = bool(page.get_images()) or not text
-            if wants_render and len(pages_png) < _MAX_PDF_RENDER_PAGES:
-                pages_png.append(page.get_pixmap(dpi=_PDF_RENDER_DPI).tobytes("png"))
-            if total >= _MAX_DOC_CHARS:
+            if wants_render and len(pages_png) < settings.EXPERTS.max_pdf_render_pages:
+                pages_png.append(page.get_pixmap(dpi=settings.EXPERTS.pdf_render_dpi).tobytes("png"))
+            if total >= settings.EXPERTS.max_doc_chars:
                 break
-    return "\n\n".join(texts)[:_MAX_DOC_CHARS], pages_png
+    return "\n\n".join(texts)[:settings.EXPERTS.max_doc_chars], pages_png
 
 
 async def _pdf(data: bytes) -> tuple[list[str], list[tuple[bytes, str]]]:
@@ -94,7 +88,7 @@ async def _pdf(data: bytes) -> tuple[list[str], list[tuple[bytes, str]]]:
         text, pages = await asyncio.to_thread(_pdf_sync, data)
     except Exception:  # noqa: BLE001 — PyMuPDF couldn't parse it
         text, pages = "", []
-    texts = [text] if len(text) >= _MIN_PDF_TEXT else []
+    texts = [text] if len(text) >= settings.EXPERTS.min_pdf_text_chars else []
     media = [(png, "image/png") for png in pages]
     if not texts and not media:
         # we extracted nothing locally (encrypted/odd/empty PDF) — don't drop it; hand the
@@ -121,7 +115,7 @@ def _get_whisper():
 
 def _transcribe(path: str) -> str:
     segments, _info = _get_whisper().transcribe(path, vad_filter=True)
-    return " ".join(s.text.strip() for s in segments).strip()[:_MAX_TRANSCRIPT_CHARS]
+    return " ".join(s.text.strip() for s in segments).strip()[:settings.EXPERTS.max_transcript_chars]
 
 
 def _audio_sync(data: bytes, suffix: str) -> str:
@@ -161,15 +155,16 @@ def _video_sync(data: bytes, suffix: str) -> tuple[str, list[bytes]]:
         # audio track -> mono 16k wav -> transcript (best-effort: a silent video has none)
         wav = os.path.join(work, "audio.wav")
         subprocess.run([ffmpeg, "-nostdin", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav],
-                       capture_output=True, timeout=_FFMPEG_TIMEOUT_S)
+                       capture_output=True, timeout=settings.EXPERTS.ffmpeg_timeout_s)
         transcript = _transcribe(wav) if os.path.exists(wav) and os.path.getsize(wav) > 0 else ""
 
         # one frame every N seconds, capped, for the model to SEE
-        subprocess.run([ffmpeg, "-nostdin", "-y", "-i", src, "-vf", f"fps=1/{_VIDEO_FRAME_EVERY_S}",
-                        "-frames:v", str(_MAX_VIDEO_FRAMES), os.path.join(work, "f_%03d.png")],
-                       capture_output=True, timeout=_FFMPEG_TIMEOUT_S)
+        subprocess.run([ffmpeg, "-nostdin", "-y", "-i", src, "-vf",
+                        f"fps=1/{settings.EXPERTS.video_frame_every_s}",
+                        "-frames:v", str(settings.EXPERTS.max_video_frames), os.path.join(work, "f_%03d.png")],
+                       capture_output=True, timeout=settings.EXPERTS.ffmpeg_timeout_s)
         frames: list[bytes] = []
-        for i in range(1, _MAX_VIDEO_FRAMES + 1):
+        for i in range(1, settings.EXPERTS.max_video_frames + 1):
             fp = os.path.join(work, f"f_{i:03d}.png")
             if os.path.exists(fp):
                 with open(fp, "rb") as fh:

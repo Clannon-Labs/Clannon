@@ -21,6 +21,7 @@ import mimetypes
 
 from pydantic import BaseModel, Field
 
+import settings
 from foundation import PermissionLevel
 
 from registry import expert
@@ -76,9 +77,9 @@ class MediaExpert:
 
 
 # media rides INLINE in the request; a single file past the provider's inline limit
-# would 400 the call, so we skip it (and report it) instead of failing the run. A
-# File-API upload path for big files is a later enhancement.
-_INLINE_LIMIT_BYTES = 15 * 1024 * 1024
+# (settings.EXPERTS.media_inline_limit_bytes) would 400 the call, so we skip it (and
+# report it) instead of failing the run. A File-API upload path for big files is a
+# later enhancement.
 
 
 def _nothing_attached() -> ExpertOutput:
@@ -105,7 +106,7 @@ def _task(args: MediaIn, docs: list[tuple[str, str]], oversized: list[tuple[str,
         )
     if oversized:
         listing = ", ".join(f"{name} (~{size // (1024 * 1024)} MB)" for name, size in oversized)
-        limit_mb = _INLINE_LIMIT_BYTES // (1024 * 1024)
+        limit_mb = settings.EXPERTS.media_inline_limit_bytes // (1024 * 1024)
         task += (
             f"\n\nNOTE: these attached files were too large to analyze inline and were NOT "
             f"included: {listing}. The inline limit is about {limit_mb} MB. Say this plainly in "
@@ -172,7 +173,7 @@ async def _gather(
             data = await workspace.read_bytes(name)
         except Exception:  # noqa: BLE001 — a single unreadable file must not sink the run
             continue
-        if len(data) > _INLINE_LIMIT_BYTES:
+        if len(data) > settings.EXPERTS.media_inline_limit_bytes:
             oversized.append((name, len(data)))
             continue
         # local preprocessing turns the file into model-ready inputs: extracted/transcribed

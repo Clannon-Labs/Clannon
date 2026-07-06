@@ -106,7 +106,10 @@ def test_media_extracts_a_text_pdf_locally_no_model_image_call():
 
 def test_media_skips_and_reports_oversized_files(monkeypatch):
     import experts.media.expert as me
-    monkeypatch.setattr(me, "_INLINE_LIMIT_BYTES", 8)            # tiny cap for the test
+    import settings
+    # tiny cap for the test -- settings.EXPERTS is a frozen pydantic model, so
+    # replace the module attribute with a copy carrying the one overridden field
+    monkeypatch.setattr(settings, "EXPERTS", settings.EXPERTS.model_copy(update={"media_inline_limit_bytes": 8}))
     ws = _WS({"small.png": b"PNG", "big.mp4": b"x" * 64})        # big.mp4 exceeds 8 bytes
     media, docs, oversized = asyncio.run(_gather(_env(ws, ["small.png", "big.mp4"])))
     assert [m for _, m in media] == ["image/png"]               # small one included

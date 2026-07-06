@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+import settings
 from foundation import ExpertCallRecord, PermissionLevel, ToolCallRecord, VrakshaContext, constants
 
 from .. import CapabilityKind, registry as default_registry
@@ -26,10 +27,6 @@ from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
 from .sandbox import DockerWorkspace
 from .support import ExpertEnv, ScopedToolbox, SkillBook
 from .tools import MemorySearcher
-
-_MAX_ARTIFACTS = 20                       # max output artifacts captured per expert run
-_MAX_ARTIFACT_BYTES = 10 * 1024 * 1024    # 10 MB cap per artifact
-_NEED_CONTEXT_MAX_ITEMS = 5               # cap per need-context recall so one request can't flood an expert's context
 
 
 class ExpertHandler:
@@ -172,7 +169,7 @@ class ExpertHandler:
         async def broker(query: str) -> str:
             started = time.monotonic()
             pkg = await MemorySearcher(ctx).search(query)
-            fresh = [i for i in pkg.items if i.content not in already][:_NEED_CONTEXT_MAX_ITEMS]
+            fresh = [i for i in pkg.items if i.content not in already][:settings.EXPERTS.need_context_max_items]
             ctx.tool_calls.append(ToolCallRecord(
                 tool_name="memory.need_context",
                 arguments={"query": query},
@@ -234,12 +231,12 @@ class ExpertHandler:
             from core.artifacts import LocalArtifactStore
             store = self._artifacts = LocalArtifactStore()
         refs: list[dict] = []
-        for path in paths[:_MAX_ARTIFACTS]:
+        for path in paths[:settings.EXPERTS.max_artifacts]:
             try:
                 data = await env.workspace.read_bytes(path)
             except Exception:  # noqa: BLE001 — designated file missing/unreadable -> skip
                 continue
-            if len(data) > _MAX_ARTIFACT_BYTES:
+            if len(data) > settings.EXPERTS.max_artifact_bytes:
                 continue
             try:
                 name = str(path).replace("\\", "/").split("/")[-1]
