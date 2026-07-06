@@ -139,16 +139,49 @@ def test_signal_is_advisory_evidence_not_a_command():
 
 
 def test_scorer_is_unwired():
-    """Guard: the scorer must not be imported by the live loop/gateway — it exists to be
-    consumed LATER as one signal, never auto-firing. If this fails, someone wired it;
-    that needs a proposal first (the locked advisory-only ruling)."""
+    """Guard: the scorer must not be imported by the live loop/gateway/batch tier — it
+    exists to be consumed LATER as one signal, never auto-firing. Includes batches.py
+    (the batch-orchestrator mechanism, built after this test's expert-tier siblings) so
+    the same guard holds at BOTH tiers, not just the one that existed when this test was
+    first written. If this fails, someone wired it; that needs a proposal first (the
+    locked advisory-only ruling)."""
     import core.orchestrator.loop as loop_mod
+    import registry.capabilities.handler.batches as batches_mod
     import registry.capabilities.handler.capability as cap_mod
 
-    for mod in (loop_mod, cap_mod):
+    for mod in (loop_mod, cap_mod, batches_mod):
         src = mod.__file__
         with open(src, encoding="utf-8") as fh:
             text = fh.read()
         assert "routing" not in text and "score_routing" not in text, (
             f"{src} references the routing scorer — it must stay UNWIRED (propose first)"
         )
+
+
+# ─── the scorer applies at the batch tier too (no new production code needed) ──
+
+def test_scorer_applies_equally_to_batch_domains():
+    """score_routing() is domain-agnostic: nothing in it assumes "domain" means
+    "expert" — it takes whatever labeled centroids a caller hands it. Proves it
+    produces the same well-formed advisory evidence over BATCH-level domains
+    (batch-orchestrator design v2 groupings: engineering/research/media, mirroring
+    BatchDefinition's per-domain scoping) as it does over expert domains above —
+    so a future batch-tier consumer needs no new math, only a proposal to wire it
+    (per the HARD RULE, still unwired today per test_scorer_is_unwired)."""
+    batch_domains = [
+        ("engineering", [1.0, 0.0, 0.0]),
+        ("research", [0.0, 1.0, 0.0]),
+        ("media", [0.0, 0.0, 1.0]),
+    ]
+    focused = score_routing([1.0, 0.0, 0.0], batch_domains)
+    assert focused.top_domain == "engineering"
+    assert focused.entropy < 0.34
+
+    dispersed = score_routing([1.0, 1.0, 1.0], batch_domains)
+    assert dispersed.entropy > 0.9
+    assert "dispersed" in dispersed.note
+
+    # same advisory framing holds regardless of what the domains represent
+    assert "advisory" in focused.note.lower()
+    fields = set(RoutingSignal.model_fields)
+    assert not (fields & {"spawn_count", "spawn_batch", "route_to"})
