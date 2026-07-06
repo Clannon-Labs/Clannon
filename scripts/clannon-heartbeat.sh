@@ -82,15 +82,35 @@ if [ "$SIDE" = "backend" ]; then
     [ -e "$HANDLED" ] || need="$need $peer"
   done
 
+  # ROBUST COMMS (owner: NO proposal ever ignored). A pending proposal or owner reply sitting
+  # in to-backend/ is unhandled work — nudge for it REGARDLESS of specialist-idle state, so a
+  # MISSED proposal-wake (a systemd hiccup, or the coordinator was mid-turn when the path unit
+  # fired and the keystroke didn't land) self-heals within one poll (~2 min) instead of waiting
+  # for the fallback. Coordinator-busy is already skipped above, so this can't spam a working
+  # coordinator; once the proposal is handled+archived it's gone, so it can't spam an idle one.
+  pending=""
+  for f in "$ROOT"/proposals/to-backend/*.md; do
+    [ -e "$f" ] || continue
+    b="$(basename "$f")"
+    case "$b" in CENTRAL_CONFIG.md|PHASE_BATCH_REDIS.md) continue ;; esac   # permanent owner briefs
+    case "$(printf '%s' "$b" | tr '[:upper:]' '[:lower:]')" in reply*) pending="$b"; break ;; esac
+    if grep -qiE '^Status:[[:space:]]*pending([[:space:]]|$)' "$f"; then pending="$b"; break; fi
+  done
+
+  reason=""
   if [ -n "$need" ]; then
-    # A specialist just became sustained-idle and hasn't been considered yet — nudge the
-    # coordinator to check it (and any other idle peer) for assignable INDEPENDENT work.
+    # A specialist became sustained-idle and hasn't been considered yet.
     for p in $idle_now; do : > "/tmp/clannon-hb-$p.handled"; done
-    log "sustained-idle + unconsidered:$need (idle now:$idle_now) — nudging coordinator"
+    reason="idle:$need"
+  fi
+  [ -n "$pending" ] && reason="${reason:+$reason }pending-proposal:$pending"
+
+  if [ -n "$reason" ]; then
+    log "nudging coordinator — $reason (idle now:${idle_now:- none})"
   elif [ "$since" -ge "$FALLBACK_S" ]; then
-    log "fallback nudge — nothing newly idle but ${since}s since last (safety net)"
+    log "fallback nudge — nothing newly idle/pending but ${since}s since last (safety net)"
   else
-    log "skip — nothing newly idle (idle now:${idle_now:- none})"
+    log "skip — nothing newly idle, no pending proposal"
     exit 0
   fi
   echo "$now" > "$LAST_PING"
