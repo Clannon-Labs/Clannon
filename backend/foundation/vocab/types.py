@@ -201,3 +201,22 @@ class MemoryKind(str, Enum):
     ASSUMPTION  = "assumption"   # inferred / provisional; may be revised
     DECISION    = "decision"     # institutional decision record (CB4); asserted, but
                                  # append-only — supersede, never dedup-overwrite
+
+
+# ---------------------------------------------------------------------------
+# Batch lifecycle (batch architecture — the control-plane status axis)
+# Used by: the BatchAwarenessPort contract + its core/memory implementer
+# ---------------------------------------------------------------------------
+
+class BatchLifecycleStatus(str, Enum):
+    """A batch orchestrator's current status, for the cross-batch awareness slice.
+
+    This is CONTROL-PLANE state (where a batch is in its lifecycle), a deliberately
+    separate axis from `MemoryKind` (which is epistemic — what a stored fact IS). That
+    separation is why batch awareness rides its OWN `BatchAwarenessPort`, not `MemoryPort`
+    (ratified 2026-07-05). A quiet BLOCKED/FAILED batch is the high-signal case the slice
+    exists to surface, so it must survive truncation over a wave of ACTIVE ones."""
+    ACTIVE  = "active"
+    BLOCKED = "blocked"
+    DONE    = "done"
+    FAILED  = "failed"

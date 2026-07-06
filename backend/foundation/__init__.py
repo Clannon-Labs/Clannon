@@ -42,6 +42,11 @@ from .contracts.budget import (
     BudgetReservation,
     BudgetPort,
 )
+from .contracts.batch_awareness import (
+    BatchAwarenessItem,
+    CrossBatchAwareness,
+    BatchAwarenessPort,
+)
 from .contracts.workspace import RunResult, WorkspacePort
 from .contracts.artifact import ArtifactRef, ArtifactStore
 from .contracts.input_file import InputFile
@@ -94,6 +99,7 @@ from .vocab.types import (
     MemoryStore,
     MemoryKind,
     Origin,
+    BatchLifecycleStatus,
 )
 from .vocab import constants
 
@@ -121,6 +127,10 @@ __all__ = [
     "TokenBudget",
     "BudgetReservation",
     "BudgetPort",
+    "BatchLifecycleStatus",
+    "BatchAwarenessItem",
+    "CrossBatchAwareness",
+    "BatchAwarenessPort",
     "RunResult",
     "WorkspacePort",
     "ArtifactRef",
