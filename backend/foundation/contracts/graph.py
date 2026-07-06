@@ -141,6 +141,19 @@ class GraphPort(Protocol):
         before that would break the sole implementer's `isinstance(GraphPort)` check."""
         ...
 
+    async def members(
+        self, scope: GraphScope, label: NodeLabel, *, parent_id: str = ""
+    ) -> GraphResult:
+        """BULK read: every node of `label` in scope — the Mission Engine's "all tasks for
+        mission X". `parent_id` is an OPTIONAL property filter AND-ed under the scope (for
+        TASK it is the `mission_id`; "" = no parent filter, every node of the label in scope).
+        Unlike `lookup()`, a bare `label` here IS a bulk read — this is the one place that
+        walks all nodes of a kind. Fail-closed on a missing scope, degrade-never-fail on a
+        store fault, and empty (not degraded) for a label with no bulk backing. Landed on
+        `GraphManager` first (a superset of this Protocol) so this declaration keeps the sole
+        implementer's `isinstance(GraphPort)` check green."""
+        ...
+
     async def write(
         self, scope: GraphScope, nodes: list[GraphNode], edges: list[GraphEdge]
     ) -> GraphResult:
