@@ -32,3 +32,37 @@ sandbox_run_timeout_s: 60.0       # ceiling 60 — max wall-clock for the sandbo
 sandbox_max_output_chars: 20000   # ceiling 20000 — captured stdout/stderr cap (flood defense)
 sandbox_create_timeout_s: 180.0   # no ceiling — ops wait on `docker create`
 sandbox_teardown_timeout_s: 20.0  # no ceiling — ops wait on `docker rm -f`
+
+# ── SANITIZER (security/sanitizers/) — plain D1 move, no ceiling ──────────────────────────────
+sanitizer_timeout_total_s: 15.0   # all workers combined must finish within this. > 0
+sanitizer_timeout_worker_s: 10.0  # single worker timeout (text/pdf/image/…). > 0
+sanitizer_max_workers: 10         # global semaphore — max concurrent workers. > 0
+
+# ── FILTER (security/filter/) — retry budget (plain D1) ───────────────────────────────────────
+filter_max_retries: 2             # retries on malformed filter output before ERROR. >= 0
+
+# ── PII REDACTION (D8, FLOORED) — the Presidio entity allow-list. Config may only ADD entities,
+# never drop one below this baseline (dropping one silently stops redacting a real PII category).
+pii_redacted_entities:
+  - EMAIL_ADDRESS
+  - PHONE_NUMBER
+  - CREDIT_CARD
+  - IBAN_CODE
+  - US_BANK_NUMBER
+  - US_SSN
+  - US_ITIN
+  - US_PASSPORT
+  - US_DRIVER_LICENSE
+  - UK_NHS
+  - MEDICAL_LICENSE
+  - CRYPTO
+  - IP_ADDRESS
+
+# ── FILTER GROUNDING WINDOW (D8, FLOORED + CEILINGED) — evidence the filter's groundedness
+# sub-check sees. Config may WIDEN (up to 4× — accuracy) but never NARROW below today (narrower
+# ⇒ over-blocks legitimate reports, the documented regression) nor exceed the ceiling (per-turn
+# filter token-cost / DoS guard). Each lives in [today, 4×today].
+filter_grounding_max_findings: 8            # floor 8, ceiling 32
+filter_grounding_max_finding_chars: 1500    # floor 1500, ceiling 6000
+filter_grounding_max_tool_calls: 12         # floor 12, ceiling 48
+filter_grounding_max_tool_result_chars: 1200 # floor 1200, ceiling 4800

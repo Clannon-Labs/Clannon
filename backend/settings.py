@@ -339,6 +339,25 @@ _SANDBOX_CEILINGS: dict[str, float] = {
     "sandbox_max_output_chars": 20000,
 }
 
+# D8 PII floor — config's Presidio entity allow-list may only ADD to this baseline, never drop
+# an entity (dropping one silently stops redacting a real PII category). Python constant, not YAML.
+_PII_BASELINE_ENTITIES: frozenset[str] = frozenset({
+    "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE", "US_BANK_NUMBER",
+    "US_SSN", "US_ITIN", "US_PASSPORT", "US_DRIVER_LICENSE", "UK_NHS",
+    "MEDICAL_LICENSE", "CRYPTO", "IP_ADDRESS",
+})
+
+# D8 filter-grounding bounds — config may WIDEN the filter's grounding window (accuracy) but never
+# NARROW below today (over-blocks legit reports — the documented regression) nor exceed the ceiling
+# (per-turn filter token-cost / DoS guard). Ceiling = 4× the floor. Python constants, not YAML.
+_FILTER_GROUNDING_FLOORS: dict[str, int] = {
+    "filter_grounding_max_findings": 8,
+    "filter_grounding_max_finding_chars": 1500,
+    "filter_grounding_max_tool_calls": 12,
+    "filter_grounding_max_tool_result_chars": 1200,
+}
+_FILTER_GROUNDING_CEILINGS: dict[str, int] = {k: v * 4 for k, v in _FILTER_GROUNDING_FLOORS.items()}
+
 
 class SecurityConfig(BaseModel):
     """Security-authorization policy (`config/backend/security.yaml`). BACKEND-CONTROLLED and
@@ -358,6 +377,44 @@ class SecurityConfig(BaseModel):
     # Ops waits on the docker CLI (not the workload) — no security direction, no ceiling.
     sandbox_create_timeout_s: float = Field(gt=0.0)
     sandbox_teardown_timeout_s: float = Field(gt=0.0)
+    # Sanitizer + filter-retry — plain D1, no floor/ceiling.
+    sanitizer_timeout_total_s: float = Field(gt=0.0)
+    sanitizer_timeout_worker_s: float = Field(gt=0.0)
+    sanitizer_max_workers: int = Field(gt=0)
+    filter_max_retries: int = Field(ge=0)
+    # PII redaction allow-list — floored (add-only).
+    pii_redacted_entities: list[str]
+    # Filter grounding window — floored + ceilinged.
+    filter_grounding_max_findings: int = Field(gt=0)
+    filter_grounding_max_finding_chars: int = Field(gt=0)
+    filter_grounding_max_tool_calls: int = Field(gt=0)
+    filter_grounding_max_tool_result_chars: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _pii_entities_meet_floor(self) -> "SecurityConfig":
+        missing = _PII_BASELINE_ENTITIES - set(self.pii_redacted_entities)
+        if missing:
+            raise ValueError(
+                f"pii_redacted_entities is missing baseline entities {sorted(missing)} (docket D8) "
+                "— config may only ADD to the redaction set, never drop below the safe baseline"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _filter_grounding_within_bounds(self) -> "SecurityConfig":
+        for field, floor in _FILTER_GROUNDING_FLOORS.items():
+            val, ceiling = getattr(self, field), _FILTER_GROUNDING_CEILINGS[field]
+            if val < floor:
+                raise ValueError(
+                    f"{field}={val} is below the hard floor {floor} (docket D8) — config may only "
+                    "WIDEN the filter's grounding window, never narrow it below the baseline"
+                )
+            if val > ceiling:
+                raise ValueError(
+                    f"{field}={val} exceeds the hard ceiling {ceiling} (docket D8, 4× floor) — a "
+                    "config edit can't blow up per-turn filter token cost unboundedly"
+                )
+        return self
 
     @model_validator(mode="after")
     def _autonomous_within_ceiling(self) -> "SecurityConfig":

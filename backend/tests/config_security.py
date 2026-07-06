@@ -22,8 +22,46 @@ def _kw(**over):
         sandbox_memory_mb=512, sandbox_cpus=1.0, sandbox_pids=256, sandbox_tmpfs_mb=64,
         sandbox_run_timeout_s=60.0, sandbox_max_output_chars=20000,
         sandbox_create_timeout_s=180.0, sandbox_teardown_timeout_s=20.0,
+        sanitizer_timeout_total_s=15.0, sanitizer_timeout_worker_s=10.0, sanitizer_max_workers=10,
+        filter_max_retries=2,
+        pii_redacted_entities=[
+            "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE", "US_BANK_NUMBER",
+            "US_SSN", "US_ITIN", "US_PASSPORT", "US_DRIVER_LICENSE", "UK_NHS",
+            "MEDICAL_LICENSE", "CRYPTO", "IP_ADDRESS",
+        ],
+        filter_grounding_max_findings=8, filter_grounding_max_finding_chars=1500,
+        filter_grounding_max_tool_calls=12, filter_grounding_max_tool_result_chars=1200,
     )
     return {**base, **over}
+
+
+# ── D8 security config: PII floor + filter grounding floor/ceiling ──────────────────────────────
+
+def test_pii_config_can_add_but_not_drop_a_baseline_entity():
+    from settings import SecurityConfig
+    # adding one is fine
+    SecurityConfig(**_kw(pii_redacted_entities=_kw()["pii_redacted_entities"] + ["LOCATION"]))
+    # dropping a baseline entity fails loud
+    dropped = [e for e in _kw()["pii_redacted_entities"] if e != "US_SSN"]
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(pii_redacted_entities=dropped))
+
+
+def test_filter_grounding_may_widen_within_ceiling_but_not_narrow_or_blow_up():
+    from settings import SecurityConfig
+    SecurityConfig(**_kw(filter_grounding_max_findings=16))   # widen (<=32) ok
+    SecurityConfig(**_kw(filter_grounding_max_findings=32))   # ceiling ok
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(filter_grounding_max_findings=4))    # below floor 8
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(filter_grounding_max_findings=33))   # above ceiling 32
+
+
+def test_security_config_d8_values_loaded():
+    s = settings.SECURITY
+    assert s.sanitizer_max_workers == 10 and s.filter_max_retries == 2
+    assert "US_SSN" in s.pii_redacted_entities
+    assert s.filter_grounding_max_findings == 8
 
 
 # ── D7 autonomous-action ceiling ────────────────────────────────────────────────────────────
