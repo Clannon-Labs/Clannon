@@ -275,11 +275,15 @@ class VrakshaContext:
                                               # mission_id) and cross-batch awareness — from ctx
                                               # only, never model output (identity-set-once): a
                                               # batch or a budget can't forge which mission it's in.
-    batch_id: str = ""                        # set once per spawn_batch invocation ("" for the
-                                              # central orchestrator's own ctx). Per-INVOCATION
-                                              # (uuid), not per-domain, so two concurrent same-
-                                              # domain batches don't clobber each other's awareness
-                                              # status row. Server-minted, never model-supplied.
+    batch_id: str = ""                        # RESERVED for the Mission-Engine loop-wiring track;
+                                              # spawn_batch does NOT write it here. It keeps batch_id
+                                              # a LOCAL var precisely because scoped_to() reuses THIS
+                                              # ctx object (no copy) and _BATCH_MAX_CONCURRENT lets
+                                              # batches run concurrently — assigning it onto shared
+                                              # ctx would race, the very clobber the per-invocation
+                                              # (uuid, not per-domain) id prevents one level down in
+                                              # the store. Server-minted, never model-supplied.
+                                              # "" = central orchestrator's own ctx / no batch.
 
     orchestrator_response: Any | None = None  # foundation.OrchestratorResponse
                                               # raw response before output filtering
