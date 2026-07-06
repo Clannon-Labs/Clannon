@@ -45,9 +45,9 @@ def test_retries_transient_then_succeeds(monkeypatch):
 
 def test_exhausts_budget_and_reraises_last_transient(monkeypatch):
     _no_sleep(monkeypatch)
-    from foundation import constants
-    # budget = LLM_TRANSIENT_MAX_RETRIES + 1 attempts, all 503
-    attempts = constants.LLM_TRANSIENT_MAX_RETRIES + 1
+    import settings
+    # budget = transient_max_retries + 1 attempts, all 503
+    attempts = settings.LLM.transient_max_retries + 1
     agent = FakeAgent([_503() for _ in range(attempts)])
 
     try:
@@ -111,7 +111,7 @@ def test_fallback_chain_exhaustion_with_rate_limit_is_retried(monkeypatch):
 
 def test_fallback_chain_exhaustion_is_capped_not_full_budget(monkeypatch):
     _no_sleep(monkeypatch)
-    from foundation import constants
+    import settings
     # every attempt exhausts the WHOLE chain (all rate-limited). The wrapper must not
     # spend the full single-model budget re-running the chain (that multiplies latency by
     # the chain length and spins to the expert timeout) — it caps whole-chain re-runs and
@@ -120,14 +120,14 @@ def test_fallback_chain_exhaustion_is_capped_not_full_budget(monkeypatch):
         return ExceptionGroup("All models failed", [
             ModelHTTPError(status_code=429, model_name="google:gemini-2.5-flash", body=None),
         ])
-    agent = FakeAgent([group() for _ in range(constants.LLM_TRANSIENT_MAX_RETRIES + 1)])
+    agent = FakeAgent([group() for _ in range(settings.LLM.transient_max_retries + 1)])
     try:
         asyncio.run(run_agent(agent, "prompt"))
         assert False, "should raise after the capped chain retries"
     except ExceptionGroup:
         pass
-    # first attempt + LLM_FALLBACK_MAX_RETRIES re-runs, NOT the full transient budget
-    assert agent.calls == constants.LLM_FALLBACK_MAX_RETRIES + 1
+    # first attempt + fallback_max_retries re-runs, NOT the full transient budget
+    assert agent.calls == settings.LLM.fallback_max_retries + 1
 
 
 def test_fallback_chain_exhaustion_all_permanent_not_retried(monkeypatch):

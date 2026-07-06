@@ -296,6 +296,25 @@ def _load_tools() -> ToolsConfig:
         raise RuntimeError(f"config/backend/tools.yaml is invalid:\n{exc}") from exc
 
 
+class LlmConfig(BaseModel):
+    """LLM retry/backoff bounds (`config/backend/llm.yaml`) — the `core/llm/retry.py` choke point."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    transient_max_retries: int = Field(ge=0)
+    fallback_max_retries: int = Field(ge=0)
+    retry_base_delay_s: float = Field(gt=0.0)
+    retry_max_delay_s: float = Field(gt=0.0)
+
+
+def _load_llm() -> LlmConfig:
+    raw = _load_mapping("backend/llm.yaml")
+    try:
+        return LlmConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/llm.yaml is invalid:\n{exc}") from exc
+
+
 # The HARD ceiling on autonomous-action permissions (D7) — a Python constant, NEVER
 # YAML-overridable. This is the actual "floor" the owner required: no config edit, however
 # malformed or hostile, can let an autonomous mission act above this set without human
@@ -376,6 +395,7 @@ MEMORY: MemoryConfig = _load_memory()
 ORCHESTRATOR: OrchestratorConfig = _load_orchestrator()
 EXPERTS: ExpertsConfig = _load_experts()
 TOOLS: ToolsConfig = _load_tools()
+LLM: LlmConfig = _load_llm()
 SECURITY: SecurityConfig = _load_security()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
@@ -389,5 +409,6 @@ __all__ = [
     "ORCHESTRATOR", "OrchestratorConfig",
     "EXPERTS", "ExpertsConfig",
     "TOOLS", "ToolsConfig",
+    "LLM", "LlmConfig",
     "SECURITY", "SecurityConfig",
 ]

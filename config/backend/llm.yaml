@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/llm.yaml — LLM retry/backoff bounds (core/llm/retry.py).
+# BACKEND-CONTROLLED. Migrated out of foundation/vocab/constants.py (D1 move,
+# owner ruling D1(a)). Behavior-preserving: every value == today's constant.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Extra attempts after the first, on a SINGLE-model transient error (429/503 blip).
+# Kept LOW on purpose: sustained rate-limits are handled by ROTATING providers in the
+# FallbackModel chain, not by one model backing off — 2 (~2+4s) rides out a blip then
+# rotates. Unit: retries. Safe range: >= 0.
+transient_max_retries: 2
+
+# Extra whole-chain re-runs when a FallbackModel exhausts EVERY provider. Capped hard
+# (1) — each re-run costs N provider attempts, so fail fast to graceful degradation
+# rather than spinning to the expert/orchestrator timeout. Unit: retries. Safe range: >= 0.
+fallback_max_retries: 1
+
+# First backoff delay; doubles each retry. Unit: seconds. Safe range: > 0.
+retry_base_delay_s: 2.0
+
+# Per-attempt backoff cap (guards a future raise of transient_max_retries from running
+# away). Unit: seconds. Safe range: > 0.
+retry_max_delay_s: 30.0

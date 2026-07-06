@@ -22,6 +22,7 @@ from typing import Any
 from pydantic_ai import Agent
 
 from foundation import constants
+import settings
 
 from . import usage
 from .failures import is_transient as _is_transient
@@ -36,14 +37,14 @@ async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:
     attempts. Any non-transient error raises immediately; an exhausted budget
     re-raises the last transient error so the caller fails closed.
     """
-    attempts = constants.LLM_TRANSIENT_MAX_RETRIES + 1
-    delay = constants.LLM_RETRY_BASE_DELAY_S
+    attempts = settings.LLM.transient_max_retries + 1
+    delay = settings.LLM.retry_base_delay_s
     # A FallbackModel that exhausts its chain already tried EVERY provider this round.
     # Re-running the whole chain on the full retry budget multiplies latency by the chain
     # length (N providers per attempt) for little gain — if every provider is rate-limited
     # now, a few seconds of backoff won't clear it. So cap whole-chain re-runs hard and let
     # the run fail fast into graceful degradation instead of spinning to the expert timeout.
-    chain_retries_left = constants.LLM_FALLBACK_MAX_RETRIES
+    chain_retries_left = settings.LLM.fallback_max_retries
 
     for attempt in range(attempts):
         try:
@@ -58,5 +59,5 @@ async def run_agent(agent: Agent[Any, Any], *args: Any, **kwargs: Any) -> Any:
                 if chain_retries_left <= 0:
                     raise
                 chain_retries_left -= 1
-            await asyncio.sleep(min(delay, constants.LLM_RETRY_MAX_DELAY_S))
+            await asyncio.sleep(min(delay, settings.LLM.retry_max_delay_s))
             delay *= 2

@@ -101,27 +101,11 @@ VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
 
 
 # ---------------------------------------------------------------------------
-# LLM TRANSIENT RETRY (shared by every model-calling stage)
-# Distinct from the *_MAX_RETRIES above: those re-run on malformed *output*
-# inside PydanticAI. These add bounded exponential backoff around transient
-# *provider* failures (HTTP 429/5xx, connection drops, timeouts) so a momentary
-# demand spike does not turn a legitimate request into a hard error. Retries are
-# bounded; on exhaustion the original error is re-raised so callers fail closed.
+# LLM TRANSIENT RETRY — MOVED to config/backend/llm.yaml → settings.LLM.* (D1 move,
+# owner ruling D1(a)); core/llm/retry.py reads them from there now. Bounded exponential
+# backoff around transient provider failures (429/5xx/drops) so a demand spike doesn't
+# turn a legitimate request into a hard error; on exhaustion the error re-raises (fail-closed).
 # ---------------------------------------------------------------------------
-
-LLM_TRANSIENT_MAX_RETRIES   = 2      # extra attempts after the first, on a SINGLE-model transient error.
-                                     # Was 4 (2+4+8+16s ~= 30s of backoff) — a real interactive latency
-                                     # blow-up nested inside the expert/orchestrator loops (W9). Sustained
-                                     # rate-limits are handled by ROTATING providers/keys in the
-                                     # FallbackModel chain, not by a single model backing off for 30s, so
-                                     # 2 (2+4s ~= 6s) rides out a brief 429/503 blip and then rotates.
-LLM_FALLBACK_MAX_RETRIES    = 1      # extra whole-chain re-runs when a FallbackModel exhausts EVERY
-                                     # provider: each re-run costs N provider attempts, so cap it hard
-                                     # (1) and fail fast to graceful degradation instead of spinning to
-                                     # the expert/orchestrator timeout when all providers are rate-limited
-LLM_RETRY_BASE_DELAY_S      = 2.0    # first backoff delay; doubles each retry
-LLM_RETRY_MAX_DELAY_S       = 30.0   # per-attempt backoff cap (won't bind at 2 retries; guards a future
-                                     # raise of LLM_TRANSIENT_MAX_RETRIES from running away)
 
 
 # ---------------------------------------------------------------------------
