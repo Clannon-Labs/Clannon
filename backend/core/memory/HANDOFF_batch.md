@@ -1,149 +1,131 @@
-# Handoff — Mission Engine graph substrate (batch phase)
+# Handoff — Kuzu knowledge-web build (CB2/CB3/EB3)
 
-Written 2026-07-05, end of session. Owner closed the laptop for the night.
-This file is for tomorrow's `clannon-memory` session to resume from — read
-it first, before checking proposal inboxes.
+Written 2026-07-06, end of session — the owner is pausing all agents (weekly usage limits
+nearly out). This supersedes the 2026-07-05 Mission Engine handoff that used to live here (that
+thread is long since complete and pushed; superseded content removed, not left to confuse a
+fresh reader). Read this first, before checking proposal inboxes.
 
-## Where things stand: committed, not just WIP
+## Where things stand: committed and pushed, tree clean
 
-Everything described below is **already committed** (`4d521d2` on `main`,
-suite green: 1045 passed, 6 env-skips) — this is a status/next-steps
-handoff, not a "resume unfinished code" one. **Not yet pushed** — the
-backend-agent said they'd push; confirm that happened before assuming it's
-on the remote.
+```
+git log --oneline -3        # (from backend/)
+24914b5 feat(memory): knowledge web substrate — Entity/Fact/Claim/MediaSegment (CB2/CB3/EB3)
+77051cc refactor(memory): lift Mission Engine's typed-node/edge mechanism into typed_graph.py
+013ea90 refactor(memory): split manager.py into thin door + hydration/write_policy/tiers
+```
 
-## What landed in `4d521d2`
+`git status --short` is empty (root and `backend/`). `main` matches `origin/main` — both commits
+above are pushed. **Nothing uncommitted, nothing half-done in the tree.** This is a clean stop,
+not a "resume unfinished code" handoff.
 
-Ratified answers to orchestration's two GraphPort-semantics questions
-(`proposals/archive/to-backend/2026-07-05_graphport-semantics-answers.md`,
-ruling in `proposals/archive/to-memory/2026-07-05_graphport-rulings-mission-engine.md`):
+## The design this build follows
 
-- **Q1 — in-place node-property mutation.** `MERGE ... ON MATCH SET` on a
-  repeat write to the same node id genuinely mutates properties in place —
-  proven empirically (a disposable-Kuzu script, then a proper test). No
-  transition history is kept: a TASK's `status` is a mutable cursor,
-  `SUPERSEDES` carries re-plan history (a different concept), not status
-  churn.
-- **Q2 — `mission_id` as a node property, not a `GraphScope` dimension** (the
-  backend-agent's ruling, not my original lean — I'd proposed this as one
-  option and they ratified it, reasoning `mission_id` is a filter *within* a
-  user's own graph, not a tenant boundary, so it shouldn't muddy
-  `GraphScope` the way a second optional dimension would).
+`proposals/archive/to-backend/2026-07-06_knowledge-web-design-cb2-cb3-eb3.md` — my design
+proposal + backend's `## Response` ratifying it. Read that file for the full node/edge model
+(`ENTITY`/`FACT`/`CLAIM`/`MEDIA_SEGMENT` + `RELATES_TO`/`CONTRADICTS`/`DERIVED_FROM`/
+`AUTHORED_BY`), the convergence rule, and the four-step build order. Two decisions were
+ratified there:
+- **Fusion direction (§1.5): Option B** — one-directional (graph node → vector via `vector_id`).
+  `MemoryItem` stays untouched; no reverse hop (vector → graph) until a concrete consumer needs
+  it. Don't add `MemoryItem.point_id` speculatively.
+- **`EdgeLabel.CALLS` (§1.4):** shape ratified, but the label itself is **deferred** — it lands
+  in `foundation/contracts/graph.py` only when the code-symbol-tier extractor (step 3.3 below)
+  actually gets built, per LAW 1 (no speculative foundation surface).
 
-### Files
-- **`foundation/contracts/graph.py`** — NOT mine; the backend-agent already
-  placed `NodeLabel.MISSION/TASK`, `EdgeLabel.BLOCKS/FEEDS/SUPERSEDES`, and
-  tightened the `write()`/`lookup()` docstrings, in `b0e206f` (pushed before
-  my build started). Nothing to do here.
-- **`core/memory/graph_store.py`** — added the `Mission`/`Task` node tables +
-  `Blocks`/`Feeds`/`Supersedes` rel tables to `_ensure_schema` (via a new
-  `_create_if_absent` helper, replacing the old copy-pasted try/except
-  pairs — CodeFile/IMPORTS use it too now, no behavior change). `
-  GraphReadResult` gained a `rows: tuple[dict, ...]` field for typed bulk
-  reads (`paths` is still the CODE_FILE traversal shape; the two are never
-  populated at once). Added `connection()` — a thin public wrapper around
-  the existing `_kuzu()` — so the new sibling module below can reuse the
-  SAME embedded Kuzu handle. **442 lines** (was 397; stayed well under the
-  LAW-2 500-line ceiling because the bulk of the new logic moved to a
-  sibling file — see next).
-- **`core/memory/mission_graph_store.py`** (NEW, 182 lines) — everything
-  Mission/Task-specific: a `_TypedNodeSchema` dataclass (`create_only` vs
-  `mutable` column tuples) + a `_TYPED_NODE_SCHEMAS` dict keyed by
-  `"mission"`/`"task"` (== `NodeLabel.MISSION.value`/`NodeLabel.TASK.value`,
-  no separate mapping needed), `upsert_typed_nodes()` (generic MERGE-by-id,
-  `ON CREATE` sets everything, `ON MATCH` sets only `mutable` — the Q1
-  mechanism, generalized off CodeFile's one-hardcoded-property version),
-  `upsert_typed_edges()` (generic MERGE-by-connectivity, mirrors
-  `upsert_edges`' asserted-always-wins protection), `typed_members()` (the
-  Q2 bulk filter-read: `WHERE user_id = ... AND repo_id = ... [AND
-  mission_id = parent_id]`), and `is_known_kind()` (a small public check so
-  `graph_manager.py` doesn't reach into this module's private schema dict).
-  **Why a separate file, not added to `graph_store.py`:** adding it inline
-  first pushed `graph_store.py` to 573 lines, over the LAW-2 ceiling — moved
-  it out once that was measured, not guessed at upfront.
-- **`core/memory/graph_manager.py`** (266 lines, was ~199) —
-  `write()`'s node/edge loops now dispatch three ways: CODE_FILE (untouched,
-  original code path), MISSION/TASK (new, generic, via
-  `mission_graph_store.upsert_typed_nodes`), anything else (still honestly
-  rejected with a note, unchanged). **Security-relevant detail:** the typed
-  node row is built as `{**n.properties, "id": ..., "user_id": ...,
-  "repo_id": ...}` — properties spread **first**, authoritative fields set
-  **after** — so a caller can never clobber its own row's storage identity
-  by naming `id`/`user_id`/`repo_id` inside `properties`. Verified this
-  specific protection red-then-green (temporarily reversed the spread
-  order, confirmed the test fails, reverted) before trusting it. Also added
-  **`members(scope, label, *, parent_id="")`** — the new bulk-read method.
-  **Deliberately NOT yet on the `GraphPort` Protocol** — this is the
-  coordination sequencing the backend-agent specified: `GraphManager` gets
-  it first (becomes a superset of the Protocol, so
-  `isinstance(manager, GraphPort)` stays green throughout), then the
-  backend-agent adds it to the Protocol in `foundation/contracts/graph.py`
-  once told it's landed. **That "tell them" step is the next action** — see
-  below.
-- **`tests/memory_mission_graph.py`** (NEW, 19 tests, all passing) — Q1
-  in-place mutation + create-only-field immunity (a MISSION's
-  `intent`/`success_criteria` survive a repeat write unchanged, only
-  `status`/`updated_at` refresh), tenant isolation (same `mission_id`/
-  `task_id` under two different `user_id`s never cross-leak), `parent_id`
-  filtering, asserted-edge protection on BLOCKS/FEEDS/SUPERSEDES, degrade-
-  never-fail, the clobber-protection fix (RED-then-GREEN verified), a mixed
-  CodeFile+Mission/Task `write()` call, and the `isinstance` superset check
-  itself as an explicit test.
+A separate correction (not in the archived proposal — filed after, `proposals/archive/
+to-memory/2026-07-06_decision-kind-gate-ratified.md`): the memory-extractor gate (step 4, not
+yet built) must be **`kind ∈ {FACT, ASSUMPTION, DECISION}`, not tier-based** — `MemoryKind.
+DECISION` exists and CB4 decision records write to the EPISODIC tier, so a tier-based
+"SEMANTIC/PROCEDURAL only" gate would silently exclude every decision record and strand
+`AUTHORED_BY`. `DECISION` maps to a `FACT` graph node (asserted, same epistemic weight).
 
-## What's genuinely NOT done yet (the real next steps)
+## What's built (both commits already pushed)
 
-1. **Tell the backend-agent `members()` has landed** (this file mentioning
-   it doesn't count — write a proposal to `proposals/to-backend/` first
-   thing tomorrow, or check if they've already noticed via the commit and
-   responded). Once told, they add `members()` to the `GraphPort` Protocol
-   in `foundation/contracts/graph.py` (their seam) — that's the one
-   remaining piece before orchestration's Mission Engine can actually call
-   `members()` through the Protocol type rather than the concrete
-   `GraphManager` class directly.
-2. **Confirm the push happened.** I committed (`4d521d2`); the owner's
-   instruction was "commit it and tell me to push" — that message hasn't
-   been sent yet as of writing this file. Send it, or check whether the
-   backend-agent already pushed proactively.
-3. Nothing else is required for THIS thread to be complete — the Kuzu
-   tables, the generic marshalling, and `members()` are all built, tested,
-   and committed. Orchestration's actual operate-step (the code that reads/
-   writes real Mission/Task data during a running mission) is NOT mine —
-   that's gated on them building against this substrate, not something to
-   pre-build here.
+**Step 1 (`77051cc`):** lifted the generic MERGE-by-id/MERGE-by-connectivity mechanism out of
+`mission_graph_store.py` into `typed_graph.py`, parameterized over an injected schema dict.
+`mission_graph_store.py` is now a thin schema registration delegating to it.
 
-## Known, deliberately-not-fixed observation (flag, don't chase tomorrow unless asked)
+**Step 2/3 (`24914b5`):** the actual substrate.
+- `knowledge_store.py` (NEW) — `Entity`/`Fact`/`Claim`/`MediaSegment` node schemas +
+  `RelatesTo`/`Contradicts`/`DerivedFrom`/`AuthoredBy` edge schemas, registered against
+  `typed_graph.py`.
+- `graph_schema.py` (NEW) — every `CREATE NODE/REL TABLE` DDL statement, split out of
+  `graph_store.py` (LAW 2 — the new tables pushed that file past 500 lines).
+- `graph_manager.py` — `_TYPED_NODE_STORE`/`_TYPED_EDGE_STORE` route each label to its owning
+  store module (`mission_graph_store` vs `knowledge_store`). **No `GraphPort` Protocol change
+  was needed** — `members()`/`edges_of()` were already generic over any label.
+- `typed_graph.py` gained two real capabilities, both found via direct Kuzu verification
+  *before* writing tests (read the commit message / `report_v27.md` for the exact repro steps
+  if you need them again): a `TypedNodeSchema.defaults` dict (Kuzu requires every row in an
+  UNWIND batch to share the same struct shape — a caller omitting an optional column used to
+  silently drop the whole write), and `_resolve_node_tables` (Kuzu can `MATCH` an unlabeled node
+  pattern but cannot `MERGE`/`CREATE` a relationship without a concrete label per endpoint — so
+  heterogeneous edges like `RELATES_TO` resolve each endpoint's real table first, then group by
+  resolved pair before the MERGE).
+- `tests/memory_knowledge_store.py` (NEW, 22 tests) — entity convergence, create-only vs.
+  mutable fields, `vector_id`-keyed Fact/Claim identity, heterogeneous edge persistence +
+  asserted-wins + missing-endpoint no-op + tenant isolation, the `DerivedFrom` fusion point
+  meeting a real `Task` node, `delete_user`.
+- Two pre-existing tests fixed (they used `NodeLabel.ENTITY`/`EdgeLabel.RELATES_TO` as their
+  "still unsupported" example — both are now backed by this build): swapped to
+  `NodeLabel.CODE_MODULE`/`EdgeLabel.DEFINES` (genuinely still unbacked today).
 
-The graph tier (BOTH the pre-existing CodeFile data and this new Mission/
-Task data) has **no right-to-erasure wiring** — `manager.py`'s
-`delete_user()` only calls `store.delete_user()` (the Qdrant vector tiers),
-never anything graph-side. This is a **pre-existing gap**, not introduced by
-tonight's work (grep confirms no `graph_store`/`graph_manager` erasure path
-existed before either). Structurally identical to the `delete_user` gap
-flagged and fixed in the cross-batch awareness design
-(`proposals/archive/to-backend/2026-07-05_cross-batch-awareness-memory-design.md`
-§6) — same fix shape would apply here (a `delete_user(user_id)` in
-`graph_store.py`/`mission_graph_store.py`, wired into `manager.py`'s
-existing method). **Not fixed tonight** — out of scope for the Q1/Q2 build
-task specifically, and raising it as new scope at the end of a long session
-felt like exactly the kind of unrequested addition to avoid. Worth a
-proposal if nobody else raises it first.
+**Verification:** full memory-scoped suite (`tests/memory_*.py tests/config_memory.py`) —
+**269 passed, 10 skipped** (qdrant-unreachable env-skip), **1 deselected** (see below).
 
-## Other threads, for context (unrelated to tonight's build, still holding)
+## The one open item: a flagged, NOT-yet-resolved bug in sibling (not knowledge-web) code
 
-- **Cross-batch awareness memory slice** — ratified
-  (`2026-07-05_cross-batch-design-ratified.md`, archived), contract slice
-  inert until Mission Engine lands. Nothing to build yet.
-- **CB2 thin-slice benchmark** — landed and committed earlier this session
-  (`947141c`). Done, not part of tonight's work.
+`tests/memory_graph_manager.py::test_build_code_graph_over_real_backend_then_depends_on_
+through_port` is currently **deselected**, not fixed. Root cause: `graph_store.py::_traverse`
+(CB2's file-level `depends_on`/`dependents_of`/`breaks_if_removed` — phase-1 code, nothing this
+build touches) has an exponential-blowup bug on `backend/`'s now-larger, cyclic import graph
+(measured: 12 hops→0.28s, 16 hops→8.3s, 20 hops/`MAX_HOPS_CEILING` exceeds two minutes — the
+bare `*1..N` Cypher pattern enumerates every WALK, not every reachable node, and the reachable
+set actually plateaus at 5 hops).
 
-## Where to look first tomorrow
+I tried the fix (`ALL SHORTEST`) — confirmed correct AND fast (0.012s, identical result) — but
+**it segfaults Kuzu's native library** on a common case (a node with zero incident edges in
+scope). Reverted immediately; `_traverse` is back to its original, non-crashing (if slow) form.
+Flagged to backend: `proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md` (still
+`Status: pending` as of this handoff — no response yet). **Do not re-attempt `ALL SHORTEST`
+without red-teaming the zero-edge-node case first** — that's exactly what crashed it. Plain
+`SHORTEST` (not `ALL SHORTEST`) was tested for performance only, never for the crash case — its
+crash-safety is unknown.
 
-1. `proposals/to-memory/` — check for anything new (ratification response,
-   a correction, or a new assignment) before assuming this handoff is still
-   the latest state.
-2. `git log --oneline -5` — confirm `4d521d2` is still `HEAD` and whether
-   it's been pushed (`git log origin/main..HEAD` — empty means pushed).
-3. If nothing new and the push hasn't happened, that's the very next
-   action: tell the backend-agent to push, and/or write the "members()
-   landed" proposal from step 1 above if it wasn't already sent before the
-   laptop closed.
+This is genuinely orthogonal to the knowledge-web build (rides `members()`/`edges_of()`/
+`write()`, never `_traverse`), so it does NOT block anything below. It's flagged, not owned by
+this thread — check the proposal's `Status` before touching `_traverse` again.
+
+## The exact next step
+
+**Step 4 (not started): the memory extractor.** Per the ratified design (§3.1):
+- New `writer.py::extract_entities(content) -> ExtractedEntities` — a fail-closed LLM step,
+  sibling to the existing `judge_supersession` (same `build_agent(..., output_type=...,
+  retries=settings.MEMORY.distill_max_retries)` shape, same "any fault/doubt → empty result,
+  never raise" discipline).
+- Hook into `write_policy.py::record_write_proposals`, **after** a proposal clears the existing
+  confidence gate, gated on **`kind ∈ {FACT, ASSUMPTION, DECISION}`** (see the correction above
+  — NOT tier-based; `UNSPECIFIED` stays excluded).
+- Produces: `ENTITY` nodes for named things in the content, one `FACT`/`CLAIM` node
+  (`DECISION`/`FACT` kind → `FACT` node; `ASSUMPTION` → `CLAIM` node) with `vector_id` = the
+  memory's own point id, `RELATES_TO` edges entity↔fact and entity↔entity, `AUTHORED_BY` when
+  `participants` (CB4's field) is non-empty. Written via `GraphPort.write()` — best-effort, same
+  "never blocks the turn" discipline as `learn()` today.
+- Then §3.2 (the contradiction judge, `writer.py::judge_contradiction`, exact copy of
+  `judge_supersession`'s fail-closed shape) rides on top of the extractor once it exists.
+- §3.3 (code symbol tier) and §3.4 (media extractor) are NOT this thread's build — they're
+  orchestration's / the media pipeline's extractors respectively, once this substrate is
+  proven with the memory extractor.
+
+No proposal needed to start step 4 — it's already ratified, `core/memory/`-only, no foundation
+touch expected (the entity-extraction LLM call is a new prompt/agent, not a contract change).
+
+## Where to look first when resuming
+
+1. `proposals/to-memory/` — check for anything new before assuming this handoff is current.
+2. `proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md` — check its `Status`.
+   If backend has ruled on `_traverse`, that may unblock re-selecting the deselected test (still
+   not this thread's job to fix unless explicitly assigned).
+3. `git log --oneline -5` in `backend/` — confirm `24914b5` is still `HEAD`, or see what landed
+   since.
+4. If nothing new: start step 4 above.
