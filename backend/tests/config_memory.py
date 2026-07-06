@@ -26,6 +26,11 @@ _TODAY = dict(
     embed_retry_after_s=60.0,
     qdrant_request_timeout_s=5,
     graph_max_hops_ceiling=20,
+    read_timeout_s=5.0,
+    write_timeout_s=10.0,
+    search_top_k=10,
+    relevance_floor=0.30,
+    distill_max_retries=2,
 )
 
 
