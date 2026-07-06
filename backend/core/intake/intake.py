@@ -18,6 +18,7 @@ from pathlib import Path
 
 from foundation import Flow, Origin, BlockReason, ThreatLevel
 from foundation import Modality, constants, PipelineStage
+import settings
 from foundation import (
     InputError,
     UnsupportedModalityError,
@@ -113,7 +114,7 @@ async def process(flow: Flow) -> Flow:
         size = _input_size_bytes(raw_input)
         if size == 0:
             return flow.block(BlockReason.MALFORMED_INPUT, ThreatLevel.NONE, Origin.INTAKE, started)
-        if size > constants.MAX_INPUT_SIZE_BYTES:
+        if size > settings.INTAKE.max_input_size_bytes:
             return flow.block(BlockReason.INPUT_TOO_LARGE, ThreatLevel.NONE, Origin.INTAKE, started)
 
         modality = _detect_modality(raw_input)
