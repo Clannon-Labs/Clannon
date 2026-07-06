@@ -25,22 +25,56 @@ from foundation import (
     NodeLabel,
 )
 
-from . import graph_store, mission_graph_store
+from . import graph_store, knowledge_store, mission_graph_store
 from .graph_extract import build_code_import_graph
 
 log = logging.getLogger(__name__)
 
-# Mission Engine (batch phase) — which node/edge labels ride the generic
-# typed-node/typed-edge path (mission_graph_store.py) instead of CodeFile's
-# hardcoded path. The dict's value is BOTH the natural-key property name
-# write() reads off GraphNode.properties AND the "kind" string
-# mission_graph_store's schema dict is keyed by (NodeLabel.MISSION.value ==
-# "mission" == the schema key — no separate mapping needed for that half).
+# Which node/edge labels ride the generic typed-node/typed-edge path (as
+# opposed to CodeFile's hardcoded path), and which sibling store module owns
+# each one. The key-property dict's value is BOTH the natural-key property
+# name write() reads off GraphNode.properties AND the "kind" string the
+# owning store's schema dict is keyed by (every NodeLabel.value already
+# equals its schema key — no separate mapping needed for that half).
+# Mission Engine (batch phase):
 _TYPED_NODE_KEY_PROPERTY: dict[NodeLabel, str] = {
     NodeLabel.MISSION: "mission_id",
     NodeLabel.TASK: "task_id",
 }
+_TYPED_NODE_STORE: dict[NodeLabel, object] = {
+    NodeLabel.MISSION: mission_graph_store,
+    NodeLabel.TASK: mission_graph_store,
+}
 _TYPED_EDGE_LABELS = frozenset({EdgeLabel.BLOCKS, EdgeLabel.FEEDS, EdgeLabel.SUPERSEDES})
+_TYPED_EDGE_STORE: dict[EdgeLabel, object] = {
+    EdgeLabel.BLOCKS: mission_graph_store,
+    EdgeLabel.FEEDS: mission_graph_store,
+    EdgeLabel.SUPERSEDES: mission_graph_store,
+}
+# Knowledge web (CB2/CB3/EB3 substrate, ratified 2026-07-06) — Entity's
+# identity IS its normalized canonical_name (§1.1 convergence rule); Fact/
+# Claim are keyed by vector_id (the fusion pointer doubles as identity, since
+# each node is the graph twin of exactly one memory point); MediaSegment is
+# keyed by a caller-constructed segment_key (which part of which media file).
+_TYPED_NODE_KEY_PROPERTY.update({
+    NodeLabel.ENTITY: "canonical_name",
+    NodeLabel.FACT: "vector_id",
+    NodeLabel.CLAIM: "vector_id",
+    NodeLabel.MEDIA_SEGMENT: "segment_key",
+})
+_TYPED_NODE_STORE.update({
+    NodeLabel.ENTITY: knowledge_store,
+    NodeLabel.FACT: knowledge_store,
+    NodeLabel.CLAIM: knowledge_store,
+    NodeLabel.MEDIA_SEGMENT: knowledge_store,
+})
+_TYPED_EDGE_LABELS |= {EdgeLabel.RELATES_TO, EdgeLabel.CONTRADICTS, EdgeLabel.DERIVED_FROM, EdgeLabel.AUTHORED_BY}
+_TYPED_EDGE_STORE.update({
+    EdgeLabel.RELATES_TO: knowledge_store,
+    EdgeLabel.CONTRADICTS: knowledge_store,
+    EdgeLabel.DERIVED_FROM: knowledge_store,
+    EdgeLabel.AUTHORED_BY: knowledge_store,
+})
 
 
 def _parse_node_id(node_id: str) -> tuple[str, str, str] | None:
@@ -151,7 +185,7 @@ class GraphManager:
 
         notes: list[str] = []
         code_file_rows: list[dict] = []
-        typed_node_rows: dict[str, list[dict]] = {}
+        typed_node_rows: dict[NodeLabel, list[dict]] = {}
         accepted_nodes: list[GraphNode] = []
         for n in nodes:
             if n.scope != scope:
@@ -179,7 +213,7 @@ class GraphManager:
                     **n.properties, "id": graph_store.node_id(scope, natural_key),
                     "user_id": scope.user_id, "repo_id": scope.repo_id,
                 }
-                typed_node_rows.setdefault(n.label.value, []).append(row)
+                typed_node_rows.setdefault(n.label, []).append(row)
             else:
                 notes.append(f"label {n.label.value!r} not yet backed by a table — dropped")
                 continue
@@ -188,13 +222,14 @@ class GraphManager:
         applied_node_ids: set[str] = set()
         if code_file_rows:
             applied_node_ids |= set(await asyncio.to_thread(graph_store.upsert_nodes, scope, code_file_rows))
-        for kind, rows in typed_node_rows.items():
+        for label, rows in typed_node_rows.items():
+            store = _TYPED_NODE_STORE[label]
             applied_node_ids |= set(
-                await asyncio.to_thread(mission_graph_store.upsert_typed_nodes, kind, rows)
+                await asyncio.to_thread(store.upsert_typed_nodes, label.value, rows)
             )
 
         imports_edge_rows: list[dict] = []
-        typed_edge_rows: dict[str, list[dict]] = {}
+        typed_edge_rows: dict[EdgeLabel, list[dict]] = {}
         edge_by_pair: dict[tuple[str, str], GraphEdge] = {}
         for e in edges:
             if not (_scope_owns(scope, e.src_id) and _scope_owns(scope, e.dst_id)):
@@ -203,7 +238,7 @@ class GraphManager:
             if e.label == EdgeLabel.IMPORTS:
                 imports_edge_rows.append({"src": e.src_id, "dst": e.dst_id, "origin": e.origin.value})
             elif e.label in _TYPED_EDGE_LABELS:
-                typed_edge_rows.setdefault(e.label.value, []).append(
+                typed_edge_rows.setdefault(e.label, []).append(
                     {"src": e.src_id, "dst": e.dst_id, "origin": e.origin.value}
                 )
             else:
@@ -215,8 +250,9 @@ class GraphManager:
         if imports_edge_rows:
             applied_rows = await asyncio.to_thread(graph_store.upsert_edges, scope, imports_edge_rows)
             applied_edges.extend(edge_by_pair[(r["src"], r["dst"])] for r in applied_rows)
-        for kind, rows in typed_edge_rows.items():
-            applied_rows = await asyncio.to_thread(mission_graph_store.upsert_typed_edges, kind, rows)
+        for label, rows in typed_edge_rows.items():
+            store = _TYPED_EDGE_STORE[label]
+            applied_rows = await asyncio.to_thread(store.upsert_typed_edges, label.value, rows)
             applied_edges.extend(edge_by_pair[(r["src"], r["dst"])] for r in applied_rows)
 
         return GraphResult(
@@ -238,10 +274,11 @@ class GraphManager:
             return GraphResult(degraded=True, notes="missing user_id — refused, fail-closed")
         if await asyncio.to_thread(graph_store.is_down):
             return GraphResult(degraded=True, notes="graph store unavailable")
+        store = _TYPED_NODE_STORE.get(label)
         kind = label.value
-        if not mission_graph_store.is_known_kind(kind):
+        if store is None or not store.is_known_kind(kind):
             return GraphResult(notes=f"label {label.value!r} has no bulk members() backing")
-        read = await asyncio.to_thread(mission_graph_store.typed_members, kind, scope, parent_id=parent_id)
+        read = await asyncio.to_thread(store.typed_members, kind, scope, parent_id=parent_id)
         if read.degraded:
             return GraphResult(degraded=True, notes=read.notes)
         nodes = [
@@ -265,10 +302,11 @@ class GraphManager:
             return GraphResult(degraded=True, notes="missing user_id — refused, fail-closed")
         if await asyncio.to_thread(graph_store.is_down):
             return GraphResult(degraded=True, notes="graph store unavailable")
+        store = _TYPED_EDGE_STORE.get(label)
         kind = label.value
-        if not mission_graph_store.is_known_edge_kind(kind):
+        if store is None or not store.is_known_edge_kind(kind):
             return GraphResult(notes=f"edge label {label.value!r} has no bulk edges_of() backing")
-        read = await asyncio.to_thread(mission_graph_store.typed_edges_of, kind, scope, node_id)
+        read = await asyncio.to_thread(store.typed_edges_of, kind, scope, node_id)
         if read.degraded:
             return GraphResult(degraded=True, notes=read.notes)
         edges = [
@@ -303,14 +341,15 @@ class GraphManager:
 
     async def delete_user(self, user_id: str) -> None:
         """Right-to-erasure: purge every graph-tier node for this user
-        (CodeFile + Mission/Task). Not part of GraphPort — a delivery-layer
-        surface, same shape as `MemoryManager.delete_user`, which calls this
-        so an account deletion actually clears the graph tier instead of
-        silently leaving it populated."""
+        (CodeFile + Mission/Task + the knowledge web). Not part of GraphPort —
+        a delivery-layer surface, same shape as `MemoryManager.delete_user`,
+        which calls this so an account deletion actually clears the graph
+        tier instead of silently leaving it populated."""
         if not user_id:
             return
         await asyncio.to_thread(graph_store.delete_user, user_id)
         await asyncio.to_thread(mission_graph_store.delete_user, user_id)
+        await asyncio.to_thread(knowledge_store.delete_user, user_id)
 
 
 # Process-level singleton; wiring hands this to the orchestrator's ports.

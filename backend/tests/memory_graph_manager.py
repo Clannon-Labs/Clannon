@@ -218,32 +218,40 @@ def test_write_upserts_nodes_and_edges_then_queryable_via_depends_on(manager):
 
 
 def test_write_rejects_unsupported_node_label_with_an_honest_note(manager):
+    """CODE_MODULE is designed-in on NodeLabel but has no backing table (only
+    CODE_FILE does) — still genuinely unsupported after the knowledge-web
+    build landed ENTITY/FACT/CLAIM/MEDIA_SEGMENT (2026-07-06), unlike this
+    test's prior example (NodeLabel.ENTITY, now backed by knowledge_store.py)."""
     async def go():
         scope = GraphScope(user_id="u1")
-        entity = GraphNode(
-            node_id="whatever", label=NodeLabel.ENTITY, scope=scope, properties={}
+        module_node = GraphNode(
+            node_id="whatever", label=NodeLabel.CODE_MODULE, scope=scope, properties={}
         )
 
-        result = await manager.write(scope, [entity], [])
+        result = await manager.write(scope, [module_node], [])
 
         assert result.nodes == []
-        assert "entity" in result.notes
+        assert "code_module" in result.notes
         assert "not yet backed" in result.notes
 
     asyncio.run(go())
 
 
 def test_write_rejects_unsupported_edge_label_with_an_honest_note(manager):
+    """DEFINES is designed-in on EdgeLabel but has no backing table — still
+    genuinely unsupported after the knowledge-web build landed RELATES_TO/
+    CONTRADICTS/DERIVED_FROM/AUTHORED_BY (2026-07-06), unlike this test's
+    prior example (EdgeLabel.RELATES_TO, now backed by knowledge_store.py)."""
     async def go():
         scope = GraphScope(user_id="u1")
         a, b = _code_file(scope, "a.py"), _code_file(scope, "b.py")
         await manager.write(scope, [a, b], [])
-        bad_edge = GraphEdge(src_id=b.node_id, dst_id=a.node_id, label=EdgeLabel.RELATES_TO)
+        bad_edge = GraphEdge(src_id=b.node_id, dst_id=a.node_id, label=EdgeLabel.DEFINES)
 
         result = await manager.write(scope, [], [bad_edge])
 
         assert result.edges == []
-        assert "relates_to" in result.notes
+        assert "defines" in result.notes
 
     asyncio.run(go())
 

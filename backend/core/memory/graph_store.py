@@ -37,6 +37,7 @@ from typing import Any
 import settings
 from foundation import GraphScope, get_root
 
+from . import graph_schema
 from .config import GRAPH_DISABLED as DISABLED
 from .config import graph_db_path_override
 from .graph_extract import CodeImportGraph
@@ -141,53 +142,14 @@ def healthcheck() -> bool:
     return _kuzu() is not None
 
 
-def _already_exists(exc: Exception) -> bool:
-    return "already exists" in str(exc).lower()
-
-
-def _create_if_absent(conn: Any, ddl: str) -> None:
-    """One CREATE TABLE statement, idempotent (mirrors the pre-existing
-    CodeFile/IMPORTS try/except shape, shared so each new table isn't its own
-    copy-pasted try/except)."""
-    try:
-        conn.execute(ddl)
-    except RuntimeError as exc:
-        if not _already_exists(exc):
-            raise
-
-
 def _ensure_schema(conn: Any) -> None:
+    """Every table this package's stores need — DDL lives in `graph_schema.py`
+    (split out, LAW 2: the DDL blob pushed this file past the line ceiling
+    once the knowledge-web tables landed)."""
     global _schema_ready
     if _schema_ready:
         return
-    _create_if_absent(
-        conn,
-        "CREATE NODE TABLE CodeFile("
-        "id STRING, user_id STRING, repo_id STRING, path STRING, "
-        "PRIMARY KEY(id))",
-    )
-    _create_if_absent(conn, "CREATE REL TABLE IMPORTS(FROM CodeFile TO CodeFile, origin STRING)")
-    # Mission Engine (batch phase) — MISSION/TASK nodes, typed task-dependency
-    # edges. mission_id lives as a plain property (a filter under user_id, not
-    # a GraphScope dimension — ratified 2026-07-05); success_criteria is a
-    # native Kuzu STRING[] (Criterion is just {description: str} today, a list
-    # of strings is the whole shape, no need for a richer encoding).
-    _create_if_absent(
-        conn,
-        "CREATE NODE TABLE Mission("
-        "id STRING, user_id STRING, repo_id STRING, mission_id STRING, "
-        "intent STRING, success_criteria STRING[], status STRING, updated_at DOUBLE, "
-        "PRIMARY KEY(id))",
-    )
-    _create_if_absent(
-        conn,
-        "CREATE NODE TABLE Task("
-        "id STRING, user_id STRING, repo_id STRING, task_id STRING, mission_id STRING, "
-        "summary STRING, status STRING, evidence STRING, updated_at DOUBLE, "
-        "PRIMARY KEY(id))",
-    )
-    for rel in ("Blocks", "Feeds", "Supersedes"):
-        _create_if_absent(conn, f"CREATE REL TABLE {rel}(FROM Task TO Task, origin STRING)")
+    graph_schema.ensure_schema(conn)
     _schema_ready = True
 
 

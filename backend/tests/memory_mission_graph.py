@@ -312,8 +312,12 @@ def test_members_degrades_on_store_down(manager, monkeypatch):
 
 
 def test_members_on_an_unbacked_label_is_empty_not_an_error(manager):
+    """CODE_MODULE is designed-in on NodeLabel but has no backing table (only
+    CODE_FILE does) — still genuinely unbacked after the knowledge-web build
+    landed ENTITY/FACT/CLAIM/MEDIA_SEGMENT (2026-07-06), unlike this test's
+    prior example (NodeLabel.ENTITY, now backed by knowledge_store.py)."""
     async def go():
-        result = await manager.members(GraphScope(user_id="u1"), NodeLabel.ENTITY, parent_id="")
+        result = await manager.members(GraphScope(user_id="u1"), NodeLabel.CODE_MODULE, parent_id="")
         assert result.degraded is False
         assert result.nodes == []
         assert "not" in result.notes or "no bulk" in result.notes
