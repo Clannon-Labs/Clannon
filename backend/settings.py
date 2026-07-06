@@ -167,9 +167,116 @@ def _load_memory() -> MemoryConfig:
         raise RuntimeError(f"config/backend/memory.yaml is invalid:\n{exc}") from exc
 
 
+class OrchestratorConfig(BaseModel):
+    """Orchestrator-tier tunables (`config/backend/orchestrator.yaml`): the routing
+    advisory-scorer's default sharpness + entropy bands, the chat-vs-deliverable split
+    threshold, the substantive-turn memory gate, and the degraded answer's bounds."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    routing_default_temperature: float = Field(gt=0.0)
+    routing_entropy_focused_below: float = Field(ge=0.0, le=1.0)
+    routing_entropy_dispersed_at_or_above: float = Field(ge=0.0, le=1.0)
+    chat_reply_max_chars: int = Field(gt=0)
+    substantive_task_chars: int = Field(gt=0)
+    substantive_answer_chars: int = Field(gt=0)
+    episodic_task_excerpt_chars: int = Field(gt=0)
+    episodic_answer_excerpt_chars: int = Field(gt=0)
+    decision_record_content_chars: int = Field(gt=0)
+    degraded_per_finding_chars: int = Field(gt=0)
+    degraded_max_findings: int = Field(gt=0)
+    degraded_confidence: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _entropy_bands_ordered(self) -> "OrchestratorConfig":
+        if not (self.routing_entropy_focused_below < self.routing_entropy_dispersed_at_or_above):
+            raise ValueError(
+                "routing_entropy_focused_below must be < routing_entropy_dispersed_at_or_above"
+            )
+        return self
+
+
+def _load_orchestrator() -> OrchestratorConfig:
+    raw = _load_mapping("backend/orchestrator.yaml")
+    try:
+        return OrchestratorConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/orchestrator.yaml is invalid:\n{exc}") from exc
+
+
+class ExpertsConfig(BaseModel):
+    """Expert-tier tunables (`config/backend/experts.yaml`): media-preprocessing bounds,
+    the media expert's inline-attachment size limit, and the expert-handler's
+    artifact-capture + need-context caps."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_doc_chars: int = Field(gt=0)
+    min_pdf_text_chars: int = Field(ge=0)
+    pdf_render_dpi: int = Field(gt=0)
+    max_pdf_render_pages: int = Field(gt=0)
+    max_transcript_chars: int = Field(gt=0)
+    video_frame_every_s: int = Field(gt=0)
+    max_video_frames: int = Field(gt=0)
+    ffmpeg_timeout_s: float = Field(gt=0.0)
+    media_inline_limit_bytes: int = Field(gt=0)
+    max_artifacts: int = Field(gt=0)
+    max_artifact_bytes: int = Field(gt=0)
+    need_context_max_items: int = Field(gt=0)
+
+
+def _load_experts() -> ExpertsConfig:
+    raw = _load_mapping("backend/experts.yaml")
+    try:
+        return ExpertsConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/experts.yaml is invalid:\n{exc}") from exc
+
+
+class ToolsConfig(BaseModel):
+    """Tool-tier tunables (`config/backend/tools.yaml`): per-tool caps (diff, fetch_url,
+    http_request, memory_search), chart SVG geometry, and the remember/recall bounds."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    diff_max_chars: int = Field(gt=0)
+    fetch_url_max_redirects: int = Field(ge=0)
+    http_request_max_headers: int = Field(gt=0)
+    memory_search_default_results: int = Field(gt=0)
+    memory_search_max_results: int = Field(gt=0)
+    chart_width: int = Field(gt=0)
+    chart_height: int = Field(gt=0)
+    chart_margin_top: int = Field(ge=0)
+    chart_margin_right: int = Field(ge=0)
+    chart_margin_bottom: int = Field(ge=0)
+    chart_margin_left: int = Field(ge=0)
+    chart_max_bar_width: float = Field(gt=0.0)
+    remember_max_chars: int = Field(gt=0)
+    recall_max_hits: int = Field(gt=0)
+    remember_write_confidence: float = Field(ge=0.0, le=1.0)
+    tool_output_preview_chars: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _search_bounds_ordered(self) -> "ToolsConfig":
+        if not (self.memory_search_default_results <= self.memory_search_max_results):
+            raise ValueError("memory_search_default_results must be <= memory_search_max_results")
+        return self
+
+
+def _load_tools() -> ToolsConfig:
+    raw = _load_mapping("backend/tools.yaml")
+    try:
+        return ToolsConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/tools.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
 MEMORY: MemoryConfig = _load_memory()
+ORCHESTRATOR: OrchestratorConfig = _load_orchestrator()
+EXPERTS: ExpertsConfig = _load_experts()
+TOOLS: ToolsConfig = _load_tools()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -179,4 +286,7 @@ __all__ = [
     "BUDGET", "BudgetConfig", "SPEND_CEILING_FRACTION",
     "PRICING", "PricingConfig", "ModelPrice",
     "MEMORY", "MemoryConfig", "TierTrust", "TierFloor",
+    "ORCHESTRATOR", "OrchestratorConfig",
+    "EXPERTS", "ExpertsConfig",
+    "TOOLS", "ToolsConfig",
 ]

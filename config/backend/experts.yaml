@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/experts.yaml — expert-tier tunables. BACKEND-CONTROLLED.
+# Media-preprocessing bounds (doc/PDF/whisper/video), the media expert's inline-
+# attachment size limit, and the expert-handler's artifact-capture + need-context
+# caps. Behavior-preserving: every value equals today's literal.
+#
+# NOTE: per-expert `model_role` is deliberately NOT here — it's the owner-flagged
+# identity-vs-dial decision (docket D12); it stays in each expert's own file
+# (self-registration) until the owner rules. Sandbox container caps stay in code
+# (D8, security). The `eager`/deferred-load flags are a dead path today (skipped).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# MEDIA PREPROCESSING (experts/media/preprocess.py) — content-processing bounds.
+max_doc_chars: 50000            # max chars extracted from one document
+min_pdf_text_chars: 50          # below this, treat a PDF page as image-only (OCR/render)
+pdf_render_dpi: 150             # render DPI when a PDF page needs rasterizing
+max_pdf_render_pages: 8         # cap on rendered PDF pages
+max_transcript_chars: 50000     # max chars of an audio/video transcript kept
+video_frame_every_s: 5          # sample one video frame every N seconds
+max_video_frames: 8             # cap on sampled video frames
+ffmpeg_timeout_s: 90.0          # wall-clock bound on an ffmpeg invocation
+
+# MEDIA EXPERT (experts/media/expert.py) — inline-vs-skip attachment size limit.
+media_inline_limit_bytes: 15728640   # 15 MB
+
+# EXPERT HANDLER (registry/capabilities/handler/experts.py) — artifact-capture +
+# need-context caps (classified BACKEND, not security).
+max_artifacts: 20               # max artifacts captured from one expert run
+max_artifact_bytes: 10485760    # 10 MB per captured artifact
+need_context_max_items: 5       # max items a need_context recall returns

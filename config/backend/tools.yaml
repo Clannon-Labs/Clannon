@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/tools.yaml — tool-tier tunables. BACKEND-CONTROLLED.
+# Per-tool caps (diff, fetch_url, http_request, memory_search), chart SVG geometry,
+# and the remember/recall built-ins' bounds. Behavior-preserving: every value
+# equals today's literal.
+#
+# NOTE: per-tool `timeout_s` overrides (web_search 75s, code_run 300s) are NOT here
+# — same owner-flagged identity-vs-dial decision as model_role (docket D12); they
+# stay as each tool's class attribute until the owner rules. fetch_url_max_redirects
+# bounds ITERATION only — the SSRF gate (tools/_net.py) is untouched. chart colors
+# (a theme choice, not geometry) are left for a later theme pass.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# PER-TOOL CAPS
+diff_max_chars: 200000          # max diff output chars (tools/diff.py)
+fetch_url_max_redirects: 5      # redirect-hop count cap — NOT the SSRF gate (tools/fetch_url.py)
+http_request_max_headers: 25    # max response headers surfaced (tools/http_request.py)
+
+# MEMORY SEARCH (tools/memory_search.py) — default vs. hard-max result count.
+# default MUST be <= max (enforced at load).
+memory_search_default_results: 8
+memory_search_max_results: 20
+
+# CHART SVG GEOMETRY (tools/chart.py) — canvas + margins + bar width. Unit: px.
+chart_width: 560
+chart_height: 380
+chart_margin_top: 50
+chart_margin_right: 20
+chart_margin_bottom: 80
+chart_margin_left: 70
+chart_max_bar_width: 80.0
+
+# REMEMBER / RECALL built-ins (registry/capabilities/handler/support.py) — the
+# user-facing memory tools' caps + the confidence a `remember` write is stored at.
+remember_max_chars: 2000
+recall_max_hits: 3
+remember_write_confidence: 0.95
+
+# TOOL OUTPUT preview cap (registry/capabilities/handler/tools.py) — how much of a
+# tool's raw output is previewed to the model. Unit: characters.
+tool_output_preview_chars: 1000
