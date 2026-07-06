@@ -1,9 +1,12 @@
 # clannon-heartbeat@<side>.timer — POLL the coordinator's keep-alive so the agent
 # never sleeps permanently. The paired clannon-heartbeat.sh does the real decision:
-# for the BACKEND it is idle-gated — it nudges the coordinator only when ALL
-# specialists (memory + orchestration) are idle (once per idle period), plus a 1h
-# safety fallback. So the timer polls often and CHEAPLY (just a couple of tmux
-# capture-pane reads); the script suppresses all but the meaningful nudge. This is
+# for the BACKEND it is idle-gated per-specialist — it nudges the coordinator when
+# ANY specialist (memory or orchestration) has been sustained-idle, once per that
+# specialist's idle period, so an idle specialist gets its next INDEPENDENT task
+# promptly (the coordinator assigns work that doesn't depend on the other, else
+# leaves it idle). Plus a 1h safety fallback. So the timer polls often and CHEAPLY
+# (a couple of tmux capture-pane reads); the script suppresses all but the real
+# nudge. This is
 # the EXTERNAL guarantee the inbox-triggered clannon-wake@<side>.path can't give (a
 # quiet inbox would let an idle agent sleep forever); independent of the agent's own
 # ScheduleWakeup; survives a session restart / crash / reboot.

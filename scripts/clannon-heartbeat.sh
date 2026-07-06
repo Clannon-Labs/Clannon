@@ -34,17 +34,17 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
-# --- BACKEND idle-gating (owner request 2026-07-06) -------------------------------
-# The coordinator only has work to do — feed an idle specialist, push their finished
-# commits — when the specialists are NOT actively building. So instead of a blind
-# fixed-interval tick, the timer polls often but this gate fires the ping only when
-# ALL specialists (memory + orchestration) are idle, and only ONCE per idle period.
-# A specialist is "working" iff its tmux pane shows Claude Code's `esc to interrupt`
-# hint (present only while a turn is generating; a completed-turn summary line is not).
-# That single-frame read can FLICKER (a tool boundary / repaint mid-turn shows a frame
-# without the hint), so a nudge additionally requires all-idle to PERSIST across polls
-# (a dwell), never firing on one poll alone. A long fallback still guarantees the
-# coordinator is never stranded asleep — even if a specialist builds for hours.
+# --- BACKEND idle-gating (owner policy 2026-07-06, refined) -----------------------
+# React when ANY specialist goes idle — not only when both do — so an idle specialist
+# gets its next INDEPENDENT task promptly instead of waiting on the other to finish.
+# The timer polls often and cheaply; this gate nudges the coordinator only when a
+# specialist has been idle long enough to be real (a dwell — so a mid-turn capture-pane
+# flicker can't fire it) and only ONCE per that specialist's idle period. When nudged,
+# the coordinator decides PER specialist: assign queued work that does NOT depend on
+# what the OTHER specialist is still doing; if no safe independent work exists, leave it
+# idle (never invent busywork). A specialist is "working" iff its tmux pane shows Claude
+# Code's `esc to interrupt` hint (present only while a turn generates; a completed-turn
+# summary line is not). A 1h fallback still guarantees the coordinator is never stranded.
 if [ "$SIDE" = "backend" ]; then
   # If the coordinator itself is mid-turn, it needs no nudge — it'll finish and re-sweep.
   if tmux capture-pane -t "$SESSION" -p 2>/dev/null | grep -q "esc to interrupt"; then
@@ -52,55 +52,46 @@ if [ "$SIDE" = "backend" ]; then
     exit 0
   fi
 
-  IDLE_STAMP="/tmp/clannon-heartbeat-backend.idle-pinged"  # set once nudged for the current idle period
-  IDLE_SINCE="/tmp/clannon-heartbeat-backend.idle-since"   # unix ts we FIRST saw all-idle (cleared when any works)
-  LAST_PING="/tmp/clannon-heartbeat-backend.last-ping"     # unix ts of last nudge (fallback clock)
-  FALLBACK_S=3600                                          # never let >1h pass with zero nudges
-  DWELL_S=110                                              # all-idle must PERSIST this long (≥2 consecutive polls)
-                                                           # before a nudge, so a single flickered capture-pane
-                                                           # frame (a tool boundary / repaint mid-turn) can't fire
-                                                           # a false 'both idle' — the transient-idle false positive.
+  LAST_PING="/tmp/clannon-heartbeat-backend.last-ping"  # unix ts of last nudge (fallback clock)
+  FALLBACK_S=3600                                        # never let >1h pass with zero nudges
+  DWELL_S=110                                            # a specialist's idle must PERSIST this long
+                                                         # (>=2 consecutive polls) before it counts — a
+                                                         # single flickered frame can't accumulate it.
   now="$(date +%s)"
   last="$(cat "$LAST_PING" 2>/dev/null || echo 0)"
   since=$(( now - last ))
 
-  working=""
+  # Per-specialist state: <peer>.idle-since (first sustained-idle ts) and <peer>.handled
+  # (already nudged-for THIS idle period). Both cleared the instant the peer works again,
+  # so each fresh idle period is considered exactly once.
+  need=""       # peers newly sustained-idle AND not yet considered -> a reason to nudge NOW
+  idle_now=""   # peers currently sustained-idle -> all marked handled on a nudge
   for peer in memory orchestration; do
+    SINCE="/tmp/clannon-hb-$peer.idle-since"
+    HANDLED="/tmp/clannon-hb-$peer.handled"
     if tmux has-session -t "clannon-$peer" 2>/dev/null \
        && tmux capture-pane -t "clannon-$peer" -p 2>/dev/null | grep -q "esc to interrupt"; then
-      working="$working $peer"
+      rm -f "$SINCE" "$HANDLED"   # peer is working -> re-arm it
+      continue
     fi
+    # peer is idle this poll
+    isince="$(cat "$SINCE" 2>/dev/null || echo 0)"
+    if [ "$isince" -eq 0 ]; then echo "$now" > "$SINCE"; isince="$now"; fi
+    [ $(( now - isince )) -lt "$DWELL_S" ] && continue   # not sustained yet — flicker guard
+    idle_now="$idle_now $peer"
+    [ -e "$HANDLED" ] || need="$need $peer"
   done
 
-  if [ -n "$working" ]; then
-    # A specialist is building — reset BOTH idle markers so the next SUSTAINED all-idle
-    # window starts fresh, and stay silent unless the 1h fallback has elapsed (safety net).
-    rm -f "$IDLE_STAMP" "$IDLE_SINCE"
-    if [ "$since" -lt "$FALLBACK_S" ]; then
-      log "skip — busy:$working (idle-gated; ${since}s < ${FALLBACK_S}s fallback)"
-      exit 0
-    fi
-    log "fallback nudge — busy:$working but ${since}s elapsed (safety net)"
-  elif [ -e "$IDLE_STAMP" ]; then
-    # Already nudged for this idle period — stay quiet until a specialist works again.
-    log "skip — all idle but already nudged this idle period"
-    exit 0
+  if [ -n "$need" ]; then
+    # A specialist just became sustained-idle and hasn't been considered yet — nudge the
+    # coordinator to check it (and any other idle peer) for assignable INDEPENDENT work.
+    for p in $idle_now; do : > "/tmp/clannon-hb-$p.handled"; done
+    log "sustained-idle + unconsidered:$need (idle now:$idle_now) — nudging coordinator"
+  elif [ "$since" -ge "$FALLBACK_S" ]; then
+    log "fallback nudge — nothing newly idle but ${since}s since last (safety net)"
   else
-    # All specialists idle THIS poll — require it to PERSIST across polls (dwell) before
-    # nudging, so a one-frame flicker during a long turn can't trigger a false 'both idle'.
-    idle_since="$(cat "$IDLE_SINCE" 2>/dev/null || echo 0)"
-    if [ "$idle_since" -eq 0 ]; then
-      echo "$now" > "$IDLE_SINCE"
-      log "first all-idle poll — waiting ${DWELL_S}s to confirm it isn't a flicker"
-      exit 0
-    fi
-    idle_for=$(( now - idle_since ))
-    if [ "$idle_for" -lt "$DWELL_S" ]; then
-      log "all idle ${idle_for}s — waiting for ${DWELL_S}s dwell before nudging"
-      exit 0
-    fi
-    : > "$IDLE_STAMP"
-    log "all specialists idle ${idle_for}s (>=${DWELL_S}s dwell) — nudging coordinator"
+    log "skip — nothing newly idle (idle now:${idle_now:- none})"
+    exit 0
   fi
   echo "$now" > "$LAST_PING"
 fi
@@ -112,7 +103,7 @@ fi
 # unpushed. Per-side so a specialist ping tells IT to resume its own track.
 case "$SIDE" in
   backend)
-    MSG="[COORDINATOR HEARTBEAT · specialists idle] The specialists have gone idle (or this is the hourly safety fallback), so there may be coordination to do. Run your sweep: if your live context is empty (fresh session) FIRST read docs/RESUME.md to reload state; then check proposals/to-backend/, capture-pane clannon-memory + clannon-orchestration and feed any IDLE specialist a next step (deliver rulings to THEIR to-<side>/ inbox, not just an archived Response), push any unpushed commits ONLY after the suite is green (sole pusher, explicit pathspec), advance the mission/config/foundation work. If nothing is idle-and-unfed and nothing is unpushed, do nothing noisy — just confirm and go quiet." ;;
+    MSG="[COORDINATOR HEARTBEAT · a specialist is idle] A specialist just went idle (or hourly safety fallback). If your live context is empty (fresh session) FIRST read docs/RESUME.md. Then, for EACH idle specialist (capture-pane clannon-memory + clannon-orchestration to see which): decide — is there queued/next work for THIS specialist that does NOT depend on what the OTHER specialist is still doing? If yes -> assign it by writing to its to-<side>/ inbox (deliver rulings there, not just an archived Response). If no safe independent work exists -> leave it idle, do NOT invent busywork. Also check proposals/to-backend/ and push any unpushed commits after the suite is green (sole pusher, explicit pathspec). If nothing is assignable and nothing is unpushed, go quiet." ;;
   *)
     MSG="[HEARTBEAT · auto keep-alive] 20-min tick so you never sleep. If idle: re-read your handoff (HANDOFF*.md in this dir) + charter + inbox and continue your track; if mid-task, ignore this. Report to reports/$SIDE/." ;;
 esac
