@@ -36,13 +36,25 @@ for f in "$INBOX"/*.md; do
   [ -e "$f" ] || continue
   base="$(basename "$f")"
   case "$base" in .*|*~|*.swp|*.swo) continue ;; esac
-  # Only a PENDING proposal wakes. This is what prevents a SELF-WAKE: when the
-  # receiving agent edits a file in its own inbox to respond (flip Status to
-  # accepted/rejected/done, append its Response), that write re-fires this path
-  # unit — but the file is no longer `pending`, so it is skipped. It also skips
-  # settled reference files (owner briefs) and absorbs partial-write races (a
-  # half-written file has no Status line yet, so it waits for the complete write).
-  grep -qiE '^Status:[[:space:]]*pending([[:space:]]|$)' "$f" || continue
+  # A file wakes the agent if EITHER:
+  #  (1) its name starts with `reply` (case-insensitive) — the OWNER's reply-drop
+  #      convention. The owner answers a report by dropping a `reply*.md` here; it
+  #      is a bare answer, not a formatted proposal, so it has no `Status:` header
+  #      and would otherwise be missed (this is exactly the gap that let a dropped
+  #      reply sit unseen until the next heartbeat — fixed 2026-07-06). Handling it
+  #      = archiving it OUT of this inbox, which re-fires the path unit but finds no
+  #      reply*/pending file, so it can never self-loop.
+  #  (2) OR it is a PENDING proposal (an agent's normal proposal). This is what
+  #      prevents a SELF-WAKE: when the receiving agent edits a file in its own
+  #      inbox to respond (flip Status to accepted/rejected/done, append its
+  #      Response), that write re-fires this path unit — but the file is no longer
+  #      `pending`, so it is skipped. It also skips settled reference files (owner
+  #      briefs) and absorbs partial-write races (a half-written file has no Status
+  #      line yet, so it waits for the complete write).
+  case "$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')" in
+    reply*) : ;;   # owner reply drop — always wakes, no header needed
+    *) grep -qiE '^Status:[[:space:]]*pending([[:space:]]|$)' "$f" || continue ;;
+  esac
   if [ -z "$newest" ] || [ "$f" -nt "$newest" ]; then
     newest="$f"
   fi
