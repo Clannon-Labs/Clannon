@@ -3,7 +3,19 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest) — §9 COMPLETE; §8 compaction built; waiting on batch split
+## Update (2026-07-06 session, latest of all) — batch-orchestrator design filed
+
+§9 held (see the update just below) and backend cleared the gate + sent the
+batch-layer split. Authored the propose-first sub-design:
+`proposals/archive/to-backend/2026-07-06_batch-orchestrator-design-v2.md`
+(full detail: `reports/orchestration/report_v22.md`). Nothing built — this is
+design-only, awaiting ratification. **Resume: check
+`proposals/to-orchestration/` for backend's ruling before writing any batch
+code.** The Mission Engine itself needs nothing further right now; this file
+stays the resume point for it, but the active frontier has moved to the
+batch orchestrator (tracked in the report, not duplicated here).
+
+## Update (2026-07-06 session, earlier) — §9 COMPLETE; §8 compaction built; waiting on batch split
 
 §9's acceptance bar is now fully covered: restart survival + budget
 pre-check + completion gate (`mission_operate.py`, prior update below) and
