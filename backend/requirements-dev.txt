@@ -7,3 +7,5 @@
 
 pytest                       # runs the suite under tests/
 pyflakes                     # quick unused/undefined-import lint
+fakeredis                    # in-process Redis for the budget proof suite (tests/budget_redis.py)
+lupa                         # Lua runtime fakeredis needs to execute the atomic EVAL scripts

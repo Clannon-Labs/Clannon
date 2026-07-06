@@ -131,3 +131,11 @@ python-multipart             # FastAPI UploadFile parsing (/memory/upload)
 kuzu==0.11.3                 # embedded property-graph DB behind GraphPort; prebuilt wheel,
                              # no native build. Verified: installs via `uv pip install`,
                              # imports on CPython 3.12, suite green (900). Pinned for repro.
+
+# ============================================================
+# ATOMIC BUDGET (core/budget/redis_budget) — the money layer (ADR-0004)
+# ============================================================
+
+redis==8.0.1                 # async client for the atomic reserve/reconcile broker behind
+                             # BudgetPort. The check-and-decrement runs as a Lua EVAL so it is
+                             # indivisible server-side (no lost-update overspend). Pinned for repro.
