@@ -8,11 +8,12 @@ the other — the same one-door / sole-broker pattern as `MemoryPort`/`GraphPort
 
 Ratified 2026-07-05 (Q1 ruling: a SEPARATE port, NOT a `MemoryPort` method — batch-lifecycle
 status is control-plane state, not epistemic memory; a distinct axis, store, and access
-pattern, so its own door keeps every contract single-purpose). This is the CONTRACT slice
-only — inert, no implementer yet: `core/memory` builds it AFTER the Mission Engine lands (it
-needs real `mission_id`/`batch_id` through trusted `ctx`, and the completion signal that
-drives `clear_mission`). Nothing here forces it to be built; it makes the ratified seam
-concrete so the implementer has a stable target.
+pattern, so its own door keeps every contract single-purpose). Implemented 2026-07-05/06 in
+`core/memory` (`batch_awareness_manager.py` + `batch_store.py`, covered by
+`tests/memory_batch_awareness.py`): `mission_id`/`batch_id` flow through trusted `ctx`, and
+the Mission Engine's conclude-path drives `clear_mission`. The remaining open work is the
+CONSUMER — a batch orchestrator reading `cross_batch_awareness()` and sizing the result into
+its own context budget — which lands with the batch-orchestrator step, not here.
 
 The read is a bounded, deterministic filter (never a relevance-ranked search — there is no
 query), so a batch orchestrator learns just enough to coordinate without the context bloat a
