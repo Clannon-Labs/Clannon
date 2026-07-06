@@ -44,6 +44,16 @@ class BudgetScope:
     user_id: str
     mission_id: str = ""
 
+    def __post_init__(self) -> None:
+        # The ids ARE the delimiter-separated segments of every Redis budget key
+        # (`budget:{user_id}:{period}`, `budget:mission:{mission_id}`). A ':' in either would let
+        # two logically-distinct scopes collide onto one billing key — a real money bug the day a
+        # caller sources `user_id` from an email/composite instead of an opaque internal id.
+        # Enforce the "opaque id" contract here rather than trust convention: this is the money
+        # layer's identity boundary, exactly where "trusted for now" is worth hardening.
+        if ":" in self.user_id or ":" in self.mission_id:
+            raise ValueError("BudgetScope ids must not contain ':' (the budget-key delimiter)")
+
 
 @dataclass(frozen=True, slots=True)
 class TokenBudget:

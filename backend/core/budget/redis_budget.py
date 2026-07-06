@@ -59,6 +59,7 @@ def _calendar_month_utc() -> str:
 # user's remaining balance after a grant; code < 0 is a refusal, tag names which ceiling.
 _RESERVE_LUA = """
 local est = tonumber(ARGV[1])
+if est < 0 then return {-1, 'invalid_estimate'} end
 local has_mission = ARGV[2] == '1'
 local ubal = redis.call('GET', KEYS[1])
 if ubal == false then return {-1, 'user_missing'} end
@@ -125,12 +126,24 @@ class RedisBudget:
     async def reserve(self, scope: BudgetScope, estimate: int) -> BudgetReservation:
         if not scope.user_id:  # identity-set-once; an unscoped reserve is a bug, fail closed
             raise BudgetExhausted("budget reserve with no user_id", ceiling="user")
+        # Validate the estimate AT THIS BOUNDARY regardless of how trusted the caller is meant to
+        # be: a negative estimate would flip the Lua DECRBY into a balance-INFLATING increment
+        # (fail-OPEN in the one module whose job is to never fail open). A negative reaching here
+        # means the cost model produced garbage — refuse loud (ERROR), never silently clamp to a
+        # free reservation. (The Lua guards it too; this is the readable, logged front line.)
+        if estimate < 0:
+            log.error("budget reserve with negative estimate %d — cost model produced garbage", estimate)
+            raise BudgetExhausted("negative budget estimate (cost model error)", ceiling="user")
         period = self._period()
         reservation_id = uuid.uuid4().hex
         has_mission = bool(scope.mission_id)
+        user_key = self._user_key(scope.user_id, period)
         keys = [
-            self._user_key(scope.user_id, period),
-            self._mission_key(scope.mission_id) if has_mission else "budget:mission:_none",
+            user_key,
+            # When there's no mission, the Lua never reads KEYS[2] (guarded by has_mission==0), so
+            # any filler is inert — reuse the user key rather than a "budget:mission:_none" sentinel
+            # that could (however improbably) collide with a real mission whose id is "_none".
+            self._mission_key(scope.mission_id) if has_mission else user_key,
             self._resv_key(reservation_id),
         ]
         try:

@@ -117,6 +117,42 @@ def test_reserve_on_a_missing_budget_fails_closed_not_open():
     _run(go())
 
 
+def test_reserve_rejects_a_negative_estimate_without_inflating_the_balance():
+    # Regression (security review, 2026-07-06): a negative estimate must be REFUSED, never turned
+    # into a balance-inflating credit — a negative DECRBY is an INCRBY, so the un-guarded path
+    # took a balance of 100 up to 1,000,100. The one input a fail-closed money broker must
+    # validate at its own boundary no matter how trusted the caller is meant to be.
+    async def go():
+        r = aioredis.FakeRedis()
+        await _seed(r, user=100)
+        b = _budget(r)
+        with pytest.raises(BudgetExhausted):
+            await b.reserve(BudgetScope(user_id="u1"), -1_000_000)
+        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 100  # untouched, NOT inflated
+    _run(go())
+
+
+def test_budget_scope_rejects_colon_in_ids():
+    # ':' is the budget-key delimiter; an id containing it could collide two distinct scopes onto
+    # one billing key. Rejected at construction, so every caller (present + future) is covered.
+    with pytest.raises(ValueError):
+        BudgetScope(user_id="a:b")
+    with pytest.raises(ValueError):
+        BudgetScope(user_id="u1", mission_id="m:1")
+
+
+def test_no_mission_reserve_writes_no_sentinel_mission_key():
+    # The no-mission path must not leave a 'budget:mission:_none' sentinel a real mission named
+    # '_none' could collide with — the KEYS[2] filler is inert (the user key), never a mission key.
+    async def go():
+        r = aioredis.FakeRedis()
+        await _seed(r, user=1000)
+        b = _budget(r)
+        await b.reserve(BudgetScope(user_id="u1"), 100)
+        assert await r.get("budget:mission:_none") is None
+    _run(go())
+
+
 class _BrokenRedis:
     """A client whose every operation raises — stands in for Redis being unreachable."""
     def register_script(self, _src):
