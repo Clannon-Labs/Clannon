@@ -16,10 +16,13 @@ from .specs import (
     validate,
 )
 from .schemas import (
+    BatchFindings,
+    BatchSummary,
     ExpertFindings,
     ExpertOutput,
     ExpertRequest,
     ExpertSummary,
+    SpawnBatchArgs,
     ToolRequest,
 )
 from .store import CapabilityRegistry, registry
@@ -48,4 +51,7 @@ __all__ = [
     "ExpertSummary",
     "ExpertFindings",
     "ExpertOutput",
+    "SpawnBatchArgs",
+    "BatchSummary",
+    "BatchFindings",
 ]

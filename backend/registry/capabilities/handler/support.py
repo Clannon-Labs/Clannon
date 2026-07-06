@@ -38,7 +38,7 @@ from foundation import (
 )
 from core.llm import RunContext, Tool      # SDK types only via the core/llm boundary
 
-from ..schemas import ExpertOutput, ExpertRequest, ToolRequest
+from ..schemas import ExpertOutput, ExpertRequest, SpawnBatchArgs, ToolRequest
 from .overlay import expert_overlay_rel as _expert_overlay_rel, overlaid as _overlaid
 from .skills import SkillBook, skills_hint
 
@@ -277,6 +277,8 @@ class OrchestratorDeps:
     ctx: object
     tools: object       # ToolHandler (full grants)
     experts: object     # ExpertHandler
+    batches: object | None = None   # BatchHandler; None unless Capabilities.open() was given a batch_registry
+    model: object | None = None     # the same model override run_turn itself got, reused for a spawned batch's own nested run_turn (so a test's FunctionModel spy governs both levels hermetically)
 
 
 def _make_orchestrator_tool_fn(key: str, input_schema: type, description: str) -> Callable:
@@ -310,6 +312,35 @@ def _make_orchestrator_expert_fn(key: str, input_schema: type, description: str)
         return f"[finding_ref: {s.finding_ref}] {s.summary}" if s.finding_ref else s.summary
 
     return _make_wrapper(key, input_schema, description, invoke=invoke)
+
+
+def _make_spawn_batch_tool() -> Callable:
+    """Expose `spawn_batch` to the CENTRAL orchestrator's model — ONE tool (unlike
+    experts/tools, which get a wrapper per key), since a batch is addressed by a
+    runtime `batch_key` string, not a registered capability key. Opens a scoped
+    `Capabilities` restricted to that batch's own domain, buffers its full
+    findings to `ctx.batch_findings`, and returns the brief `BatchSummary` — the
+    two-output split one tier up. `ctx.deps.batches` is `None`/empty unless
+    `Capabilities.open()` was given a `batch_registry` (see batches.py's
+    recursion guard: a scoped/batch Capabilities never has one)."""
+
+    async def invoke(ctx: RunContext[OrchestratorDeps], args: SpawnBatchArgs) -> str:
+        if ctx.deps.batches is None:
+            return "[no batches configured]"
+        summary = await ctx.deps.batches.spawn_batch(
+            args.batch_key, args.task, ctx.deps.ctx, model=ctx.deps.model,
+        )
+        return f"[finding_ref: {summary.finding_ref}] {summary.summary}" if summary.finding_ref else summary.summary
+
+    return _make_wrapper(
+        "spawn_batch", SpawnBatchArgs,
+        "Delegate one sub-task to a scoped batch orchestrator for a specific domain "
+        "(e.g. \"engineering\", \"research\") — it runs its own full turn with only that "
+        "domain's experts/tools, and reports back a brief summary. Use this to decompose "
+        "a broad mission into domain-scoped sub-work instead of doing it all yourself. "
+        "Args: batch_key (which configured batch to run), task (what it should do).",
+        invoke=invoke,
+    )
 
 
 def _make_say_tool(on_message: Callable) -> Callable:
@@ -436,7 +467,7 @@ def _offer(fn: Callable, spec, *, files_attached: bool = False) -> "Callable | T
 
 def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None,
-    *, files_attached: bool = False, with_memory_write: bool = True,
+    *, files_attached: bool = False, with_memory_write: bool = True, batches: object | None = None,
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the always-on built-ins — `remember` (long-term memory) and
@@ -452,6 +483,12 @@ def build_orchestrator_tools(
     a batch's safer default, not a capability regression (`recall`, read-only and
     session-scoped, is unaffected).
 
+    `batches` (a `BatchHandler`) gates `spawn_batch`: offered ONLY when `batches.
+    has_batches` — an always-refusing tool (no batch configured yet, today's default)
+    is dead surface, not a working one, so it stays absent until at least one batch
+    is configured. `Capabilities.scoped_to()` never passes a non-empty `batches` here
+    (the recursion guard — see batches.py) — a batch's own model never sees this tool.
+
     `remember`/`recall`/`say` and the hot-path (`eager`) capabilities load up front; the
     long tail is deferred behind tool search (W2). When `files_attached`, the file-reading
     experts are ALSO eager this turn (so the orchestrator can read an upload instead of falling
@@ -462,6 +499,8 @@ def build_orchestrator_tools(
         fns.append(_make_remember_tool())
     if on_message is not None:
         fns.append(_make_say_tool(on_message))
+    if batches is not None and batches.has_batches:
+        fns.append(_make_spawn_batch_tool())
     for spec in tool_specs:
         fns.append(_offer(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description), spec))
     for spec in expert_specs:

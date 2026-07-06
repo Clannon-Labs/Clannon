@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from foundation import MaxRetriesExceededError, VrakshaContext, constants
 
 from .. import CapabilityKind, registry as default_registry
+from .batches import BatchDefinition, BatchHandler
 from .experts import ExpertHandler
 from .tools import ToolHandler
 
@@ -39,13 +40,21 @@ class Capabilities:
     _tools: ToolHandler
     _experts: ExpertHandler
     _allow_memory_write: bool = True   # gates the `remember` built-in; True preserves .open()'s behavior
+    _batches: BatchHandler | None = None   # None for every scoped_to() instance -- see its docstring (recursion guard)
 
     @classmethod
-    def open(cls, ctx: VrakshaContext, *, registry=default_registry) -> "Capabilities":
-        """Open a full-power gateway for one request."""
+    def open(
+        cls, ctx: VrakshaContext, *, registry=default_registry,
+        batch_registry: dict[str, BatchDefinition] | None = None,
+    ) -> "Capabilities":
+        """Open a full-power gateway for one request. `batch_registry` (batch_key
+        -> BatchDefinition) is the ONLY construction site that can populate the
+        batch tier -- see batches.py's module docstring on why `scoped_to()`
+        deliberately has no equivalent parameter (a batch cannot spawn a batch)."""
         tools = ToolHandler(registry=registry)
         experts = ExpertHandler(registry=registry, tools=tools)
-        return cls(ctx=ctx, _tools=tools, _experts=experts)
+        batches = BatchHandler(batch_registry=batch_registry, registry=registry)
+        return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches)
 
     @classmethod
     def scoped_to(
@@ -68,7 +77,11 @@ class Capabilities:
         no egress together" rule to; a batch orchestrator's default is the safer
         posture, with per-batch config (once it exists) able to opt back in
         explicitly. `recall` (read-only, this session only) is unaffected — this
-        gates the WRITE side only."""
+        gates the WRITE side only.
+
+        Deliberately takes no `batch_registry` param — `_batches` stays `None`
+        on the returned instance, so a batch's own scoped gateway never offers
+        `spawn_batch` to its own model (the recursion guard; see batches.py)."""
         tools = ToolHandler(registry=registry).scoped(allowed_keys=tool_keys, grants=grants)
         experts = ExpertHandler(registry=registry, tools=tools).scoped(allowed_keys=expert_keys)
         return cls(ctx=ctx, _tools=tools, _experts=experts, _allow_memory_write=allow_memory_write)
@@ -126,7 +139,9 @@ class Capabilities:
         expert_allowed = self._experts._allowed_keys
         if expert_allowed is not None:
             expert_specs = [s for s in expert_specs if s and s.key in expert_allowed]
-        deps = OrchestratorDeps(ctx=self.ctx, tools=self._tools, experts=self._experts)
+        deps = OrchestratorDeps(
+            ctx=self.ctx, tools=self._tools, experts=self._experts, batches=self._batches, model=model,
+        )
 
         handle = build_tool_agent(
             "orchestrator",
@@ -138,6 +153,7 @@ class Capabilities:
                 # front so the orchestrator can actually read the upload (not fall back to search)
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
                 with_memory_write=self._allow_memory_write,
+                batches=self._batches,
             ),
             deps_type=OrchestratorDeps,
             retries=constants.ORCHESTRATOR_MAX_RETRIES,

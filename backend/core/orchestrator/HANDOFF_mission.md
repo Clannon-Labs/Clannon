@@ -3,7 +3,40 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest of all) — mission_compaction.py now consumes edges_of()
+## Update (2026-07-06 session, latest of all) — BatchHandler/spawn_batch built
+
+Backend placed `ctx.batch_findings` on `VrakshaContext` (`57cde08`), clearing
+the last named blocker. Built `BatchDefinition`/`BatchHandler`
+(`registry/capabilities/handler/batches.py`, new) + `BatchFindings`/
+`BatchSummary`/`SpawnBatchArgs` schemas — mirrors `ExpertHandler` one tier up,
+wired as ONE new native tool (`spawn_batch`) on the central orchestrator via
+`Capabilities.open()`/`OrchestratorDeps`/`build_orchestrator_tools`. Full
+detail: `reports/orchestration/report_v25.md`.
+
+**Two things resolved before writing code, both load-bearing:**
+- Recursion guard: `Capabilities.scoped_to()` has NO `batch_registry`
+  parameter — only `Capabilities.open()` does — so a batch's own scoped
+  gateway can never spawn another batch. Structural, not a runtime check;
+  proved with a real nested `run_turn`, not attribute inspection.
+- Non-empty-registry gate: `spawn_batch` is offered to the model only when
+  `BatchHandler.has_batches`. No `batches.yaml` exists yet, so today's real
+  `Capabilities.open(ctx)` call site correctly never offers it — no dead
+  surface, appears automatically the moment a real batch is configured.
+
+9 tests (`tests/orchestrator_batch_handler.py`), including a discriminating
+end-to-end test driving a REAL nested `run_turn` through one shared
+`FunctionModel` spy. Suite green: 1134 passed, 13 env-skips. Committed.
+
+**Resume: nothing is currently blocked.** `config/backend/batches.yaml` +
+a first concrete batch proposal is the natural next step, but that's a
+propose-first decomposition exercise (design's §H), not mine to start
+unprompted. One low-priority gap flagged to backend, not fixed here:
+`proposals/to-backend/2026-07-06_batch-call-audit-gap.md` (no
+`ctx.batch_calls` equivalent to `ctx.expert_calls`) — currently unreachable,
+revisit once a real batch lands. The unwired advisory batch-entropy scorer
+still just needs a test (backlog, unchanged across several sessions now).
+
+## Update (2026-07-06 session, earlier) — mission_compaction.py now consumes edges_of()
 
 Self-selected cleanup, not owner-assigned: `edges_of()` landed on `GraphPort`
 (`foundation/contracts/graph.py`, `45b6ab4`) explicitly to close the

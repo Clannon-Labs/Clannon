@@ -66,3 +66,35 @@ class ExpertOutput(BaseModel):
         "(e.g. a generated report or code file). The handler copies these out of the "
         "workspace into durable storage before it is torn down. Empty if nothing to deliver.",
     )
+
+
+class SpawnBatchArgs(BaseModel):
+    """The central orchestrator's `spawn_batch` native tool arguments — ONE tool,
+    not one wrapper per batch (unlike experts/tools, which get a wrapper each)."""
+    batch_key: str
+    task: str
+
+
+class BatchSummary(BaseModel):
+    """
+    Brief summary returned to the central orchestrator after a batch's scoped
+    run — the two-output split, one tier up from ExpertSummary. `summary` is a
+    bounded excerpt of the batch's own answer_text (see BatchHandler's cap
+    constant); the full text lives in the matching BatchFindings.
+    """
+    batch: str
+    summary: str
+    confidence: float = 0.0
+    finding_ref: str            # key into ctx.batch_findings for the full content
+
+
+class BatchFindings(BaseModel):
+    """Full batch output, buffered in ctx.batch_findings for the output filter —
+    the batch's own answer_text in full (its constituent experts' full output is
+    already buffered separately in ctx.expert_findings, since a batch shares its
+    caller's ctx; this holds the batch-level synthesis on top of that, not a
+    duplicate of it)."""
+    batch: str
+    ref: str
+    full_content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)

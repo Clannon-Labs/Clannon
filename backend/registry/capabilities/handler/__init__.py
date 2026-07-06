@@ -8,6 +8,7 @@ registry surfaces (registry/__init__, registry.capabilities/__init__) — import
 explicitly from here when you need to run capabilities or build an expert.
 """
 
+from .batches import BatchDefinition, BatchHandler
 from .capability import Capabilities
 from .experts import ExpertHandler
 from .tools import ToolHandler
@@ -26,6 +27,8 @@ __all__ = [
     "Capabilities",
     "ToolHandler",
     "ExpertHandler",
+    "BatchHandler",
+    "BatchDefinition",
     "ExpertDeps",
     "ExpertEnv",
     "ScopedToolbox",
