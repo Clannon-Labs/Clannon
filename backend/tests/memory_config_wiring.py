@@ -28,6 +28,14 @@ coincidence.
     call-time rather than frozen at import, so it's provable without a
     module reload
 
+D1 slice (2026-07-06, f628a0b): the MEMORY_* group formerly in
+`foundation/vocab/constants.py` — same equality-pin / causation-proof split:
+  ✓ manager.py's _SEARCH_K/_RELEVANCE_FLOOR and store.search's default
+    `limit` equal settings.MEMORY (import-frozen, equality-pin)
+  ✓ manager._embed_bounded's read deadline and writer.distill/
+    judge_supersession's retry count are GENUINELY wired (call-time reads,
+    same causation-proof shape as the Qdrant timeout above)
+
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_config_wiring.py -v
 """
@@ -52,11 +60,15 @@ from core.memory.manager import (
     _MIN_ACCEPT_CONFIDENCE,
     _RECENCY_FLOOR,
     _RECENCY_HALF_LIFE_S,
+    _RELEVANCE_FLOOR,
+    _SEARCH_K,
     _SUPERSESSION_FLOOR,
     _SUPERSESSION_TIMEOUT_S,
     _TIER_FLOOR,
     _TIER_TRUST,
+    _embed_bounded,
 )
+import core.memory.writer as writer
 from foundation import MemoryStore
 
 
@@ -132,3 +144,62 @@ def test_store_qdrant_timeout_is_genuinely_wired_not_coincidental(monkeypatch):
     client = store._qdrant()
     assert client is not None
     assert captured.get("timeout") == sentinel
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# D1 slice (f628a0b) — the former foundation.constants.MEMORY_* group
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_search_k_and_relevance_floor_match_settings():
+    assert _SEARCH_K == settings.MEMORY.search_top_k
+    assert _RELEVANCE_FLOOR == settings.MEMORY.relevance_floor
+
+
+def test_store_search_default_limit_matches_settings():
+    import inspect
+    default = inspect.signature(store.search).parameters["limit"].default
+    assert default == settings.MEMORY.search_top_k
+
+
+def test_embed_bounded_read_timeout_is_genuinely_wired(monkeypatch):
+    """Causation, not coincidence: a hanging embed only trips the (patched,
+    near-zero) deadline if _embed_bounded is actually reading
+    settings.MEMORY.read_timeout_s live, not a frozen default."""
+    import asyncio as _asyncio
+
+    async def _hanging_embed(texts):
+        await _asyncio.sleep(5)
+        return [[0.0] for _ in texts]
+
+    monkeypatch.setattr(embeddings, "embed", _hanging_embed)
+    patched = settings.MemoryConfig(**{**settings.MEMORY.model_dump(), "read_timeout_s": 0.05})
+    monkeypatch.setattr(settings, "MEMORY", patched)
+
+    result = _asyncio.run(_embed_bounded("x"))
+    assert result is None, "a stalled embed must degrade via the (patched, tiny) read timeout"
+
+
+def test_writer_retries_are_genuinely_wired(monkeypatch):
+    """Causation proof for both writer.py call sites: a fake build_agent
+    captures the `retries` kwarg it's actually invoked with. Returns None
+    (a bogus handle) rather than raising — build_agent() is called OUTSIDE
+    both functions' try/except, so a raise here would propagate uncaught;
+    the None handle instead makes the (real) run_structured() fail, which
+    IS inside the try/except, so distill()/judge_supersession() degrade
+    normally (best-effort, never raises)."""
+    captured = []
+
+    def _fake_build_agent(*args, **kwargs):
+        captured.append(kwargs.get("retries"))
+        return None
+
+    monkeypatch.setattr(writer, "build_agent", _fake_build_agent)
+    sentinel = 7   # distinct from the real default (2) — rules out coincidence
+    patched = settings.MemoryConfig(**{**settings.MEMORY.model_dump(), "distill_max_retries": sentinel})
+    monkeypatch.setattr(settings, "MEMORY", patched)
+
+    import asyncio as _asyncio
+    assert _asyncio.run(writer.distill("task", "answer", [])) == []
+    assert _asyncio.run(writer.judge_supersession("a", "b")) is False
+
+    assert captured == [sentinel, sentinel]

@@ -379,9 +379,10 @@ def test_mark_failure_does_not_break_the_write(monkeypatch):
 
 
 def test_judge_timeout_is_bounded_independently(monkeypatch):
-    """A slow/hanging judge must be cut off well inside MEMORY_WRITE_TIMEOUT_S, and
-    must never cause record_write_proposals to mistake the already-successful upsert
-    for a stalled store (which would incorrectly drop this AND all later writes)."""
+    """A slow/hanging judge must be cut off well inside
+    settings.MEMORY.write_timeout_s, and must never cause
+    record_write_proposals to mistake the already-successful upsert for a
+    stalled store (which would incorrectly drop this AND all later writes)."""
     monkeypatch.setattr(manager_mod, "_SUPERSESSION_TIMEOUT_S", 0.05)
     monkeypatch.setattr(emb_mod, "embed", _embed_ok())
     monkeypatch.setattr(store_mod, "search", _search_hit(score=_MID_BAND))

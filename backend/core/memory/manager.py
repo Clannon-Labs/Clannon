@@ -22,7 +22,6 @@ from foundation import (
     MemoryKind,
     MemoryStore,
     MemoryWriteProposal,
-    constants,
 )
 
 from . import batch_awareness_manager, embeddings, graph_manager, store, writer
@@ -57,21 +56,12 @@ def _count_tokens(text: str) -> int:
             pass
     return max(1, len(text) // _CHARS_PER_TOKEN)
 
-# Config-depth (2026-07-06): every value below now reads from
-# config/backend/{memory,budget}.yaml via settings.MEMORY/settings.BUDGET,
-# behavior-preserving (each still equals the prior hardcoded literal) — only
-# these definitions changed, no call site below them did. _TIER_TRUST/
-# _TIER_FLOOR stay MemoryStore-enum-keyed dicts (every call site already
-# reads them that way) rather than exposing the config's per-tier field
-# names past this point.
-#
-# TierTrust's fields are typed float in settings.py (a future fractional
-# weight is legitimate there), but this dict's values flow into
-# MemoryItem.trust (an `int` field, foundation/contracts/memory.py) and then
-# into the Qdrant payload — an un-cast 3.0 would silently persist as a float
-# where 3 was stored before, a real behavior change pydantic's coercion
-# would introduce invisibly. int() here is the honest boundary cast, not a
-# settings.py schema change.
+# Config-depth (2026-07-06): these read config/backend/{memory,budget}.yaml
+# via settings.MEMORY/settings.BUDGET, behavior-preserving; only the
+# definitions changed, no call site below them did. TierTrust's fields are
+# `float` in settings.py, but _TIER_TRUST flows into MemoryItem.trust (an
+# `int` field) and the Qdrant payload, so int() casts at the boundary here
+# rather than letting an un-cast 3.0 silently persist where 3 did before.
 _TIER_TRUST = {
     MemoryStore.WIKI: int(settings.MEMORY.tier_trust.wiki),
     MemoryStore.SEMANTIC: int(settings.MEMORY.tier_trust.semantic),
@@ -86,8 +76,8 @@ _TIER_FLOOR = {
     MemoryStore.PROCEDURAL: settings.MEMORY.tier_floor.procedural,
 }
 _DEFAULT_BUDGET_TOKENS = settings.BUDGET.default_memory_budget_tokens
-_SEARCH_K = constants.MEMORY_SEARCH_TOP_K          # candidates per inferred tier
-_RELEVANCE_FLOOR = constants.MEMORY_RELEVANCE_FLOOR  # drop weak hits before ranking
+_SEARCH_K = settings.MEMORY.search_top_k          # candidates per inferred tier
+_RELEVANCE_FLOOR = settings.MEMORY.relevance_floor  # drop weak hits before ranking
 _RECENCY_HALF_LIFE_S = settings.MEMORY.recency_half_life_s
 _RECENCY_FLOOR = settings.MEMORY.recency_floor
 _MIN_ACCEPT_CONFIDENCE = settings.MEMORY.min_accept_confidence   # semantic/procedural acceptance bar
@@ -109,7 +99,7 @@ _SUPERSESSION_FLOOR = settings.MEMORY.supersession_floor
 # unlike a plain turn-history entry). See the `kind == DECISION` half of the
 # gate at the call site — this set alone is deliberately not the full story.
 _SUPERSESSION_TIERS = frozenset({MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL})
-# Bounds the optional judge+mark step independently of MEMORY_WRITE_TIMEOUT_S, so
+# Bounds the optional judge+mark step independently of settings.MEMORY.write_timeout_s, so
 # a slow judge call can never cause record_write_proposals to mistake an
 # already-successful upsert for a stalled store and drop a real write.
 _SUPERSESSION_TIMEOUT_S = settings.MEMORY.supersession_timeout_s
@@ -148,7 +138,7 @@ def _recency(created_at: float) -> float:
 
 
 async def _embed_bounded(text: str) -> list[list[float]] | None:
-    """Embed the query under a hard read deadline (MEMORY_READ_TIMEOUT_S).
+    """Embed the query under a hard read deadline (settings.MEMORY.read_timeout_s).
 
     A cold or stalled embedding model must NOT hang the whole turn waiting on
     memory: on timeout we return None and the turn proceeds without memory (the
@@ -157,7 +147,7 @@ async def _embed_bounded(text: str) -> list[list[float]] | None:
     """
     try:
         return await asyncio.wait_for(
-            embeddings.embed([text]), timeout=constants.MEMORY_READ_TIMEOUT_S
+            embeddings.embed([text]), timeout=settings.MEMORY.read_timeout_s
         )
     except Exception as exc:  # noqa: BLE001 — TimeoutError or any embed fault → degrade, never raise
         log.warning("memory embed degraded (%s); answering without it", exc)
@@ -315,8 +305,9 @@ class MemoryManager:
         the store/embeddings are down. Callers surface ONLY the returned set, so the
         `/memory` view can never show a memory that was proposed but not persisted
         (delivered-path honesty — no phantom writes). Each write is bounded by
-        `MEMORY_WRITE_TIMEOUT_S`: a stalled store degrades (drops the rest) instead
-        of hanging the delivered path — symmetric with the read path's deadline."""
+        `settings.MEMORY.write_timeout_s`: a stalled store degrades (drops the
+        rest) instead of hanging the delivered path — symmetric with the read
+        path's deadline."""
         persisted: list[MemoryWriteProposal] = []
         if not proposals or not user_id:
             return persisted
@@ -335,12 +326,12 @@ class MemoryManager:
             try:
                 wrote = await asyncio.wait_for(
                     self._persist_one(tier, user_id, session_id, content, proposal),
-                    timeout=constants.MEMORY_WRITE_TIMEOUT_S,
+                    timeout=settings.MEMORY.write_timeout_s,
                 )
             except asyncio.TimeoutError:
                 log.warning(
                     "memory write timed out after %ss (store stalled) — dropping remaining writes",
-                    constants.MEMORY_WRITE_TIMEOUT_S,
+                    settings.MEMORY.write_timeout_s,
                 )
                 break  # a stalled store fails every write; bail like the embeddings-down path
             if not wrote:

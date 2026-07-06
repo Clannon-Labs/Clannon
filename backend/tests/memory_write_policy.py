@@ -462,13 +462,16 @@ def test_returns_empty_when_upsert_fails_midflight(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_write_timeout_drops_remaining_writes(monkeypatch):
-    from foundation import constants as fconst   # the exact module manager reads
+    import settings   # the exact module manager reads (config-depth, 2026-07-06)
 
     async def _hanging_embed(texts):
         await asyncio.sleep(5)   # far longer than the (patched) write deadline
         return [_DUMMY_VEC for _ in texts]
 
-    monkeypatch.setattr(fconst, "MEMORY_WRITE_TIMEOUT_S", 0.05)
+    # settings.MEMORY is a frozen pydantic model — swap the whole singleton for
+    # a copy with one field overridden, rather than mutating a field in place.
+    patched = settings.MemoryConfig(**{**settings.MEMORY.model_dump(), "write_timeout_s": 0.05})
+    monkeypatch.setattr(settings, "MEMORY", patched)
     rec, result = asyncio.run(
         _run_returning(
             "u1", [_p(content="a"), _p(content="b")],

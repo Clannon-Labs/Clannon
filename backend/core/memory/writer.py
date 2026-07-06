@@ -16,7 +16,8 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from foundation import MemoryKind, MemoryStore, MemoryWriteProposal, constants
+import settings
+from foundation import MemoryKind, MemoryStore, MemoryWriteProposal
 from core.llm import build_agent, run_structured
 
 log = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ async def distill(task: str, answer: str, findings: list[str]) -> list[MemoryWri
         "memory",
         output_type=MemoryExtraction,
         prompt_name="memory",
-        retries=constants.MEMORY_DISTILL_MAX_RETRIES,
+        retries=settings.MEMORY.distill_max_retries,
     )
     try:
         result = await run_structured(
@@ -145,7 +146,7 @@ async def judge_supersession(new_content: str, existing_content: str) -> bool:
         "memory",
         output_type=_SupersessionVerdict,
         prompt_name="memory_supersession",
-        retries=constants.MEMORY_DISTILL_MAX_RETRIES,
+        retries=settings.MEMORY.distill_max_retries,
     )
     try:
         verdict = await run_structured(

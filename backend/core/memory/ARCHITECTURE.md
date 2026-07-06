@@ -78,11 +78,12 @@ loop before planning. Steps:
 
 1. **Scope check** — no `user_id` → empty package with a note. Fail closed.
 2. **Embed** the normalized query text (one embedding call, cached model).
-3. **Per-tier search** — each allowed tier, top-K (`MEMORY_SEARCH_TOP_K`, default
-   10), filtered `user_id == request.user_id`. Tiers the caller's plan doesn't
-   include are simply not searched (`allowed_tiers` on the request; default: all).
-   A **relevance floor** (`MEMORY_RELEVANCE_FLOOR`, default 0.30) drops hits below
-   that raw cosine *before* ranking, so weak neighbours never fill context.
+3. **Per-tier search** — each allowed tier, top-K (`settings.MEMORY.search_top_k`,
+   default 10), filtered `user_id == request.user_id`. Tiers the caller's plan
+   doesn't include are simply not searched (`allowed_tiers` on the request;
+   default: all). A **relevance floor** (`settings.MEMORY.relevance_floor`,
+   default 0.30) drops hits below that raw cosine *before* ranking, so weak
+   neighbours never fill context.
 4. **Score** = cosine similarity × recency decay (half-life 30 days,
    floor 0.5) — old memories fade but never vanish.
 5. **Lagrangian budget allocation** across tiers (the root doc's model):
