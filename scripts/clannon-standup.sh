@@ -50,6 +50,16 @@ msg_for() {
   esac
 }
 
+# --- Mode -------------------------------------------------------------------
+# resume : bring back the EXACT running conversations — `claude --continue` in each agent's own
+#          cwd, so no context is lost and no reorientation is needed. This is what you run after
+#          closing the terminals or rebooting: every agent picks up its exact session.
+# fresh  : cold-start a NEW session per agent + send the reorientation wake (read handoff). Only
+#          for a true cold clone where no prior session exists on disk.
+MODE="${1:-fresh}"
+case "$MODE" in resume|fresh) ;; *) echo "usage: $(basename "$0") [resume|fresh]"; exit 2 ;; esac
+echo "clannon-standup: mode = $MODE"
+
 created=0
 for side in "${sides[@]}"; do
   session="clannon-$side"
@@ -62,10 +72,17 @@ for side in "${sides[@]}"; do
     # default (Opus). The quality net is the backend agent's Opus review of every
     # specialist proposal + merge — not the model. Reversible: drop the flag to
     # bump a specialist back to Opus.
-    launch="claude --dangerously-skip-permissions"
-    case "$side" in
-      memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
-    esac
+    if [ "$MODE" = resume ]; then
+      # Resume the EXACT prior conversation in this cwd. `--continue` picks the most-recent
+      # session for the directory (= this agent's live one) and keeps its own remembered model,
+      # so we deliberately do NOT re-pass --model here.
+      launch="claude --continue --dangerously-skip-permissions"
+    else
+      launch="claude --dangerously-skip-permissions"
+      case "$side" in
+        memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
+      esac
+    fi
     tmux new-session -d -s "$session" -c "$dir"
     # type the launch command literally, then a detached Enter to submit it
     tmux send-keys -t "$session" -l "$launch"
@@ -82,16 +99,23 @@ if [ "$created" = 1 ]; then
   sleep 12
 fi
 
-# Wake each agent. Literal text + a separate Enter (a text+Enter burst is read as a
-# paste and inserts a newline instead of submitting — same reason as proposal-wake.sh).
-for side in "${sides[@]}"; do
-  session="clannon-$side"
-  tmux has-session -t "$session" 2>/dev/null || { echo "clannon-standup: $session missing — skipped wake."; continue; }
-  tmux send-keys -t "$session" -l "$(msg_for "$side")"
-  sleep 0.5
-  tmux send-keys -t "$session" Enter
-  echo "clannon-standup: woke $session."
-done
+# Wake each agent (FRESH mode only). A resumed agent already has its full context, so injecting a
+# reorientation message would be wrong (and could type over you) — resume just brings the sessions
+# back; the heartbeat + inbox-path units re-engage the coordinator, and you can type into any
+# session to drive. Literal text + a separate Enter (a text+Enter burst is read as a paste and
+# inserts a newline instead of submitting — same reason as proposal-wake.sh).
+if [ "$MODE" = fresh ]; then
+  for side in "${sides[@]}"; do
+    session="clannon-$side"
+    tmux has-session -t "$session" 2>/dev/null || { echo "clannon-standup: $session missing — skipped wake."; continue; }
+    tmux send-keys -t "$session" -l "$(msg_for "$side")"
+    sleep 0.5
+    tmux send-keys -t "$session" Enter
+    echo "clannon-standup: woke $session."
+  done
+else
+  echo "clannon-standup: resume mode — contexts intact, no reorientation wake sent."
+fi
 
 # Keep-alive guarantee: (re)install + enable the 20-min heartbeat timer so the
 # BACKEND coordinator never sleeps permanently — even on a fresh clone after a
@@ -111,4 +135,5 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
-echo "clannon-standup: crew online. Attach with ./scripts/agent-session.sh <backend|frontend|memory|orchestration>."
+echo "clannon-standup: crew online ($MODE). Attach with:  tmux attach -t clannon-<backend|frontend|memory|orchestration|security>"
+echo "clannon-standup:   (or ./scripts/agent-session.sh <side>).  Re-run any time — alive sessions are left untouched."
