@@ -69,16 +69,11 @@ TEXTUAL_MIME_TYPES = frozenset({
 
 
 # ---------------------------------------------------------------------------
-# SANITIZERS
-# Parallel workers that inspect raw input.
-# TOTAL timeout is the wall time for all workers combined (they run in parallel).
-# PER_WORKER timeout is how long one modality worker can run before it is killed.
+# SANITIZERS — MIGRATED to config (D1, single-source). The combined + per-worker timeouts and
+# the concurrency cap now live in config/backend/security.yaml → settings.SECURITY.
+# {sanitizer_timeout_total_s, sanitizer_timeout_worker_s, sanitizer_max_workers}; security/'s
+# workers read them from there (owner control panel), not from a foundation constant.
 # ---------------------------------------------------------------------------
-
-SANITIZER_TIMEOUT_TOTAL_S   = 15.0   # all workers combined must finish within this
-SANITIZER_TIMEOUT_WORKER_S  = 10.0   # single worker timeout (text, pdf, image etc)
-SANITIZER_MAX_WORKERS       = 10     # global semaphore — max concurrent workers
-                                     # across all incoming requests
 
 MAX_TEXT_INPUT_CHARS        = 100_000             # character cap on text content
 MAX_PDF_PAGES               = 500                 # pages before we reject the pdf
@@ -159,7 +154,7 @@ EXPERT_MAX_TURNS            = 8      # max tool rounds inside one expert's run
 
 FILTER_TIMEOUT_S            = 12.0   # >= 10s: Gemini rejects deadlines under 10s
 FILTER_MAX_TOKENS           = 512
-FILTER_MAX_RETRIES          = 2      # retries on malformed output before ERROR
+# FILTER_MAX_RETRIES — MIGRATED to config (D1): settings.SECURITY.filter_max_retries.
 FILTER_MAX_REVISIONS        = 2      # THE single output-filter recovery budget (CLI + web): when the
                                      # filter rejects a draft, the reason is fed back (ctx.filter_feedback)
                                      # and the orchestrator re-reasons, up to this many times. The filter

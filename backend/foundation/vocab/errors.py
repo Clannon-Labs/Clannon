@@ -236,7 +236,8 @@ class ExpertNotPermittedError(OrchestratorError):
 class MaxRetriesExceededError(OrchestratorError):
     """
     The orchestrator or output filter retry loop hit its limit.
-    Check constants.py: FILTER_MAX_RETRIES, TOOL_MAX_RETRIES, ORCHESTRATOR_MAX_RETRIES.
+    Bounds: settings.SECURITY.filter_max_retries (filter); constants.py TOOL_MAX_RETRIES /
+    ORCHESTRATOR_MAX_RETRIES (still there pending their own D1 move).
     """
 
 
