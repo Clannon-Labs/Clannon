@@ -17,6 +17,7 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
+import settings
 from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 
@@ -125,7 +126,7 @@ def _sanitize_image(payload: bytes, image_format: str) -> bytes:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
-                timeout=constants.SANITIZER_TIMEOUT_WORKER_S,
+                timeout=settings.SECURITY.sanitizer_timeout_worker_s,
             )
         except subprocess.TimeoutExpired:
             # A crafted image must not let exiftool hang a worker thread.

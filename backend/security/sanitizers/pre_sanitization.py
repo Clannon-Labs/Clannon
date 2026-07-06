@@ -28,7 +28,8 @@ from typing import Any
 import clamd
 import yara
 
-from foundation import SanitizationError, ThreatLevel, coerce_to_bytes, constants
+import settings
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 
 CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
@@ -189,7 +190,9 @@ class YaraScanner:
             # the engine-level timeout matters: asyncio cancellation stops the
             # await, not the scanning thread — without it a pathological
             # rule x payload combination pins a worker thread forever
-            matches = rules.match(data=payload, timeout=int(constants.SANITIZER_TIMEOUT_WORKER_S))
+            matches = rules.match(
+                data=payload, timeout=int(settings.SECURITY.sanitizer_timeout_worker_s)
+            )
         except SanitizationError:
             raise
         except Exception as exc:

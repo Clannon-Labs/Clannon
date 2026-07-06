@@ -22,9 +22,9 @@ then per-modality cleanup workers. One `Flow` in, one `Flow` out.
 ## Conventions
 - `runner.py` (door) → `pre_sanitization.py` → `workers/*` (text=detect-secrets +
   presidio; image=Pillow + exiftool; pdf=PyMuPDF + pikepdf; audio/video=ffmpeg
-  remux). Concurrency `SANITIZER_MAX_WORKERS`, per-worker timeout
-  `SANITIZER_TIMEOUT_WORKER_S`. Standalone `security/vendors/pdfid/` is NOT in the
-  active path.
+  remux). Concurrency `settings.SECURITY.sanitizer_max_workers`, per-worker
+  timeout `settings.SECURITY.sanitizer_timeout_worker_s` (`config/backend/
+  security.yaml`). Standalone `security/vendors/pdfid/` is NOT in the active path.
 
 ## Tests
 `tests/pre_sanitization.py`, `tests/text_sanitization.py`, `tests/sanitizer_runner.py`, `tests/uploads.py`.

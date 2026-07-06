@@ -22,8 +22,9 @@ It:
 - Runs universal pre-sanitization first.
 - Runs modality-specific sanitizer workers only after pre-sanitization passes.
 - Runs matching modality workers concurrently, under a global concurrency limit
-  (`SANITIZER_MAX_WORKERS`) and a per-worker timeout (`SANITIZER_TIMEOUT_WORKER_S`),
-  within an overall total timeout.
+  (`settings.SECURITY.sanitizer_max_workers`) and a per-worker timeout
+  (`settings.SECURITY.sanitizer_timeout_worker_s`), within an overall total timeout
+  (`config/backend/security.yaml`).
 - Blocks the flow when a worker reports a blocking threat level (and persists the
   worker report to `flow.ctx.sanitization` on that block path too).
 - Blocks if intake somehow reports no modality with a matching worker.

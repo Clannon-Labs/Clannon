@@ -25,6 +25,7 @@ from typing import Any, Callable
 import ffmpeg
 from mutagen import File as MutagenFile
 
+import settings
 from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
 
 from ._base import highest_threat, run_subworker
@@ -94,7 +95,7 @@ def _run_ffmpeg(stream) -> None:
     """
     process = stream.run_async(pipe_stdout=True, pipe_stderr=True, quiet=True)
     try:
-        out, err = process.communicate(timeout=constants.SANITIZER_TIMEOUT_WORKER_S)
+        out, err = process.communicate(timeout=settings.SECURITY.sanitizer_timeout_worker_s)
     except subprocess.TimeoutExpired:
         process.kill()
         process.communicate()

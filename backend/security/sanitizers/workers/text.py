@@ -25,6 +25,7 @@ import tempfile
 from typing import Callable
 import asyncio
 
+import settings
 from foundation import ThreatLevel
 
 from ._base import highest_threat, run_subworker
@@ -59,21 +60,9 @@ TextWorker = Callable[[str], TextWorkerResult]
 # PERSON / LOCATION / DATE_TIME / NRP / URL, those are the subject matter of
 # research queries ("the capital of France", "papers by Hinton since 2020"),
 # and redacting them destroys the request before the orchestrator sees it.
-PII_REDACTED_ENTITIES = [
-    "EMAIL_ADDRESS",
-    "PHONE_NUMBER",
-    "CREDIT_CARD",
-    "IBAN_CODE",
-    "US_BANK_NUMBER",
-    "US_SSN",
-    "US_ITIN",
-    "US_PASSPORT",
-    "US_DRIVER_LICENSE",
-    "UK_NHS",
-    "MEDICAL_LICENSE",
-    "CRYPTO",
-    "IP_ADDRESS",
-]
+# Sourced from config/backend/security.yaml (settings.SECURITY, docket D8) — the
+# floor there is this same baseline; config may only ADD entities, never drop one.
+PII_REDACTED_ENTITIES = settings.SECURITY.pii_redacted_entities
 
 
 @lru_cache(maxsize=1)

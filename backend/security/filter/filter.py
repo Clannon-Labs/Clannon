@@ -15,6 +15,7 @@ import json
 import time
 from typing import Any
 
+import settings
 from foundation import (
     BlockReason,
     FilterError,
@@ -23,7 +24,6 @@ from foundation import (
     Origin,
     PipelineStage,
     ThreatLevel,
-    constants,
 )
 from core.llm import build_agent, run_structured
 
@@ -31,11 +31,12 @@ from .schemas import FilterResult
 
 
 # bounds on the grounding payload — enough evidence for the filter to judge
-# groundedness without blowing up the filter call's token cost
-_MAX_FINDINGS = 8
-_FINDING_CHARS = 1500
-_MAX_TOOL_CALLS = 12
-_TOOL_RESULT_CHARS = 1200
+# groundedness without blowing up the filter call's token cost. Sourced from
+# config/backend/security.yaml (settings.SECURITY, docket D8: floor + 4x ceiling).
+_MAX_FINDINGS = settings.SECURITY.filter_grounding_max_findings
+_FINDING_CHARS = settings.SECURITY.filter_grounding_max_finding_chars
+_MAX_TOOL_CALLS = settings.SECURITY.filter_grounding_max_tool_calls
+_TOOL_RESULT_CHARS = settings.SECURITY.filter_grounding_max_tool_result_chars
 
 
 def _grounding_view(response, findings: list, memory: list, tool_calls: list) -> str:
@@ -91,7 +92,7 @@ async def _filter(response, findings: list, memory: list, tool_calls: list) -> F
         "filter",
         output_type=FilterResult,
         prompt_name="filter",
-        retries=constants.FILTER_MAX_RETRIES,
+        retries=settings.SECURITY.filter_max_retries,
     )
     return await run_structured(handle, _grounding_view(response, findings, memory, tool_calls))
 

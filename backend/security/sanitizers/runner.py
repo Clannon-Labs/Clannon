@@ -17,14 +17,15 @@ import time
 import asyncio
 import weakref
 
+import settings
 from foundation import Flow, Origin, BlockReason, PipelineStage
-from foundation import constants, SanitizationError
+from foundation import SanitizationError
 from . import pre_sanitization
 from .workers import text, pdf, image, video, audio
 
 
 # One concurrency limiter per event loop, shared across requests on that loop.
-# Bounds how many modality workers run at once to constants.SANITIZER_MAX_WORKERS
+# Bounds how many modality workers run at once to settings.SECURITY.sanitizer_max_workers
 # (keyed by loop so tests that spin up fresh loops don't reuse a bound semaphore).
 _worker_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
@@ -36,7 +37,7 @@ def _worker_semaphore() -> asyncio.Semaphore:
     loop = asyncio.get_running_loop()
     semaphore = _worker_semaphores.get(loop)
     if semaphore is None:
-        semaphore = asyncio.Semaphore(constants.SANITIZER_MAX_WORKERS)
+        semaphore = asyncio.Semaphore(settings.SECURITY.sanitizer_max_workers)
         _worker_semaphores[loop] = semaphore
     return semaphore
 
@@ -44,11 +45,12 @@ def _worker_semaphore() -> asyncio.Semaphore:
 async def _bounded_scan(scan_coro):
     """
     Run one modality worker under the global concurrency limit and a per-worker
-    timeout. A worker that exceeds SANITIZER_TIMEOUT_WORKER_S raises TimeoutError,
-    which the runner turns into a fail (distinct from the overall total timeout).
+    timeout. A worker that exceeds settings.SECURITY.sanitizer_timeout_worker_s
+    raises TimeoutError, which the runner turns into a fail (distinct from the
+    overall total timeout).
     """
     async with _worker_semaphore():
-        async with asyncio.timeout(constants.SANITIZER_TIMEOUT_WORKER_S):
+        async with asyncio.timeout(settings.SECURITY.sanitizer_timeout_worker_s):
             return await scan_coro
 
 
@@ -113,7 +115,7 @@ async def run(flow: Flow) -> Flow:
                 started
             )
 
-        async with asyncio.timeout(constants.SANITIZER_TIMEOUT_TOTAL_S):
+        async with asyncio.timeout(settings.SECURITY.sanitizer_timeout_total_s):
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # The default handoff is the original payload. Workers can replace it
