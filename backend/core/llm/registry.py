@@ -11,6 +11,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
 from foundation import constants
+import settings
 from registry.config import ModelProfile, load_model_registry
 
 # Per-request model overrides (role -> "provider:model"), set by the
@@ -230,8 +231,8 @@ def usage_limits_for_layer(
         base_requests = constants.VERIFIER_MAX_RETRIES + 1
         base_tokens: int | None = constants.VERIFIER_MAX_TOKENS
     elif layer == "orchestrator":
-        base_requests = constants.ORCHESTRATOR_MAX_TURNS + 1
-        base_tokens = constants.ORCHESTRATOR_MAX_TOKENS
+        base_requests = settings.ORCHESTRATOR.max_turns + 1
+        base_tokens = settings.ORCHESTRATOR.max_tokens
     else:
         # one-shot structured agents (e.g. filter); tool-driving callers override.
         base_requests = 1

@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from foundation import Flow, constants
+import settings
 from core import intake, normalizer, verifier, orchestrator
 
 log = logging.getLogger(__name__)
@@ -223,10 +224,10 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
             # ORCHESTRATOR_TIMEOUT_S). Budget exhausted ⇒ wait_for times out ⇒ fail closed
             # below. Falls back to the per-pass limit if no deadline was set (defensive).
             _budget = (max(0.0, ctx.turn_deadline - time.monotonic())
-                       if ctx.turn_deadline else constants.ORCHESTRATOR_TIMEOUT_S)
+                       if ctx.turn_deadline else settings.ORCHESTRATOR.timeout_s)
             revised = await asyncio.wait_for(
                 run_loop(ctx.normalized_input, ports, ctx),
-                timeout=min(constants.ORCHESTRATOR_TIMEOUT_S, _budget),
+                timeout=min(settings.ORCHESTRATOR.timeout_s, _budget),
             )
         except Exception as exc:  # noqa: BLE001 — surface as a run failure, never crash
             ctx.failed = True

@@ -194,6 +194,12 @@ class OrchestratorConfig(BaseModel):
     degraded_per_finding_chars: int = Field(gt=0)
     degraded_max_findings: int = Field(gt=0)
     degraded_confidence: float = Field(ge=0.0, le=1.0)
+    # D1 move — migrating out of foundation/vocab/constants.py.
+    timeout_s: float = Field(gt=0.0)
+    max_tokens: int = Field(gt=0)
+    max_turns: int = Field(gt=0)
+    max_retries: int = Field(ge=0)
+    turn_wall_clock_s: float = Field(gt=0.0)
 
     @model_validator(mode="after")
     def _entropy_bands_ordered(self) -> "OrchestratorConfig":
@@ -231,6 +237,11 @@ class ExpertsConfig(BaseModel):
     max_artifacts: int = Field(gt=0)
     max_artifact_bytes: int = Field(gt=0)
     need_context_max_items: int = Field(gt=0)
+    # D1 move — migrating out of foundation/vocab/constants.py.
+    timeout_s: float = Field(gt=0.0)
+    max_concurrent: int = Field(gt=0)
+    max_output_tokens: int = Field(gt=0)
+    max_turns: int = Field(gt=0)
 
 
 def _load_experts() -> ExpertsConfig:
@@ -263,6 +274,12 @@ class ToolsConfig(BaseModel):
     recall_max_hits: int = Field(gt=0)
     remember_write_confidence: float = Field(ge=0.0, le=1.0)
     tool_output_preview_chars: int = Field(gt=0)
+    # D1 move — migrating out of foundation/vocab/constants.py.
+    timeout_s: float = Field(gt=0.0)
+    sandbox_timeout_s: float = Field(gt=0.0)
+    max_retries: int = Field(ge=0)
+    max_output_bytes: int = Field(gt=0)
+    fetch_max_response_bytes: int = Field(gt=0)
 
     @model_validator(mode="after")
     def _search_bounds_ordered(self) -> "ToolsConfig":

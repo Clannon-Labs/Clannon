@@ -32,6 +32,21 @@ def test_experts_values_match_todays_literals():
     assert (e.max_artifacts, e.max_artifact_bytes, e.need_context_max_items) == (20, 10485760, 5)
 
 
+def test_d1_migrated_bounds_equal_the_foundation_constants():
+    # ORCHESTRATOR_*/EXPERT_*/TOOL_* migrating out of foundation/vocab/constants.py (D1). Until
+    # the consumers repoint + the constants are removed, config MUST equal the constant (no-op swap).
+    import foundation.vocab.constants as c
+    o, e, t = settings.ORCHESTRATOR, settings.EXPERTS, settings.TOOLS
+    assert o.timeout_s == c.ORCHESTRATOR_TIMEOUT_S and o.max_tokens == c.ORCHESTRATOR_MAX_TOKENS
+    assert o.max_turns == c.ORCHESTRATOR_MAX_TURNS and o.max_retries == c.ORCHESTRATOR_MAX_RETRIES
+    assert o.turn_wall_clock_s == c.TURN_WALL_CLOCK_S
+    assert e.timeout_s == c.EXPERT_TIMEOUT_S and e.max_concurrent == c.EXPERT_MAX_CONCURRENT
+    assert e.max_output_tokens == c.EXPERT_MAX_OUTPUT_TOKENS and e.max_turns == c.EXPERT_MAX_TURNS
+    assert t.timeout_s == c.TOOL_TIMEOUT_S and t.sandbox_timeout_s == c.TOOL_SANDBOX_TIMEOUT_S
+    assert t.max_retries == c.TOOL_MAX_RETRIES and t.max_output_bytes == c.TOOL_MAX_OUTPUT_BYTES
+    assert t.fetch_max_response_bytes == c.FETCH_MAX_RESPONSE_BYTES
+
+
 def test_tools_values_match_todays_literals():
     t = settings.TOOLS
     assert (t.diff_max_chars, t.fetch_url_max_redirects, t.http_request_max_headers) == (200000, 5, 25)
@@ -53,6 +68,7 @@ def _orch_kwargs(**over):
         episodic_task_excerpt_chars=200, episodic_answer_excerpt_chars=500,
         decision_record_content_chars=500, degraded_per_finding_chars=4000,
         degraded_max_findings=6, degraded_confidence=0.1,
+        timeout_s=480.0, max_tokens=8096, max_turns=20, max_retries=2, turn_wall_clock_s=720.0,
     )
     return {**base, **over}
 
@@ -71,6 +87,8 @@ def _tools_kwargs(**over):
         chart_margin_bottom=80, chart_margin_left=70, chart_max_bar_width=80.0,
         remember_max_chars=2000, recall_max_hits=3, remember_write_confidence=0.95,
         tool_output_preview_chars=1000,
+        timeout_s=30.0, sandbox_timeout_s=25.0, max_retries=2,
+        max_output_bytes=1048576, fetch_max_response_bytes=5242880,
     )
     return {**base, **over}
 

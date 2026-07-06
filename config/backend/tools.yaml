@@ -39,3 +39,10 @@ remember_write_confidence: 0.95
 # TOOL OUTPUT preview cap (registry/capabilities/handler/tools.py) — how much of a
 # tool's raw output is previewed to the model. Unit: characters.
 tool_output_preview_chars: 1000
+
+# ── D1 MOVE: tool bounds migrating OUT of foundation/vocab/constants.py ───────────────────────
+timeout_s: 30.0                 # per tool call wall time — was TOOL_TIMEOUT_S. > 0
+sandbox_timeout_s: 25.0        # sandbox process must exit before tool timeout — was TOOL_SANDBOX_TIMEOUT_S. > 0
+max_retries: 2               # retries on transient sandbox errors — was TOOL_MAX_RETRIES. >= 0
+max_output_bytes: 1048576      # 1 MB cap on tool output — was TOOL_MAX_OUTPUT_BYTES. > 0
+fetch_max_response_bytes: 5242880  # 5 MB cap on a fetched HTTP body — was FETCH_MAX_RESPONSE_BYTES. > 0

@@ -28,3 +28,9 @@ media_inline_limit_bytes: 15728640   # 15 MB
 max_artifacts: 20               # max artifacts captured from one expert run
 max_artifact_bytes: 10485760    # 10 MB per captured artifact
 need_context_max_items: 5       # max items a need_context recall returns
+
+# ── D1 MOVE: expert bounds migrating OUT of foundation/vocab/constants.py ─────────────────────
+timeout_s: 240.0                # per expert invocation — was EXPERT_TIMEOUT_S. > 0
+max_concurrent: 3              # max experts running in parallel — was EXPERT_MAX_CONCURRENT. > 0
+max_output_tokens: 4096        # was EXPERT_MAX_OUTPUT_TOKENS. > 0
+max_turns: 8                  # max tool rounds inside one expert's run — was EXPERT_MAX_TURNS. > 0

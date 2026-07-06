@@ -39,3 +39,12 @@ decision_record_content_chars: 500
 degraded_per_finding_chars: 4000
 degraded_max_findings: 6
 degraded_confidence: 0.1
+
+# ── D1 MOVE: orchestrator bounds migrating OUT of foundation/vocab/constants.py ───────────────
+# (owner ruling D1(a); consumers in core/orchestrator + core/pipeline read them here. The
+# foundation constants stay until consumers repoint, then are removed — equal throughout.)
+timeout_s: 480.0              # whole-loop wall time — was ORCHESTRATOR_TIMEOUT_S. > 0
+max_tokens: 8096             # was ORCHESTRATOR_MAX_TOKENS. > 0
+max_turns: 20               # max tool rounds in one orchestrator turn — was ORCHESTRATOR_MAX_TURNS. > 0
+max_retries: 2              # retries on malformed orchestrator output — was ORCHESTRATOR_MAX_RETRIES. >= 0
+turn_wall_clock_s: 720.0     # max wall time for ONE full user turn (incl. revisions) — was TURN_WALL_CLOCK_S. > 0
