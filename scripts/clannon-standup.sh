@@ -37,13 +37,13 @@ dir_for() {
 msg_for() {
   case "$1" in
     backend)
-      echo "[auto-wake] Good morning — new work session. You've been woken up to start today's work. Read HANDOFF.md for state, check your inbox (proposals/to-backend/ + backend/proposals/), then drive the mission and coordinate the two specialists (memory, orchestration)." ;;
+      echo "[auto-wake] RESUMING — this is a fresh session, so your live context is empty; the durable state is on disk/GitHub. FIRST read docs/RESUME.md (the committed resume runbook) + .claude/contexts/HANDOFF.md (local anchor) to reload full state, THEN check your inbox (proposals/to-backend/ + backend/proposals/), re-arm the coordinator heartbeat (ScheduleWakeup ~1200s), and drive the mission + coordinate the two specialists (memory, orchestration). Continue from where the runbook says, don't restart." ;;
     frontend)
-      echo "[auto-wake] New work session — check your inbox (proposals/to-frontend/ + frontend/proposals/) and continue your frontend work per your CLAUDE.md." ;;
+      echo "[auto-wake] RESUMING (fresh session) — FIRST read your handoff HANDOFF.md (in this dir) to pick up where you paused, THEN check your inbox (proposals/to-frontend/ + frontend/proposals/) and continue your frontend work per your CLAUDE.md." ;;
     memory)
-      echo "[auto-wake] New work session — check your inbox (proposals/to-memory/), read your kickoff + charter (core/memory/CLAUDE.md), and start/continue your work. Report to reports/memory/." ;;
+      echo "[auto-wake] RESUMING MID-TASK (fresh session — live context is empty). FIRST read your handoff HANDOFF_batch.md (in this dir) to pick up EXACTLY where you paused on the Mission Engine graph build (members()/mission_graph_store — what's done + the next steps), THEN your charter (core/memory/CLAUDE.md) + inbox (proposals/to-memory/). Continue from the handoff's next-steps — do NOT restart from scratch. Report to reports/memory/." ;;
     orchestration)
-      echo "[auto-wake] New work session — check your inbox (proposals/to-orchestration/), read your kickoff + charter (core/orchestrator/CLAUDE.md), and start/continue your work. Report to reports/orchestration/." ;;
+      echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your handoff HANDOFF_mission.md (in this dir) to pick up your Mission Engine state + what unblocks now that memory's members() landed, THEN your charter (core/orchestrator/CLAUDE.md) + inbox (proposals/to-orchestration/). Continue from the handoff — do NOT restart. Report to reports/orchestration/." ;;
   esac
 }
 
