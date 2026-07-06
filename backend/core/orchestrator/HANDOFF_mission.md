@@ -3,7 +3,23 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest of all) — BatchHandler/spawn_batch built
+## Update (2026-07-06 session, latest of all) — §7 autonomy ceiling now config-driven (D7)
+
+Minor but worth knowing if you're touching `mission_operate.py`'s autonomy
+gate: `DEFAULT_AUTONOMOUS_SAFE` is gone. `needs_approval()`/
+`run_operate_step()`'s `autonomous_safe` parameter now defaults from
+`settings.SECURITY.autonomous_safe_permissions` (`config/backend/
+security.yaml`, owner docket D7) — value unchanged (`frozenset({READ})`),
+but the CEILING it can never exceed (`_AUTONOMOUS_SAFE_CEILING`, blocking
+WRITE/EXECUTE/NETWORK/ELEVATED from ever being autonomous) now lives as a
+non-YAML-overridable constant in `settings.py`, enforced fail-loud at
+import. If a future mission ever needs broader autonomous action, that's a
+deliberate ceiling-widening code change with owner sign-off, not a config
+edit. Full detail: `reports/orchestration/report_v28.md`. This also closed
+the whole config-depth track (reports v26-v28) — unrelated to Mission Engine
+progress itself, just landed the same tree.
+
+## Update (2026-07-06 session, earlier) — BatchHandler/spawn_batch built
 
 Backend placed `ctx.batch_findings` on `VrakshaContext` (`57cde08`), clearing
 the last named blocker. Built `BatchDefinition`/`BatchHandler`
