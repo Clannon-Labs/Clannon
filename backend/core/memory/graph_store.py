@@ -61,11 +61,11 @@ class GraphReadResult:
 
     `paths` is the CODE_FILE traversal shape (a bare set of paths — the
     caller already knows the label, so a path is enough to rebuild a node).
-    `rows` is the typed-node bulk-read shape (`members()`) — a MISSION/TASK
-    node carries real properties (status, summary, …), not just one path, so
-    each match is a full property dict (including `id`) instead of a bare
-    string. The two are populated by different read paths and never both at
-    once."""
+    `rows` is the generic typed-dict bulk-read shape: a MISSION/TASK node's
+    full property dict (including `id`) for `members()`, or a
+    `{"src", "dst", "origin"}` edge dict for `edges_of()` — either way, a
+    tuple of dicts rather than the bare-path shape. `paths`/`rows` are
+    populated by different read paths and never both at once."""
     paths: frozenset[str] = field(default_factory=frozenset)
     rows: tuple[dict[str, Any], ...] = ()
     degraded: bool = False

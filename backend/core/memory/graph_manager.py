@@ -17,6 +17,7 @@ from pathlib import Path
 
 from foundation import (
     EdgeLabel,
+    EdgeOrigin,
     GraphEdge,
     GraphNode,
     GraphResult,
@@ -69,6 +70,19 @@ def _to_graph_node(scope: GraphScope, path: str) -> GraphNode:
         scope=scope,
         properties={"path": path},
     )
+
+
+def _safe_edge_origin(value: str) -> EdgeOrigin:
+    """Reconstruct EdgeOrigin from a stored string without ever raising into
+    a read path that promises degrade-never-fail — an unrecognized value
+    (only reachable via a corrupt/hand-edited db, since every write path
+    only ever stores a real EdgeOrigin.value) falls back to INFERRED rather
+    than propagating a ValueError, and never to ASSERTED (its immutability
+    protection must not be granted to unrecognized data)."""
+    try:
+        return EdgeOrigin(value)
+    except ValueError:
+        return EdgeOrigin.INFERRED
 
 
 def _from_read(scope: GraphScope, read: graph_store.GraphReadResult) -> GraphResult:
@@ -236,6 +250,32 @@ class GraphManager:
             for row in read.rows
         ]
         return GraphResult(nodes=nodes, notes=read.notes)
+
+    async def edges_of(self, scope: GraphScope, node_id: str, label: EdgeLabel) -> GraphResult:
+        """Every edge of `label` incident to `node_id`, either direction — the
+        fix for the TASK-edge read gap orchestration flagged (`write()` could
+        persist BLOCKS/FEEDS/SUPERSEDES, nothing could read them back; a
+        restart-surviving compaction needs "does this terminal task still
+        feed a non-terminal one"). A complete, deterministic filter-read,
+        never a traversal — mirrors `members()`'s framing for edges instead
+        of nodes. NOT on the GraphPort Protocol yet — same three-step landing
+        sequence as `members()`: lands here first (a Protocol superset, so
+        isinstance stays green), backend adds it to the Protocol once told."""
+        if not scope.user_id:
+            return GraphResult(degraded=True, notes="missing user_id — refused, fail-closed")
+        if await asyncio.to_thread(graph_store.is_down):
+            return GraphResult(degraded=True, notes="graph store unavailable")
+        kind = label.value
+        if not mission_graph_store.is_known_edge_kind(kind):
+            return GraphResult(notes=f"edge label {label.value!r} has no bulk edges_of() backing")
+        read = await asyncio.to_thread(mission_graph_store.typed_edges_of, kind, scope, node_id)
+        if read.degraded:
+            return GraphResult(degraded=True, notes=read.notes)
+        edges = [
+            GraphEdge(src_id=row["src"], dst_id=row["dst"], label=label, origin=_safe_edge_origin(row["origin"]))
+            for row in read.rows
+        ]
+        return GraphResult(edges=edges, notes=read.notes)
 
     # ---- build-slice surface (not part of GraphPort) ---------------------
 

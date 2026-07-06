@@ -2,7 +2,9 @@
 Mission Engine graph substrate — `core/memory/mission_graph_store.py` (typed
 Mission/Task nodes + Blocks/Feeds/Supersedes edges over Kuzu) and
 `GraphManager`'s dispatch extension (`write()` now also accepts MISSION/TASK
-nodes + the three new edge labels; the new `members()` bulk-read method).
+nodes + the three new edge labels; the `members()` bulk node-read; the
+`edges_of()` bulk edge-read — the fix for orchestration's TASK-edge read gap,
+`archive/to-backend/2026-07-06_task-edge-read-gap.md`, ruled 2026-07-06).
 
 Ratified 2026-07-05 from the memory specialist's empirically-verified answers
 to orchestration's two GraphPort-semantics questions
@@ -161,6 +163,41 @@ def test_degrade_never_fail_when_store_disabled(monkeypatch):
     assert result.degraded is True
 
 
+def test_typed_edges_of_finds_edges_in_either_direction():
+    """The TASK-edge read gap fix — a FEEDS edge t1->t2 must be visible from
+    BOTH t1's and t2's perspective (edges_of is 'incident to', not a
+    directional traversal); the caller recovers direction from src/dst."""
+    scope = GraphScope(user_id="u1")
+    mission_graph_store.upsert_typed_nodes("task", [_task_row(scope, "t1", "m1")])
+    mission_graph_store.upsert_typed_nodes("task", [_task_row(scope, "t2", "m1")])
+    src, dst = graph_store.node_id(scope, "t1"), graph_store.node_id(scope, "t2")
+    mission_graph_store.upsert_typed_edges("feeds", [{"src": src, "dst": dst, "origin": "inferred"}])
+
+    from_src = mission_graph_store.typed_edges_of("feeds", scope, src)
+    from_dst = mission_graph_store.typed_edges_of("feeds", scope, dst)
+
+    assert from_src.rows == ({"src": src, "dst": dst, "origin": "inferred"},)
+    assert from_dst.rows == ({"src": src, "dst": dst, "origin": "inferred"},)
+
+
+def test_typed_edges_of_does_not_cross_edge_kinds():
+    scope = GraphScope(user_id="u1")
+    mission_graph_store.upsert_typed_nodes("task", [_task_row(scope, "t1", "m1")])
+    mission_graph_store.upsert_typed_nodes("task", [_task_row(scope, "t2", "m1")])
+    src, dst = graph_store.node_id(scope, "t1"), graph_store.node_id(scope, "t2")
+    mission_graph_store.upsert_typed_edges("blocks", [{"src": src, "dst": dst, "origin": "inferred"}])
+
+    assert mission_graph_store.typed_edges_of("feeds", scope, src).rows == ()
+    assert mission_graph_store.typed_edges_of("blocks", scope, src).rows == ({"src": src, "dst": dst, "origin": "inferred"},)
+
+
+def test_typed_edges_of_unknown_kind_is_degraded():
+    scope = GraphScope(user_id="u1")
+    result = mission_graph_store.typed_edges_of("not-a-real-kind", scope, "whatever")
+    assert result.degraded is True
+    assert result.rows == ()
+
+
 def test_delete_user_purges_mission_and_task_nodes_for_that_user_only():
     """The Mission Engine half of right-to-erasure — previously nothing
     purged Mission/Task data on account deletion at all."""
@@ -280,6 +317,106 @@ def test_members_on_an_unbacked_label_is_empty_not_an_error(manager):
         assert result.degraded is False
         assert result.nodes == []
         assert "not" in result.notes or "no bulk" in result.notes
+    asyncio.run(go())
+
+
+def test_edges_of_through_the_port_returns_typed_graphedges(manager):
+    async def go():
+        scope = GraphScope(user_id="u1")
+        t1 = GraphNode(node_id=graph_store.node_id(scope, "t1"), label=NodeLabel.TASK, scope=scope,
+                        properties={"task_id": "t1", "mission_id": "m1", "summary": "s", "status": "active",
+                                    "evidence": "", "updated_at": 1.0})
+        t2 = GraphNode(node_id=graph_store.node_id(scope, "t2"), label=NodeLabel.TASK, scope=scope,
+                        properties={"task_id": "t2", "mission_id": "m1", "summary": "s", "status": "active",
+                                    "evidence": "", "updated_at": 1.0})
+        await manager.write(scope, [t1, t2], [])
+        await manager.write(scope, [], [GraphEdge(src_id=t1.node_id, dst_id=t2.node_id,
+                                                   label=EdgeLabel.FEEDS, origin=EdgeOrigin.ASSERTED)])
+
+        from_t1 = await manager.edges_of(scope, t1.node_id, EdgeLabel.FEEDS)
+        from_t2 = await manager.edges_of(scope, t2.node_id, EdgeLabel.FEEDS)
+
+        for result in (from_t1, from_t2):
+            assert len(result.edges) == 1
+            assert result.edges[0].src_id == t1.node_id
+            assert result.edges[0].dst_id == t2.node_id
+            assert result.edges[0].label == EdgeLabel.FEEDS
+            assert result.edges[0].origin == EdgeOrigin.ASSERTED
+    asyncio.run(go())
+
+
+def test_edges_of_fail_closed_on_missing_user_id(manager):
+    async def go():
+        result = await manager.edges_of(GraphScope(user_id=""), "whatever", EdgeLabel.FEEDS)
+        assert result.degraded is True
+    asyncio.run(go())
+
+
+def test_edges_of_degrades_on_store_down(manager, monkeypatch):
+    async def go():
+        monkeypatch.setattr(graph_store, "DISABLED", True)
+        result = await manager.edges_of(GraphScope(user_id="u1"), "whatever", EdgeLabel.FEEDS)
+        assert result.degraded is True
+    asyncio.run(go())
+
+
+def test_edges_of_on_an_unbacked_label_is_empty_not_an_error(manager):
+    async def go():
+        result = await manager.edges_of(GraphScope(user_id="u1"), "whatever", EdgeLabel.IMPORTS)
+        assert result.degraded is False
+        assert result.edges == []
+        assert "no bulk" in result.notes
+    asyncio.run(go())
+
+
+def test_edges_of_tenant_isolation_same_ids_different_users(manager):
+    async def go():
+        scope_a, scope_b = GraphScope(user_id="u1"), GraphScope(user_id="u2")
+        for scope in (scope_a, scope_b):
+            t1 = GraphNode(node_id=graph_store.node_id(scope, "t1"), label=NodeLabel.TASK, scope=scope,
+                            properties={"task_id": "t1", "mission_id": "m1", "summary": "s", "status": "active",
+                                        "evidence": "", "updated_at": 1.0})
+            t2 = GraphNode(node_id=graph_store.node_id(scope, "t2"), label=NodeLabel.TASK, scope=scope,
+                            properties={"task_id": "t2", "mission_id": "m1", "summary": "s", "status": "active",
+                                        "evidence": "", "updated_at": 1.0})
+            await manager.write(scope, [t1, t2], [])
+            await manager.write(scope, [], [GraphEdge(src_id=t1.node_id, dst_id=t2.node_id,
+                                                       label=EdgeLabel.BLOCKS, origin=EdgeOrigin.INFERRED)])
+
+        node_a = graph_store.node_id(scope_a, "t1")
+        result = await manager.edges_of(scope_a, node_a, EdgeLabel.BLOCKS)
+        assert len(result.edges) == 1
+        assert result.edges[0].src_id == node_a  # never the identically-keyed u2 edge
+    asyncio.run(go())
+
+
+def test_edges_of_unparseable_stored_origin_falls_back_instead_of_raising(manager, monkeypatch):
+    """Defense-in-depth for a corrupt/hand-edited db: an origin string that
+    isn't a valid EdgeOrigin must never raise into this degrade-never-fail
+    read path."""
+    async def go():
+        scope = GraphScope(user_id="u1")
+        real_read = mission_graph_store.typed_edges_of
+
+        def _tampered(kind, s, node_id):
+            result = real_read(kind, s, node_id)
+            return type(result)(rows=tuple({**r, "origin": "not-a-real-origin"} for r in result.rows),
+                                 degraded=result.degraded, notes=result.notes)
+
+        t1 = GraphNode(node_id=graph_store.node_id(scope, "t1"), label=NodeLabel.TASK, scope=scope,
+                        properties={"task_id": "t1", "mission_id": "m1", "summary": "s", "status": "active",
+                                    "evidence": "", "updated_at": 1.0})
+        t2 = GraphNode(node_id=graph_store.node_id(scope, "t2"), label=NodeLabel.TASK, scope=scope,
+                        properties={"task_id": "t2", "mission_id": "m1", "summary": "s", "status": "active",
+                                    "evidence": "", "updated_at": 1.0})
+        await manager.write(scope, [t1, t2], [])
+        await manager.write(scope, [], [GraphEdge(src_id=t1.node_id, dst_id=t2.node_id,
+                                                   label=EdgeLabel.FEEDS, origin=EdgeOrigin.INFERRED)])
+
+        monkeypatch.setattr(mission_graph_store, "typed_edges_of", _tampered)
+        result = await manager.edges_of(scope, t1.node_id, EdgeLabel.FEEDS)
+        assert result.degraded is False
+        assert result.edges[0].origin == EdgeOrigin.INFERRED  # falls back, never raises
     asyncio.run(go())
 
 

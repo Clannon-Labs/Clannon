@@ -81,6 +81,13 @@ def is_known_kind(kind: str) -> bool:
     return kind in _TYPED_NODE_SCHEMAS
 
 
+def is_known_edge_kind(kind: str) -> bool:
+    """Whether `kind` (an EdgeLabel.value string, e.g. "blocks"/"feeds") has a
+    typed-edge table backing it — the `edges_of()` counterpart to
+    `is_known_kind`."""
+    return kind in _TYPED_EDGE_TABLES
+
+
 def upsert_typed_nodes(kind: str, rows: list[dict]) -> list[str]:
     """Generic MERGE-by-id upsert for a typed node table (Mission/Task today;
     any future typed label the same way). Each row carries 'id' plus whatever
@@ -200,4 +207,38 @@ def typed_members(kind: str, scope: GraphScope, *, parent_id: str = "") -> Graph
         return GraphReadResult(rows=rows)
     except Exception as exc:
         log.warning("kuzu typed-members read failed (%s): %s", kind, exc)
+        return GraphReadResult(degraded=True, notes="graph store unavailable")
+
+
+def typed_edges_of(kind: str, scope: GraphScope, node_id: str) -> GraphReadResult:
+    """Every edge of `kind` incident to `node_id`, either direction — a
+    complete, deterministic filter-read (never a traversal, never hop-
+    bounded), the edge counterpart to `typed_members()`. Backs
+    `GraphPort.edges_of()` — the fix for the TASK-edge read gap orchestration
+    flagged (BLOCKS/FEEDS/SUPERSEDES could be written via `write()` but never
+    read back). Fail-closed on a missing scope/unknown kind; degrades on a
+    store fault. Rows are `{"src", "dst", "origin"}` dicts (not node property
+    dicts — `GraphReadResult.rows` is a generic typed-dict shape, shared with
+    `typed_members()`'s node rows)."""
+    entry = _TYPED_EDGE_TABLES.get(kind)
+    if not scope.user_id or entry is None:
+        return GraphReadResult(degraded=True, notes="missing user_id or unknown kind — refused, fail-closed")
+    rel_table, node_table = entry
+    conn = graph_store.connection()
+    if conn is None:
+        return GraphReadResult(degraded=True, notes="graph store unavailable")
+    params = {"user_id": scope.user_id, "repo_id": scope.repo_id, "node_id": node_id}
+    try:
+        result = conn.execute(
+            f"MATCH (a:{node_table})-[r:{rel_table}]->(b:{node_table}) "
+            "WHERE a.user_id = $user_id AND a.repo_id = $repo_id "
+            "AND b.user_id = $user_id AND b.repo_id = $repo_id "
+            "AND (a.id = $node_id OR b.id = $node_id) "
+            "RETURN a.id, b.id, r.origin",
+            params,
+        )
+        rows = tuple({"src": r[0], "dst": r[1], "origin": r[2]} for r in result.get_all())
+        return GraphReadResult(rows=rows)
+    except Exception as exc:
+        log.warning("kuzu typed-edges-of read failed (%s): %s", kind, exc)
         return GraphReadResult(degraded=True, notes="graph store unavailable")
