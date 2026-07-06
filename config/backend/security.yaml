@@ -1,0 +1,15 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/security.yaml — security-authorization policy. BACKEND-CONTROLLED.
+# HARD-FLOORED: some values here can only ever be TIGHTENED by config, never loosened
+# below a safe ceiling that settings.py enforces fail-loud at load (a hostile/mistaken
+# edit that tries to loosen past the ceiling STOPS startup). First entry is the D7
+# autonomous-action ceiling; the D8 security-policy values land here next.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# AUTONOMOUS-ACTION CEILING (D7) — the permission levels an autonomous mission may act on
+# WITHOUT human approval. Today = [read] (no side effects). The HARD ceiling lives in
+# settings.py (NOT here): config may only ever be a subset of {read} — i.e. [] (even more
+# conservative: everything needs approval) or [read]. write/execute/network/elevated can
+# NEVER be autonomous whatever this file says; widening the ceiling itself is a deliberate
+# code change with owner sign-off (docket D7, option B). Unit: PermissionLevel names.
+autonomous_safe_permissions: [read]

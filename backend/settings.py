@@ -21,6 +21,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from foundation import PermissionLevel
+
 # Repo-root config/ — this file is backend/settings.py, so config/ is one level up.
 _CONFIG_ROOT = Path(__file__).resolve().parent.parent / "config"
 
@@ -271,12 +273,51 @@ def _load_tools() -> ToolsConfig:
         raise RuntimeError(f"config/backend/tools.yaml is invalid:\n{exc}") from exc
 
 
+# The HARD ceiling on autonomous-action permissions (D7) — a Python constant, NEVER
+# YAML-overridable. This is the actual "floor" the owner required: no config edit, however
+# malformed or hostile, can let an autonomous mission act above this set without human
+# approval. EXECUTE/NETWORK/ELEVATED are categorically excluded (running code, outbound
+# calls, elevated grants are never autonomous). Widening it is a deliberate code change
+# with owner sign-off (docket D7, option B).
+_AUTONOMOUS_SAFE_CEILING: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
+
+
+class SecurityConfig(BaseModel):
+    """Security-authorization policy (`config/backend/security.yaml`). BACKEND-CONTROLLED and
+    HARD-FLOORED: config may only TIGHTEN a value, never loosen it below the ceiling enforced
+    here — a config edit that tries to exceed the ceiling fails loud at startup."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    autonomous_safe_permissions: frozenset[PermissionLevel]
+
+    @model_validator(mode="after")
+    def _autonomous_within_ceiling(self) -> "SecurityConfig":
+        if not self.autonomous_safe_permissions <= _AUTONOMOUS_SAFE_CEILING:
+            raise ValueError(
+                f"autonomous_safe_permissions "
+                f"{sorted(p.value for p in self.autonomous_safe_permissions)} exceeds the hard "
+                f"ceiling {sorted(p.value for p in _AUTONOMOUS_SAFE_CEILING)} (docket D7) — an "
+                "autonomous mission may never act beyond this without human approval"
+            )
+        return self
+
+
+def _load_security() -> SecurityConfig:
+    raw = _load_mapping("backend/security.yaml")
+    try:
+        return SecurityConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/security.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
 MEMORY: MemoryConfig = _load_memory()
 ORCHESTRATOR: OrchestratorConfig = _load_orchestrator()
 EXPERTS: ExpertsConfig = _load_experts()
 TOOLS: ToolsConfig = _load_tools()
+SECURITY: SecurityConfig = _load_security()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -289,4 +330,5 @@ __all__ = [
     "ORCHESTRATOR", "OrchestratorConfig",
     "EXPERTS", "ExpertsConfig",
     "TOOLS", "ToolsConfig",
+    "SECURITY", "SecurityConfig",
 ]
