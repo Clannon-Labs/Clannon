@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 # Repo-root config/ — this file is backend/settings.py, so config/ is one level up.
 _CONFIG_ROOT = Path(__file__).resolve().parent.parent / "config"
@@ -54,6 +54,8 @@ class BudgetConfig(BaseModel):
     verbatim_turn_floor: int = Field(ge=1)                 # most-recent turns always kept whole
     infra_cost_per_call_micros: int = Field(ge=0)          # µ$ flat, every LLM call (B2b)
     infra_cost_per_second_micros: int = Field(ge=0)        # µ$ per wall-clock second (B2b)
+    default_memory_budget_tokens: int = Field(gt=0)        # default hydration token budget
+    memory_chars_per_token: int = Field(gt=0)              # chars/token fallback if tiktoken fails
 
 
 def _load_budget() -> BudgetConfig:
@@ -104,8 +106,70 @@ def _load_pricing() -> PricingConfig:
         raise RuntimeError(f"config/backend/pricing.yaml is invalid:\n{exc}") from exc
 
 
+class TierTrust(BaseModel):
+    """Per-tier ranking weight — WIKI (user-authored) outranks the machine-derived tiers."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    wiki: float = Field(gt=0.0)
+    semantic: float = Field(gt=0.0)
+    episodic: float = Field(gt=0.0)
+    procedural: float = Field(gt=0.0)
+
+
+class TierFloor(BaseModel):
+    """Per-tier minimum fraction of the hydration budget (water-filling floor)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    wiki: float = Field(ge=0.0, le=1.0)
+    semantic: float = Field(ge=0.0, le=1.0)
+    episodic: float = Field(ge=0.0, le=1.0)
+    procedural: float = Field(ge=0.0, le=1.0)
+
+
+class MemoryConfig(BaseModel):
+    """The four-tier memory system's ranking/acceptance knobs (`config/backend/memory.yaml`)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tier_trust: TierTrust
+    tier_floor: TierFloor
+    recency_half_life_s: float = Field(gt=0.0)
+    recency_floor: float = Field(ge=0.0, le=1.0)
+    min_accept_confidence: float = Field(ge=0.0, le=1.0)
+    dedup_similarity: float = Field(ge=0.0, le=1.0)
+    max_content_chars: int = Field(gt=0)
+    supersession_floor: float = Field(ge=0.0, le=1.0)
+    supersession_timeout_s: float = Field(gt=0.0)
+    embed_retry_after_s: float = Field(gt=0.0)
+    qdrant_request_timeout_s: float = Field(gt=0.0)
+    graph_max_hops_ceiling: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _dedup_is_a_subset_of_supersession(self) -> "MemoryConfig":
+        # Dedup (a same-tier refresh) must be a STRICT SUBSET of the wider supersession
+        # candidate band. If a config edit ever inverted these, the dedup path would start
+        # swallowing what should be LLM-judged supersession candidates — fail loud, not silent.
+        if self.dedup_similarity < self.supersession_floor:
+            raise ValueError(
+                f"dedup_similarity ({self.dedup_similarity}) must be >= supersession_floor "
+                f"({self.supersession_floor}) — dedup is a strict subset of the supersession band"
+            )
+        return self
+
+
+def _load_memory() -> MemoryConfig:
+    raw = _load_mapping("backend/memory.yaml")
+    try:
+        return MemoryConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/memory.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
+MEMORY: MemoryConfig = _load_memory()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -114,4 +178,5 @@ SPEND_CEILING_FRACTION: float = BUDGET.spend_ceiling_fraction
 __all__ = [
     "BUDGET", "BudgetConfig", "SPEND_CEILING_FRACTION",
     "PRICING", "PricingConfig", "ModelPrice",
+    "MEMORY", "MemoryConfig", "TierTrust", "TierFloor",
 ]

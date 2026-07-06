@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/memory.yaml — the four-tier memory system's ranking/acceptance
+# knobs (core/memory/manager.py), plus embeddings retry backoff, the Qdrant
+# client timeout, and the graph traversal hop ceiling. BACKEND-CONTROLLED:
+# server-enforced, never frontend-changeable. Behavior-preserving: every
+# default below equals today's hardcoded value.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# TIER TRUST — ranking weight per tier (ARCHITECTURE.md §4). WIKI is
+# user-authored, so it outranks everything; SEMANTIC/EPISODIC/PROCEDURAL are
+# machine-derived. Unit: relative weight (unitless, higher = more trusted).
+# Safe range: > 0 (a tier at 0 would never surface regardless of relevance).
+tier_trust:
+  wiki: 3
+  semantic: 2
+  episodic: 1
+  procedural: 1
+
+# TIER FLOOR — minimum fraction of the hydration token budget reserved for
+# each tier during the Lagrangian (water-filling) allocation, so no tier is
+# starved to zero under heavy budget pressure. Unit: fraction of the total
+# token budget. Safe range: 0 <= f <= 1 (the four floors need not sum to 1 —
+# the allocator's water-filling handles the remainder).
+tier_floor:
+  wiki: 0.25
+  semantic: 0.15
+  episodic: 0.15
+  procedural: 0.15
+
+# RECENCY DECAY — how fast an older memory's ranking score decays toward
+# recency_floor. Unit: seconds. Safe range: > 0.
+recency_half_life_s: 2592000   # 30 days
+
+# The floor a memory's recency-decayed score can never fall below, however
+# old it is — an old-but-relevant memory should never hit zero from age
+# alone. Unit: fraction of full recency weight. Safe range: 0 <= f <= 1.
+recency_floor: 0.5
+
+# WRITE ACCEPTANCE — minimum confidence a SEMANTIC/PROCEDURAL write proposal
+# needs to persist (WIKI is user-authored and always accepted; EPISODIC is
+# turn history, not a confidence-gated claim). Unit: confidence score.
+# Safe range: 0 <= f <= 1.
+min_accept_confidence: 0.6
+
+# DEDUP — a new write whose embedding is at least this similar to an
+# existing point in the SAME tier is treated as a refresh of that point
+# (hard key-upsert), not a new entry. Unit: cosine similarity.
+# Safe range: 0 <= f <= 1, and MUST be >= supersession_floor (dedup is a
+# strict subset of the wider supersession-candidate band below it) — enforced
+# fail-loud at load by settings.py, not just documented here.
+dedup_similarity: 0.97
+
+# Hard cap on one memory's persisted content length. Unit: characters.
+# Safe range: > 0.
+max_content_chars: 2000
+
+# SUPERSESSION (EB1) — the candidate band: close enough (raw cosine) to
+# plausibly be the same fact/preference restated with a changed value, but
+# below dedup_similarity (already a refresh, not an LLM-judgment candidate).
+# Unit: cosine similarity. Safe range: 0 <= f < dedup_similarity.
+supersession_floor: 0.85
+
+# Wall-clock bound on the optional supersession-judge LLM call, independent
+# of the store's own write timeout — a slow judge must never make an
+# already-persisted write look like a failed one. Unit: seconds.
+# Safe range: > 0.
+supersession_timeout_s: 5.0
+
+# EMBEDDINGS — after the embedding model fails to load/respond, how long to
+# back off before retrying (mirrors the store's own circuit-breaker shape).
+# Unit: seconds. Safe range: > 0.
+embed_retry_after_s: 60.0
+
+# QDRANT CLIENT — per-request timeout for every Qdrant call (the four vector
+# tiers AND the cross-batch awareness collection share this client).
+# Unit: seconds. Safe range: > 0.
+qdrant_request_timeout_s: 5
+
+# GRAPH TRAVERSAL — hard ceiling on max_hops for any bounded graph traversal
+# (depends_on/dependents_of/breaks_if_removed) — a cyclic/dense graph can
+# never hang a read regardless of what a caller asks for. Unit: hops (edge
+# count). Safe range: >= 1.
+graph_max_hops_ceiling: 20

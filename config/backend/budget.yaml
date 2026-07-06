@@ -33,3 +33,10 @@ verbatim_turn_floor: 2
 # lean HIGH: over-counting infra protects margin; under-counting erodes it.
 infra_cost_per_call_micros: 50      # µ$ per LLM call (≈ $0.00005/call) — PLACEHOLDER
 infra_cost_per_second_micros: 20    # µ$ per wall-clock second of work — PLACEHOLDER
+
+# ── MEMORY HYDRATION BUDGET (core/memory/manager.py) ─────────────────────────────────────
+# The default token budget for a hydration request when the caller doesn't specify one, and
+# the chars-per-token fallback heuristic used only if tiktoken fails to load. Lives here (the
+# budget/token area) alongside the other token budgets. Unit: tokens / ratio. Both > 0.
+default_memory_budget_tokens: 2000
+memory_chars_per_token: 4
