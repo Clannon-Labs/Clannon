@@ -32,14 +32,18 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import settings
 from foundation import RunResult
 
+# Resource caps + timeouts live in config/backend/security.yaml (settings.SECURITY) --
+# ceiling-bounded fail-loud on the six that bound the sandboxed workload (docket D8).
+# _ENABLE/_IMAGE_ENV/_DEFAULT_IMAGE stay here: security identity (a config value that
+# could disable the sandbox or swap its image is a hole, not a dial), never a settings
+# field. Same for the isolation STRUCTURE below (--network none, --read-only, non-root,
+# the mount layout) -- boolean/structural, no numeric ceiling applies.
 _ENABLE = "VRAKSHA_ENABLE_SANDBOX"
 _IMAGE_ENV = "VRAKSHA_SANDBOX_IMAGE"
 _DEFAULT_IMAGE = "python:3.12-slim"
-_MAX_OUTPUT = 20_000          # chars kept per stream (output cap)
-_DEFAULT_RUN_TIMEOUT = 60.0   # seconds per command
-_CREATE_TIMEOUT = 180.0       # seconds to start the container (allows a first-time image pull)
 
 
 def sandbox_enabled() -> bool:
@@ -101,7 +105,7 @@ class DockerWorkspace:
             await self._ensure_container()
         except Exception as exc:  # noqa: BLE001 — docker missing/down/image issue: report, never raise
             return RunResult(-1, "", f"[sandbox unavailable: {str(exc)[:200]}]", False)
-        return await self._exec(command, timeout_s or _DEFAULT_RUN_TIMEOUT)
+        return await self._exec(command, timeout_s or settings.SECURITY.sandbox_run_timeout_s)
 
     async def reset(self) -> None:
         """Fresh container AND clean files (a clean slate, as if newly opened)."""
@@ -131,15 +135,17 @@ class DockerWorkspace:
         args = [
             "docker", "run", "-d", "--rm", "--name", self._name,
             "--network", "none",                                  # no network
-            "--memory", "512m", "--cpus", "1", "--pids-limit", "256",
-            "--read-only", "--tmpfs", "/tmp:rw,size=64m",         # only /workspace + /tmp writable
+            "--memory", f"{settings.SECURITY.sandbox_memory_mb}m",
+            "--cpus", str(settings.SECURITY.sandbox_cpus),
+            "--pids-limit", str(settings.SECURITY.sandbox_pids),
+            "--read-only", "--tmpfs", f"/tmp:rw,size={settings.SECURITY.sandbox_tmpfs_mb}m",
             "-v", f"{self._root}:/workspace:rw",
             "-w", "/workspace",
         ]
         if hasattr(os, "getuid"):
             args += ["--user", f"{os.getuid()}:{os.getgid()}"]    # files stay host-owned
         args += [image, "sleep", "infinity"]
-        code, out, err = await self._proc(args, timeout=_CREATE_TIMEOUT)
+        code, out, err = await self._proc(args, timeout=settings.SECURITY.sandbox_create_timeout_s)
         if code != 0:
             raise RuntimeError((err or out).strip()[:200] or "docker run failed")
         self._up = True
@@ -153,13 +159,16 @@ class DockerWorkspace:
             # kill the container (files on the host dir survive; next run recreates it)
             await self._teardown_container()
             return RunResult(-1, "", f"[command timed out after {timeout:.0f}s]", True)
-        return RunResult(code, out[:_MAX_OUTPUT], err[:_MAX_OUTPUT], False)
+        cap = settings.SECURITY.sandbox_max_output_chars
+        return RunResult(code, out[:cap], err[:cap], False)
 
     async def _teardown_container(self) -> None:
         if not self._up:
             return
         self._up = False
-        await self._proc(["docker", "rm", "-f", self._name], timeout=20.0)  # best-effort
+        await self._proc(  # best-effort
+            ["docker", "rm", "-f", self._name], timeout=settings.SECURITY.sandbox_teardown_timeout_s,
+        )
 
     @staticmethod
     async def _proc(args: list[str], *, timeout: float) -> tuple[int, str, str]:
