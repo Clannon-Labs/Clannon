@@ -1,0 +1,15 @@
+# clannon-heartbeat@<side>.service — one-shot keep-alive: inject the 20-min
+# heartbeat line into the side's tmux session. Triggered by the paired
+# clannon-heartbeat@<side>.timer; never runs claude or any AI process (see
+# scripts/clannon-heartbeat.sh).
+
+[Unit]
+Description=Clannon %i agent heartbeat — 20-min keep-alive tmux ping into clannon-%i
+# Same reasoning as clannon-wake@.service: disable systemd's start-rate limiter so
+# a burst (e.g. timer + a manual `systemctl start`) can never trip the 5-starts/10s
+# default and SILENTLY mark the unit failed, which would kill the keep-alive.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=%h/Vault/projects/Clannon/scripts/clannon-heartbeat.sh %i

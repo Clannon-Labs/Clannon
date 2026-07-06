@@ -90,4 +90,22 @@ for side in "${sides[@]}"; do
   echo "clannon-standup: woke $session."
 done
 
+# Keep-alive guarantee: (re)install + enable the 20-min heartbeat timer so the
+# BACKEND coordinator never sleeps permanently — even on a fresh clone after a
+# disk loss, and independent of the agent's own ScheduleWakeup. Idempotent: cp
+# overwrites, `enable --now` is a no-op if already enabled. The inbox-triggered
+# clannon-wake@backend.path only fires on inbox CHANGES; this timer is the
+# unconditional floor. (See scripts/systemd/clannon-heartbeat@.timer.)
+if command -v systemctl >/dev/null 2>&1; then
+  mkdir -p "$HOME/.config/systemd/user"
+  cp "$ROOT/scripts/systemd/clannon-heartbeat@.service" \
+     "$ROOT/scripts/systemd/clannon-heartbeat@.timer" "$HOME/.config/systemd/user/" 2>/dev/null || true
+  systemctl --user daemon-reload 2>/dev/null || true
+  if systemctl --user enable --now clannon-heartbeat@backend.timer 2>/dev/null; then
+    echo "clannon-standup: heartbeat timer enabled (backend never sleeps > 20 min)."
+  else
+    echo "clannon-standup: WARN could not enable heartbeat timer (systemd --user unavailable?) — arm ScheduleWakeup in-agent instead."
+  fi
+fi
+
 echo "clannon-standup: crew online. Attach with ./scripts/agent-session.sh <backend|frontend|memory|orchestration>."

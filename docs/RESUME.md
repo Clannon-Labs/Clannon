@@ -31,7 +31,13 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    (`proposals/to-backend|to-memory|to-orchestration`) for pending items.
 4. **Re-establish ownership + restart the loop.** Re-assign the batch/config split (below), then the
    coordinator arms the self-paced heartbeat (a `ScheduleWakeup` ~1200s) that keeps the team from
-   idling. The systemd `clannon-wake@*` auto-wake units survive a reboot and re-fire on inbox writes.
+   idling. Two systemd `--user` layers back this up and survive a reboot: `clannon-wake@*.path`
+   re-fires on inbox writes (event-driven), and `clannon-heartbeat@backend.timer` fires every 20 min
+   unconditionally (the **keep-alive floor** — guarantees the coordinator never sleeps permanently even
+   with a quiet inbox or a broken ScheduleWakeup chain). `clannon-standup.sh` re-installs + enables the
+   timer idempotently, so it self-heals on a fresh clone. Units are version-controlled in
+   `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
+   send-keys only — never an AI process).
 
 ## State snapshot (keep current at each good chunk)
 

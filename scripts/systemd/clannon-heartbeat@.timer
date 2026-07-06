@@ -1,0 +1,30 @@
+# clannon-heartbeat@<side>.timer — fire the keep-alive every ~20 minutes so the
+# agent never sleeps permanently. This is the EXTERNAL guarantee that the
+# inbox-triggered clannon-wake@<side>.path cannot give: the path unit only fires
+# when the inbox changes, so a quiet inbox would let an idle agent sleep forever.
+# The timer is independent of the agent's own ScheduleWakeup and survives a
+# session restart / crash / reboot.
+#
+# Instances: clannon-heartbeat@backend.timer is the important one (the coordinator
+# is the hub — if it sleeps the whole team stalls). Enable others only if a
+# specialist should also be self-nudged.
+#
+# Install (or let scripts/clannon-standup.sh do it idempotently on resume):
+#   cp scripts/systemd/clannon-heartbeat@.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clannon-heartbeat@backend.timer
+
+[Unit]
+Description=Clannon %i agent heartbeat timer — keep-alive every 20 min
+
+[Timer]
+# First tick 2 min after enable/boot (so a just-woken crew settles), then every
+# 20 min measured from the last run. Monotonic (not wall-clock) so it keeps
+# cadence across suspend/resume without piling up missed runs.
+OnActiveSec=2min
+OnUnitActiveSec=20min
+AccuracySec=30s
+Unit=clannon-heartbeat@%i.service
+
+[Install]
+WantedBy=timers.target
