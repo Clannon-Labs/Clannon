@@ -35,6 +35,7 @@ Run:
 import asyncio
 import time
 
+import pytest
 from pydantic import BaseModel
 from pydantic_ai import ModelResponse
 from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
@@ -355,6 +356,29 @@ def test_spawn_batch_records_failed_status_when_the_batch_turn_raises():
         "a batch fault must not sink the central orchestrator's own turn"
     statuses = [c[4] for c in fake.record_calls]
     assert statuses == [BatchLifecycleStatus.ACTIVE, BatchLifecycleStatus.FAILED]
+
+
+def test_spawn_batch_records_failed_on_cancellation_and_still_propagates_it():
+    """CancelledError is a BaseException, not an Exception -- a bare `except
+    Exception` silently misses it, leaving a cancelled batch stuck at ACTIVE
+    forever (security review, b1-item-3 follow-up). It must still transition
+    to FAILED, and the cancellation itself must never be swallowed."""
+    class _CancellingAwareness(_FakeAwareness):
+        async def cross_batch_awareness(self, user_id, mission_id, requesting_batch_id):
+            await super().cross_batch_awareness(user_id, mission_id, requesting_batch_id)
+            raise asyncio.CancelledError()
+
+    async def go():
+        fake = _CancellingAwareness()
+        handler = BatchHandler(
+            batch_registry=_batch_registry(), registry=_registry_with_one_batchable_domain(), awareness=fake,
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await handler.spawn_batch("research", "task", _ctx(mission_id="m1"))
+        statuses = [c[4] for c in fake.record_calls]
+        assert statuses == [BatchLifecycleStatus.ACTIVE, BatchLifecycleStatus.FAILED], \
+            "a cancelled batch must still leave ACTIVE, never stay stuck there"
+    asyncio.run(go())
 
 
 def test_spawn_batch_unconfigured_key_never_records_awareness():

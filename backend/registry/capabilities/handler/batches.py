@@ -114,23 +114,29 @@ class BatchHandler:
                     ctx.user_id, ctx.mission_id, batch_id, definition.domain,
                     BatchLifecycleStatus.ACTIVE, headline=task[:_AWARENESS_HEADLINE_MAX_CHARS],
                 )
-                awareness = await self._awareness.cross_batch_awareness(ctx.user_id, ctx.mission_id, batch_id)
-                task = _with_awareness_context(task, awareness)
 
-            from .capability import Capabilities   # deferred: capability.py imports this module at top level
-
-            scoped = Capabilities.scoped_to(
-                ctx,
-                expert_keys=definition.expert_keys,
-                tool_keys=definition.tool_keys,
-                grants=definition.grants,
-                allow_memory_write=definition.allow_memory_write,
-                registry=self._registry,
-            )
-
-            from core.orchestrator.schemas import OrchestratorAnswer
-
+            # Everything from here on can raise or be cancelled after ACTIVE was
+            # already recorded -- all of it lives inside the try/except below so
+            # ACTIVE never gets stuck un-transitioned (security review, b1-item-3
+            # follow-up).
             try:
+                if self._awareness is not None:
+                    awareness = await self._awareness.cross_batch_awareness(ctx.user_id, ctx.mission_id, batch_id)
+                    task = _with_awareness_context(task, awareness)
+
+                from .capability import Capabilities   # deferred: capability.py imports this module at top level
+
+                scoped = Capabilities.scoped_to(
+                    ctx,
+                    expert_keys=definition.expert_keys,
+                    tool_keys=definition.tool_keys,
+                    grants=definition.grants,
+                    allow_memory_write=definition.allow_memory_write,
+                    registry=self._registry,
+                )
+
+                from core.orchestrator.schemas import OrchestratorAnswer
+
                 # No on_event/on_message sinks: a batch's own decision log/chat
                 # voice stays internal -- the central orchestrator's live stream
                 # only ever shows its own turns, never a batch's internals.
@@ -143,6 +149,13 @@ class BatchHandler:
                     ),
                     timeout=_BATCH_TIMEOUT_S,
                 )
+            except asyncio.CancelledError:
+                # CancelledError is a BaseException, not an Exception -- the clause
+                # below never catches it. A cancelled batch must still transition
+                # out of ACTIVE (best-effort), then the cancellation propagates
+                # untouched -- it must never be swallowed.
+                await self._fail(batch_key, batch_id, task, ctx, started, "batch cancelled", definition=definition)
+                raise
             except asyncio.TimeoutError:
                 return await self._fail(batch_key, batch_id, task, ctx, started, "batch timed out", definition=definition)
             except Exception as exc:  # noqa: BLE001 -- a batch fault must not sink the mission

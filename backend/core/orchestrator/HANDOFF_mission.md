@@ -3,7 +3,37 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, latest of all) — §7 autonomy ceiling now config-driven (D7)
+## Update (2026-07-06 session, latest of all) — B1-item-3: spawn_batch consumes BatchAwarenessPort
+
+`spawn_batch` (`registry/capabilities/handler/batches.py`) now calls
+`cross_batch_awareness()` before a batch's scoped turn (folded into its own
+task prompt) and `record_batch_status()` around it (ACTIVE → DONE/FAILED),
+keyed on a per-invocation `batch_id` (uuid), with `BatchDefinition.domain`
+carrying the stable batch_key. `Ports.awareness` + `Capabilities.open(...,
+awareness=...)` thread the port from `wiring.py`; `scoped_to()` gets no
+equivalent (unchanged recursion guard). Commit `9e0aa19`, 7 new tests, full
+detail in `reports/orchestration/report_v34.md`. Design ratified:
+`proposals/archive/to-backend/2026-07-06_b1-item3-batch-awareness-consumption-design.md`.
+
+**Depends on backend's `mission_id`/`batch_id`-on-`VrakshaContext` placement**
+(`478f34e`) — `ctx.batch_id` itself is reserved/unused by this build (a
+concurrent-agent edit landed mid-session clarifying it must stay a LOCAL
+var, never written onto the shared `ctx`, since `scoped_to()` reuses that
+same object across concurrent batches — this build already matched that
+shape, nothing to fix). Everything here fails closed to a no-op while
+`ctx.mission_id == ""` (today's only real production value, since the
+Mission Engine isn't wired into `loop.py` yet) — see the next paragraph.
+
+**Resume: production end-to-end proof is still gated on wiring the Mission
+Engine into `core/orchestrator/loop.py`** (unchanged blocker, tracked below) —
+that's what would ever set `ctx.mission_id` to something real. The
+awareness-consumption code itself is fully unit-tested today against a fake
+port + a test `ctx` carrying a real `mission_id`. Next real item toward "one
+batch end-to-end": a concrete first batch (`engineering`/CB2 flagship,
+`config/backend/batches.yaml`) — a separate decomposition-test proposal, not
+started.
+
+## Update (2026-07-06 session, earlier) — §7 autonomy ceiling now config-driven (D7)
 
 Minor but worth knowing if you're touching `mission_operate.py`'s autonomy
 gate: `DEFAULT_AUTONOMOUS_SAFE` is gone. `needs_approval()`/
