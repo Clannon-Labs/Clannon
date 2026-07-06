@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/budget.yaml — the spend/margin ceiling + context-history budget.
+# BACKEND-CONTROLLED: server-enforced, NEVER changeable from the frontend. A bad value
+# here can cost us money or wrongly block a paying user, so every knob is range-validated
+# at startup (see backend/settings.py) and fails LOUD rather than running silently wrong.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# THE MARGIN INVARIANT — the single source of truth (ADR-0004 / the Redis atomic budget).
+# A user may spend at most this fraction of what they PAID, measured in real cost (LLM token
+# cost + infra cost). The gap between what they paid and this ceiling is our GUARANTEED
+# minimum margin: at 0.80, a user can spend ≤ 80% of what they paid, so ≥ 20% is locked-in
+# margin. This is the ONLY place the ceiling is set — move it here (e.g. to 0.90) and every
+# enforcement point follows with zero other edits. Nothing else may hardcode or re-derive it.
+# Unit: fraction of amount paid. Safe range: 0 < f ≤ 1 (rejected otherwise at startup).
+spend_ceiling_fraction: 0.80
+
+# CONVERSATION-HISTORY BUDGET — when a session's replayed history grows past this many
+# characters, the OLDEST turns are condensed into a recap (never dropped; full text stays
+# retrievable via the `recall` tool), keeping context complete without unbounded growth.
+# Generous on purpose. Unit: characters. Safe range: > 0.
+history_char_budget: 200000
+
+# Always keep at least this many of the most-recent turns VERBATIM, even mid-condense — the
+# model never loses the immediate conversational thread. Unit: turns. Safe range: ≥ 1.
+verbatim_turn_floor: 2

@@ -32,6 +32,7 @@ from core.artifacts import LocalArtifactStore
 from core.llm import model_overrides, usage_scope
 
 from observability import DecisionLogSink
+import settings
 
 from . import audit as _audit_trail, auth, config
 from .run_state import RunState, _now, _process_summary
@@ -99,8 +100,9 @@ def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -
 # The WHOLE session travels as chat history — the orchestrator should see everything
 # that happened. We only trim when a session grows genuinely huge, and then we drop the
 # OLDEST turns (keeping the recent ones whole), bounded by this character budget so the
-# context stays complete without growing without limit. Generous on purpose.
-_HISTORY_CHAR_BUDGET = 200_000
+# context stays complete without growing without limit. Generous on purpose. Sourced from
+# the central control panel (config/backend/budget.yaml) so it's tunable without a code edit.
+_HISTORY_CHAR_BUDGET = settings.BUDGET.history_char_budget
 
 
 def _turn_assistant_content(turn: RunState) -> str:
@@ -165,7 +167,8 @@ def _recap_text(old: list[tuple[int, RunState]]) -> str:
 
 
 # always keep at least this many of the most-recent turns verbatim, even mid-condense
-_VERBATIM_TURN_FLOOR = 2
+# (config/backend/budget.yaml — one place to tune the whole product's budget knobs)
+_VERBATIM_TURN_FLOOR = settings.BUDGET.verbatim_turn_floor
 
 
 def _build_conversation(run: RunState) -> list[dict]:

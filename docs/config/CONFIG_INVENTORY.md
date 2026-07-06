@@ -1,7 +1,16 @@
 # Central `config/` — Phase 1 Discovery: Inventory + Proposed Layout
 
-**Status: DISCOVERY COMPLETE — awaiting owner approval before ANY externalization (Phase 3).**
-Nothing has been moved yet. This is the map + the decisions, per the CENTRAL_CONFIG spec.
+**Status: D1–D6 RULED by the owner (2026-07-05) — Phase 3 IN PROGRESS.** The rulings are
+recorded in `reports/DECISIONS_FOR_OWNER.md`. Layout below is approved. Externalization is
+proceeding one area per commit, behavior-preserving (each default equals today's value):
+- ✅ **budget** — `config/backend/budget.yaml` + the typed loader `backend/settings.py`
+  (`SPEND_CEILING_FRACTION=0.80` single-source per D2, + the api/ history-budget knobs).
+- ⏳ next: fold the premature `backend/config/business.yaml` into `tiers.yaml`/`models.yaml`
+  and delete it (D6); the `foundation/` product-knob move (D1); then memory/orchestrator/
+  tools/security/llm/copy; the memory-tree budget knobs (`_DEFAULT_BUDGET_TOKENS`,
+  `_CHARS_PER_TOKEN`) migrate into `budget.yaml` via a memory-agent slice (their tree).
+
+_(Original Phase-1 discovery map + the D1–D6 decision text follow, kept for the record.)_
 
 Method: two full sweeps (backend, excluding `foundation/`+`flow`; frontend, read-only) + backend-agent
 recon. Every value below is a hardcoded literal a human might reasonably want to tune. Program logic,
