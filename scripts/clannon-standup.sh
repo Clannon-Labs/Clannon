@@ -72,17 +72,14 @@ for side in "${sides[@]}"; do
     # default (Opus). The quality net is the backend agent's Opus review of every
     # specialist proposal + merge — not the model. Reversible: drop the flag to
     # bump a specialist back to Opus.
-    if [ "$MODE" = resume ]; then
-      # Resume the EXACT prior conversation in this cwd. `--continue` picks the most-recent
-      # session for the directory (= this agent's live one) and keeps its own remembered model,
-      # so we deliberately do NOT re-pass --model here.
-      launch="claude --continue --dangerously-skip-permissions"
-    else
-      launch="claude --dangerously-skip-permissions"
-      case "$side" in
-        memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
-      esac
-    fi
+    # `--continue` (resume) picks the most-recent session for this cwd = the agent's live one.
+    launch="claude --dangerously-skip-permissions"
+    [ "$MODE" = resume ] && launch="$launch --continue"
+    # Keep the specialist model tier explicit in BOTH modes (don't rely on resume remembering it —
+    # a specialist silently resuming on Opus would blow the token budget the tiering exists to save).
+    case "$side" in
+      memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
+    esac
     tmux new-session -d -s "$session" -c "$dir"
     # type the launch command literally, then a detached Enter to submit it
     tmux send-keys -t "$session" -l "$launch"
