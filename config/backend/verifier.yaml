@@ -1,0 +1,9 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/verifier.yaml — the verifier stage's LLM bounds. BACKEND-CONTROLLED.
+# Migrated out of foundation/vocab/constants.py (D1, owner ruling D1(a)); core/verifier
+# + core/llm/registry.py read them from here. Behavior-preserving: values == today.
+# ─────────────────────────────────────────────────────────────────────────────
+
+timeout_s: 12.0    # if the verifier LLM call takes longer, treat as ERROR. > 0
+max_tokens: 512   # verifier only emits structured JSON — a tight output cap. > 0
+max_retries: 2    # retries on malformed verifier output before ERROR. >= 0

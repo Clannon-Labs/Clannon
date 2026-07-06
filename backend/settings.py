@@ -315,6 +315,24 @@ def _load_llm() -> LlmConfig:
         raise RuntimeError(f"config/backend/llm.yaml is invalid:\n{exc}") from exc
 
 
+class VerifierConfig(BaseModel):
+    """The verifier stage's LLM bounds (`config/backend/verifier.yaml`)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    timeout_s: float = Field(gt=0.0)
+    max_tokens: int = Field(gt=0)
+    max_retries: int = Field(ge=0)
+
+
+def _load_verifier() -> VerifierConfig:
+    raw = _load_mapping("backend/verifier.yaml")
+    try:
+        return VerifierConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/verifier.yaml is invalid:\n{exc}") from exc
+
+
 # The HARD ceiling on autonomous-action permissions (D7) — a Python constant, NEVER
 # YAML-overridable. This is the actual "floor" the owner required: no config edit, however
 # malformed or hostile, can let an autonomous mission act above this set without human
@@ -453,6 +471,7 @@ ORCHESTRATOR: OrchestratorConfig = _load_orchestrator()
 EXPERTS: ExpertsConfig = _load_experts()
 TOOLS: ToolsConfig = _load_tools()
 LLM: LlmConfig = _load_llm()
+VERIFIER: VerifierConfig = _load_verifier()
 SECURITY: SecurityConfig = _load_security()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
@@ -467,5 +486,6 @@ __all__ = [
     "EXPERTS", "ExpertsConfig",
     "TOOLS", "ToolsConfig",
     "LLM", "LlmConfig",
+    "VERIFIER", "VerifierConfig",
     "SECURITY", "SecurityConfig",
 ]
