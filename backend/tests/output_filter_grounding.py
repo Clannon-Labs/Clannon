@@ -201,6 +201,26 @@ def test_recipient_string_is_present():
 
 
 # ---------------------------------------------------------------------------
+# CB5 EARNED SEAL — FilterResult.groundedness / checks_performed contract
+# (docs/benchmarks/V1_GAP_ANALYSIS.md — "earn the seal": a PASS must carry a
+# real, inspectable verdict, not a silent no-op)
+# ---------------------------------------------------------------------------
+
+def test_groundedness_rejects_values_outside_the_allowed_set():
+    import pytest
+
+    with pytest.raises(Exception):
+        FilterResult(proceed=True, groundedness="probably-fine")
+
+
+def test_not_applicable_is_the_safe_default_for_a_conversational_turn():
+    # A did_research=False turn must never be stamped "ungrounded" for lacking
+    # sources it was never supposed to have (filter/CLAUDE.md's documented rule).
+    result = FilterResult(proceed=True)
+    assert result.groundedness == "not_applicable"
+
+
+# ---------------------------------------------------------------------------
 # PASS / BLOCK adjudication seam
 # (monkeypatch run_structured so _filter is called for real, only the
 #  LLM step is intercepted — distinct from output_filter.py which patches
@@ -260,6 +280,8 @@ if __name__ == "__main__":
         ("CAPPED",              "memory capped at 10 items",               "memory_capped_at_10_items"),
         ("CAPPED",              "sources capped at 20",                    "sources_flattened_from_findings_and_capped_at_20"),
         ("RECIPIENT",           "fixed string present",                    "recipient_string_is_present"),
+        ("EARNED-SEAL",         "invalid groundedness value rejected",     "groundedness_rejects_values_outside_the_allowed_set"),
+        ("EARNED-SEAL",         "not_applicable is the safe default",      "not_applicable_is_the_safe_default_for_a_conversational_turn"),
     ]
 
     results: dict[str, str] = {}
