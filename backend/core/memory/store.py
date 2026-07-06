@@ -65,6 +65,25 @@ def _qdrant():
         return _client
 
 
+def connection():
+    """Shared accessor to the lazy Qdrant client for sibling internal modules
+    (`batch_store.py`) that need the SAME client + circuit-breaker state —
+    mirrors `graph_store.connection()`'s precedent (a sibling reaches a named
+    public wrapper, never a `_`-prefixed name directly). Unlike Kuzu, a
+    second `QdrantClient` on the same server is merely wasteful, not risky
+    (client-server, not embedded) — shared anyway so a batch_store fault
+    trips the SAME breaker every other tier already degrades behind."""
+    return _qdrant()
+
+
+def trip(exc: Exception) -> None:
+    """Public wrapper around `_trip` for the same reason `connection()`
+    exists — `batch_store.py` shares this module's circuit breaker rather
+    than keeping a second one that could disagree about whether Qdrant is
+    up."""
+    _trip(exc)
+
+
 def is_down() -> bool:
     """True while the breaker is open (or memory is disabled) — lets the
     manager tell 'no memory found' apart from 'memory unavailable'."""
