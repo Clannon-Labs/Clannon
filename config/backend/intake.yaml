@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/intake.yaml — the intake stage's rate-limiter knobs. BACKEND-CONTROLLED,
+# server-enforced, NEVER changeable from the frontend (an ingress guard a bypassed client
+# must not be able to loosen). Migrated out of foundation/vocab/constants.py (D1, single-
+# source); core/intake/rate_limiter.py reads them from here. Behavior-preserving: values ==
+# today's constants. These bound abuse (a single session or a global burst hammering intake)
+# without a per-request DB hit — the limiter is in-memory + sliding-window.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Per-session (identity) sliding window: at most `max_requests` in each `window_s`.
+rate_limit_window_s: 60.0          # rolling per-session request window (seconds). > 0
+rate_limit_max_requests: 30        # max requests per session inside the window. > 0
+rate_limit_max_tracked_keys: 10000 # cap on session keys the in-memory limiter holds (a
+                                   # session-id rotation attack can't grow it unbounded). > 0
+
+# Global burst window: a short, tight cap on TOTAL intake requests, protecting the whole
+# system from a synchronized flood independent of any one session.
+global_rate_limit_window_s: 1.0    # rolling global burst window (seconds). > 0
+global_rate_limit_max_requests: 10 # max total requests inside the burst window. > 0

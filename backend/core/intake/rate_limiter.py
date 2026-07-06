@@ -14,7 +14,7 @@ import threading
 import time
 from typing import Callable
 
-from foundation import constants
+import settings
 
 
 Clock = Callable[[], float]
@@ -39,7 +39,7 @@ class InMemorySlidingWindowRateLimiter:
         self,
         max_requests: int,
         window_s: float,
-        max_tracked_keys: int = constants.RATE_LIMIT_MAX_TRACKED_KEYS,
+        max_tracked_keys: int = settings.INTAKE.rate_limit_max_tracked_keys,
         clock: Clock = time.monotonic,
     ) -> None:
         self.max_requests = max_requests
@@ -94,12 +94,12 @@ class InMemorySlidingWindowRateLimiter:
 
 
 _identity_rate_limiter = InMemorySlidingWindowRateLimiter(
-    max_requests=constants.RATE_LIMIT_MAX_REQUESTS,
-    window_s=constants.RATE_LIMIT_WINDOW_S,
+    max_requests=settings.INTAKE.rate_limit_max_requests,
+    window_s=settings.INTAKE.rate_limit_window_s,
 )
 _global_rate_limiter = InMemorySlidingWindowRateLimiter(
-    max_requests=constants.GLOBAL_RATE_LIMIT_MAX_REQUESTS,
-    window_s=constants.GLOBAL_RATE_LIMIT_WINDOW_S,
+    max_requests=settings.INTAKE.global_rate_limit_max_requests,
+    window_s=settings.INTAKE.global_rate_limit_window_s,
 )
 
 

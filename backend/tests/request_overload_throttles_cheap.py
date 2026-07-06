@@ -27,6 +27,7 @@ import asyncio
 import pytest
 
 from foundation import Flow, constants
+import settings
 from core.intake import intake, rate_limiter
 from core.intake.rate_limiter import (
     InMemorySlidingWindowRateLimiter,
@@ -192,7 +193,7 @@ def test_intake_blocks_flow_when_per_identity_limit_exceeded():
     ever invoked.
     """
     session = "overloaded_session"
-    max_r = constants.RATE_LIMIT_MAX_REQUESTS
+    max_r = settings.INTAKE.rate_limit_max_requests
 
     # exhaust the identity slot directly through the module-level limiter
     for _ in range(max_r):
@@ -221,7 +222,7 @@ def test_intake_blocks_flow_on_global_burst(monkeypatch):
 def test_intake_block_has_should_stop_set():
     """A rate-limited block marks should_stop so the Railway pipeline stops."""
     session = "should_stop_session"
-    for _ in range(constants.RATE_LIMIT_MAX_REQUESTS):
+    for _ in range(settings.INTAKE.rate_limit_max_requests):
         rate_limiter._identity_rate_limiter.allow(session)
 
     out = _run_intake("hello", session)
@@ -241,7 +242,7 @@ def test_blocked_flow_never_invokes_downstream_via_then():
     testing it here proves the guarantee at the mechanism level.
     """
     session = "short_circuit_session"
-    for _ in range(constants.RATE_LIMIT_MAX_REQUESTS):
+    for _ in range(settings.INTAKE.rate_limit_max_requests):
         rate_limiter._identity_rate_limiter.allow(session)
 
     blocked = _run_intake("payload", session)
@@ -283,7 +284,7 @@ def test_rate_limited_flow_origin_is_intake():
     never ran — the block was set at the first (cheapest) gate.
     """
     session = "origin_check_session"
-    for _ in range(constants.RATE_LIMIT_MAX_REQUESTS):
+    for _ in range(settings.INTAKE.rate_limit_max_requests):
         rate_limiter._identity_rate_limiter.allow(session)
 
     out = _run_intake("hello", session)

@@ -333,6 +333,27 @@ def _load_verifier() -> VerifierConfig:
         raise RuntimeError(f"config/backend/verifier.yaml is invalid:\n{exc}") from exc
 
 
+class IntakeConfig(BaseModel):
+    """The intake rate-limiter knobs (`config/backend/intake.yaml`). BACKEND-CONTROLLED
+    ingress guards — a bypassed client can never loosen them."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    rate_limit_window_s: float = Field(gt=0.0)
+    rate_limit_max_requests: int = Field(gt=0)
+    rate_limit_max_tracked_keys: int = Field(gt=0)
+    global_rate_limit_window_s: float = Field(gt=0.0)
+    global_rate_limit_max_requests: int = Field(gt=0)
+
+
+def _load_intake() -> IntakeConfig:
+    raw = _load_mapping("backend/intake.yaml")
+    try:
+        return IntakeConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/intake.yaml is invalid:\n{exc}") from exc
+
+
 # The HARD ceiling on autonomous-action permissions (D7) — a Python constant, NEVER
 # YAML-overridable. This is the actual "floor" the owner required: no config edit, however
 # malformed or hostile, can let an autonomous mission act above this set without human
@@ -473,6 +494,7 @@ TOOLS: ToolsConfig = _load_tools()
 LLM: LlmConfig = _load_llm()
 VERIFIER: VerifierConfig = _load_verifier()
 SECURITY: SecurityConfig = _load_security()
+INTAKE: IntakeConfig = _load_intake()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -488,4 +510,5 @@ __all__ = [
     "LLM", "LlmConfig",
     "VERIFIER", "VerifierConfig",
     "SECURITY", "SecurityConfig",
+    "INTAKE", "IntakeConfig",
 ]

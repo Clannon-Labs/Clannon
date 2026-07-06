@@ -39,6 +39,7 @@ import asyncio
 import pytest
 
 from foundation import BlockReason, HydrationPackage, Origin, ThreatLevel, constants
+import settings
 from core.intake import rate_limiter
 from security.sanitizers import pre_sanitization
 from security.sanitizers.pre_sanitization import PreSanitizationResult
@@ -165,7 +166,7 @@ def test_rate_limited_blocked_before_paid_stages(seam_counter):
     # rotatable), so pre-fill the window under the user this run carries ("u").
     # Direct calls to _identity_rate_limiter.allow() bypass the global window,
     # preventing accidental global-limiter pollution across tests.
-    for _ in range(constants.RATE_LIMIT_MAX_REQUESTS):
+    for _ in range(settings.INTAKE.rate_limit_max_requests):
         rate_limiter._identity_rate_limiter.allow("u")
 
     out = _run("hello", session_id="s-rate-limit")
