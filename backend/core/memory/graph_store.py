@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import settings
 from foundation import GraphScope, get_root
 
 from .config import GRAPH_DISABLED as DISABLED
@@ -44,7 +45,7 @@ log = logging.getLogger(__name__)
 
 # breaks_if_removed's hop bound — a cyclic/dense graph can't hang the door,
 # same spirit as ORCHESTRATOR_MAX_TURNS bounding the orchestrator's loop.
-MAX_HOPS_CEILING = 20
+MAX_HOPS_CEILING = settings.MEMORY.graph_max_hops_ceiling
 
 _db = None
 _conn = None

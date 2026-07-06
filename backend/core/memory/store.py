@@ -16,6 +16,7 @@ import time
 import uuid
 from typing import Any
 
+import settings
 from foundation import MemoryKind, MemoryStore, constants
 
 from .config import MEMORY_DISABLED as DISABLED
@@ -57,7 +58,7 @@ def _qdrant():
             try:
                 from qdrant_client import QdrantClient
 
-                _client = QdrantClient(url=QDRANT_URL, timeout=5)
+                _client = QdrantClient(url=QDRANT_URL, timeout=settings.MEMORY.qdrant_request_timeout_s)
             except Exception as exc:
                 log.warning("qdrant client unavailable: %s", exc)
                 _down_until = time.monotonic() + _BREAKER_S

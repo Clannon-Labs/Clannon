@@ -14,6 +14,7 @@ import logging
 import re
 import time
 
+import settings
 from foundation import (
     HydrationPackage,
     HydrationRequest,
@@ -56,35 +57,50 @@ def _count_tokens(text: str) -> int:
             pass
     return max(1, len(text) // _CHARS_PER_TOKEN)
 
+# Config-depth (2026-07-06): every value below now reads from
+# config/backend/{memory,budget}.yaml via settings.MEMORY/settings.BUDGET,
+# behavior-preserving (each still equals the prior hardcoded literal) — only
+# these definitions changed, no call site below them did. _TIER_TRUST/
+# _TIER_FLOOR stay MemoryStore-enum-keyed dicts (every call site already
+# reads them that way) rather than exposing the config's per-tier field
+# names past this point.
+#
+# TierTrust's fields are typed float in settings.py (a future fractional
+# weight is legitimate there), but this dict's values flow into
+# MemoryItem.trust (an `int` field, foundation/contracts/memory.py) and then
+# into the Qdrant payload — an un-cast 3.0 would silently persist as a float
+# where 3 was stored before, a real behavior change pydantic's coercion
+# would introduce invisibly. int() here is the honest boundary cast, not a
+# settings.py schema change.
 _TIER_TRUST = {
-    MemoryStore.WIKI: 3,
-    MemoryStore.SEMANTIC: 2,
-    MemoryStore.EPISODIC: 1,
-    MemoryStore.PROCEDURAL: 1,
+    MemoryStore.WIKI: int(settings.MEMORY.tier_trust.wiki),
+    MemoryStore.SEMANTIC: int(settings.MEMORY.tier_trust.semantic),
+    MemoryStore.EPISODIC: int(settings.MEMORY.tier_trust.episodic),
+    MemoryStore.PROCEDURAL: int(settings.MEMORY.tier_trust.procedural),
 }
 # minimum budget floors (fractions) — ARCHITECTURE.md §4 step 5
 _TIER_FLOOR = {
-    MemoryStore.WIKI: 0.25,
-    MemoryStore.SEMANTIC: 0.15,
-    MemoryStore.EPISODIC: 0.15,
-    MemoryStore.PROCEDURAL: 0.15,
+    MemoryStore.WIKI: settings.MEMORY.tier_floor.wiki,
+    MemoryStore.SEMANTIC: settings.MEMORY.tier_floor.semantic,
+    MemoryStore.EPISODIC: settings.MEMORY.tier_floor.episodic,
+    MemoryStore.PROCEDURAL: settings.MEMORY.tier_floor.procedural,
 }
-_DEFAULT_BUDGET_TOKENS = 2000
+_DEFAULT_BUDGET_TOKENS = settings.BUDGET.default_memory_budget_tokens
 _SEARCH_K = constants.MEMORY_SEARCH_TOP_K          # candidates per inferred tier
 _RELEVANCE_FLOOR = constants.MEMORY_RELEVANCE_FLOOR  # drop weak hits before ranking
-_RECENCY_HALF_LIFE_S = 30 * 86_400
-_RECENCY_FLOOR = 0.5
-_MIN_ACCEPT_CONFIDENCE = 0.6   # semantic/procedural acceptance bar
-_DEDUP_SIMILARITY = 0.97
-_MAX_CONTENT_CHARS = 2000
-_CHARS_PER_TOKEN = 4
+_RECENCY_HALF_LIFE_S = settings.MEMORY.recency_half_life_s
+_RECENCY_FLOOR = settings.MEMORY.recency_floor
+_MIN_ACCEPT_CONFIDENCE = settings.MEMORY.min_accept_confidence   # semantic/procedural acceptance bar
+_DEDUP_SIMILARITY = settings.MEMORY.dedup_similarity
+_MAX_CONTENT_CHARS = settings.MEMORY.max_content_chars
+_CHARS_PER_TOKEN = settings.BUDGET.memory_chars_per_token
 
 # EB1 — supersession candidate band: close enough (by raw cosine) to plausibly be
 # the same specific fact/preference restated with a changed value, but below
 # _DEDUP_SIMILARITY (which is already treated as "the same point, refresh it").
 # Below this floor, two memories are just topically related — not worth an LLM
 # judgment (that's _RELEVANCE_FLOOR's much looser job, at retrieval time).
-_SUPERSESSION_FLOOR = 0.85
+_SUPERSESSION_FLOOR = settings.MEMORY.supersession_floor
 # Only durable-knowledge tiers are "supersedable" facts/preferences; an ordinary
 # EPISODIC entry is turn history (each its own point in time, not a competing
 # claim) so it's excluded here — but a DECISION is supersedable regardless of
@@ -96,7 +112,7 @@ _SUPERSESSION_TIERS = frozenset({MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL})
 # Bounds the optional judge+mark step independently of MEMORY_WRITE_TIMEOUT_S, so
 # a slow judge call can never cause record_write_proposals to mistake an
 # already-successful upsert for a stalled store and drop a real write.
-_SUPERSESSION_TIMEOUT_S = 5.0
+_SUPERSESSION_TIMEOUT_S = settings.MEMORY.supersession_timeout_s
 
 
 # Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a

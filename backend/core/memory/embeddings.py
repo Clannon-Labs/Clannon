@@ -13,6 +13,8 @@ import logging
 import threading
 import time
 
+import settings
+
 from .config import EMBED_CACHE_DIR
 
 log = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ DIMS = 768
 # `_failed = True` for the whole process — one bad first call disabled memory until
 # restart. Instead, back off for _RETRY_AFTER_S and try again, exactly like the
 # Qdrant breaker, so memory self-heals once the model is actually available.
-_RETRY_AFTER_S = 60.0
+_RETRY_AFTER_S = settings.MEMORY.embed_retry_after_s
 _model = None
 _retry_after = 0.0
 _lock = threading.Lock()

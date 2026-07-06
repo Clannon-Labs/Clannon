@@ -12,9 +12,12 @@ another file under the same root are tracked — stdlib/third-party imports are
 not nodes in this graph; this is a dependency graph over the repo's own
 modules, not a transitive closure over installed packages.
 
-Deliberately independent of `GraphPort`/Kuzu: no new dependency, buildable and
-testable before the foundation contract lands. `graph_manager.py` is the
-(future) adapter that turns a `CodeImportGraph` into `GraphNode`/`GraphEdge`
+Deliberately independent of `GraphPort`/Kuzu: no graph-substrate dependency,
+buildable and testable before the foundation contract lands (the one import
+below, `settings`, is lightweight config, not graph infra — `breaks_if_removed`'s
+hop-ceiling default reads the same config value `graph_store.MAX_HOPS_CEILING`
+does, rather than hardcoding a second copy that could drift). `graph_manager.py`
+is the (future) adapter that turns a `CodeImportGraph` into `GraphNode`/`GraphEdge`
 writes through the door.
 
 Honest limits: no macro/dynamic-import resolution, star imports contribute
@@ -27,6 +30,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import settings
 
 _EXCLUDE_DIRS = {".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".git"}
 
@@ -46,11 +51,17 @@ class CodeImportGraph:
         """Files that import `path` (directly, or transitively up to max_hops)."""
         return _walk(self.edges, {path}, max_hops, forward=False) - {path}
 
-    def breaks_if_removed(self, path: str, *, max_hops: int = 20) -> frozenset[str]:
+    def breaks_if_removed(
+        self, path: str, *, max_hops: int = settings.MEMORY.graph_max_hops_ceiling
+    ) -> frozenset[str]:
         """Transitive closure of dependents_of — every file whose import chain
-        would break if `path` disappeared. Hop-bounded (default 20, same
-        spirit as ORCHESTRATOR_MAX_TURNS) so a cyclic/dense graph can't hang
-        the query."""
+        would break if `path` disappeared. Hop-bounded (default from the same
+        `graph_max_hops_ceiling` config value `graph_store.MAX_HOPS_CEILING`
+        reads — a single source, not a second hardcoded literal that could
+        drift from it; read directly from `settings` rather than importing
+        `graph_store` to avoid a circular import, since `graph_store.py`
+        itself imports THIS module) so a cyclic/dense graph can't hang the
+        query."""
         return self.dependents_of(path, max_hops=max_hops)
 
 
