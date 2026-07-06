@@ -24,12 +24,13 @@ import os
 
 import magic
 
+import settings
 from foundation import InputFile, SanitizationError, constants
 
 from . import pre_sanitization
 
 # same hard cap the brief gets; one upload may not exceed it
-_MAX_UPLOAD_BYTES = constants.MAX_INPUT_SIZE_BYTES
+_MAX_UPLOAD_BYTES = settings.INTAKE.max_input_size_bytes
 
 
 def _safe_name(name: str) -> str:
