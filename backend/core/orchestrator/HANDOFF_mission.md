@@ -3,6 +3,66 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## PAUSED (backend-agent, weekly limits) — clean stop, 2026-07-06
+
+**Tree state: clean.** `git status` empty, `HEAD` == `origin/main` (0 ahead,
+0 behind) at commit `1b30a1e` (the CancelledError fix — see the update just
+below). No uncommitted or half-finished code anywhere in
+`core/orchestrator/`/`registry/`. Nothing was parked because nothing was
+mid-write: backend asked me to start the concrete engineering-batch
+proposal (see below), and I had only reached the research phase (no code,
+no draft proposal file yet) when the pause landed.
+
+**Exact next step, so this doesn't need re-deriving:** write the
+propose-first design for the FIRST concrete batch — `engineering` (the CB2
+Large Repo Understanding flagship, `docs/architecture/BATCH_ARCHITECTURE.md`
+§7) — covering the decomposition-test pass, the `config/backend/batches.yaml`
+content backend should place, and the end-to-end proof plan. Backend said
+"Design → I ratify → build one + prove before a second"; nothing should be
+built until that ratification lands.
+
+**Research already done for that proposal (don't re-run it):**
+- Expert domains (9, unchanged from the batch-orchestrator-design-v2 count):
+  `code, web, summary, data, docs, verification, synthesis, delivery, media`.
+  Tool domains are a SEPARATE namespace: `fs, code, text, http, memory,
+  search, math, viz, web`.
+- `code.engineer` (`experts/code/expert.py`) is the one existing
+  engineering-judgment expert: tools `fs.read, fs.write, code.run`,
+  `PermissionLevel.EXECUTE`, workspace-backed (Docker sandbox via
+  `WorkspacePort`, ephemeral + network-less per run). Decomposition-test
+  verdict: **one expert is the right shape** — write/run/read-failures/fix
+  is one iterative judgment loop, not genuinely different expertise per
+  phase. `verification.claims` (citation fact-checking against web sources)
+  is a different judgment and should NOT be folded in.
+- **The gap is tools, not experts** — CB2's three flagship capabilities
+  (AST-aware search, dependency-graph traversal, precise patch-apply) do
+  **not exist anywhere in `tools/`** today. Closest substitutes: `fs.read`
+  (whole-file, 40k-char cap, no line ranges), `fs.write` (whole-file
+  overwrite, no patch-apply), `text.diff` (computes a diff between two
+  inline strings — cannot read/write a file or apply a diff to one).
+  `WorkspacePort` itself is per-run/ephemeral/no-network — no mechanism to
+  load or persist a large repo across runs. **This means the engineering
+  batch proposal is NOT just a YAML entry wiring existing pieces — it needs
+  new tool(s) proposed too** (at minimum: a patch-apply tool; AST search and
+  dep-graph traversal are the harder open design questions — how a repo
+  gets INTO the ephemeral workspace at all is the prerequisite question
+  underneath those).
+- `PermissionLevel` is a flat set (`READ, WRITE, EXECUTE, NETWORK,
+  ELEVATED`), checked by membership not hierarchy
+  (`ToolHandler.call_tool`, `tools.py:89`). An engineering `BatchDefinition
+  .grants` would be `frozenset({READ, WRITE, EXECUTE})` — NETWORK
+  deliberately excluded (sandbox has none anyway; matches the existing
+  no-memory-write+no-egress-together posture).
+
+**Open decision for whoever resumes, not yet answered:** does the
+engineering batch ship v1 with `code.engineer`'s CURRENT tools (accepting
+CB2's large-repo target is NOT met yet, just the batch MECHANISM proven
+end-to-end on a small/medium repo), or does it block on the new
+navigation/patch tooling landing first? Leaning toward the former (prove
+the batch mechanism first per Prime Directive bottom-up order, propose the
+heavy tools as a fast-follow) but this needs to be an explicit call in the
+proposal, not defaulted silently.
+
 ## Update (2026-07-06 session, latest of all) — B1-item-3: spawn_batch consumes BatchAwarenessPort
 
 `spawn_batch` (`registry/capabilities/handler/batches.py`) now calls
