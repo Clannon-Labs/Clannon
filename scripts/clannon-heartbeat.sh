@@ -41,8 +41,10 @@ fi
 # ALL specialists (memory + orchestration) are idle, and only ONCE per idle period.
 # A specialist is "working" iff its tmux pane shows Claude Code's `esc to interrupt`
 # hint (present only while a turn is generating; a completed-turn summary line is not).
-# A long fallback still guarantees the coordinator is never stranded asleep — even if
-# a specialist builds for hours or the pane check ever misreads.
+# That single-frame read can FLICKER (a tool boundary / repaint mid-turn shows a frame
+# without the hint), so a nudge additionally requires all-idle to PERSIST across polls
+# (a dwell), never firing on one poll alone. A long fallback still guarantees the
+# coordinator is never stranded asleep — even if a specialist builds for hours.
 if [ "$SIDE" = "backend" ]; then
   # If the coordinator itself is mid-turn, it needs no nudge — it'll finish and re-sweep.
   if tmux capture-pane -t "$SESSION" -p 2>/dev/null | grep -q "esc to interrupt"; then
@@ -50,9 +52,14 @@ if [ "$SIDE" = "backend" ]; then
     exit 0
   fi
 
-  IDLE_STAMP="/tmp/clannon-heartbeat-backend.idle-pinged"  # set once pinged for the current idle period
-  LAST_PING="/tmp/clannon-heartbeat-backend.last-ping"     # unix ts of last ping (fallback clock)
-  FALLBACK_S=3600                                          # never let >1h pass with zero pings
+  IDLE_STAMP="/tmp/clannon-heartbeat-backend.idle-pinged"  # set once nudged for the current idle period
+  IDLE_SINCE="/tmp/clannon-heartbeat-backend.idle-since"   # unix ts we FIRST saw all-idle (cleared when any works)
+  LAST_PING="/tmp/clannon-heartbeat-backend.last-ping"     # unix ts of last nudge (fallback clock)
+  FALLBACK_S=3600                                          # never let >1h pass with zero nudges
+  DWELL_S=110                                              # all-idle must PERSIST this long (≥2 consecutive polls)
+                                                           # before a nudge, so a single flickered capture-pane
+                                                           # frame (a tool boundary / repaint mid-turn) can't fire
+                                                           # a false 'both idle' — the transient-idle false positive.
   now="$(date +%s)"
   last="$(cat "$LAST_PING" 2>/dev/null || echo 0)"
   since=$(( now - last ))
@@ -66,23 +73,34 @@ if [ "$SIDE" = "backend" ]; then
   done
 
   if [ -n "$working" ]; then
-    # A specialist is building — clear the idle marker so the NEXT all-idle transition
-    # re-fires, and stay silent unless the fallback window has elapsed (marathon safety net).
-    rm -f "$IDLE_STAMP"
+    # A specialist is building — reset BOTH idle markers so the next SUSTAINED all-idle
+    # window starts fresh, and stay silent unless the 1h fallback has elapsed (safety net).
+    rm -f "$IDLE_STAMP" "$IDLE_SINCE"
     if [ "$since" -lt "$FALLBACK_S" ]; then
       log "skip — busy:$working (idle-gated; ${since}s < ${FALLBACK_S}s fallback)"
       exit 0
     fi
     log "fallback nudge — busy:$working but ${since}s elapsed (safety net)"
+  elif [ -e "$IDLE_STAMP" ]; then
+    # Already nudged for this idle period — stay quiet until a specialist works again.
+    log "skip — all idle but already nudged this idle period"
+    exit 0
   else
-    # All specialists idle — nudge ONCE per idle period (the stamp suppresses re-pinging
-    # on every poll while they stay idle).
-    if [ -e "$IDLE_STAMP" ]; then
-      log "skip — all idle but already nudged this idle period"
+    # All specialists idle THIS poll — require it to PERSIST across polls (dwell) before
+    # nudging, so a one-frame flicker during a long turn can't trigger a false 'both idle'.
+    idle_since="$(cat "$IDLE_SINCE" 2>/dev/null || echo 0)"
+    if [ "$idle_since" -eq 0 ]; then
+      echo "$now" > "$IDLE_SINCE"
+      log "first all-idle poll — waiting ${DWELL_S}s to confirm it isn't a flicker"
+      exit 0
+    fi
+    idle_for=$(( now - idle_since ))
+    if [ "$idle_for" -lt "$DWELL_S" ]; then
+      log "all idle ${idle_for}s — waiting for ${DWELL_S}s dwell before nudging"
       exit 0
     fi
     : > "$IDLE_STAMP"
-    log "all specialists idle — nudging coordinator"
+    log "all specialists idle ${idle_for}s (>=${DWELL_S}s dwell) — nudging coordinator"
   fi
   echo "$now" > "$LAST_PING"
 fi
