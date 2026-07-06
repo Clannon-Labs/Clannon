@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from foundation import VrakshaContext
 from core.memory import manager as memory_manager
+from core.memory.batch_awareness_manager import manager as batch_awareness_manager
 from registry.capabilities import discover
 
 from ..ports import Ports
@@ -26,6 +27,7 @@ def build_default_ports(ctx: VrakshaContext) -> Ports:
     discover()                              # import tools/ and experts/ so they self-register
     return Ports(
         memory=memory_manager,
-        caps=Capabilities.open(ctx),        # one door; tool/expert calls + guards inside
+        awareness=batch_awareness_manager,
+        caps=Capabilities.open(ctx, awareness=batch_awareness_manager),   # one door; tool/expert calls + guards inside
         log=CtxDecisionLog(ctx),
     )

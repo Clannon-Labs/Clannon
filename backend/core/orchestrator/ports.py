@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from foundation import MemoryPort
+from foundation import BatchAwarenessPort, MemoryPort
 
 from .schemas import DecisionLogEntry
 
@@ -37,3 +37,7 @@ class Ports:
     memory: MemoryPort
     caps: "Capabilities"        # the Flow-inspired tool/expert door
     log: DecisionLogSink
+    # Defaulted + trailing so existing keyword-only test construction sites (Ports(memory=...,
+    # caps=..., log=...)) keep working unchanged; None means "no awareness consumption" -- the
+    # same fail-closed-to-no-op posture BatchHandler already has for a None awareness port.
+    awareness: BatchAwarenessPort | None = None

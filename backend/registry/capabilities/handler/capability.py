@@ -20,7 +20,7 @@ from typing import Any, Awaitable, Callable
 from dataclasses import dataclass
 
 import settings
-from foundation import MaxRetriesExceededError, VrakshaContext
+from foundation import BatchAwarenessPort, MaxRetriesExceededError, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from .batches import BatchDefinition, BatchHandler
@@ -47,14 +47,17 @@ class Capabilities:
     def open(
         cls, ctx: VrakshaContext, *, registry=default_registry,
         batch_registry: dict[str, BatchDefinition] | None = None,
+        awareness: BatchAwarenessPort | None = None,
     ) -> "Capabilities":
         """Open a full-power gateway for one request. `batch_registry` (batch_key
         -> BatchDefinition) is the ONLY construction site that can populate the
         batch tier -- see batches.py's module docstring on why `scoped_to()`
-        deliberately has no equivalent parameter (a batch cannot spawn a batch)."""
+        deliberately has no equivalent parameter (a batch cannot spawn a batch).
+        `awareness` (b1-item-3) is threaded the same way -- a batch's own scoped
+        gateway needs no awareness handle, since it never calls spawn_batch itself."""
         tools = ToolHandler(registry=registry)
         experts = ExpertHandler(registry=registry, tools=tools)
-        batches = BatchHandler(batch_registry=batch_registry, registry=registry)
+        batches = BatchHandler(batch_registry=batch_registry, registry=registry, awareness=awareness)
         return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches)
 
     @classmethod

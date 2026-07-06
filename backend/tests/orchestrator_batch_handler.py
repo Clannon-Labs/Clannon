@@ -33,13 +33,16 @@ Run:
 """
 
 import asyncio
+import time
 
 from pydantic import BaseModel
 from pydantic_ai import ModelResponse
-from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 
-from foundation import PermissionLevel, VrakshaContext
+from foundation import (
+    BatchAwarenessItem, BatchLifecycleStatus, CrossBatchAwareness, PermissionLevel, VrakshaContext,
+)
 from registry.capabilities import CapabilityKind, CapabilityRegistry, ExpertSpec, ToolSpec, validate
 from registry.capabilities import ExpertOutput
 from registry.capabilities.handler import BatchDefinition, BatchHandler, Capabilities
@@ -69,8 +72,10 @@ class _Researcher:
         return ExpertOutput(summary="researched", full_content=str(rec.result if rec else ""), confidence=0.7)
 
 
-def _ctx():
-    return VrakshaContext.new("s")
+def _ctx(*, mission_id: str = ""):
+    ctx = VrakshaContext.new("s")
+    ctx.mission_id = mission_id
+    return ctx
 
 
 def _registry_with_one_batchable_domain() -> CapabilityRegistry:
@@ -93,11 +98,30 @@ def _registry_with_one_batchable_domain() -> CapabilityRegistry:
 def _batch_registry() -> dict:
     return {
         "research": BatchDefinition(
+            domain="research",
             expert_keys=frozenset({"research.investigate"}),
             tool_keys=frozenset({"research.read"}),
             grants=frozenset({PermissionLevel.READ}),
         ),
     }
+
+
+class _FakeAwareness:
+    """Records every call it receives, in order -- used to pin the
+    read-before/record-after flow (b1-item-3) without a real store."""
+
+    def __init__(self, awareness: CrossBatchAwareness | None = None):
+        self._awareness = awareness or CrossBatchAwareness()
+        self.record_calls: list[tuple] = []
+        self.read_calls: list[tuple] = []
+
+    async def record_batch_status(self, user_id, mission_id, batch_id, domain, status, headline):
+        self.record_calls.append((user_id, mission_id, batch_id, domain, status, headline))
+        return True
+
+    async def cross_batch_awareness(self, user_id, mission_id, requesting_batch_id):
+        self.read_calls.append((user_id, mission_id, requesting_batch_id))
+        return self._awareness
 
 
 def _offered_names(caps, model) -> list[str]:
@@ -208,3 +232,167 @@ def test_spawn_batch_end_to_end_buffers_full_findings_and_returns_brief_summary(
     assert finding.batch == "research"
     assert finding.full_content == full_report, "the FULL batch answer must be buffered, not the excerpt"
     assert finding.metadata["confidence"] == 0.8
+
+
+# ─── b1-item-3: cross-batch awareness consumption ──────────────────────────
+
+def test_spawn_batch_with_no_awareness_port_is_unchanged_from_before():
+    """Regression pin: BatchHandler() without an awareness port (today's real
+    default -- wiring.py is the only production construction site, and it now
+    always threads a real one, but every OTHER caller, including these older
+    tests above, still constructs bare) behaves byte-for-byte as before this
+    feature existed. No awareness call is attempted."""
+    async def go():
+        handler = BatchHandler(batch_registry=_batch_registry(), registry=_registry_with_one_batchable_domain())
+        summary = await handler.spawn_batch("no-such-batch", "do something", _ctx(mission_id="m1"))
+        assert summary.summary.startswith("[unavailable]")
+    asyncio.run(go())
+
+
+def test_spawn_batch_records_active_then_done_with_a_stable_batch_id():
+    """The read-before/record-after flow (b1-item-3 design §5): ACTIVE is
+    recorded before the batch's own turn runs, DONE after it succeeds, both
+    keyed by the SAME per-invocation batch_id -- batch_key/domain is a
+    separate, stable axis (§2/§3), never the row key."""
+    reg = _registry_with_one_batchable_domain()
+    fake = _FakeAwareness()
+    ctx = _ctx(mission_id="m1")
+    caps = Capabilities.open(ctx, registry=reg, batch_registry=_batch_registry(), awareness=fake)
+    calls = {"n": 0}
+
+    def spy(messages, info):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            tool = next(t for t in info.function_tools if t.name == "spawn_batch")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"batch_key": "research", "task": "investigate the thing"})])
+        out = info.output_tools[0]
+        text = "batch answer" if calls["n"] == 2 else "central final answer"
+        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": text, "confidence": 0.6})])
+
+    asyncio.run(caps.run_turn(
+        system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
+    ))
+
+    assert len(fake.record_calls) == 2, "one ACTIVE before the turn, one DONE after"
+    active_call, done_call = fake.record_calls
+    assert active_call[4] == BatchLifecycleStatus.ACTIVE
+    assert done_call[4] == BatchLifecycleStatus.DONE
+    assert active_call[2] == done_call[2] != "", "same per-invocation batch_id across ACTIVE -> DONE"
+    assert active_call[3] == "research" == done_call[3], "domain carries the stable batch_key"
+    assert active_call[0] == ctx.user_id and active_call[1] == "m1"
+    assert len(fake.read_calls) == 1, "exactly one cross_batch_awareness read, before the turn runs"
+    assert fake.read_calls[0] == (ctx.user_id, "m1", active_call[2]), \
+        "the read excludes-self key must match the SAME batch_id just recorded ACTIVE"
+
+
+def test_cross_batch_awareness_folded_into_batch_task_prompt():
+    """A non-empty awareness read becomes part of the batch's OWN task prompt
+    -- internal to its scoped turn, distinct from what the central model's own
+    context ever sees (the two-output split still holds one tier up)."""
+    reg = _registry_with_one_batchable_domain()
+    other = CrossBatchAwareness(items=[
+        BatchAwarenessItem(batch_id="other1", domain="security",
+                            status=BatchLifecycleStatus.ACTIVE, headline="scanning for CVEs"),
+    ], total_batches=1)
+    fake = _FakeAwareness(other)
+    ctx = _ctx(mission_id="m1")
+    caps = Capabilities.open(ctx, registry=reg, batch_registry=_batch_registry(), awareness=fake)
+    captured_prompts: list[str] = []
+    calls = {"n": 0}
+
+    def spy(messages, info):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            tool = next(t for t in info.function_tools if t.name == "spawn_batch")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"batch_key": "research", "task": "investigate the thing"})])
+        if calls["n"] == 2:
+            for m in messages:
+                if isinstance(m, ModelRequest):
+                    captured_prompts.extend(
+                        p.content for p in m.parts if isinstance(p, UserPromptPart) and isinstance(p.content, str)
+                    )
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "ok", "confidence": 0.6})])
+
+    asyncio.run(caps.run_turn(
+        system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
+    ))
+
+    assert captured_prompts, "the batch's own turn must have received a user prompt"
+    assert any("scanning for CVEs" in p and "security" in p for p in captured_prompts), \
+        "the other batch's awareness headline must be folded into this batch's own task prompt"
+
+
+def test_spawn_batch_records_failed_status_when_the_batch_turn_raises():
+    """A crashed batch must not vanish from awareness -- otherwise it reads as
+    'never existed' to its siblings instead of 'failed', defeating the exact
+    quiet-failure case the slice exists to surface (b1-item-3 design §5)."""
+    reg = _registry_with_one_batchable_domain()
+    fake = _FakeAwareness()
+    ctx = _ctx(mission_id="m1")
+    caps = Capabilities.open(ctx, registry=reg, batch_registry=_batch_registry(), awareness=fake)
+    calls = {"n": 0}
+
+    def spy(messages, info):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            tool = next(t for t in info.function_tools if t.name == "spawn_batch")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"batch_key": "research", "task": "investigate the thing"})])
+        if calls["n"] == 2:
+            raise RuntimeError("batch model exploded")
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name, args={"answer_text": "central final answer", "confidence": 0.9})])
+
+    result = asyncio.run(caps.run_turn(
+        system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
+    ))
+
+    assert result.answer_text == "central final answer", \
+        "a batch fault must not sink the central orchestrator's own turn"
+    statuses = [c[4] for c in fake.record_calls]
+    assert statuses == [BatchLifecycleStatus.ACTIVE, BatchLifecycleStatus.FAILED]
+
+
+def test_spawn_batch_unconfigured_key_never_records_awareness():
+    """The 'not configured' path never resolves a batch_id or a definition --
+    there is nothing to record against, unlike a real batch that fails after
+    starting (previous test)."""
+    async def go():
+        fake = _FakeAwareness()
+        handler = BatchHandler(
+            batch_registry=_batch_registry(), registry=_registry_with_one_batchable_domain(), awareness=fake,
+        )
+        await handler.spawn_batch("no-such-batch", "do something", _ctx(mission_id="m1"))
+        assert fake.record_calls == []
+        assert fake.read_calls == []
+    asyncio.run(go())
+
+
+def test_spawn_batch_mints_a_distinct_batch_id_per_invocation():
+    """Two spawns of the SAME batch_key must not share a batch_id -- a shared
+    id would let a second concurrent same-domain batch clobber the first's
+    status row, and cross_batch_awareness (which excludes only the requesting
+    batch_id) would then hide both from each other instead of showing two
+    distinct 'research' entries (b1-item-3 design §2)."""
+    async def go():
+        fake = _FakeAwareness()
+        handler = BatchHandler(
+            batch_registry=_batch_registry(), registry=_registry_with_one_batchable_domain(), awareness=fake,
+        )
+
+        async def one_call():
+            def spy(messages, info):
+                out = info.output_tools[0]
+                return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "ok", "confidence": 0.5})])
+            await handler.spawn_batch("research", "task", _ctx(mission_id="m1"), model=FunctionModel(spy))
+
+        await one_call()
+        await one_call()
+        active_ids = [c[2] for c in fake.record_calls if c[4] == BatchLifecycleStatus.ACTIVE]
+        assert len(active_ids) == 2
+        assert active_ids[0] != active_ids[1]
+    asyncio.run(go())
