@@ -431,6 +431,23 @@ def upsert_edges(scope: GraphScope, rows: list[dict]) -> list[dict]:
         return []
 
 
+def delete_user(user_id: str) -> None:
+    """Erase every CodeFile node (and its incident IMPORTS edges, via DETACH
+    DELETE) for a user — the graph tier's half of right-to-erasure, mirroring
+    `store.delete_user` for the vector tiers. No-op on a missing user_id or a
+    down store, never raises (same degrade-never-fail discipline as every
+    other write in this module)."""
+    if not user_id:
+        return
+    conn = _kuzu()
+    if conn is None:
+        return
+    try:
+        conn.execute("MATCH (f:CodeFile {user_id: $user_id}) DETACH DELETE f", {"user_id": user_id})
+    except Exception as exc:
+        log.warning("kuzu delete_user failed (CodeFile): %s", exc)
+
+
 def connection():
     """Shared accessor to the lazy Kuzu connection for sibling internal
     modules (`mission_graph_store.py`) that need the SAME embedded db handle

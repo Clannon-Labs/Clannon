@@ -153,6 +153,27 @@ def upsert_typed_edges(kind: str, rows: list[dict]) -> list[dict]:
         return []
 
 
+def delete_user(user_id: str) -> None:
+    """Erase every Mission/Task node (and incident Blocks/Feeds/Supersedes
+    edges, via DETACH DELETE) for a user — the Mission Engine's half of
+    right-to-erasure, parallel to `graph_store.delete_user`'s CodeFile purge.
+    Iterates every known typed-node table rather than hardcoding
+    Mission/Task by name, so a future typed kind added to
+    `_TYPED_NODE_SCHEMAS` is covered automatically. No-op on a missing
+    user_id or a down store; a fault on one table is logged and does not
+    stop the others from being purged."""
+    if not user_id:
+        return
+    conn = graph_store.connection()
+    if conn is None:
+        return
+    for schema in _TYPED_NODE_SCHEMAS.values():
+        try:
+            conn.execute(f"MATCH (n:{schema.table} {{user_id: $user_id}}) DETACH DELETE n", {"user_id": user_id})
+        except Exception as exc:
+            log.warning("kuzu delete_user failed (%s): %s", schema.table, exc)
+
+
 def typed_members(kind: str, scope: GraphScope, *, parent_id: str = "") -> GraphReadResult:
     """Every node of `kind` in scope — a complete, deterministic filter-read
     (never ranked, never hop-bounded; not a traversal), optionally restricted

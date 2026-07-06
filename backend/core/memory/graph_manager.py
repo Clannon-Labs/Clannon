@@ -261,6 +261,17 @@ class GraphManager:
             return GraphResult(degraded=True, notes="graph store unavailable")
         return GraphResult(notes=f"built {len(graph.nodes)} files, {len(graph.edges)} import edges")
 
+    async def delete_user(self, user_id: str) -> None:
+        """Right-to-erasure: purge every graph-tier node for this user
+        (CodeFile + Mission/Task). Not part of GraphPort — a delivery-layer
+        surface, same shape as `MemoryManager.delete_user`, which calls this
+        so an account deletion actually clears the graph tier instead of
+        silently leaving it populated."""
+        if not user_id:
+            return
+        await asyncio.to_thread(graph_store.delete_user, user_id)
+        await asyncio.to_thread(mission_graph_store.delete_user, user_id)
+
 
 # Process-level singleton; wiring hands this to the orchestrator's ports.
 manager = GraphManager()

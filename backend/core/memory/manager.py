@@ -24,7 +24,7 @@ from foundation import (
     constants,
 )
 
-from . import embeddings, store, writer
+from . import embeddings, graph_manager, store, writer
 
 log = logging.getLogger(__name__)
 
@@ -473,8 +473,11 @@ class MemoryManager:
             )
 
     async def delete_user(self, user_id: str) -> None:
-        """Right-to-erasure: purge every tier for this user."""
+        """Right-to-erasure: purge every tier for this user — the four
+        Qdrant vector tiers plus the graph tier (CodeFile + Mission/Task),
+        which used to be silently skipped here."""
         await asyncio.to_thread(store.delete_user, user_id)
+        await graph_manager.manager.delete_user(user_id)
 
 
 # Process-level singleton; wiring hands this to the orchestrator's ports.

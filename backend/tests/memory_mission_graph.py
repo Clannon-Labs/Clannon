@@ -161,6 +161,31 @@ def test_degrade_never_fail_when_store_disabled(monkeypatch):
     assert result.degraded is True
 
 
+def test_delete_user_purges_mission_and_task_nodes_for_that_user_only():
+    """The Mission Engine half of right-to-erasure — previously nothing
+    purged Mission/Task data on account deletion at all."""
+    owner, other = GraphScope(user_id="owner"), GraphScope(user_id="other")
+    mission_graph_store.upsert_typed_nodes("mission", [_mission_row(owner, "m1")])
+    mission_graph_store.upsert_typed_nodes("task", [_task_row(owner, "t1", "m1")])
+    mission_graph_store.upsert_typed_nodes("mission", [_mission_row(other, "m1")])
+
+    mission_graph_store.delete_user("owner")
+
+    assert mission_graph_store.typed_members("mission", owner).rows == ()
+    assert mission_graph_store.typed_members("task", owner, parent_id="m1").rows == ()
+    # the other tenant's identically-keyed mission is untouched
+    assert len(mission_graph_store.typed_members("mission", other).rows) == 1
+
+
+def test_delete_user_is_a_noop_on_missing_user_id():
+    scope = GraphScope(user_id="owner")
+    mission_graph_store.upsert_typed_nodes("mission", [_mission_row(scope, "m1")])
+
+    mission_graph_store.delete_user("")  # must not raise, must not touch anything
+
+    assert len(mission_graph_store.typed_members("mission", scope).rows) == 1
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GraphManager — through the port (write() dispatch + members())
 # ─────────────────────────────────────────────────────────────────────────────
@@ -313,4 +338,37 @@ def test_mixed_write_codefile_and_mission_engine_nodes_together(manager, tmp_pat
         )
         result = await manager.write(scope, [code_node, task_node], [])
         assert {n.node_id for n in result.nodes} == {code_node.node_id, task_node.node_id}
+    asyncio.run(go())
+
+
+def test_graph_manager_delete_user_purges_codefile_and_mission_task_together(manager):
+    """GraphManager.delete_user (not on GraphPort — a delivery-layer surface,
+    same shape as MemoryManager.delete_user) must clear BOTH the CodeFile
+    tier and the Mission/Task tier for the target user, and leave another
+    tenant's identically-shaped data alone."""
+    async def go():
+        owner, other = GraphScope(user_id="owner"), GraphScope(user_id="other")
+        code_node = GraphNode(
+            node_id=graph_store.node_id(owner, "a.py"), label=NodeLabel.CODE_FILE, scope=owner,
+            properties={"path": "a.py"},
+        )
+        task_node = GraphNode(
+            node_id=graph_store.node_id(owner, "t1"), label=NodeLabel.TASK, scope=owner,
+            properties={"task_id": "t1", "mission_id": "m1", "summary": "s", "status": "active",
+                        "evidence": "", "updated_at": 1.0},
+        )
+        other_task = GraphNode(
+            node_id=graph_store.node_id(other, "t1"), label=NodeLabel.TASK, scope=other,
+            properties={"task_id": "t1", "mission_id": "m1", "summary": "s", "status": "active",
+                        "evidence": "", "updated_at": 1.0},
+        )
+        await manager.write(owner, [code_node, task_node], [])
+        await manager.write(other, [other_task], [])
+
+        await manager.delete_user("owner")
+
+        assert (await manager.lookup(owner, natural_key="a.py")).nodes == []
+        assert (await manager.members(owner, NodeLabel.TASK, parent_id="m1")).nodes == []
+        other_view = await manager.members(other, NodeLabel.TASK, parent_id="m1")
+        assert len(other_view.nodes) == 1, "another tenant's data must survive delete_user"
     asyncio.run(go())

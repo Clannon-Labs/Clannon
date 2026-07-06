@@ -25,6 +25,10 @@ rather than duplicated).
   ✓ a hop request beyond MAX_HOPS_CEILING is clamped, not rejected/crashed
   ✓ Kuzu unavailable degrades cleanly (degraded=True, empty paths), never
     raises
+  ✓ delete_user purges only the target user's CodeFile nodes (tenant
+    isolation holds for erasure too), no-ops on a missing user_id, and
+    degrades silently on a down store — the graph tier's half of
+    right-to-erasure (previously missing entirely)
   ✓ upsert_nodes / upsert_edges (the incremental primitives graph_manager's
     GraphPort.write() uses) — idempotent (no duplicate parallel edges on a
     repeat call), an existing ASSERTED edge is immutable (§5.2, "asserted
@@ -426,3 +430,35 @@ def test_concurrent_cold_start_constructs_kuzu_database_exactly_once(monkeypatch
         f"cold start, got {construct_count['n']} — the lazy-init lock isn't "
         f"serializing callers"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# delete_user — the graph tier's right-to-erasure
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_delete_user_purges_only_the_target_users_code_files():
+    owner, other = GraphScope(user_id="owner"), GraphScope(user_id="other")
+    graph_store.replace_code_graph(owner, _chain_graph())
+    graph_store.replace_code_graph(other, _chain_graph())
+
+    graph_store.delete_user("owner")
+
+    assert graph_store.depends_on(owner, "c.py").paths == frozenset()
+    assert graph_store.lookup_by_path(owner, "a.py").paths == frozenset()
+    # the other tenant's identical-looking graph is untouched
+    assert graph_store.lookup_by_path(other, "a.py").paths == frozenset({"a.py"})
+
+
+def test_delete_user_is_a_noop_on_missing_user_id():
+    scope = GraphScope(user_id="owner")
+    graph_store.replace_code_graph(scope, _chain_graph())
+
+    graph_store.delete_user("")  # must not raise, must not touch anything
+
+    assert graph_store.lookup_by_path(scope, "a.py").paths == frozenset({"a.py"})
+
+
+def test_delete_user_degrades_silently_when_store_is_down(monkeypatch):
+    monkeypatch.setattr(graph_store, "_kuzu", lambda: None)
+
+    graph_store.delete_user("owner")  # must not raise
