@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+import settings
 from core.llm import classify_failure as _classify_llm_failure
 from foundation import OrchestratorResponse, VrakshaContext
 
@@ -26,11 +27,6 @@ from foundation import OrchestratorResponse, VrakshaContext
 # source of truth shared with the retry wrapper. recovery keeps only the POLICY:
 # mapping a kind to its user-facing reason and building the degraded answer.
 FailureKind = Literal["rate_limit", "timeout", "error"]
-
-# how much of each partial finding to surface, and how many, so a degraded
-# answer stays legible (and well under the filter's input bounds)
-_PER_FINDING_CHARS = 4000
-_MAX_FINDINGS = 6
 
 
 def classify_failure(exc: BaseException) -> FailureKind:
@@ -86,15 +82,15 @@ def build_degraded_response(ctx: VrakshaContext, kind: FailureKind) -> Orchestra
     """
     parts = [degraded_reason(kind)]
     findings = list(getattr(ctx, "expert_findings", []) or [])
-    usable = [f for f in findings if getattr(f, "full_content", "")][:_MAX_FINDINGS]
+    usable = [f for f in findings if getattr(f, "full_content", "")][:settings.ORCHESTRATOR.degraded_max_findings]
     if usable:
         parts.append("\n\nHere is what was gathered before the run stopped:")
         for f in usable:
-            body = f.full_content.strip()[:_PER_FINDING_CHARS]
+            body = f.full_content.strip()[:settings.ORCHESTRATOR.degraded_per_finding_chars]
             parts.append(f"\n\n### {_humanize(f.expert)}\n{body}")
     return OrchestratorResponse(
         text="".join(parts),
-        confidence=0.1,
+        confidence=settings.ORCHESTRATOR.degraded_confidence,
         metadata={"degraded": True, "cause": kind},
         finding_refs=[f.ref for f in usable],
     )

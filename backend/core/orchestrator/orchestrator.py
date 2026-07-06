@@ -17,6 +17,7 @@ import logging
 import time
 from typing import Any
 
+import settings
 from foundation import (
     Flow,
     MemoryKind,
@@ -60,12 +61,6 @@ async def _learn(ports, user_id: str, session_id: str, *, task: str, answer: str
         log.warning("memory learning dropped: %s", exc)
 
 
-# A turn with no expert/tool work still counts as substantive if either side of the
-# exchange is non-trivial — a real question or a real answer, not a greeting.
-_SUBSTANTIVE_TASK_CHARS = 40
-_SUBSTANTIVE_ANSWER_CHARS = 200
-
-
 def _is_substantive_turn(normalized, response, ctx) -> bool:
     """Worth recording to episodic memory / distilling from: the turn did real work
     (experts or tools ran) or exchanged something non-trivial. A bare greeting or a
@@ -74,7 +69,10 @@ def _is_substantive_turn(normalized, response, ctx) -> bool:
         return True
     task = (getattr(normalized, "content", "") or "").strip()
     answer = (getattr(response, "text", "") or "").strip()
-    return len(task) >= _SUBSTANTIVE_TASK_CHARS or len(answer) >= _SUBSTANTIVE_ANSWER_CHARS
+    return (
+        len(task) >= settings.ORCHESTRATOR.substantive_task_chars
+        or len(answer) >= settings.ORCHESTRATOR.substantive_answer_chars
+    )
 
 
 def _decision_write_proposal(ctx) -> MemoryWriteProposal | None:
@@ -97,7 +95,7 @@ def _decision_write_proposal(ctx) -> MemoryWriteProposal | None:
     return MemoryWriteProposal(
         store=MemoryStore.EPISODIC,
         kind=MemoryKind.DECISION,
-        content=record.decision[:500],
+        content=record.decision[:settings.ORCHESTRATOR.decision_record_content_chars],
         rationale=record.reasoning or "turn decision",
         confidence=ctx.orchestrator_response.confidence if ctx.orchestrator_response else 0.0,
         participants=", ".join(record.participants),
@@ -187,7 +185,10 @@ async def persist_turn_memory(ctx) -> None:
             ctx.memory_writes_requested.append(
                 MemoryWriteProposal(
                     store=MemoryStore.EPISODIC,
-                    content=f"task: {task_content[:200]} | answer: {response.text[:500]}",
+                    content=(
+                        f"task: {task_content[:settings.ORCHESTRATOR.episodic_task_excerpt_chars]} "
+                        f"| answer: {response.text[:settings.ORCHESTRATOR.episodic_answer_excerpt_chars]}"
+                    ),
                     rationale="turn outcome",
                     confidence=response.confidence,
                 )

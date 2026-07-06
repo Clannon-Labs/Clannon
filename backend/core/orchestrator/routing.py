@@ -38,6 +38,12 @@ _DEFAULT_TEMPERATURE = 0.1
 # cosine is undefined, so we report zero similarity rather than dividing by ~0.
 _ZERO_NORM_EPS = 1e-12
 
+# Entropy-band defaults for the human-readable `note` classification below. Same
+# "sensible default, not yet tuned in production" status as _DEFAULT_TEMPERATURE —
+# also recorded in config/backend/orchestrator.yaml for the future caller to read.
+_ENTROPY_FOCUSED_BELOW = 0.34
+_ENTROPY_DISPERSED_AT_OR_ABOVE = 0.67
+
 
 # ─── output contract ────────────────────────────────────────────────────────
 
@@ -131,6 +137,8 @@ def score_routing(
     centroids: Sequence[tuple[str, Sequence[float]]],
     *,
     temperature: float = _DEFAULT_TEMPERATURE,
+    focused_below: float = _ENTROPY_FOCUSED_BELOW,
+    dispersed_at_or_above: float = _ENTROPY_DISPERSED_AT_OR_ABOVE,
 ) -> RoutingSignal:
     """Score how a query disperses across capability domains — ADVISORY evidence only.
 
@@ -139,6 +147,14 @@ def score_routing(
         centroids:  labeled domain centroids as (domain_name, vector) pairs — e.g. one
                     per expert domain, each the embedding of that domain's description.
         temperature: softmax sharpness for the relevance distribution (default tuned-later).
+        focused_below: entropy below this reads as "focused on one domain" in `note`.
+        dispersed_at_or_above: entropy at/above this reads as "dispersed" in `note`;
+                    between the two edges reads as "leaning, with secondary domains".
+
+    This module stays a pure, zero-import leaf (see the module docstring) even though
+    these three defaults are also recorded in `config/backend/orchestrator.yaml` — a
+    future caller reads `settings.ORCHESTRATOR.routing_*` and passes them in here
+    explicitly; this function itself never reads config.
 
     Returns a `RoutingSignal` (see its docstring). Deterministic and pure.
 
@@ -174,9 +190,9 @@ def score_routing(
     )
     top = ordered[0].domain if ordered else None
 
-    if entropy < 0.34:
+    if entropy < focused_below:
         shape = f"focused on '{top}'"
-    elif entropy < 0.67:
+    elif entropy < dispersed_at_or_above:
         shape = f"leaning to '{top}' with secondary domains"
     else:
         shape = "dispersed across domains"

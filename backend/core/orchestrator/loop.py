@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 
+import settings
 from foundation import (
     HydrationPackage,
     HydrationRequest,
@@ -100,12 +101,6 @@ def _resolve_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str
     return answer.answer_text
 
 
-# With no `say()` note, a tool-free answer up to this length reads as a conversational CHAT reply
-# (a greeting, a quick answer) → the chat bubble; longer than this it is a generated DELIVERABLE
-# (a document/report) and goes to the deliverable channel, never the chat.
-_CHAT_REPLY_MAX_CHARS = 600
-
-
 def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> tuple[str, str]:
     """Split a turn into (conversational message, deliverable) — the two channels the UI renders
     separately (the chat bubble vs the deliverable card). They must NOT bleed into each other: a
@@ -124,7 +119,7 @@ def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaConte
     message = ctx.assistant_message or ""
     if message:
         return message, deliverable          # said a note → chat; the answer/artifact is the deliverable
-    if not answer.deliverable_ref and not ctx.expert_findings and len(deliverable) <= _CHAT_REPLY_MAX_CHARS:
+    if not answer.deliverable_ref and not ctx.expert_findings and len(deliverable) <= settings.ORCHESTRATOR.chat_reply_max_chars:
         return deliverable, ""               # a short, direct conversational reply IS the chat
     return message, deliverable              # a document / artifact-backed answer → deliverable only
 
