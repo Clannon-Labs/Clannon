@@ -6,21 +6,28 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+import settings
 from foundation import PermissionLevel
 from registry import tool
 
 # ─── palette + layout constants ────────────────────────────────────────────
+# Geometry sourced from settings.TOOLS (config/backend/tools.yaml); the color
+# palette stays a plain module constant — a theme choice, not geometry, left
+# for a later theme/frontend-config pass.
 
 _COLORS = [
     "#4e79a7", "#f28e2b", "#59a14f", "#e15759",
     "#76b7b2", "#edc948", "#b07aa1", "#ff9da7",
 ]
 
-_W, _H = 560, 380              # SVG canvas size
-_MT, _MR, _MB, _ML = 50, 20, 80, 70   # margins: top, right, bottom, left
-_PW = _W - _ML - _MR           # plot width  = 470
-_PH = _H - _MT - _MB           # plot height = 250
-_MAX_BAR_W = 80.0               # pixel cap on a single bar
+_W, _H = settings.TOOLS.chart_width, settings.TOOLS.chart_height   # SVG canvas size
+_MT, _MR, _MB, _ML = (                                             # margins: top, right, bottom, left
+    settings.TOOLS.chart_margin_top, settings.TOOLS.chart_margin_right,
+    settings.TOOLS.chart_margin_bottom, settings.TOOLS.chart_margin_left,
+)
+_PW = _W - _ML - _MR           # plot width, derived — not an independent knob
+_PH = _H - _MT - _MB           # plot height, derived — not an independent knob
+_MAX_BAR_W = settings.TOOLS.chart_max_bar_width   # pixel cap on a single bar
 
 
 # ─── SVG helpers ───────────────────────────────────────────────────────────

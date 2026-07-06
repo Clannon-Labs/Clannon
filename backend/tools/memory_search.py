@@ -8,13 +8,14 @@ this user, via the MemoryPort's hydrate (injected as `memory`, a MemorySearcher)
 READ-ONLY by design: experts never WRITE memory (CLAUDE.md constraint #4 — writes go
 through the memory write policy, and the wiki is user-triggered only). This tool only
 reads. `wants_memory=True`, so the handler injects the scoped searcher; this module
-imports only `registry` + foundation.
+imports only `registry` + foundation + settings (for the result-count bounds).
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+import settings
 from foundation import PermissionLevel
 
 from registry import tool
@@ -26,7 +27,9 @@ class MemSearchIn(BaseModel):
         "client name, or task description. The most relevant memories are returned."
     )
     max_results: int = Field(
-        default=8, ge=1, le=20, description="Maximum number of memories to return."
+        default=settings.TOOLS.memory_search_default_results,
+        ge=1, le=settings.TOOLS.memory_search_max_results,
+        description="Maximum number of memories to return.",
     )
 
 

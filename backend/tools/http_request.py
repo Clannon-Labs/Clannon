@@ -21,13 +21,12 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field
 
+import settings
 from foundation import PermissionLevel, constants
 
 from registry import tool
 
 from ._net import decode_response, read_capped, validate_public_url
-
-_MAX_HEADERS = 25
 
 
 class HttpIn(BaseModel):
@@ -70,7 +69,7 @@ class HttpRequestTool:
 
     async def run(self, args: HttpIn) -> HttpOut:
         await validate_public_url(args.url)
-        headers = dict(list((args.headers or {}).items())[:_MAX_HEADERS]) or None
+        headers = dict(list((args.headers or {}).items())[:settings.TOOLS.http_request_max_headers]) or None
         async with httpx.AsyncClient(timeout=constants.TOOL_TIMEOUT_S, follow_redirects=False) as client:
             # stream + cap: a hostile endpoint can't flood memory with a huge response
             async with client.stream(args.method, args.url, json=args.json_body, headers=headers) as response:

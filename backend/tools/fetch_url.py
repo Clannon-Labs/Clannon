@@ -14,6 +14,7 @@ import re
 import httpx
 from pydantic import BaseModel
 
+import settings
 from foundation import PermissionLevel, constants
 
 from registry import tool
@@ -26,7 +27,6 @@ _read_capped = read_capped
 
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
-_MAX_REDIRECTS = 5
 
 
 def _html_to_text(html: str) -> str:
@@ -56,7 +56,7 @@ class FetchUrlTool:
     async def run(self, args: FetchIn) -> FetchOut:
         url = args.url
         async with httpx.AsyncClient(timeout=constants.TOOL_TIMEOUT_S, follow_redirects=False) as client:
-            for _ in range(_MAX_REDIRECTS + 1):
+            for _ in range(settings.TOOLS.fetch_url_max_redirects + 1):
                 await validate_public_url(url)            # re-validate every hop
                 # stream, never buffer: a server can advertise a small body and
                 # then send gigabytes, or omit Content-Length entirely — the cap

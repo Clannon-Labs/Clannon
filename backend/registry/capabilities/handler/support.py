@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, Callable
 
+import settings
 from foundation import (
     MaxRetriesExceededError,
     MemoryStore,
@@ -362,9 +363,6 @@ def _make_say_tool(on_message: Callable) -> Callable:
     return say
 
 
-_REMEMBER_MAX_CHARS = 2000   # cap on one remembered fact/preference (proposal content)
-
-
 def _make_remember_tool() -> Callable:
     """A tool the orchestrator calls to save a durable fact or preference to long-term
     memory — when the user asks it to remember something, or when it learns something
@@ -378,9 +376,10 @@ def _make_remember_tool() -> Callable:
         store = MemoryStore.PROCEDURAL if kind == "preference" else MemoryStore.SEMANTIC
         ctx.deps.ctx.memory_writes_requested.append(MemoryWriteProposal(
             store=store,
-            content=text[:_REMEMBER_MAX_CHARS],
+            content=text[:settings.TOOLS.remember_max_chars],
             rationale="user asked to remember it, or a durable fact the orchestrator chose to keep",
-            confidence=0.95,   # high: an explicit, considered save — clears the write-policy floor
+            # high: an explicit, considered save — clears the write-policy floor
+            confidence=settings.TOOLS.remember_write_confidence,
         ))
         return f"saved to long-term memory ({store.value})"
 
@@ -395,9 +394,6 @@ def _make_remember_tool() -> Callable:
         "content (what to remember), kind ('fact' or 'preference')."
     )
     return remember
-
-
-_RECALL_MAX_HITS = 3   # cap full turns returned per recall so one call can't flood context
 
 
 def _make_recall_tool() -> Callable:
@@ -416,8 +412,9 @@ def _make_recall_tool() -> Callable:
         hits = [t for t in transcript if q in f"{t.get('user', '')} {t.get('assistant', '')}".lower()]
         if not hits:
             return f"No earlier turn in this session mentions '{query}'. ({len(transcript)} earlier turn(s) exist.)"
-        shown = hits[-_RECALL_MAX_HITS:]
-        head = "" if len(hits) <= _RECALL_MAX_HITS else f"({len(hits)} matches; showing the {_RECALL_MAX_HITS} most recent)\n\n"
+        max_hits = settings.TOOLS.recall_max_hits
+        shown = hits[-max_hits:]
+        head = "" if len(hits) <= max_hits else f"({len(hits)} matches; showing the {max_hits} most recent)\n\n"
         blocks = [
             f"--- Turn {t.get('n', '?')} ---\nUser: {t.get('user', '')}\nYou: {t.get('assistant', '')}"
             for t in shown

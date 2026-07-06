@@ -14,6 +14,7 @@ import asyncio
 import json
 import time
 
+import settings
 from foundation import PermissionLevel, ToolCallRecord, VrakshaContext, constants
 from security.sanitizers.workers.text import scan as scan_text
 
@@ -169,4 +170,4 @@ class ToolHandler:
         blob = json.dumps(result, default=str)
         if len(blob.encode("utf-8")) <= constants.TOOL_MAX_OUTPUT_BYTES:
             return result
-        return {"truncated": True, "preview": blob[:1000]}
+        return {"truncated": True, "preview": blob[:settings.TOOLS.tool_output_preview_chars]}

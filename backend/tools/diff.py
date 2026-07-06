@@ -7,13 +7,14 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+import settings
 from foundation import PermissionLevel
 from registry import tool
 
-# Combined-input guard: difflib's matcher is ~O(n·m), so a hard char cap keeps a
-# pathological pair from pinning the tool timeout. Upstream text is already bounded
-# (sanitizer caps at 100k chars); this is defence in depth, and honest when it trips.
-_MAX_CHARS = 200_000
+# Combined-input guard (settings.TOOLS.diff_max_chars): difflib's matcher is ~O(n·m),
+# so a hard char cap keeps a pathological pair from pinning the tool timeout. Upstream
+# text is already bounded (sanitizer caps at 100k chars); this is defence in depth,
+# and honest when it trips.
 
 
 # ─── change accounting ──────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ class DiffTool:
 
     async def run(self, args: DiffIn) -> DiffOut:
         try:
-            if len(args.a) + len(args.b) > _MAX_CHARS:
+            if len(args.a) + len(args.b) > settings.TOOLS.diff_max_chars:
                 return DiffOut(error="inputs_too_large")
 
             a_lines = args.a.splitlines()
