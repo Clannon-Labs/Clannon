@@ -260,6 +260,15 @@ class VrakshaContext:
                                               # The orchestrator never reads these — it only sees
                                               # brief expert summaries (keeps its context lean)
 
+    batch_findings: list[Any] = field(default_factory=list)
+                                              # registry.capabilities.BatchFindings (batch tier)
+                                              # FULL batch findings buffered — the same two-output
+                                              # split as expert_findings, ONE TIER UP: the central
+                                              # orchestrator sees only brief BatchSummaries, never a
+                                              # batch's full transcript/findings (context stays
+                                              # bounded as batch count grows). Typed list[Any] so
+                                              # foundation stays import-free of the registry tier.
+
     orchestrator_response: Any | None = None  # foundation.OrchestratorResponse
                                               # raw response before output filtering
     assistant_message: str = ""               # the orchestrator's CONVERSATIONAL voice for
@@ -432,6 +441,7 @@ class VrakshaContext:
             "expert_calls":     len(self.expert_calls),
             "decision_log":     len(self.decision_log),
             "expert_findings":  len(self.expert_findings),
+            "batch_findings":   len(self.batch_findings),
             "filter_retries":   self.filter_retry_count,
             "stage_durations":  self.stage_durations,
             "total_ms":         round(self.total_duration_ms, 2),
