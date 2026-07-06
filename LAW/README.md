@@ -63,7 +63,7 @@ implementation of this rule that only agrees by coincidence? Am I adding a path 
 ## LAW 2 — READABILITY · a developer must LOVE reading it
 
 **Principle.** Any developer opening the code finds it intuitive: the *why* is explained, naming
-is precise, structure is obvious. **Hard cap 500 lines per file (aim ~300).** Short,
+is precise, structure is obvious. **Soft cap 500 lines per file (aim ~400).** Short,
 single-purpose functions. The codebase reads as if one careful author wrote all of it.
 
 **Why.** Code is read far more than it is written — by the next developer, by a future you, by
@@ -77,9 +77,9 @@ extend it.
    line already says.
 2. **Naming is precise.** A name says exactly what the thing is/does. No `data`, `tmp`, `handle2`.
    Rename the moment a name stops being true.
-3. **No long files.** 500 lines is a hard cap, and you only approach it when cutting below would
-   genuinely hurt clarity; otherwise stay well under (~300). A file growing past this is a signal
-   to split by responsibility — do it before the sprawl, not after.
+3. **No long files.** 500 lines is a soft cap, and you only approach it when cutting below would
+   genuinely hurt clarity; otherwise stay well under (~400). A file growing past this is a signal
+   to split by responsibility — do it before the sprawl, not after. > Recent law change by owner.
 4. **No long functions.** A function stays short and single-purpose; extract helpers before it
    sprawls. Deep nesting is a smell — flatten with early returns / guard clauses.
 5. **Match the surrounding idiom** — comment density, naming style, structure — so the file reads
