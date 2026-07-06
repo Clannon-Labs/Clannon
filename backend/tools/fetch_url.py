@@ -15,7 +15,7 @@ import httpx
 from pydantic import BaseModel
 
 import settings
-from foundation import PermissionLevel, constants
+from foundation import PermissionLevel
 
 from registry import tool
 
@@ -55,7 +55,7 @@ class FetchUrlTool:
 
     async def run(self, args: FetchIn) -> FetchOut:
         url = args.url
-        async with httpx.AsyncClient(timeout=constants.TOOL_TIMEOUT_S, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=settings.TOOLS.timeout_s, follow_redirects=False) as client:
             for _ in range(settings.TOOLS.fetch_url_max_redirects + 1):
                 await validate_public_url(url)            # re-validate every hop
                 # stream, never buffer: a server can advertise a small body and
@@ -66,7 +66,7 @@ class FetchUrlTool:
                         url = str(response.next_request.url)
                         continue
                     response.raise_for_status()
-                    raw = await read_capped(response, constants.FETCH_MAX_RESPONSE_BYTES)
-                text = _html_to_text(decode_response(raw, response))[: constants.TOOL_MAX_OUTPUT_BYTES]
+                    raw = await read_capped(response, settings.TOOLS.fetch_max_response_bytes)
+                text = _html_to_text(decode_response(raw, response))[: settings.TOOLS.max_output_bytes]
                 return FetchOut(url=url, text=text)
         raise FetchBlocked("too many redirects")

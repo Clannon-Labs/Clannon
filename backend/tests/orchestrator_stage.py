@@ -6,7 +6,8 @@ here — they are deferred to a post-filter site (see tests/memory_write_timing.
 
 import asyncio
 
-from foundation import Flow, NormalizedInput, Origin, OrchestratorResponse, constants
+import settings
+from foundation import Flow, NormalizedInput, Origin, OrchestratorResponse
 from registry.capabilities import ExpertFindings
 from core.orchestrator import orchestrator as stage
 
@@ -45,7 +46,7 @@ def test_stage_degrades_gracefully_on_loop_error(monkeypatch):
 
 
 def test_stage_degrades_gracefully_on_timeout(monkeypatch):
-    monkeypatch.setattr(constants, "ORCHESTRATOR_TIMEOUT_S", 0.01)
+    monkeypatch.setattr(settings, "ORCHESTRATOR", settings.ORCHESTRATOR.model_copy(update={"timeout_s": 0.01}))
 
     async def slow(normalized, ports, ctx):
         await asyncio.sleep(0.1)

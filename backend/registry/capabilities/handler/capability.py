@@ -19,7 +19,8 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 from dataclasses import dataclass
 
-from foundation import MaxRetriesExceededError, VrakshaContext, constants
+import settings
+from foundation import MaxRetriesExceededError, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from .batches import BatchDefinition, BatchHandler
@@ -156,7 +157,7 @@ class Capabilities:
                 batches=self._batches,
             ),
             deps_type=OrchestratorDeps,
-            retries=constants.ORCHESTRATOR_MAX_RETRIES,
+            retries=settings.ORCHESTRATOR.max_retries,
         )
         try:
             return await run_structured(
@@ -171,7 +172,7 @@ class Capabilities:
                 system_prompt=system_prompt + _FORCE_ANSWER,
                 tools=[],
                 deps_type=OrchestratorDeps,
-                retries=constants.ORCHESTRATOR_MAX_RETRIES,
+                retries=settings.ORCHESTRATOR.max_retries,
             )
             return await run_structured(
                 forced, user_prompt, deps=deps, max_turns=1, model=model,

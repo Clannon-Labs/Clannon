@@ -22,7 +22,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 import settings
-from foundation import PermissionLevel, constants
+from foundation import PermissionLevel
 
 from registry import tool
 
@@ -70,9 +70,9 @@ class HttpRequestTool:
     async def run(self, args: HttpIn) -> HttpOut:
         await validate_public_url(args.url)
         headers = dict(list((args.headers or {}).items())[:settings.TOOLS.http_request_max_headers]) or None
-        async with httpx.AsyncClient(timeout=constants.TOOL_TIMEOUT_S, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=settings.TOOLS.timeout_s, follow_redirects=False) as client:
             # stream + cap: a hostile endpoint can't flood memory with a huge response
             async with client.stream(args.method, args.url, json=args.json_body, headers=headers) as response:
-                raw = await read_capped(response, constants.FETCH_MAX_RESPONSE_BYTES)
-            body = decode_response(raw, response)[: constants.TOOL_MAX_OUTPUT_BYTES]
+                raw = await read_capped(response, settings.TOOLS.fetch_max_response_bytes)
+            body = decode_response(raw, response)[: settings.TOOLS.max_output_bytes]
         return HttpOut(status=response.status_code, ok=response.is_success, body=body)

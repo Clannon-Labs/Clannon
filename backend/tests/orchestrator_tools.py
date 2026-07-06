@@ -4,7 +4,8 @@ import asyncio
 
 from pydantic import BaseModel
 
-from foundation import PermissionLevel, VrakshaContext, constants
+import settings
+from foundation import PermissionLevel, VrakshaContext
 from registry.capabilities import CapabilityKind, CapabilityRegistry, ToolSpec, discover
 from registry.capabilities import validate
 from registry.capabilities import ToolRequest
@@ -71,7 +72,7 @@ def test_bad_arguments():
 
 
 def test_timeout_never_silent(monkeypatch):
-    monkeypatch.setattr(constants, "TOOL_TIMEOUT_S", 0.01)
+    monkeypatch.setattr(settings, "TOOLS", settings.TOOLS.model_copy(update={"timeout_s": 0.01}))
 
     class Slow:
         async def run(self, args):

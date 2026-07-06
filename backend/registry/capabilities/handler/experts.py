@@ -20,7 +20,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import settings
-from foundation import ExpertCallRecord, PermissionLevel, ToolCallRecord, VrakshaContext, constants
+from foundation import ExpertCallRecord, PermissionLevel, ToolCallRecord, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
@@ -36,7 +36,7 @@ class ExpertHandler:
         self._registry = registry
         self._tools = tools                          # a ToolHandler, for scoping
         self._artifacts = artifact_store             # an ArtifactStore; lazy LocalArtifactStore if None
-        self._semaphore = asyncio.Semaphore(constants.EXPERT_MAX_CONCURRENT)
+        self._semaphore = asyncio.Semaphore(settings.EXPERTS.max_concurrent)
         self._allowed_keys = None if allowed_keys is None else frozenset(allowed_keys)
 
     def scoped(self, allowed_keys) -> "ExpertHandler":
@@ -89,7 +89,7 @@ class ExpertHandler:
                 await self._seed_inputs(env, ctx)
                 try:
                     output = await asyncio.wait_for(
-                        spec.impl().run(args, env), timeout=constants.EXPERT_TIMEOUT_S
+                        spec.impl().run(args, env), timeout=settings.EXPERTS.timeout_s
                     )
                 except asyncio.TimeoutError:
                     return self._fail(request, ctx, started, "expert timed out")

@@ -26,7 +26,6 @@ from foundation import (
     NormalizedInput,
     Origin,
     PipelineStage,
-    constants,
 )
 
 from .loop import run_loop
@@ -118,10 +117,10 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         # wait_for against the time remaining, so the turn can never exceed
         # TURN_WALL_CLOCK_S even across revisions. Fresh-turn deadline is well above
         # ORCHESTRATOR_TIMEOUT_S, so this first pass keeps its full budget.
-        flow.ctx.turn_deadline = time.monotonic() + constants.TURN_WALL_CLOCK_S
+        flow.ctx.turn_deadline = time.monotonic() + settings.ORCHESTRATOR.turn_wall_clock_s
         response = await asyncio.wait_for(
             run_loop(normalized, ports, flow.ctx),
-            timeout=min(constants.ORCHESTRATOR_TIMEOUT_S,
+            timeout=min(settings.ORCHESTRATOR.timeout_s,
                         max(0.0, flow.ctx.turn_deadline - time.monotonic())),
         )
 

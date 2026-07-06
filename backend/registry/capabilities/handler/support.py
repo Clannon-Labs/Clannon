@@ -35,7 +35,6 @@ from foundation import (
     MemoryWriteProposal,
     ToolCallRecord,
     WorkspacePort,
-    constants,
 )
 from core.llm import RunContext, Tool      # SDK types only via the core/llm boundary
 
@@ -258,7 +257,7 @@ async def think(env: ExpertEnv, user_prompt: str, *, media=None) -> ExpertOutput
         build_expert_tools(env.granted, env.skills, with_need_context=broker is not None),
     )
     try:
-        return await run_structured(agent, user_prompt, deps=deps, max_turns=constants.EXPERT_MAX_TURNS, media=media)
+        return await run_structured(agent, user_prompt, deps=deps, max_turns=settings.EXPERTS.max_turns, media=media)
     except MaxRetriesExceededError:
         forced = _agent(system_prompt + _EXPERT_FORCE_ANSWER, [])
         return await run_structured(forced, user_prompt, deps=deps, max_turns=1, media=media)

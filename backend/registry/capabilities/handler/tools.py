@@ -15,7 +15,7 @@ import json
 import time
 
 import settings
-from foundation import PermissionLevel, ToolCallRecord, VrakshaContext, constants
+from foundation import PermissionLevel, ToolCallRecord, VrakshaContext
 from security.sanitizers.workers.text import scan as scan_text
 
 from .. import CapabilityKind, registry as default_registry
@@ -106,7 +106,7 @@ class ToolHandler:
             coro = impl.run(args)
 
         try:
-            timeout = getattr(spec, "timeout_s", None) or constants.TOOL_TIMEOUT_S
+            timeout = getattr(spec, "timeout_s", None) or settings.TOOLS.timeout_s
             output = await asyncio.wait_for(coro, timeout=timeout)
         except asyncio.TimeoutError:
             return self._fail(request, ctx, started, "tool timed out")
@@ -168,6 +168,6 @@ class ToolHandler:
 
     def _cap(self, result: dict) -> dict:
         blob = json.dumps(result, default=str)
-        if len(blob.encode("utf-8")) <= constants.TOOL_MAX_OUTPUT_BYTES:
+        if len(blob.encode("utf-8")) <= settings.TOOLS.max_output_bytes:
             return result
         return {"truncated": True, "preview": blob[:settings.TOOLS.tool_output_preview_chars]}
