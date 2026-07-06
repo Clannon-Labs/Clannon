@@ -47,14 +47,20 @@ ROOT MANAGER agent.
 ## OWNER REPLY CHANNEL (standing rule — owner instruction, 2026-07-06)
 
 **When you want a reply/decision from the owner about ANYTHING, do NOT ask in
-chat — write a report in `reports/` (a `report_vN.md`, or the living docket
-`reports/DECISIONS_FOR_OWNER.md` for decisions), make it decision-ready (what it
-is · the options · your recommendation), and tell the owner in one line it's
-ready.** The owner drops their reply into `proposals/to-backend/`. So: your
-questions go OUT as reports; the owner's answers come IN through your normal
+chat — write a report in `reports/` that is CLEARLY NAMED as needing a reply, and
+tell the owner in one line it's ready.** Make it decision-ready (what it is · the
+options · your recommendation). The owner drops their reply into
+`proposals/to-backend/`, and their answers arrive through your normal
 `proposals/to-backend/` inbox — handle them there exactly like any other pending
 proposal. Prefer this over `AskUserQuestion` for anything that isn't a trivial
 in-the-moment clarification.
+
+**Naming — this matters (owner instruction):** a reply-needed report must NOT be
+a `report_vN.md` (those are progress reports, no reply expected — naming a
+reply-needed file `report_vN.md` creates confusion). Use an unmistakable name:
+`reports/REPLY_NEEDED_<slug>.md`, or the living decision docket
+`reports/DECISIONS_FOR_OWNER.md`. The name alone must tell the owner "this one
+wants your answer."
 
 ## ACTIVE MISSION (multi-session — check at session start)
 
