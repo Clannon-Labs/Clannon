@@ -3,7 +3,38 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## Update (2026-07-06 session, continued) — §6 operate-step BUILT + committed
+## Update (2026-07-06 session, latest) — §9 COMPLETE; §8 compaction built; waiting on batch split
+
+§9's acceptance bar is now fully covered: restart survival + budget
+pre-check + completion gate (`mission_operate.py`, prior update below) and
+mid-run compaction (`mission_compaction.py`, new — 8 tests, commit
+`a752e7a`). Full detail: `reports/orchestration/report_v21.md` (reports are
+now one-file-per-feature, per `CLAUDE.md`'s updated Working Rules — don't
+append further updates here to that old monolith pattern; this file
+(HANDOFF) stays a running resume-point log, that's different from
+reports/).
+
+**Real limitation, load-bearing for whoever resumes next:** compaction's
+frontier check (`MissionWorkingContext.dependents`) is IN-SESSION ONLY —
+`GraphPort` has no way to read TASK dependency edges back after they're
+written (`depends_on`/`dependents_of`/`breaks_if_removed` are hardcoded to
+CodeFile/IMPORTS; `members()` returns nodes only). Flagged to backend,
+non-blocking: `proposals/archive/to-backend/2026-07-06_task-edge-read-gap.md`.
+If the batch orchestrator ever needs cross-restart dependency reasoning,
+this is the seam that needs filling first — don't assume it already works.
+
+**Told backend §9 is solid; waiting on the batch-layer work split**
+(batch orchestrator ownership + cross-batch slice + context-discipline
+bounds) — per the Prime Directive, backend is holding that split until §9
+was green, which it now is. Nothing to build until it arrives; check
+`proposals/to-orchestration/` on next resume.
+
+**Still not built, unchanged from the prior update:** wiring
+`run_operate_step`/`conclude_mission` into `core/orchestrator/loop.py`
+(deliberately deferred — this IS the gate the batch orchestrator crosses,
+not a shortcut), and the `awaiting_approval → active` resume path.
+
+## Update (2026-07-06 session, earlier still) — §6 operate-step BUILT + committed
 
 `members()` landed on the Protocol (`85b4f15`); backend also ruled the
 conclude-path question (poll, not push — matches my recommendation, full
