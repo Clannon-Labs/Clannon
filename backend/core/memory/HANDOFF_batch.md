@@ -73,28 +73,31 @@ DECISION` exists and CB4 decision records write to the EPISODIC tier, so a tier-
 **Verification:** full memory-scoped suite (`tests/memory_*.py tests/config_memory.py`) —
 **269 passed, 10 skipped** (qdrant-unreachable env-skip), **1 deselected** (see below).
 
-## The one open item: a flagged, NOT-yet-resolved bug in sibling (not knowledge-web) code
+## RESOLVED (commit `1e81903`, 2026-07-25): the `_traverse` exponential-blowup/crash bug
 
-`tests/memory_graph_manager.py::test_build_code_graph_over_real_backend_then_depends_on_
-through_port` is currently **deselected**, not fixed. Root cause: `graph_store.py::_traverse`
-(CB2's file-level `depends_on`/`dependents_of`/`breaks_if_removed` — phase-1 code, nothing this
-build touches) has an exponential-blowup bug on `backend/`'s now-larger, cyclic import graph
-(measured: 12 hops→0.28s, 16 hops→8.3s, 20 hops/`MAX_HOPS_CEILING` exceeds two minutes — the
-bare `*1..N` Cypher pattern enumerates every WALK, not every reachable node, and the reachable
-set actually plateaus at 5 hops).
+Fixed, per backend's ruling to defer to resume and red-team the degenerate shapes first
+(`proposals/archive/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md`'s `## Response`).
 
-I tried the fix (`ALL SHORTEST`) — confirmed correct AND fast (0.012s, identical result) — but
-**it segfaults Kuzu's native library** on a common case (a node with zero incident edges in
-scope). Reverted immediately; `_traverse` is back to its original, non-crashing (if slow) form.
-Flagged to backend: `proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md` (still
-`Status: pending` as of this handoff — no response yet). **Do not re-attempt `ALL SHORTEST`
-without red-teaming the zero-edge-node case first** — that's exactly what crashed it. Plain
-`SHORTEST` (not `ALL SHORTEST`) was tested for performance only, never for the crash case — its
-crash-safety is unknown.
+`graph_store.py::_traverse` no longer uses ANY variable-length Cypher pattern (the `[:IMPORTS*1..N]`
+that both enumerated every walk exponentially AND was the surface `ALL SHORTEST` crashed on). It's
+now a plain in-Python BFS: each hop is one fixed-pattern `MATCH` over the current frontier (the same
+query shape already proven safe elsewhere in this module), with early termination once a layer
+discovers nothing new. This sidesteps the whole "which Kuzu variable-length keyword is safe" question
+rather than answering it — no variable-length pattern means no walk-enumeration blowup and no
+`ALL SHORTEST`-style crash surface, by construction.
 
-This is genuinely orthogonal to the knowledge-web build (rides `members()`/`edges_of()`/
-`write()`, never `_traverse`), so it does NOT block anything below. It's flagged, not owned by
-this thread — check the proposal's `Status` before touching `_traverse` again.
+Red-teamed (`tests/memory_graph_store.py`, new tests): a self-loop, a multi-node cycle, a zero-edge
+node embedded in an otherwise-cyclic graph (**the precise shape that crashed `ALL SHORTEST`**), and a
+40-node cyclic+chorded graph at the full `MAX_HOPS_CEILING` with a wall-clock assertion (<5s) as a
+real regression guard, not just "didn't hang the test runner."
+`tests/memory_graph_manager.py::test_build_code_graph_over_real_backend_then_depends_on_through_port`
+(the regression gate the flag named) is **un-skipped** and passes in ~6s — it previously exceeded two
+minutes. Also fixed an unrelated stale pinned-import assertion in
+`tests/benchmarks/c2_repo_intelligence.py` (pre-existing drift from the manager.py split, 013ea90 —
+surfaced only because un-skipping the test above ran this benchmark for the first time in a while).
+
+Full targeted suite: 294 passed, 10 skipped (qdrant-unreachable only — the `_traverse` deselect is
+gone).
 
 ## Step 4: DONE (commit `809ec72`, 2026-07-25) — the memory extractor
 
@@ -127,12 +130,12 @@ Built per the ratified design (§3.1), resumed after the ~2.5-week pause. Full d
 
 ## The exact next step
 
-**The flagged `_traverse` exponential-blowup/crash bug** (see the section above — still
-`Status: pending` on the backend proposal as of this update). This needs deliberate
-red-teaming of the zero-edge-node degenerate shape (the thing that segfaulted the
-`ALL SHORTEST` attempt) before touching it again — NOT a quick patch. Un-skipping
-`tests/memory_graph_manager.py:83` is the regression gate. Read the "one open item" section
-above in full before starting; don't re-attempt `ALL SHORTEST` without red-teaming first.
+Both the memory extractor (step 4) and the `_traverse` fix are DONE — nothing self-assigned is
+outstanding. Candidates for the next pick, in the ratified design's own order:
+- **§3.2 — the contradiction judge** (`writer.py::judge_contradiction`, exact copy of
+  `judge_supersession`'s fail-closed shape), riding on top of the memory extractor now that it
+  exists.
+- Check `proposals/to-memory/` first — backend may have assigned something newer.
 
 ## Where to look first when resuming
 
