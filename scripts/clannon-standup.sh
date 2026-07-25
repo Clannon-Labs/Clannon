@@ -56,10 +56,17 @@ msg_for() {
 #          closing the terminals or rebooting: every agent picks up its exact session.
 # fresh  : cold-start a NEW session per agent + send the reorientation wake (read handoff). Only
 #          for a true cold clone where no prior session exists on disk.
-MODE="${1:-fresh}"
-case "$MODE" in resume|fresh) ;; *) echo "usage: $(basename "$0") [resume|fresh]"; exit 2 ;; esac
-echo "clannon-standup: mode = $MODE"
+MODE=fresh
+case "${1:-}" in
+  resume|fresh) MODE="$1"; shift ;;
+  -h|--help)    echo "usage: $(basename "$0") [resume|fresh] [side...]   (sides default: all 5; e.g. 'resume memory orchestration security')"; exit 0 ;;
+esac
+# Optional side selection after the mode restricts the crew (default = all five). Works from
+# ANYWHERE (in or out of tmux): every session is created detached with `tmux new-session -d`.
+if [ "$#" -gt 0 ]; then sides=("$@"); fi
+echo "clannon-standup: mode = $MODE | sides = ${sides[*]}"
 
+launched=()   # sides this run actually started (resume nudges only these — never an already-working agent)
 created=0
 for side in "${sides[@]}"; do
   session="clannon-$side"
@@ -86,6 +93,7 @@ for side in "${sides[@]}"; do
     sleep 0.3
     tmux send-keys -t "$session" Enter
     echo "clannon-standup: launched $session (cwd $dir) [$launch]."
+    launched+=("$side")
     created=1
   fi
 done
@@ -101,18 +109,29 @@ fi
 # back; the heartbeat + inbox-path units re-engage the coordinator, and you can type into any
 # session to drive. Literal text + a separate Enter (a text+Enter burst is read as a paste and
 # inserts a newline instead of submitting — same reason as proposal-wake.sh).
+# FRESH → full reorientation (context empty → read the handoff), sent to every side.
+# RESUME → a LIGHT nudge (context intact → just check inbox + continue), sent ONLY to sessions
+# THIS run launched, so re-running never types over an agent already working (including the
+# coordinator running this script).
 if [ "$MODE" = fresh ]; then
-  for side in "${sides[@]}"; do
-    session="clannon-$side"
-    tmux has-session -t "$session" 2>/dev/null || { echo "clannon-standup: $session missing — skipped wake."; continue; }
-    tmux send-keys -t "$session" -l "$(msg_for "$side")"
-    sleep 0.5
-    tmux send-keys -t "$session" Enter
-    echo "clannon-standup: woke $session."
-  done
+  wake_sides=("${sides[@]}")
 else
-  echo "clannon-standup: resume mode — contexts intact, no reorientation wake sent."
+  wake_sides=("${launched[@]:-}")
 fi
+for side in "${wake_sides[@]:-}"; do
+  [ -n "$side" ] || continue
+  session="clannon-$side"
+  tmux has-session -t "$session" 2>/dev/null || { echo "clannon-standup: $session missing — skipped wake."; continue; }
+  if [ "$MODE" = resume ]; then
+    msg="[auto-wake] Resumed — your context is intact. Check your inbox (proposals/to-$side/) and continue your next task per your handoff. OOM-lightweight verify per commit; propose-up anything that crosses a boundary."
+  else
+    msg="$(msg_for "$side")"
+  fi
+  tmux send-keys -t "$session" -l "$msg"
+  sleep 0.5
+  tmux send-keys -t "$session" Enter
+  echo "clannon-standup: woke $session ($MODE)."
+done
 
 # Keep-alive guarantee: (re)install + enable the 20-min heartbeat timer so the
 # BACKEND coordinator never sleeps permanently — even on a fresh clone after a
