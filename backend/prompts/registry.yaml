@@ -54,3 +54,8 @@ memory_entities:
   file: memory/entities.md
   locked: false   # CB2/CB3 graph-twin extractor — behavior, not a security boundary
 
+memory_contradiction:
+  version: 1
+  file: memory/contradiction.md
+  locked: false   # §3.2 contradiction judge — behavior, not a security boundary
+

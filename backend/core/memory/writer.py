@@ -225,3 +225,51 @@ async def judge_supersession(new_content: str, existing_content: str) -> bool:
         log.warning("supersession judgment failed: %s", exc)
         return False
     return bool(verdict.supersedes and verdict.confident)
+
+
+class _ContradictionVerdict(BaseModel):
+    """The judge's verdict on whether NEW directly contradicts EXISTING (§3.2)."""
+    contradicts: bool = False
+    confident: bool = False
+    rationale: str = ""
+
+
+# the judged strings are already-distilled memories (short); keep the call cheap
+_MAX_CONTRADICTION_CONTENT_CHARS = 1500
+_CONTRADICTION_MAX_OUTPUT_TOKENS = 200
+
+
+def _build_contradiction_prompt(new_content: str, existing_content: str) -> str:
+    return (
+        f"## NEW\n{new_content[:_MAX_CONTRADICTION_CONTENT_CHARS]}\n\n"
+        f"## EXISTING\n{existing_content[:_MAX_CONTRADICTION_CONTENT_CHARS]}\n"
+    )
+
+
+async def judge_contradiction(new_content: str, existing_content: str) -> bool:
+    """§3.2 (knowledge-web CONTRADICTS edge): does `new_content` directly
+    contradict `existing_content` — the same specific claim asserted
+    incompatibly, not merely a different or unrelated claim about the same
+    entity? Exact copy of `judge_supersession`'s fail-closed shape.
+
+    FAIL-CLOSED: returns False on any doubt, malformed output, or fault. A
+    false positive would assert a contradiction that isn't one — the refused
+    failure mode; a false negative just leaves two claims unlinked, the
+    honest default (most claims sharing an entity are NOT contradictory)."""
+    handle = build_agent(
+        "memory",
+        output_type=_ContradictionVerdict,
+        prompt_name="memory_contradiction",
+        retries=settings.MEMORY.distill_max_retries,
+    )
+    try:
+        verdict = await run_structured(
+            handle,
+            _build_contradiction_prompt(new_content, existing_content),
+            max_turns=1,
+            max_output_tokens=_CONTRADICTION_MAX_OUTPUT_TOKENS,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort; a fault must never assert a false contradiction
+        log.warning("contradiction judgment failed: %s", exc)
+        return False
+    return bool(verdict.contradicts and verdict.confident)

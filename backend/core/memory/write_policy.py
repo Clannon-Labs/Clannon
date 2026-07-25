@@ -69,6 +69,10 @@ _GRAPH_TWIN_KINDS = frozenset({MemoryKind.FACT, MemoryKind.ASSUMPTION, MemoryKin
 # the memory itself already persisted; this whole step is pure best-effort
 # enrichment on top of an already-successful write.
 _GRAPH_TWIN_TIMEOUT_S = settings.MEMORY.supersession_timeout_s
+# §3.2 — bounds the CONTRADICTS candidate fan-out regardless of how many
+# existing CLAIMs share an entity with the newly-written one; same funnel
+# discipline as the rest of the write policy (never an all-pairs compare).
+_MAX_CONTRADICTION_CANDIDATES = 5
 
 
 # Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a
@@ -304,6 +308,7 @@ async def _write_graph_twin(
     edges: list[GraphEdge] = []
 
     entity_ids: dict[str, str] = {}
+    relates_to_entity_ids: set[str] = set()  # only entities THIS node RELATES_TO (excludes AUTHORED_BY participants) — §3.2's candidate fan-out
 
     def _entity_node(name: str, entity_type: str) -> str | None:
         canonical = _normalize_entity_name(name)
@@ -323,6 +328,7 @@ async def _write_graph_twin(
         eid = _entity_node(e.name, e.entity_type)
         if eid is not None:
             edges.append(GraphEdge(src_id=eid, dst_id=fact_id, label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED))
+            relates_to_entity_ids.add(eid)
 
     for rel in extracted.relates:
         a, b = entity_ids.get(_normalize_entity_name(rel.a)), entity_ids.get(_normalize_entity_name(rel.b))
@@ -342,6 +348,64 @@ async def _write_graph_twin(
             log.warning("graph-twin write degraded for memory %s: %s", memory_id, result.notes)
     except Exception as exc:  # noqa: BLE001 — best-effort, never affects the write that already landed
         log.warning("graph-twin write failed for memory %s: %s", memory_id, exc)
+        return  # nothing landed — nothing to check for contradictions against
+
+    # §3.2: only a CLAIM (ASSUMPTION-kind) can CONTRADICTS — the edge table is
+    # homogeneous Claim<->Claim (knowledge_store.py), and a FACT/DECISION is
+    # asserted, not the kind of thing this judge is scoped to weigh in on.
+    if fact_label == NodeLabel.CLAIM and relates_to_entity_ids:
+        try:
+            contradiction_edges = await asyncio.wait_for(
+                _judge_contradictions(scope, fact_id, relates_to_entity_ids, content),
+                timeout=_GRAPH_TWIN_TIMEOUT_S,
+            )
+            if contradiction_edges:
+                write_result = await asyncio.wait_for(
+                    graph_manager.manager.write(scope, [], contradiction_edges), timeout=_GRAPH_TWIN_TIMEOUT_S,
+                )
+                if write_result.degraded:
+                    log.warning("contradiction-edge write degraded for memory %s: %s", memory_id, write_result.notes)
+        except Exception as exc:  # noqa: BLE001 — best-effort, never affects the graph twin that already landed
+            log.warning("contradiction check failed for memory %s: %s", memory_id, exc)
+
+
+async def _judge_contradictions(
+    scope: GraphScope, fact_id: str, entity_ids: set[str], content: str,
+) -> list[GraphEdge]:
+    """§3.2: the CONTRADICTS candidate band is 'shares an ENTITY' — never an
+    all-pairs compare, same funnel discipline as EB1's supersession candidate
+    search. Every existing CLAIM connected (via RELATES_TO) to any of
+    `entity_ids` that the just-written CLAIM (`fact_id`) also connects to is a
+    candidate; bounded to `_MAX_CONTRADICTION_CANDIDATES` judge calls
+    regardless of how many claims share the entity. One candidate's fault is
+    logged and skipped, never stopping the rest — the caller applies the
+    overall timeout."""
+    claim_result = await graph_manager.manager.members(scope, NodeLabel.CLAIM)
+    claim_by_id = {n.node_id: n for n in claim_result.nodes if n.node_id != fact_id}
+    if not claim_by_id:
+        return []
+
+    candidates: set[str] = set()
+    for entity_id in entity_ids:
+        edges_result = await graph_manager.manager.edges_of(scope, entity_id, EdgeLabel.RELATES_TO)
+        for e in edges_result.edges:
+            other = e.dst_id if e.src_id == entity_id else e.src_id
+            if other in claim_by_id:
+                candidates.add(other)
+
+    new_edges: list[GraphEdge] = []
+    for candidate_id in list(candidates)[:_MAX_CONTRADICTION_CANDIDATES]:
+        existing_content = claim_by_id[candidate_id].properties.get("content", "")
+        try:
+            contradicts = await writer.judge_contradiction(content, existing_content)
+        except Exception as exc:  # noqa: BLE001 — one candidate's fault must not skip the rest
+            log.warning("contradiction judgment failed for %s: %s", candidate_id, exc)
+            continue
+        if contradicts:
+            new_edges.append(GraphEdge(
+                src_id=fact_id, dst_id=candidate_id, label=EdgeLabel.CONTRADICTS, origin=EdgeOrigin.INFERRED,
+            ))
+    return new_edges
 
 
 async def sync_wiki(user_id: str, title: str, content: str) -> None:

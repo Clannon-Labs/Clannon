@@ -27,12 +27,24 @@ import asyncio
 
 import core.memory.embeddings as emb_mod
 import core.memory.graph_manager as graph_manager_mod
+import core.memory.graph_store as graph_store_mod
 import core.memory.store as store_mod
 import core.memory.write_policy as write_policy_mod
 import core.memory.writer as writer_mod
 from core.memory.manager import MemoryManager
 from core.memory.write_policy import _normalize_entity_name
-from foundation import EdgeLabel, GraphResult, GraphScope, MemoryKind, MemoryStore, MemoryWriteProposal, NodeLabel
+from foundation import (
+    EdgeLabel,
+    EdgeOrigin,
+    GraphEdge,
+    GraphNode,
+    GraphResult,
+    GraphScope,
+    MemoryKind,
+    MemoryStore,
+    MemoryWriteProposal,
+    NodeLabel,
+)
 
 _DUMMY_VEC: list[float] = [0.1] * 768
 
@@ -125,13 +137,30 @@ def test_extract_entities_bounded_regardless_of_model_output(monkeypatch):
 # ---------------------------------------------------------------------------
 
 class _FakeGraphManager:
-    def __init__(self, degraded: bool = False) -> None:
+    def __init__(
+        self, degraded: bool = False,
+        claim_members: list[GraphNode] | None = None,
+        entity_edges: dict[str, list[GraphEdge]] | None = None,
+    ) -> None:
         self.calls: list[tuple] = []
         self.degraded = degraded
+        # §3.2 fixtures: members(CLAIM) returns these; edges_of(entity_id, RELATES_TO) returns entity_edges[entity_id].
+        self._claim_members = claim_members or []
+        self._entity_edges = entity_edges or {}
+        self.members_calls: list[tuple] = []
+        self.edges_of_calls: list[tuple] = []
 
     async def write(self, scope, nodes, edges) -> GraphResult:
         self.calls.append((scope, nodes, edges))
         return GraphResult(nodes=nodes, edges=edges, degraded=self.degraded)
+
+    async def members(self, scope, label, *, parent_id: str = "") -> GraphResult:
+        self.members_calls.append((scope, label, parent_id))
+        return GraphResult(nodes=list(self._claim_members))
+
+    async def edges_of(self, scope, node_id, label) -> GraphResult:
+        self.edges_of_calls.append((scope, node_id, label))
+        return GraphResult(edges=list(self._entity_edges.get(node_id, [])))
 
 
 def _fake_extract(entities=(), relates=()):
@@ -343,3 +372,230 @@ def test_graph_twin_not_triggered_on_a_dedup_merge_refresh(monkeypatch):
     result = asyncio.run(MemoryManager().record_write_proposals("u1", "sess", [_p(kind=MemoryKind.FACT)]))
     assert len(result) == 1
     assert fake.calls == []
+
+
+# ---------------------------------------------------------------------------
+# 4. writer.judge_contradiction — fail-closed LLM contract (§3.2)
+# ---------------------------------------------------------------------------
+
+def test_judge_contradiction_true_when_confident_and_contradicts(monkeypatch):
+    captured = _stub_agent(
+        monkeypatch,
+        result=writer_mod._ContradictionVerdict(contradicts=True, confident=True, rationale="opposite claims"),
+    )
+    result = asyncio.run(writer_mod.judge_contradiction("X is true", "X is false"))
+    assert result is True
+    assert "X is true" in captured["prompt"] and "X is false" in captured["prompt"]
+
+
+def test_judge_contradiction_false_when_not_confident(monkeypatch):
+    _stub_agent(monkeypatch, result=writer_mod._ContradictionVerdict(contradicts=True, confident=False))
+    assert asyncio.run(writer_mod.judge_contradiction("a", "b")) is False, "contradicts=True but NOT confident must still fail closed"
+
+
+def test_judge_contradiction_false_when_not_contradicts(monkeypatch):
+    _stub_agent(monkeypatch, result=writer_mod._ContradictionVerdict(contradicts=False, confident=True))
+    assert asyncio.run(writer_mod.judge_contradiction("a", "b")) is False
+
+
+def test_judge_contradiction_false_on_model_fault(monkeypatch):
+    _stub_agent(monkeypatch, raises=RuntimeError("model unavailable"))
+    assert asyncio.run(writer_mod.judge_contradiction("a", "b")) is False
+
+
+# ---------------------------------------------------------------------------
+# 5. write_policy._judge_contradictions — the §3.2 candidate funnel
+# ---------------------------------------------------------------------------
+
+def _claim_node(node_id: str, content: str, scope: GraphScope) -> GraphNode:
+    return GraphNode(node_id=node_id, label=NodeLabel.CLAIM, scope=scope, properties={"content": content})
+
+
+def test_judge_contradictions_finds_candidate_via_shared_entity_and_returns_edge(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id = "e1"
+    candidate = _claim_node("old-claim", "old claim", scope)
+    fake = _FakeGraphManager(
+        claim_members=[candidate],
+        entity_edges={entity_id: [GraphEdge(src_id=entity_id, dst_id="old-claim", label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED)]},
+    )
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+
+    async def fake_judge(new, existing):
+        return True
+    monkeypatch.setattr(writer_mod, "judge_contradiction", fake_judge)
+
+    edges = asyncio.run(write_policy_mod._judge_contradictions(scope, "new-claim", {entity_id}, "new content"))
+    assert len(edges) == 1
+    assert edges[0].src_id == "new-claim" and edges[0].dst_id == "old-claim"
+    assert edges[0].label == EdgeLabel.CONTRADICTS
+
+
+def test_judge_contradictions_no_edge_when_judge_says_no(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id = "e1"
+    fake = _FakeGraphManager(
+        claim_members=[_claim_node("old-claim", "old claim", scope)],
+        entity_edges={entity_id: [GraphEdge(src_id=entity_id, dst_id="old-claim", label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED)]},
+    )
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+
+    async def fake_judge(new, existing):
+        return False
+    monkeypatch.setattr(writer_mod, "judge_contradiction", fake_judge)
+
+    edges = asyncio.run(write_policy_mod._judge_contradictions(scope, "new-claim", {entity_id}, "new content"))
+    assert edges == []
+
+
+def test_judge_contradictions_excludes_self_from_candidates(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id, fact_id = "e1", "new-claim"
+    fake = _FakeGraphManager(
+        claim_members=[_claim_node(fact_id, "new content", scope)],  # the just-written node itself
+        entity_edges={entity_id: [GraphEdge(src_id=entity_id, dst_id=fact_id, label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED)]},
+    )
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "judge_contradiction", _tripwire())
+
+    edges = asyncio.run(write_policy_mod._judge_contradictions(scope, fact_id, {entity_id}, "new content"))
+    assert edges == []
+
+
+def test_judge_contradictions_no_candidates_never_calls_the_judge(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    fake = _FakeGraphManager()  # no claim_members at all
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "judge_contradiction", _tripwire())
+
+    edges = asyncio.run(write_policy_mod._judge_contradictions(scope, "new-claim", {"e1"}, "new content"))
+    assert edges == []
+    assert fake.edges_of_calls == [], "must short-circuit before even looking up entity edges when there are no claims at all"
+
+
+def test_judge_contradictions_bounded_to_max_candidates(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id = "e1"
+    n = 10
+    claim_nodes = [_claim_node(f"c{i}", f"claim {i}", scope) for i in range(n)]
+    edges_fixture = [GraphEdge(src_id=entity_id, dst_id=f"c{i}", label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED) for i in range(n)]
+    fake = _FakeGraphManager(claim_members=claim_nodes, entity_edges={entity_id: edges_fixture})
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+
+    judged: list[str] = []
+
+    async def counting_judge(new, existing):
+        judged.append(existing)
+        return False
+    monkeypatch.setattr(writer_mod, "judge_contradiction", counting_judge)
+
+    asyncio.run(write_policy_mod._judge_contradictions(scope, "new-claim", {entity_id}, "new content"))
+    assert len(judged) == write_policy_mod._MAX_CONTRADICTION_CANDIDATES
+
+
+def test_judge_contradictions_one_candidate_fault_does_not_stop_the_rest(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id = "e1"
+    claim_nodes = [_claim_node("c1", "claim 1", scope), _claim_node("c2", "claim 2", scope)]
+    edges_fixture = [
+        GraphEdge(src_id=entity_id, dst_id="c1", label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED),
+        GraphEdge(src_id=entity_id, dst_id="c2", label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED),
+    ]
+    fake = _FakeGraphManager(claim_members=claim_nodes, entity_edges={entity_id: edges_fixture})
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+
+    async def flaky_judge(new, existing):
+        if existing == "claim 1":
+            raise RuntimeError("boom")
+        return True
+    monkeypatch.setattr(writer_mod, "judge_contradiction", flaky_judge)
+
+    edges = asyncio.run(write_policy_mod._judge_contradictions(scope, "new-claim", {entity_id}, "new content"))
+    assert len(edges) == 1
+    assert edges[0].dst_id == "c2"
+
+
+# ---------------------------------------------------------------------------
+# 6. _write_graph_twin <-> contradiction check integration (§3.2)
+# ---------------------------------------------------------------------------
+
+def test_write_graph_twin_fact_kind_never_triggers_contradiction_check(monkeypatch):
+    """CONTRADICTS is homogeneous Claim<->Claim — a FACT (or DECISION) twin
+    must never even look."""
+    fake = _FakeGraphManager()
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "extract_entities", _fake_extract(
+        entities=[writer_mod._ExtractedEntity(name="Clannon")],
+    ))
+
+    asyncio.run(write_policy_mod._write_graph_twin("u1", "mem-fact", "content", MemoryKind.FACT, ""))
+
+    assert fake.members_calls == [] and fake.edges_of_calls == []
+
+
+def test_write_graph_twin_assumption_kind_with_no_entities_skips_contradiction_check(monkeypatch):
+    fake = _FakeGraphManager()
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "extract_entities", _fake_extract())  # no entities extracted
+
+    asyncio.run(write_policy_mod._write_graph_twin("u1", "mem-noent", "content", MemoryKind.ASSUMPTION, ""))
+
+    assert fake.members_calls == [], "no RELATES_TO entity means no candidate band to search"
+
+
+def test_write_graph_twin_assumption_kind_with_entity_checks_for_contradictions(monkeypatch):
+    fake = _FakeGraphManager()  # no pre-existing claims -> short-circuits after members()
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "extract_entities", _fake_extract(
+        entities=[writer_mod._ExtractedEntity(name="Clannon")],
+    ))
+    monkeypatch.setattr(writer_mod, "judge_contradiction", _tripwire())  # must never be reached: no candidates exist
+
+    asyncio.run(write_policy_mod._write_graph_twin("u1", "mem-assume", "content", MemoryKind.ASSUMPTION, ""))
+
+    assert len(fake.members_calls) == 1
+    assert fake.members_calls[0][1] == NodeLabel.CLAIM
+    assert fake.edges_of_calls == []  # short-circuited: no claims exist at all yet
+
+
+def test_write_graph_twin_writes_contradicts_edge_when_judge_confirms(monkeypatch):
+    scope = GraphScope(user_id="u1")
+    entity_id = graph_store_mod.node_id(scope, "clannon")  # exact id _write_graph_twin mints for "Clannon"
+    existing_claim_id = "u1||mem-old"
+    fake = _FakeGraphManager(
+        claim_members=[_claim_node(existing_claim_id, "old claim", scope)],
+        entity_edges={entity_id: [GraphEdge(src_id=entity_id, dst_id=existing_claim_id, label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED)]},
+    )
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "extract_entities", _fake_extract(
+        entities=[writer_mod._ExtractedEntity(name="Clannon")],
+    ))
+
+    async def fake_judge(new, existing):
+        return True
+    monkeypatch.setattr(writer_mod, "judge_contradiction", fake_judge)
+
+    asyncio.run(write_policy_mod._write_graph_twin("u1", "mem-new", "new claim", MemoryKind.ASSUMPTION, ""))
+
+    assert len(fake.calls) == 2, "the node/RELATES_TO write, then a separate CONTRADICTS-only edge write"
+    _, contra_nodes, contra_edges = fake.calls[1]
+    assert contra_nodes == []
+    assert len(contra_edges) == 1
+    assert contra_edges[0].label == EdgeLabel.CONTRADICTS
+    assert contra_edges[0].dst_id == existing_claim_id
+
+
+def test_write_graph_twin_contradiction_check_fault_never_raises_and_leaves_the_twin_intact(monkeypatch):
+    class _RaisingMembersManager(_FakeGraphManager):
+        async def members(self, scope, label, *, parent_id=""):
+            raise RuntimeError("kuzu down")
+
+    fake = _RaisingMembersManager()
+    monkeypatch.setattr(graph_manager_mod, "manager", fake)
+    monkeypatch.setattr(writer_mod, "extract_entities", _fake_extract(
+        entities=[writer_mod._ExtractedEntity(name="Clannon")],
+    ))
+
+    asyncio.run(write_policy_mod._write_graph_twin("u1", "mem-fault", "content", MemoryKind.ASSUMPTION, ""))  # must not raise
+
+    assert len(fake.calls) == 1, "the graph twin itself must still have landed despite the contradiction check faulting"
