@@ -3,6 +3,45 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-25, later same day) — patch-apply (fs.patch + fs.read line ranges)
+
+The nav/patch-tooling design (`proposals/archive/to-backend/2026-07-25_
+nav-patch-tooling-design.md`, ratified) split into a hard prerequisite
+(backend/security's parallel track: `security/sanitizers/uploads.py`
+rejects any archive upload outright today — traced, not assumed, before
+proposing) and a piece gated on nothing: patch-apply. Built + proven,
+commit `24b5227`. `fs.read` gained optional `start_line`/`end_line`
+(backward-compatible, `cat -n`-style numbered slice); new `fs.patch`
+(`tools/file_patch.py`, `PermissionLevel.WRITE`) replaces/inserts/deletes a
+precise line range via read-modify-write, no new `WorkspacePort` method.
+Line-range over literal unified-diff, deliberately (no fuzzy
+context-matching, more robust for an LLM caller citing line numbers it just
+read). Reframed as a correctness FIX, not just a CB2 feature: `fs.read`'s
+40k-char truncation + `fs.write`'s whole-file overwrite meant `code.engineer`
+— already shipped in the engineering batch — could silently clobber
+everything past the truncation point when editing a large file.
+
+Wired through the three-places checklist (found while building the batch,
+applied to myself this time): `tools/file_patch.py`, `code.engineer`'s
+`tools` tuple, `batches.yaml`'s `engineering.tool_keys` — plus two
+security-sensitive-permission pin lists (`tests/orchestrator_registry.py`,
+`tests/expert_contract.py`) that would have regressed silently otherwise
+(both caught by their own tests failing loudly).
+
+Also closed two small interleaved items from security's review of the
+shipped batch: `registry/config/batches.py`'s loader now rejects
+NETWORK/ELEVATED grants fail-closed (`6d7ce9f`), and a stale `experts.py`
+comment fixed (`7d7debd`). Full detail: `reports/orchestration/report_v37.md`.
+
+**Resume: waiting on backend/security's archive-modality + cap work
+(parallel track, not blocking anything of mine).** Once it lands: build the
+extraction step into `_seed_inputs()` (§3 of the ratified design — reuses
+`write_bytes`'s existing confinement, adds the entry-count/total-size/
+per-member-size caps that don't exist yet), then AST-aware search
+(`tree-sitter`, approved in principle, actual dependency addition deferred
+to that build), then dependency-graph traversal (built on the AST tool's
+output). Nothing else blocking in the meantime.
+
 ## BUILT (2026-07-25) — the first concrete batch: engineering (CB2), proven end-to-end
 
 Design ratified same-session (`proposals/archive/to-backend/2026-07-25_
