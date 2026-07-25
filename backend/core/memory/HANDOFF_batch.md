@@ -139,26 +139,45 @@ A confirmed pair gets a `CONTRADICTS` edge via a second `write()` call. FACT/DEC
 trigger this (CONTRADICTS is homogeneous Claim-to-Claim). 15 new tests in
 `tests/memory_extractor.py`. Full detail: `reports/memory/report_v30.md`.
 
-## The exact next step
+## CB2/CB3/EB3 benchmark proofs DONE (commit `6b3d4f4`, + `81df1eb`, 2026-07-25)
 
-Everything self-assigned from the resume proposal plus §3.2 is DONE. Remaining candidates per the
-ratified design's own order (none started, none assigned yet — check `proposals/to-memory/` first,
-backend may have queued something newer):
-- **§3.3 — code symbol tier** and **§3.4 — media extractor**: NOT this thread's build per the
-  design's own scoping (orchestration's tree / the media pipeline's, once this substrate is
-  proven — which it now is, via the memory extractor + contradiction judge).
-- **EdgeLabel.CALLS** (§1.4, deferred): only lands in `foundation/contracts/graph.py` when its
-  first real consumer (the code extractor) is actually built — propose-up to backend when that
-  day comes, per LAW 1 (no speculative foundation surface).
-- **The `vector_id` fusion read hop** (§1.5): `GraphPort.lookup(scope, vector_id=X)` is designed
-  in but inert (`graph_manager.py`'s `lookup()` already has the "not set yet" branch) — every
-  FACT/CLAIM/ENTITY node written by the extractor now carries a real `vector_id`, so this is
-  ready to wire up whenever a consumer actually needs the vector→graph hop. Not needed yet.
-- **CB2/CB3/EB3 benchmark proofs** (`docs/architecture/knowledge_graph/`'s own promise, §5 of the
-  ratified design) — none of the three harnesses (`tests/benchmarks/cb2_*`/`cb3_*`/
-  `eb3_cross_media_synthesis.py`) exist yet. Worth considering as the next pick: the substrate +
-  both extraction passes are now real and tested, so a benchmark proving CB2/CB3 end-to-end
-  (not just unit-level) is the natural next validation step, if backend agrees it's the priority.
+`tests/benchmarks/c2_repo_intelligence.py` (extended, cross-batch `DERIVED_FROM`),
+`tests/benchmarks/c3_knowledge_web_convergence.py` (new — NOT an edit to
+`c3_multimodal.py`, see that file's own docstring for why), `tests/benchmarks/
+eb3_cross_media_synthesis.py` (new, exact name from the ratified design). All
+honestly scored per LAW 6 — PASS only on the graph-substrate-specific claims,
+PARTIAL/NOT-YET on anything gated on §3.3/§3.4. Full detail: `reports/memory/
+report_v31.md`. `scripts/benchmarks/run_all.py`'s E3 slot wired to the new EB3
+harness, and its graph-db isolation gap (discovered while verifying — standalone
+runs were polluting the real default graph db since the extractor shipped) fixed
+in a follow-up (commit `81df1eb`, `reports/memory/report_v32.md`).
+
+**A genuine schema-completeness finding surfaced by EB3, ruled DEFERRED by backend:**
+neither `CONTRADICTS` (Claim-only by design) nor `RelatesTo` (Entity-centric by
+design) has a direct Claim<->MediaSegment pair — verified empirically (a live
+write-and-observe probe through the real port, not static registry inspection,
+which false-positives on RelatesTo's heterogeneous candidate set). Distinct from
+"gated on §3.4" — not representable in the schema as ratified and built, even with
+a real media extractor. **Do NOT touch `graph_schema.py` to add this pair** —
+deferred to EB3-build-time, backend's call.
+
+## Status: standing by (2026-07-25)
+
+Both self-picked tasks (memory extractor, `_traverse` fix), §3.2 (contradiction
+judge), the CB2/CB3/EB3 harnesses, and the `run_all.py` isolation fix are all
+DONE. Remaining items are all cross-tree or explicitly deferred:
+- **§3.3 — code symbol tier** and **§3.4 — media extractor**: orchestration's tree /
+  the media pipeline's, once they're ready to build against this now-proven door.
+- **EdgeLabel.CALLS** (§1.4): propose-up only when its first real consumer (the code
+  extractor) exists, per LAW 1.
+- **The `vector_id` fusion read hop** (§1.5): inert but ready — every FACT/CLAIM/
+  ENTITY node carries a real `vector_id` now. Wire up `GraphManager.lookup(vector_id=)`
+  only when a concrete consumer needs the vector→graph hop.
+- **The EB3 Claim<->MediaSegment schema gap** above: deferred, backend's call.
+
+No genuinely independent, substrate-provable work remains in `core/memory/` that
+isn't gated on another tree or a backend decision. Standing by — check
+`proposals/to-memory/` first on resume in case something new has been queued.
 
 ## Where to look first when resuming
 
