@@ -128,14 +128,37 @@ Built per the ratified design (§3.1), resumed after the ~2.5-week pause. Full d
 - §3.3 (code symbol tier) / §3.4 (media extractor) — NOT this thread's build; orchestration's
   / the media pipeline's, once this substrate is proven.
 
+## §3.2 DONE (commit `9afef44`, 2026-07-25): the contradiction judge
+
+`writer.py::judge_contradiction` (exact copy of `judge_supersession`'s fail-closed shape) +
+`write_policy.py::_judge_contradictions` (the "shares an ENTITY" candidate funnel — never an
+all-pairs compare) ride on top of the memory extractor: a fresh ASSUMPTION-kind write's CLAIM
+twin gets checked against every existing CLAIM connected to the same entity/entities (via
+`GraphPort.members()`/`edges_of()`), bounded to `_MAX_CONTRADICTION_CANDIDATES` (5) judge calls.
+A confirmed pair gets a `CONTRADICTS` edge via a second `write()` call. FACT/DECISION twins never
+trigger this (CONTRADICTS is homogeneous Claim-to-Claim). 15 new tests in
+`tests/memory_extractor.py`. Full detail: `reports/memory/report_v30.md`.
+
 ## The exact next step
 
-Both the memory extractor (step 4) and the `_traverse` fix are DONE — nothing self-assigned is
-outstanding. Candidates for the next pick, in the ratified design's own order:
-- **§3.2 — the contradiction judge** (`writer.py::judge_contradiction`, exact copy of
-  `judge_supersession`'s fail-closed shape), riding on top of the memory extractor now that it
-  exists.
-- Check `proposals/to-memory/` first — backend may have assigned something newer.
+Everything self-assigned from the resume proposal plus §3.2 is DONE. Remaining candidates per the
+ratified design's own order (none started, none assigned yet — check `proposals/to-memory/` first,
+backend may have queued something newer):
+- **§3.3 — code symbol tier** and **§3.4 — media extractor**: NOT this thread's build per the
+  design's own scoping (orchestration's tree / the media pipeline's, once this substrate is
+  proven — which it now is, via the memory extractor + contradiction judge).
+- **EdgeLabel.CALLS** (§1.4, deferred): only lands in `foundation/contracts/graph.py` when its
+  first real consumer (the code extractor) is actually built — propose-up to backend when that
+  day comes, per LAW 1 (no speculative foundation surface).
+- **The `vector_id` fusion read hop** (§1.5): `GraphPort.lookup(scope, vector_id=X)` is designed
+  in but inert (`graph_manager.py`'s `lookup()` already has the "not set yet" branch) — every
+  FACT/CLAIM/ENTITY node written by the extractor now carries a real `vector_id`, so this is
+  ready to wire up whenever a consumer actually needs the vector→graph hop. Not needed yet.
+- **CB2/CB3/EB3 benchmark proofs** (`docs/architecture/knowledge_graph/`'s own promise, §5 of the
+  ratified design) — none of the three harnesses (`tests/benchmarks/cb2_*`/`cb3_*`/
+  `eb3_cross_media_synthesis.py`) exist yet. Worth considering as the next pick: the substrate +
+  both extraction passes are now real and tested, so a benchmark proving CB2/CB3 end-to-end
+  (not just unit-level) is the natural next validation step, if backend agrees it's the priority.
 
 ## Where to look first when resuming
 
