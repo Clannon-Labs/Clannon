@@ -3,6 +3,64 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-25, later still) — Mission Engine wired into loop.py; autonomous missions are LIVE
+
+The long-standing blocker at the top of this file ("Mission Engine built +
+longevity-verified but not wired into loop.py") is closed. Ratified design:
+`proposals/archive/to-backend/2026-07-25_mission-engine-loop-wiring-design.md`.
+Built + proven, commit `01e0625`.
+
+**Identity: `mission_id := session_id`** (one mission per session, v1) —
+sidesteps a real blocker found by checking `core/memory/graph_schema.py`
+directly: the graph's `Mission` node table has no session-correlation
+column, and adding one would be a memory-specialist-tree schema change.
+Reusing `session_id` makes "find the active mission for this session" a
+targeted read, no scan, no schema change.
+
+**`_sync_mission_state` (loop.py) runs every turn, before `run_turn`**:
+re-reads the graph fresh (never trusts a carried-over `ctx`), sets/clears
+`ctx.mission_id` — the exact line backend's budget-enforcement anchor now
+reads fresh, per-LLM-call (their doc corrected from a ContextVar-mirror
+approach after I flagged that pydantic-ai's concurrent tool execution can
+make a set-once-in-a-tool-wrapper mirror invisible to the rest of a turn).
+`_with_mission_context` folds active-mission state into the prompt.
+
+**Three new native tools** (`start_mission`, `advance_mission`,
+`end_mission`, `registry/capabilities/handler/support.py`) mirror
+`spawn_batch`'s guarded shape — `mission_id` server-minted, never
+model-supplied. `advance_mission` is a thin pass-through to the
+already-tested `run_operate_step` (§4/§6/§7 gates).
+
+**`Ports.budget: BudgetPort` — a real, load-bearing addition, not a detail:**
+`run_operate_step`'s budget pre-check fails closed to EMPTY when Redis isn't
+seeded (true in every environment today), which would `BUDGET_PAUSE` every
+mission on step one. `core/orchestrator/utils/unlimited_budget.py`'s
+`UnlimitedBudget` is the swap seam — `wiring.py` wires it in now; backend
+swaps it for their real Redis-backed anchor later, one line, once seeded +
+`enforcement_enabled` flips on.
+
+**A real bug caught by a failing test:** `run_operate_step`'s completion
+gate needs the mission's own status ALREADY `PROPOSED_COMPLETE` before it
+will evaluate a judgment — `apply_turn` never sets that on its own.
+`advance_mission` now writes that transition explicitly in the same step
+`completion_verdicts` are submitted. Found by
+`test_advance_mission_progresses_then_completes_and_clears_mission_id`
+failing on first run.
+
+10 new tests (`tests/orchestrator_mission_wiring.py`) — real registry + a
+hermetic `_FakeGraphPort` + the real `UnlimitedBudget`; start/advance/
+complete/end + both refusal paths + the recursion guard + loop.py's own
+read-first/fold-into-prompt wiring (fake capability door, no model — see
+report_v38.md for why: `run_loop`'s `on_event` drives a pydantic-ai
+streaming path `FunctionModel` can't take without a `stream_function` no
+test here provides yet). Full detail: `reports/orchestration/report_v38.md`.
+
+**Resume: waiting on backend's real budget anchor** (Redis-seeded,
+`enforcement_enabled`) before `Ports.budget` swaps from the stub — not
+blocking anything else. Otherwise autonomous missions are live: a mission
+can be started, advanced, completed, or ended through the central
+orchestrator's own tool calls, end to end.
+
 ## BUILT (2026-07-25, later same day) — patch-apply (fs.patch + fs.read line ranges)
 
 The nav/patch-tooling design (`proposals/archive/to-backend/2026-07-25_
