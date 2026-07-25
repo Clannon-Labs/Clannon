@@ -49,3 +49,8 @@ memory_supersession:
   file: memory/supersession.md
   locked: false   # EB1 judge: does memory NEW replace memory EXISTING — behavior, not a security boundary
 
+memory_entities:
+  version: 1
+  file: memory/entities.md
+  locked: false   # CB2/CB3 graph-twin extractor — behavior, not a security boundary
+

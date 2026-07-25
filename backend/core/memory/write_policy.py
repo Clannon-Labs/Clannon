@@ -20,9 +20,19 @@ import asyncio
 import logging
 
 import settings
-from foundation import MemoryKind, MemoryStore, MemoryWriteProposal
+from foundation import (
+    EdgeLabel,
+    EdgeOrigin,
+    GraphEdge,
+    GraphNode,
+    GraphScope,
+    MemoryKind,
+    MemoryStore,
+    MemoryWriteProposal,
+    NodeLabel,
+)
 
-from . import embeddings, store, writer
+from . import embeddings, graph_manager, graph_store, store, writer
 from .tiers import TIER_TRUST
 
 log = logging.getLogger(__name__)
@@ -49,6 +59,16 @@ _SUPERSESSION_TIERS = frozenset({MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL})
 # a slow judge call can never cause record_write_proposals to mistake an
 # already-successful upsert for a stalled store and drop a real write.
 _SUPERSESSION_TIMEOUT_S = settings.MEMORY.supersession_timeout_s
+
+# CB2/CB3 graph twin — which epistemic kinds get mirrored onto the knowledge
+# web. Gate is on `kind`, NOT tier (a DECISION is EPISODIC but must still get
+# a graph twin — see the ratified correction in HANDOFF_batch.md); UNSPECIFIED
+# stays excluded, same as it's excluded from supersession eligibility.
+_GRAPH_TWIN_KINDS = frozenset({MemoryKind.FACT, MemoryKind.ASSUMPTION, MemoryKind.DECISION})
+# Same bounded, best-effort, annotation-only shape as _SUPERSESSION_TIMEOUT_S —
+# the memory itself already persisted; this whole step is pure best-effort
+# enrichment on top of an already-successful write.
+_GRAPH_TWIN_TIMEOUT_S = settings.MEMORY.supersession_timeout_s
 
 
 # Epistemic strength ordering — a dedup refresh keeps the STRONGER kind, so a
@@ -164,6 +184,7 @@ async def _persist_one(
         source = source or prev.get("source", "")
         valid_at = valid_at or float(prev.get("valid_at", 0.0))
         participants = participants or prev.get("participants", "")
+    is_new = point_id is None  # captured before store.upsert below decides the real id
     memory_id = await asyncio.to_thread(
         store.upsert,
         tier,
@@ -196,6 +217,11 @@ async def _persist_one(
     supersession_eligible = tier in _SUPERSESSION_TIERS or kind == MemoryKind.DECISION
     if memory_id and point_id is None and supersession_eligible and existing:
         await _maybe_mark_superseded(tier, user_id, memory_id, content, existing[0], kind=kind)
+    # CB2/CB3: only on a genuinely fresh point — a dedup-merge refresh reuses
+    # the same memory_id (Fact/Claim's `content` is create_only anyway, so a
+    # repeat extraction of the same text would be pure waste, not a change).
+    if memory_id and is_new and kind in _GRAPH_TWIN_KINDS:
+        await _write_graph_twin(user_id, memory_id, content, kind, participants)
     return memory_id
 
 
@@ -231,6 +257,91 @@ async def _maybe_mark_superseded(
             log.warning("supersession mark failed for %s -> %s", candidate["id"], memory_id)
     except Exception as exc:  # noqa: BLE001 — best-effort annotation, never affects the write that landed
         log.warning("supersession judgment/mark failed: %s", exc)
+
+
+def _normalize_entity_name(name: str) -> str:
+    """Canonical form for Entity convergence (§1.1 of the ratified knowledge-
+    web design): collapsed whitespace, lowercased — "Memory  Manager" and
+    "memory manager" must land on the same node, not fork into two."""
+    return " ".join((name or "").split()).lower()
+
+
+async def _write_graph_twin(
+    user_id: str, memory_id: str, content: str, kind: MemoryKind, participants: str,
+) -> None:
+    """CB2/CB3: mirror an accepted FACT/ASSUMPTION/DECISION memory onto the
+    knowledge web. Best-effort, annotation-only — same discipline as
+    `_maybe_mark_superseded`: the memory itself already persisted successfully
+    before this runs, and any fault here (extraction or graph write) must
+    never surface into the write that triggered it.
+
+    DECISION and FACT both assert (CB4: a decision is itself an asserted
+    claim, the same epistemic weight as a source-backed fact) so both become
+    a FACT node; ASSUMPTION — inferential by nature — becomes a CLAIM node.
+    Fusion is one-directional (Option B, ratified): the graph node carries
+    `vector_id` = memory_id; `MemoryItem` itself stays untouched.
+
+    Node ids are minted here with the exact same `graph_store.node_id(scope,
+    natural_key)` formula `GraphManager.write()` uses internally for typed
+    nodes — required so the edges built here (which carry raw ids, unlike
+    nodes whose id `write()` recomputes from `properties`) actually land on
+    the right rows."""
+    try:
+        extracted = await asyncio.wait_for(
+            writer.extract_entities(content), timeout=_GRAPH_TWIN_TIMEOUT_S,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort, never affects the write that already landed
+        log.warning("graph-twin entity extraction failed: %s", exc)
+        return
+
+    scope = GraphScope(user_id=user_id)
+    fact_label = NodeLabel.CLAIM if kind == MemoryKind.ASSUMPTION else NodeLabel.FACT
+    fact_id = graph_store.node_id(scope, memory_id)
+    nodes = [GraphNode(
+        node_id=fact_id, label=fact_label, scope=scope,
+        properties={"content": content, "vector_id": memory_id},
+    )]
+    edges: list[GraphEdge] = []
+
+    entity_ids: dict[str, str] = {}
+
+    def _entity_node(name: str, entity_type: str) -> str | None:
+        canonical = _normalize_entity_name(name)
+        if not canonical:
+            return None
+        eid = entity_ids.get(canonical)
+        if eid is None:
+            eid = graph_store.node_id(scope, canonical)
+            entity_ids[canonical] = eid
+            nodes.append(GraphNode(
+                node_id=eid, label=NodeLabel.ENTITY, scope=scope,
+                properties={"canonical_name": canonical, "entity_type": entity_type or "concept"},
+            ))
+        return eid
+
+    for e in extracted.entities:
+        eid = _entity_node(e.name, e.entity_type)
+        if eid is not None:
+            edges.append(GraphEdge(src_id=eid, dst_id=fact_id, label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED))
+
+    for rel in extracted.relates:
+        a, b = entity_ids.get(_normalize_entity_name(rel.a)), entity_ids.get(_normalize_entity_name(rel.b))
+        if a and b and a != b:
+            edges.append(GraphEdge(src_id=a, dst_id=b, label=EdgeLabel.RELATES_TO, origin=EdgeOrigin.INFERRED))
+
+    for name in participants.split(","):
+        pid = _entity_node(name, "person")
+        if pid is not None:
+            edges.append(GraphEdge(src_id=fact_id, dst_id=pid, label=EdgeLabel.AUTHORED_BY, origin=EdgeOrigin.INFERRED))
+
+    try:
+        result = await asyncio.wait_for(
+            graph_manager.manager.write(scope, nodes, edges), timeout=_GRAPH_TWIN_TIMEOUT_S,
+        )
+        if result.degraded:
+            log.warning("graph-twin write degraded for memory %s: %s", memory_id, result.notes)
+    except Exception as exc:  # noqa: BLE001 — best-effort, never affects the write that already landed
+        log.warning("graph-twin write failed for memory %s: %s", memory_id, exc)
 
 
 async def sync_wiki(user_id: str, title: str, content: str) -> None:

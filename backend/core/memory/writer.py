@@ -134,6 +134,72 @@ def _build_supersession_prompt(new_content: str, existing_content: str) -> str:
     )
 
 
+# CB2/CB3 graph-twin extraction — a memory's content is already short
+# (dedup/policy-cleared), so this stays small and cheap by design.
+_ENTITY_EXTRACT_MAX_CONTENT_CHARS = 1200
+_ENTITY_EXTRACT_MAX_OUTPUT_TOKENS = 300
+_MAX_ENTITIES = 8
+_MAX_RELATIONS = 8
+
+
+class _ExtractedEntity(BaseModel):
+    """One named thing the memory is actually about."""
+    name: str
+    entity_type: str = "concept"
+
+
+class _ExtractedRelation(BaseModel):
+    """A directly-stated relationship between two extracted entities (by name)."""
+    a: str
+    b: str
+
+
+class ExtractedEntities(BaseModel):
+    """The extractor's structured verdict: named entities in one already-
+    distilled memory, plus which pairs it directly relates. Both lists are
+    commonly empty — most memories name zero or one entity and state no
+    entity-to-entity relationship; that is the correct, common case, not a
+    degraded result."""
+    entities: list[_ExtractedEntity] = Field(default_factory=list)
+    relates: list[_ExtractedRelation] = Field(default_factory=list)
+
+
+def _build_entity_prompt(content: str) -> str:
+    return f"## MEMORY\n{content[:_ENTITY_EXTRACT_MAX_CONTENT_CHARS]}\n"
+
+
+async def extract_entities(content: str) -> ExtractedEntities:
+    """CB2/CB3: pull named entities (and any directly-stated entity-to-entity
+    relations) out of one already-accepted memory, for the knowledge-web graph
+    twin. FAIL-CLOSED like every other writer step: any fault or malformed
+    output returns an empty result — a missed graph twin is a smaller loss
+    than a fabricated entity/link, and the memory itself already persisted
+    independent of this step."""
+    handle = build_agent(
+        "memory",
+        output_type=ExtractedEntities,
+        prompt_name="memory_entities",
+        retries=settings.MEMORY.distill_max_retries,
+    )
+    try:
+        result = await run_structured(
+            handle,
+            _build_entity_prompt(content),
+            max_turns=1,
+            max_output_tokens=_ENTITY_EXTRACT_MAX_OUTPUT_TOKENS,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort; a fault must never affect the write that already landed
+        log.warning("entity extraction failed: %s", exc)
+        return ExtractedEntities()
+    # Bounded regardless of what the model returned — a prompt is guidance,
+    # never a guarantee, so the caller's fan-out into graph writes stays
+    # bounded even on a model that ignores the "keep it short" instruction.
+    return ExtractedEntities(
+        entities=[e for e in result.entities if (e.name or "").strip()][:_MAX_ENTITIES],
+        relates=[r for r in result.relates if (r.a or "").strip() and (r.b or "").strip()][:_MAX_RELATIONS],
+    )
+
+
 async def judge_supersession(new_content: str, existing_content: str) -> bool:
     """EB1: does `new_content` supersede `existing_content` — a later, updated
     version of the same specific fact/preference (not merely related content)?
