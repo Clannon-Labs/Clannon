@@ -65,9 +65,10 @@ class ExpertHandler:
             started = time.monotonic()
             # `spec.permission` is NOT checked here — it's catalog-only for experts
             # (see ExpertSpec's docstring in ../specs.py). Access control is `spec.
-            # tool_grants`, scoped below in `_build_env`/`_toolbox_for`; there is one
-            # construction site for this handler (the fully-privileged orchestrator),
-            # so no reduced-privilege caller depends on a per-expert gate today.
+            # tool_grants`, scoped below in `_build_env`/`_toolbox_for`, PLUS this
+            # handler's own `_allowed_keys` (checked just below) — the gate a
+            # reduced-privilege caller (a batch orchestrator's scoped Capabilities)
+            # actually depends on, via `.scoped()`.
             spec = self._registry.get_expert(request.key)
             if spec is None:
                 reason = self._registry.describe_missing(CapabilityKind.EXPERT, request.key)
