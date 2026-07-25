@@ -1,6 +1,7 @@
 import asyncio
 
-from foundation import Flow, NormalizedInput, ThreatLevel, constants
+from foundation import Flow, NormalizedInput, ThreatLevel
+import settings
 from core.verifier import rules, verifier
 from core.verifier.utils import verification_result
 from core.llm.registry import usage_limits_for_layer
@@ -53,4 +54,4 @@ def test_llm_is_the_blocker(monkeypatch):
 
 def test_verifier_retry_budget_allows_configured_retries():
     limits = usage_limits_for_layer("verifier")
-    assert limits.request_limit == constants.VERIFIER_MAX_RETRIES + 1
+    assert limits.request_limit == settings.VERIFIER.max_retries + 1

@@ -10,7 +10,6 @@ from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from foundation import constants
 import settings
 from registry.config import ModelProfile, load_model_registry
 
@@ -177,11 +176,13 @@ _MESSAGE_CACHE_LAYERS = frozenset({"orchestrator", "research", "code", "planner"
 def model_settings_for_layer(layer: str) -> ModelSettings:
     """Build bounded model settings for a pipeline layer."""
     profile = model_profile_for_layer(layer)
-    settings: dict[str, Any] = dict(profile.settings)
+    params: dict[str, Any] = dict(profile.settings)  # the model-settings kwargs (renamed from
+    # `settings` so it no longer shadows the `settings` config module — needed to read
+    # settings.VERIFIER below, and clearer regardless).
 
     if layer == "verifier":
-        settings.setdefault("max_tokens", constants.VERIFIER_MAX_TOKENS)
-        settings.setdefault("timeout", constants.VERIFIER_TIMEOUT_S)
+        params.setdefault("max_tokens", settings.VERIFIER.max_tokens)
+        params.setdefault("timeout", settings.VERIFIER.timeout_s)
 
     # Prompt caching (W3 — the single biggest cost lever). Every call's stable
     # prefix — the large hardened system prompt, plus the full tool/expert catalog
@@ -194,8 +195,8 @@ def model_settings_for_layer(layer: str) -> ModelSettings:
     # no-op; below-threshold blocks simply don't cache; and deferred tools (W2, later)
     # are auto-excluded from the cached block. A models.yaml `settings:` entry can turn
     # either off per role.
-    settings.setdefault("anthropic_cache_instructions", True)
-    settings.setdefault("anthropic_cache_tool_definitions", True)
+    params.setdefault("anthropic_cache_instructions", True)
+    params.setdefault("anthropic_cache_tool_definitions", True)
 
     # W8: also cache the growing MESSAGE HISTORY for the multi-turn agents (the
     # orchestrator + the expert roles). Their history — prior session turns, then this
@@ -205,9 +206,9 @@ def model_settings_for_layer(layer: str) -> ModelSettings:
     # filter, normalizer, memory, search): their last message differs every call, so
     # caching it would cost write overhead with nothing to reuse.
     if layer in _MESSAGE_CACHE_LAYERS:
-        settings.setdefault("anthropic_cache", True)
+        params.setdefault("anthropic_cache", True)
 
-    return ModelSettings(**settings)
+    return ModelSettings(**params)
 
 
 def usage_limits_for_layer(
@@ -228,8 +229,8 @@ def usage_limits_for_layer(
     plain ints; this is the single place the SDK `UsageLimits` is built.
     """
     if layer == "verifier":
-        base_requests = constants.VERIFIER_MAX_RETRIES + 1
-        base_tokens: int | None = constants.VERIFIER_MAX_TOKENS
+        base_requests = settings.VERIFIER.max_retries + 1
+        base_tokens: int | None = settings.VERIFIER.max_tokens
     elif layer == "orchestrator":
         base_requests = settings.ORCHESTRATOR.max_turns + 1
         base_tokens = settings.ORCHESTRATOR.max_tokens

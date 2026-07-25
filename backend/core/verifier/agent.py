@@ -7,8 +7,8 @@ from functools import lru_cache
 from foundation import (
     NormalizedInput,
     ThreatLevel,
-    constants,
 )
+import settings
 from registry.config import Prompt, get_prompt
 from core.llm import build_agent, run_structured
 
@@ -130,7 +130,7 @@ async def verify_with_llm(
         "verifier",
         output_type=VerifierLLMResult,
         prompt_name="verifier",
-        retries=constants.VERIFIER_MAX_RETRIES,
+        retries=settings.VERIFIER.max_retries,
     )
     llm_result = await run_structured(handle, prompt)
 

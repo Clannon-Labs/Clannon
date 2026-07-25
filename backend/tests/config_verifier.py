@@ -12,11 +12,10 @@ from settings import VerifierConfig
 
 
 def test_verifier_values_match_todays_constants():
-    import foundation.vocab.constants as c
     v = settings.VERIFIER
-    assert v.timeout_s == c.VERIFIER_TIMEOUT_S == 12.0
-    assert v.max_tokens == c.VERIFIER_MAX_TOKENS == 512
-    assert v.max_retries == c.VERIFIER_MAX_RETRIES == 2
+    assert v.timeout_s == 12.0
+    assert v.max_tokens == 512
+    assert v.max_retries == 2
 
 
 @pytest.mark.parametrize("bad", [{"timeout_s": 0}, {"max_tokens": 0}, {"max_retries": -1}])

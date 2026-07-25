@@ -170,6 +170,7 @@ def test_anthropic_cache_settings_are_inert_on_other_providers():
 
 from core.llm.registry import model_settings_for_layer, usage_limits_for_layer
 from foundation import constants
+import settings
 
 # the two anthropic prompt-prefix cache knobs every layer carries
 _CACHE_PREFIX = {"anthropic_cache_instructions": True, "anthropic_cache_tool_definitions": True}
@@ -184,8 +185,8 @@ EXPECTED_MODEL_SETTINGS = {
     "planner": _CACHE_PREFIX_AND_HISTORY,
     "media_expert": _CACHE_PREFIX_AND_HISTORY,
     # verifier additionally pins a hard token + timeout cap (fail closed on a slow gate)
-    "verifier": {**_CACHE_PREFIX, "max_tokens": constants.VERIFIER_MAX_TOKENS,
-                 "timeout": constants.VERIFIER_TIMEOUT_S},
+    "verifier": {**_CACHE_PREFIX, "max_tokens": settings.VERIFIER.max_tokens,
+                 "timeout": settings.VERIFIER.timeout_s},
     # one-shot / varying-input layers: prefix cache only, no history cache
     "filter": _CACHE_PREFIX,
     "normalizer": _CACHE_PREFIX,
@@ -196,7 +197,7 @@ EXPECTED_MODEL_SETTINGS = {
 
 # (request_limit, output_tokens_limit) for the no-override base path
 EXPECTED_USAGE_LIMITS = {
-    "verifier": (constants.VERIFIER_MAX_RETRIES + 1, constants.VERIFIER_MAX_TOKENS),
+    "verifier": (settings.VERIFIER.max_retries + 1, settings.VERIFIER.max_tokens),
     "orchestrator": (constants.ORCHESTRATOR_MAX_TURNS + 1, constants.ORCHESTRATOR_MAX_TOKENS),
     # everything else is a one-shot structured agent: one request, no token cap baked in
     "filter": (1, None),

@@ -335,7 +335,7 @@ def test_verifier_request_limit_matches_retry_budget():
     across all LLM stages, not just the orchestrator).
     """
     limits = usage_limits_for_layer("verifier")
-    assert limits.request_limit == constants.VERIFIER_MAX_RETRIES + 1
+    assert limits.request_limit == settings.VERIFIER.max_retries + 1
 
 
 def test_per_run_turn_override_applies_correctly():

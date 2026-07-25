@@ -86,11 +86,9 @@ MAX_VIDEO_DURATION_S        = 300                 # 5 minutes max video
 # Should be fast class model, tight token limits.
 # ---------------------------------------------------------------------------
 
-VERIFIER_TIMEOUT_S          = 12.0   # if verifier takes longer, treat as ERROR.
-                                     # Must be >= 10s: the Gemini API rejects
-                                     # request deadlines under 10s (400).
-VERIFIER_MAX_TOKENS         = 512    # verifier only outputs structured JSON
-VERIFIER_MAX_RETRIES        = 2      # retries on malformed output before ERROR
+# VERIFIER_* — MIGRATED to config (D1, single-source): config/backend/verifier.yaml ->
+# settings.VERIFIER.{timeout_s, max_tokens, max_retries}. core/llm/registry.py + core/verifier/
+# agent.py read them from there (owner control panel), not from a foundation constant.
 
 
 # ---------------------------------------------------------------------------
