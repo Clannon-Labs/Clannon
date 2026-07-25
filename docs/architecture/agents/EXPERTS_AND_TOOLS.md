@@ -78,6 +78,9 @@ Reads files from the user's connected storage — R2, local uploads, or linked s
 **File Write Tool**
 Writes or updates files — documents, code files, reports. Requires explicit permission check before writing.
 
+**File Patch Tool**
+Replaces, inserts, or deletes a precise line range inside a file instead of overwriting the whole thing — the precise-editing primitive for large files (fs.read's whole-file cap silently truncates past ~40k chars; a targeted read+patch reaches past that and avoids clobbering the rest of the file on write). Used by the Code Expert.
+
 **Vector Search Tool**
 Queries Qdrant for semantically similar memories. Used by the Memory Manager during hydration. Always scoped to `user_id`.
 
