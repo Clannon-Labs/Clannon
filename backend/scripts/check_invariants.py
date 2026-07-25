@@ -353,6 +353,67 @@ def check_network_tools_ssrf_gate(files: list[Path]) -> Result:
     )
 
 
+def check_agent_run_confined_to_retry(files: list[Path]) -> Result:
+    """
+    No-bypass invariant (security review 2026-07-25) — `agent.run(` (the
+    pydantic-ai SDK call) must be invoked only inside core/llm/retry.py. Every
+    other layer routes through retry.run_agent instead (framework.py's
+    run_structured, search.py's grounded search both do) so the shared
+    transient-retry wrapper — and the budget-enforcement anchor once it lands —
+    can never be skipped by a second call site.
+
+    FAIL if any file outside backend/core/llm/retry.py or backend/tests/
+    contains the literal `agent.run(`. tests/ is excluded (test-by-design —
+    e.g. tests/llm_provider_failover.py discusses agent.run() in prose/asserts,
+    not as a second real call site).
+    """
+    retry_module = BACKEND_ROOT / "core" / "llm" / "retry.py"
+    tests_dir = BACKEND_ROOT / "tests"
+    candidates = [
+        f for f in files
+        if f != retry_module and not _is_under(f, tests_dir)
+    ]
+    hits = _grep(candidates, r"\bagent\.run\(")
+    status = "FAIL" if hits else "PASS"
+    return Result(
+        label="agent.run( confined to core/llm/retry.py",
+        invariant_ref="no-bypass (retry/budget anchor, security review 2026-07-25)",
+        status=status,
+        hits=hits,
+        note="a second agent.run( call site would skip the shared retry wrapper and the budget anchor.",
+    )
+
+
+def check_budget_keys_confined_to_core_budget(files: list[Path]) -> Result:
+    """
+    No-bypass invariant (security review 2026-07-25) — a raw `budget:` Redis
+    key literal must be constructed only inside core/budget/ (the sole broker
+    for reserve/reconcile/seed). A hand-rolled key elsewhere would read or
+    write the money ledger outside the atomic Lua-script door, defeating the
+    no-overspend guarantee (core/budget/redis_budget.py's own docstring).
+
+    FAIL if any file outside backend/core/budget/ or backend/tests/ contains a
+    string literal starting with "budget:". tests/ is excluded (test-by-design
+    — tests assert against the real key format directly, same carve-out as
+    the other confinement checks).
+    """
+    core_budget = BACKEND_ROOT / "core" / "budget"
+    tests_dir = BACKEND_ROOT / "tests"
+    candidates = [
+        f for f in files
+        if not _is_under(f, core_budget) and not _is_under(f, tests_dir)
+    ]
+    hits = _grep(candidates, r"[\"']budget:")
+    status = "FAIL" if hits else "PASS"
+    return Result(
+        label="raw budget: keys confined to core/budget/",
+        invariant_ref="no-bypass (money layer, security review 2026-07-25)",
+        status=status,
+        hits=hits,
+        note="a hand-rolled budget: key outside core/budget/ would bypass reserve/reconcile's atomic Lua door.",
+    )
+
+
 def check_foundation_deep_import(files: list[Path]) -> Result:
     """
     §III.13 smell — callers outside foundation/ should import from the package
@@ -456,6 +517,8 @@ def main() -> int:
         check_no_bare_set(all_files),
         check_network_tools_ssrf_gate(network_capable_files),
         check_foundation_deep_import(all_files),
+        check_agent_run_confined_to_retry(all_files),
+        check_budget_keys_confined_to_core_budget(all_files),
     ]
 
     _print_results(results)

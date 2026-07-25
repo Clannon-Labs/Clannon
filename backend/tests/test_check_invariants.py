@@ -23,6 +23,8 @@ from check_invariants import (  # noqa: E402
     REPO_ROOT,
     _is_under,
     _iter_py_files,
+    check_agent_run_confined_to_retry,
+    check_budget_keys_confined_to_core_budget,
     check_foundation_deep_import,
     check_foundation_dep_direction,
     check_memory_internals_confined,
@@ -287,6 +289,84 @@ class TestNetworkToolsSSRFGate:
 
 
 # ---------------------------------------------------------------------------
+# no-bypass — agent.run( confined to core/llm/retry.py (security review 2026-07-25)
+# ---------------------------------------------------------------------------
+
+class TestAgentRunConfinedToRetry:
+    def test_pass_when_no_agent_run_calls(self, tmp_path):
+        f = _write(tmp_path, "core/orchestrator/loop.py", "x = 1\n")
+        result = check_agent_run_confined_to_retry([f])
+        assert result.status == "PASS"
+
+    def test_fail_on_second_call_site(self, tmp_path):
+        f = _write(tmp_path, "experts/code/expert.py",
+                   "result = await agent.run(prompt)\n")
+        result = check_agent_run_confined_to_retry([f])
+        assert result.status == "FAIL"
+        assert len(result.hits) == 1
+
+    def test_retry_module_itself_is_excluded(self):
+        # The real file is excluded by identity, not just by content — pass the
+        # actual retry.py path and confirm it never fails regardless of content.
+        retry_module = BACKEND_ROOT / "core" / "llm" / "retry.py"
+        if not retry_module.exists():
+            pytest.skip("core/llm/retry.py not found at expected path")
+        result = check_agent_run_confined_to_retry([retry_module])
+        assert result.status == "PASS"
+        assert result.hits == []
+
+    def test_test_files_excluded(self, tmp_path):
+        # tests/ is excluded — a test file discussing agent.run() in prose/asserts
+        # (tests/llm_provider_failover.py) must not trip the gate.
+        f = BACKEND_ROOT / "tests" / "llm_provider_failover.py"
+        if not f.exists():
+            pytest.skip("tests/llm_provider_failover.py not found at expected path")
+        result = check_agent_run_confined_to_retry([f])
+        assert result.status == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# no-bypass — raw budget: keys confined to core/budget/ (security review 2026-07-25)
+# ---------------------------------------------------------------------------
+
+class TestBudgetKeysConfinedToCoreBudget:
+    def test_pass_when_no_raw_keys(self, tmp_path):
+        f = _write(tmp_path, "core/orchestrator/loop.py", "x = 1\n")
+        result = check_budget_keys_confined_to_core_budget([f])
+        assert result.status == "PASS"
+
+    def test_fail_on_hand_rolled_key_outside_core_budget(self, tmp_path):
+        f = _write(tmp_path, "api/admin.py",
+                   'await redis.get(f"budget:{user_id}:{period}")\n')
+        result = check_budget_keys_confined_to_core_budget([f])
+        assert result.status == "FAIL"
+        assert len(result.hits) == 1
+
+    def test_core_budget_itself_is_excluded(self):
+        core_budget = BACKEND_ROOT / "core" / "budget"
+        if not core_budget.exists():
+            pytest.skip("core/budget/ not found at expected path")
+        files = [f for f in core_budget.rglob("*.py")]
+        if not files:
+            pytest.skip("no .py files under core/budget/")
+        result = check_budget_keys_confined_to_core_budget(files)
+        assert result.status == "PASS"
+        assert result.hits == []
+
+    def test_test_files_excluded(self, tmp_path):
+        f = _write(tmp_path, "tests/budget_seed.py",
+                   'assert await r.get("budget:mission:m1") == 50_000\n')
+        # Simulate the real exclusion: the check only excludes the REAL tests/
+        # dir under BACKEND_ROOT, so build the candidate list the way main() does.
+        tests_dir = BACKEND_ROOT / "tests"
+        real = tests_dir / "budget_seed.py"
+        if not real.exists():
+            pytest.skip("tests/budget_seed.py not found at expected path")
+        result = check_budget_keys_confined_to_core_budget([real])
+        assert result.status == "PASS"
+
+
+# ---------------------------------------------------------------------------
 # §III.13 — no deep-import of foundation submodules
 # ---------------------------------------------------------------------------
 
@@ -405,6 +485,8 @@ class TestBaselineGuard:
             check_no_bare_set(all_files),
             check_network_tools_ssrf_gate(network_files),
             check_foundation_deep_import(all_files),
+            check_agent_run_confined_to_retry(all_files),
+            check_budget_keys_confined_to_core_budget(all_files),
         ]
         fail_results = [r for r in results if r.status == "FAIL"]
         assert fail_results == [], (
