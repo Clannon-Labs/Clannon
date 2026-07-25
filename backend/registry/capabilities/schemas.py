@@ -98,3 +98,59 @@ class BatchFindings(BaseModel):
     ref: str
     full_content: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Mission Engine native tools (ratified 2026-07-25, mission-engine-loop-wiring-design) ---
+
+class StartMissionArgs(BaseModel):
+    """The central orchestrator's `start_mission` native tool arguments. No id
+    field — mission_id is server-minted (session_id, identity-set-once), never
+    model-supplied."""
+    intent: str
+    success_criteria: list[str] = Field(default_factory=list)
+
+
+class NewTaskArg(BaseModel):
+    """One task the model proposes this turn (mirrors mission_operate.NewTask,
+    as a model-facing arg — required_permission is a plain PermissionLevel
+    string so pydantic-ai can introspect it directly)."""
+    task_id: str
+    summary: str
+    blocks: list[str] = Field(default_factory=list)
+    feeds: list[str] = Field(default_factory=list)
+    supersedes: str = ""
+    required_permission: str = "read"
+
+
+class TaskTransitionArg(BaseModel):
+    """One already-existing task's terminal outcome this turn (mirrors
+    mission_operate.TaskTransition). status is one of "done"/"failed"/"superseded"."""
+    task_id: str
+    status: str
+    summary: str
+    evidence: str = ""
+
+
+class CriterionVerdictArg(BaseModel):
+    """One success criterion's judged outcome this turn (mirrors
+    mission.CriterionVerdict) — only meaningful when the model believes the
+    mission is complete; empty completion_verdicts on AdvanceMissionArgs means
+    "just advance tasks, not proposing completion yet"."""
+    description: str
+    met: bool
+    evidence: str = ""
+
+
+class AdvanceMissionArgs(BaseModel):
+    """The central orchestrator's `advance_mission` native tool arguments — ONE
+    tool bundling one turn's worth of mission_operate.OperateStepTurn (new
+    tasks, terminal transitions, and an optional completion judgment)."""
+    new_tasks: list[NewTaskArg] = Field(default_factory=list)
+    transitions: list[TaskTransitionArg] = Field(default_factory=list)
+    completion_verdicts: list[CriterionVerdictArg] = Field(default_factory=list)
+
+
+class EndMissionArgs(BaseModel):
+    """The central orchestrator's `end_mission` native tool arguments — a direct
+    terminal transition (USER_ENDED), bypassing the completion-judgment gate."""
+    reason: str

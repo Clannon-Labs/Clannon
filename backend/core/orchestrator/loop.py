@@ -40,6 +40,7 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     # governs what the FINAL message carries.
     ctx.assistant_message = ""
     hydration = await _hydrate(normalized, ports, ctx)
+    mission = await _sync_mission_state(ports, ctx)
 
     async def on_event(event: dict) -> None:
         """Stream each capability call to the decision-log sink, live — EXCEPT internal
@@ -68,11 +69,13 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         ctx.assistant_message = (ctx.assistant_message or "") + text
         await ports.log.emit(DecisionLogEntry(kind="message", message=text))
 
+    user_prompt = build_user_prompt(normalized, hydration, ctx.filter_feedback, ctx.input_files)
+    user_prompt = _with_mission_context(user_prompt, mission)
     answer: OrchestratorAnswer = await ports.caps.run_turn(
         system_prompt=get_prompt("orchestrator").text,
         # revision_feedback is set only on a bounded retry after the output filter
         # rejected the previous draft — it tells the orchestrator what to fix
-        user_prompt=build_user_prompt(normalized, hydration, ctx.filter_feedback, ctx.input_files),
+        user_prompt=user_prompt,
         output_type=OrchestratorAnswer,
         on_event=on_event,
         on_message=on_message,
@@ -122,6 +125,55 @@ def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaConte
     if not answer.deliverable_ref and not ctx.expert_findings and len(deliverable) <= settings.ORCHESTRATOR.chat_reply_max_chars:
         return deliverable, ""               # a short, direct conversational reply IS the chat
     return message, deliverable              # a document / artifact-backed answer → deliverable only
+
+
+async def _sync_mission_state(ports: Ports, ctx: VrakshaContext):
+    """Mission-engine loop-wiring (ratified 2026-07-25) — the read-first check, every
+    turn: re-reads the graph for an active mission bound to THIS session
+    (mission_id := session_id, §1 of the ratified design — a targeted read, no scan,
+    no schema change), never trusted from a carried-over ctx. Sets ctx.mission_id
+    when one is found and non-terminal — the exact line backend's budget anchor
+    reads fresh, per-call (§4: never a ContextVar mirror set once and assumed to
+    survive concurrent tool execution). Clears it back to "" when no mission is
+    active or it has concluded, so an ordinary turn is never mistaken for a
+    mission-bound one. `ports.graph is None` (missions unavailable in this Ports
+    instance) degrades to the same "no mission" no-op, matching awareness/batches."""
+    if ports.graph is None:
+        ctx.mission_id = ""
+        return None
+    from foundation import GraphScope
+
+    from .mission import MissionStatus
+    from .mission_operate import read_mission_state
+
+    scope = GraphScope(user_id=ctx.user_id)
+    mission = await read_mission_state(ports.graph, scope, ctx.session_id)
+    if mission is None or mission.status in (MissionStatus.DONE, MissionStatus.FAILED, MissionStatus.USER_ENDED):
+        ctx.mission_id = ""
+        return None
+    ctx.mission_id = mission.mission_id
+    return mission
+
+
+def _with_mission_context(user_prompt: str, mission) -> str:
+    """Folds the active mission's state into this turn's own task prompt — internal
+    context, same "fold into the prompt" shape batches.py's _with_awareness_context
+    already uses. A concluded/absent mission (mission is None) changes nothing, so an
+    ordinary turn behaves identically to today."""
+    if mission is None:
+        return user_prompt
+    criteria = "\n".join(f"- {c.description}" for c in mission.criteria)
+    tasks = "\n".join(
+        f"- {t.task_id} ({t.status.value if t.status else 'active'}): {t.summary}" for t in mission.tasks
+    ) or "(no tasks yet)"
+    section = (
+        f"You are working an ACTIVE MISSION (status: {mission.status.value}).\n"
+        f"Success criteria:\n{criteria}\n\nTasks so far:\n{tasks}\n\n"
+        "Use advance_mission to record task outcomes / propose new tasks / submit "
+        "completion_verdicts once every criterion is genuinely met. Use end_mission "
+        "only to abort without claiming success."
+    )
+    return f"{user_prompt}\n\n---\n{section}"
 
 
 async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:

@@ -30,15 +30,26 @@ from typing import Awaitable, Callable
 
 import settings
 from foundation import (
+    BudgetScope,
+    GraphScope,
     MaxRetriesExceededError,
     MemoryStore,
     MemoryWriteProposal,
+    PermissionLevel,
     ToolCallRecord,
     WorkspacePort,
 )
 from core.llm import RunContext, Tool      # SDK types only via the core/llm boundary
 
-from ..schemas import ExpertOutput, ExpertRequest, SpawnBatchArgs, ToolRequest
+from ..schemas import (
+    AdvanceMissionArgs,
+    EndMissionArgs,
+    ExpertOutput,
+    ExpertRequest,
+    SpawnBatchArgs,
+    StartMissionArgs,
+    ToolRequest,
+)
 from .overlay import expert_overlay_rel as _expert_overlay_rel, overlaid as _overlaid
 from .skills import SkillBook, skills_hint
 
@@ -55,7 +66,16 @@ __all__ = [
     "think",
     "OrchestratorDeps",
     "build_orchestrator_tools",
+    "MISSION_STEP_BUDGET_ESTIMATE",
 ]
+
+# Tree-local for now (registry/capabilities is my tree; the technical config areas
+# — foundation.vocab.constants, config/backend/*.yaml — are backend's seams).
+# UnlimitedBudget makes the actual number irrelevant today; this exists so
+# run_operate_step's signature (which takes a real estimate int) has something
+# principled to pass, and so a future real budget wiring has a documented,
+# swappable value to tune rather than a magic number buried in a tool wrapper.
+MISSION_STEP_BUDGET_ESTIMATE = 4000
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +299,8 @@ class OrchestratorDeps:
     experts: object     # ExpertHandler
     batches: object | None = None   # BatchHandler; None unless Capabilities.open() was given a batch_registry
     model: object | None = None     # the same model override run_turn itself got, reused for a spawned batch's own nested run_turn (so a test's FunctionModel spy governs both levels hermetically)
+    graph: object | None = None     # GraphPort; None unless Capabilities.open() was given one (mission-engine loop-wiring)
+    budget: object | None = None    # BudgetPort; None unless Capabilities.open() was given one (mission-engine loop-wiring)
 
 
 def _make_orchestrator_tool_fn(key: str, input_schema: type, description: str) -> Callable:
@@ -339,6 +361,142 @@ def _make_spawn_batch_tool() -> Callable:
         "domain's experts/tools, and reports back a brief summary. Use this to decompose "
         "a broad mission into domain-scoped sub-work instead of doing it all yourself. "
         "Args: batch_key (which configured batch to run), task (what it should do).",
+        invoke=invoke,
+    )
+
+
+def _make_start_mission_tool() -> Callable:
+    """Expose `start_mission` to the CENTRAL orchestrator's model (mission-engine
+    loop-wiring, ratified 2026-07-25). mission_id is server-minted from
+    ctx.session_id (identity-set-once; the model never supplies or invents an
+    id) -- see mission-engine-loop-wiring-design.md §1 for why session_id IS the
+    mission_id (no schema change needed on the graph's Mission table). Refuses
+    if a mission is already active this session (one mission per session, v1)."""
+
+    async def invoke(ctx: RunContext[OrchestratorDeps], args: StartMissionArgs) -> str:
+        if ctx.deps.graph is None:
+            return "[missions are not available in this environment]"
+        real_ctx = ctx.deps.ctx
+        if real_ctx.mission_id:
+            return "[a mission is already active this session — use advance_mission or end_mission]"
+        from core.orchestrator.mission import Criterion
+        from core.orchestrator.mission_operate import create_mission
+
+        scope = GraphScope(user_id=real_ctx.user_id)
+        criteria = [Criterion(description=d) for d in args.success_criteria]
+        ok = await create_mission(ctx.deps.graph, scope, real_ctx.session_id, args.intent, criteria)
+        if not ok:
+            return "[failed to start the mission — graph degraded]"
+        real_ctx.mission_id = real_ctx.session_id
+        return f"mission started, tracking {len(criteria)} success criteria"
+
+    return _make_wrapper(
+        "start_mission", StartMissionArgs,
+        "Start a persistent, multi-turn mission for a broad or long-running task — its "
+        "intent and success criteria are anchored durably and re-checked every turn, "
+        "surviving restarts and compaction. Use this only for work that genuinely needs "
+        "tracking across many turns, not a task you can finish in this one. Only one "
+        "mission can be active per session. Args: intent (what the mission is for), "
+        "success_criteria (a list of concrete, checkable statements — the mission is "
+        "DONE only when every one of them is genuinely met).",
+        invoke=invoke,
+    )
+
+
+def _make_advance_mission_tool() -> Callable:
+    """Expose `advance_mission` to the CENTRAL orchestrator's model — a thin, guarded
+    pass-through to mission_operate.run_operate_step, which already holds the full
+    §4/§6/§7 gate logic (built + tested); this tool only builds its OperateStepTurn
+    input from model-supplied args and reports the resulting status back."""
+
+    async def invoke(ctx: RunContext[OrchestratorDeps], args: AdvanceMissionArgs) -> str:
+        if ctx.deps.graph is None or ctx.deps.budget is None:
+            return "[missions are not available in this environment]"
+        real_ctx = ctx.deps.ctx
+        if not real_ctx.mission_id:
+            return "[no mission is active this session — call start_mission first]"
+        from core.orchestrator.mission import CompletionJudgment, CriterionVerdict, MissionStatus, TaskStatus
+        from core.orchestrator.mission_operate import (
+            NewTask, OperateStepTurn, TaskTransition, read_mission_state, run_operate_step, write_mission_status,
+        )
+
+        scope = GraphScope(user_id=real_ctx.user_id)
+        budget_scope = BudgetScope(user_id=real_ctx.user_id, mission_id=real_ctx.mission_id)
+        new_tasks = tuple(
+            NewTask(
+                task_id=t.task_id, summary=t.summary, blocks=tuple(t.blocks), feeds=tuple(t.feeds),
+                supersedes=t.supersedes, required_permission=PermissionLevel(t.required_permission),
+            )
+            for t in args.new_tasks
+        )
+        transitions = tuple(
+            TaskTransition(task_id=t.task_id, status=TaskStatus(t.status), summary=t.summary, evidence=t.evidence)
+            for t in args.transitions
+        )
+        judgment = None
+        if args.completion_verdicts:
+            # run_operate_step's completion gate only fires when the MISSION's own
+            # status is ALREADY PROPOSED_COMPLETE (its precondition, not something
+            # apply_turn sets) -- advance_mission is the one caller that proposes
+            # completion, so it makes that transition explicit here, in the SAME
+            # step the verdicts are submitted, rather than requiring a separate
+            # "propose complete" round-trip first.
+            current = await read_mission_state(ctx.deps.graph, scope, real_ctx.mission_id)
+            if current is not None:
+                await write_mission_status(ctx.deps.graph, scope, real_ctx.mission_id, current, MissionStatus.PROPOSED_COMPLETE)
+            judgment = CompletionJudgment(criteria_verdicts=[
+                CriterionVerdict(description=v.description, met=v.met, evidence=v.evidence)
+                for v in args.completion_verdicts
+            ])
+        turn = OperateStepTurn(transitions=transitions, new_tasks=new_tasks, completion_judgment=judgment)
+        result = await run_operate_step(
+            ctx.deps.graph, ctx.deps.budget, scope, budget_scope, real_ctx.mission_id,
+            MISSION_STEP_BUDGET_ESTIMATE, turn,
+        )
+        if result.status in (MissionStatus.DONE, MissionStatus.FAILED, MissionStatus.USER_ENDED):
+            real_ctx.mission_id = ""     # the session is ordinary again — read-first will confirm next turn
+        return f"mission status: {result.status.value}" + (f" — {result.notes}" if result.notes else "")
+
+    return _make_wrapper(
+        "advance_mission", AdvanceMissionArgs,
+        "Advance the currently active mission by one step: propose new tasks, report "
+        "terminal outcomes for existing tasks (done/failed/superseded), and — only when "
+        "you believe every success criterion is genuinely met, with evidence — submit "
+        "completion_verdicts to propose the mission is DONE. An incomplete or unconvincing "
+        "verdict set holds the mission open rather than ending it wrong. Call this instead "
+        "of doing mission work silently, so the mission's durable state stays current.",
+        invoke=invoke,
+    )
+
+
+def _make_end_mission_tool() -> Callable:
+    """Expose `end_mission` to the CENTRAL orchestrator's model — a direct terminal
+    transition (USER_ENDED), bypassing the completion-judgment gate entirely (a
+    different, simpler path than advance_mission's DONE gate, for an explicit abort)."""
+
+    async def invoke(ctx: RunContext[OrchestratorDeps], args: EndMissionArgs) -> str:
+        if ctx.deps.graph is None:
+            return "[missions are not available in this environment]"
+        real_ctx = ctx.deps.ctx
+        if not real_ctx.mission_id:
+            return "[no mission is active this session]"
+        from core.orchestrator.mission import MissionStatus
+        from core.orchestrator.mission_operate import conclude_mission, read_mission_state
+
+        scope = GraphScope(user_id=real_ctx.user_id)
+        mission = await read_mission_state(ctx.deps.graph, scope, real_ctx.mission_id)
+        if mission is None:
+            return "[failed to end the mission — graph degraded or mission not found]"
+        ok = await conclude_mission(ctx.deps.graph, scope, real_ctx.mission_id, mission, MissionStatus.USER_ENDED)
+        real_ctx.mission_id = ""
+        return "mission ended" if ok else "[failed to end the mission — graph degraded]"
+
+    return _make_wrapper(
+        "end_mission", EndMissionArgs,
+        "End the currently active mission WITHOUT claiming its success criteria were met "
+        "— use this when the user asks to stop, or you determine the mission should not "
+        "continue. This does not judge completion; for a mission you believe succeeded, "
+        "use advance_mission's completion_verdicts instead. Args: reason (why it's ending).",
         invoke=invoke,
     )
 
@@ -464,6 +622,7 @@ def _offer(fn: Callable, spec, *, files_attached: bool = False) -> "Callable | T
 def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None,
     *, files_attached: bool = False, with_memory_write: bool = True, batches: object | None = None,
+    graph: object | None = None, budget: object | None = None,
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the always-on built-ins — `remember` (long-term memory) and
@@ -485,6 +644,12 @@ def build_orchestrator_tools(
     is configured. `Capabilities.scoped_to()` never passes a non-empty `batches` here
     (the recursion guard — see batches.py) — a batch's own model never sees this tool.
 
+    `graph`/`budget` gate the three mission-engine tools (`start_mission`,
+    `advance_mission`, `end_mission`) the same way — offered only when BOTH are
+    present (mission-engine loop-wiring, ratified 2026-07-25). `Capabilities.
+    scoped_to()` never passes them either (same recursion-guard shape as
+    `batches`) — a batch's own scoped turn never starts/advances/ends a mission.
+
     `remember`/`recall`/`say` and the hot-path (`eager`) capabilities load up front; the
     long tail is deferred behind tool search (W2). When `files_attached`, the file-reading
     experts are ALSO eager this turn (so the orchestrator can read an upload instead of falling
@@ -497,6 +662,10 @@ def build_orchestrator_tools(
         fns.append(_make_say_tool(on_message))
     if batches is not None and batches.has_batches:
         fns.append(_make_spawn_batch_tool())
+    if graph is not None and budget is not None:
+        fns.append(_make_start_mission_tool())
+        fns.append(_make_advance_mission_tool())
+        fns.append(_make_end_mission_tool())
     for spec in tool_specs:
         fns.append(_offer(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description), spec))
     for spec in expert_specs:

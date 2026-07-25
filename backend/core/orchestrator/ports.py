@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from foundation import BatchAwarenessPort, MemoryPort
+from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MemoryPort
 
 from .schemas import DecisionLogEntry
 
@@ -41,3 +41,10 @@ class Ports:
     # caps=..., log=...)) keep working unchanged; None means "no awareness consumption" -- the
     # same fail-closed-to-no-op posture BatchHandler already has for a None awareness port.
     awareness: BatchAwarenessPort | None = None
+    # Mission Engine loop-wiring (ratified 2026-07-25): both None means missions are simply
+    # unavailable in this Ports instance (no start_mission/advance_mission/end_mission offered,
+    # ctx.mission_id never set) -- the same gate-on-None idiom as awareness/batches. wiring.py's
+    # real construction sets graph to the real GraphManager and budget to UnlimitedBudget (the
+    # swap seam for backend's real Redis-backed anchor later -- see utils/unlimited_budget.py).
+    graph: GraphPort | None = None
+    budget: BudgetPort | None = None

@@ -20,7 +20,7 @@ from typing import Any, Awaitable, Callable
 from dataclasses import dataclass
 
 import settings
-from foundation import BatchAwarenessPort, MaxRetriesExceededError, VrakshaContext
+from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MaxRetriesExceededError, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from .batches import BatchDefinition, BatchHandler
@@ -42,23 +42,32 @@ class Capabilities:
     _experts: ExpertHandler
     _allow_memory_write: bool = True   # gates the `remember` built-in; True preserves .open()'s behavior
     _batches: BatchHandler | None = None   # None for every scoped_to() instance -- see its docstring (recursion guard)
+    # Mission Engine loop-wiring (ratified 2026-07-25): None for every scoped_to() instance too --
+    # a batch's own scoped turn never starts/advances/ends a mission (that's the central
+    # orchestrator's job coordinating the WHOLE mission), same recursion-guard shape as _batches.
+    _graph: GraphPort | None = None
+    _budget: BudgetPort | None = None
 
     @classmethod
     def open(
         cls, ctx: VrakshaContext, *, registry=default_registry,
         batch_registry: dict[str, BatchDefinition] | None = None,
         awareness: BatchAwarenessPort | None = None,
+        graph: GraphPort | None = None,
+        budget: BudgetPort | None = None,
     ) -> "Capabilities":
         """Open a full-power gateway for one request. `batch_registry` (batch_key
         -> BatchDefinition) is the ONLY construction site that can populate the
         batch tier -- see batches.py's module docstring on why `scoped_to()`
         deliberately has no equivalent parameter (a batch cannot spawn a batch).
         `awareness` (b1-item-3) is threaded the same way -- a batch's own scoped
-        gateway needs no awareness handle, since it never calls spawn_batch itself."""
+        gateway needs no awareness handle, since it never calls spawn_batch itself.
+        `graph`/`budget` (mission-engine loop-wiring) follow the same rule: only
+        `.open()` can populate them, `scoped_to()` never does."""
         tools = ToolHandler(registry=registry)
         experts = ExpertHandler(registry=registry, tools=tools)
         batches = BatchHandler(batch_registry=batch_registry, registry=registry, awareness=awareness)
-        return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches)
+        return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches, _graph=graph, _budget=budget)
 
     @classmethod
     def scoped_to(
@@ -145,6 +154,7 @@ class Capabilities:
             expert_specs = [s for s in expert_specs if s and s.key in expert_allowed]
         deps = OrchestratorDeps(
             ctx=self.ctx, tools=self._tools, experts=self._experts, batches=self._batches, model=model,
+            graph=self._graph, budget=self._budget,
         )
 
         handle = build_tool_agent(
@@ -158,6 +168,7 @@ class Capabilities:
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
                 with_memory_write=self._allow_memory_write,
                 batches=self._batches,
+                graph=self._graph, budget=self._budget,
             ),
             deps_type=OrchestratorDeps,
             retries=settings.ORCHESTRATOR.max_retries,
