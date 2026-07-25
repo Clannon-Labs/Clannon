@@ -1,0 +1,18 @@
+# Batch registry — batch_key -> its domain, member experts, and the tools those
+# experts need (see `registry/config/batches.py`'s loader for the fail-closed
+# contract, mirroring `models.yaml`/`registry/config/models.py`).
+#
+# `tool_keys` MUST list every tool any member expert individually requests, not
+# just what the batch orchestrator's own model calls directly — a batch's tool
+# scope is INTERSECTED against each expert's own requested tools
+# (`ExpertHandler._toolbox_for`), so an omitted tool here silently strips it
+# from the expert too, not just from the batch's own reasoning loop.
+#
+# `grants` must cover the PermissionLevel every listed tool requires (checked
+# by membership, not hierarchy) — least privilege: grant only what's needed.
+
+engineering:
+  domain: engineering
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read, fs.write, code.run]
+  grants: [read, write, execute]

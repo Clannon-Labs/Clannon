@@ -20,14 +20,18 @@ from .decision_log import CtxDecisionLog
 
 def build_default_ports(ctx: VrakshaContext) -> Ports:
     """Wire the Phase-1 ports: the capability door + memory door + decision-log sink."""
-    # Imported lazily: the handler depends on core.llm, so importing it at module
-    # load would re-enter core/__init__ -> orchestrator -> wiring (a cycle).
+    # Imported lazily: both depend on the handler package, which itself depends on
+    # core.llm -- importing at module load would re-enter core/__init__ ->
+    # orchestrator -> wiring (a cycle).
     from registry.capabilities.handler import Capabilities
+    from registry.config.batches import load_batches
 
     discover()                              # import tools/ and experts/ so they self-register
     return Ports(
         memory=memory_manager,
         awareness=batch_awareness_manager,
-        caps=Capabilities.open(ctx, awareness=batch_awareness_manager),   # one door; tool/expert calls + guards inside
+        caps=Capabilities.open(
+            ctx, batch_registry=load_batches(), awareness=batch_awareness_manager,
+        ),   # one door; tool/expert calls + guards inside
         log=CtxDecisionLog(ctx),
     )
