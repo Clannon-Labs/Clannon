@@ -12,14 +12,29 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 models:
-  # Anthropic (the default-routed primary set — orchestrator/verifier/normalizer/filter/planner)
-  claude-haiku-4-5:   { input_micros_per_token: 0.80, output_micros_per_token: 4.00 }   # PLACEHOLDER
-  claude-sonnet-4-6:  { input_micros_per_token: 3.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
+  # ALL PRICES BELOW ARE PLACEHOLDER — owner sets the real per-token rates before go-live. The
+  # point of listing every model is completeness: every model model-catalog.yaml offers (or
+  # models.yaml could route to) MUST have an entry here, or the fail-closed budget BLOCKS it.
+  # Adding a new model = ONE line here (id + the two rates), nothing else.
+  #
+  # Anthropic — Claude 5 family + 4.x
+  claude-opus-5:      { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER
+  claude-sonnet-5:    { input_micros_per_token: 3.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
+  claude-fable-5:     { input_micros_per_token: 1.00, output_micros_per_token: 5.00 }   # PLACEHOLDER
   claude-opus-4-8:    { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER
-  # OpenAI (research reasoning role + selectable)
+  claude-opus-4-7:    { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER
+  claude-opus-4-6:    { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER
+  claude-sonnet-4-6:  { input_micros_per_token: 3.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
+  claude-haiku-4-5:   { input_micros_per_token: 0.80, output_micros_per_token: 4.00 }   # PLACEHOLDER
+  # OpenAI — GPT-5 family
+  gpt-5.5:            { input_micros_per_token: 5.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
   gpt-5.4:            { input_micros_per_token: 5.00, output_micros_per_token: 15.00 }  # PLACEHOLDER
   gpt-5.4-mini:       { input_micros_per_token: 0.50, output_micros_per_token: 2.00 }   # PLACEHOLDER
-  # Google (grounded search + multimodal/media roles)
+  gpt-5.4-nano:       { input_micros_per_token: 0.10, output_micros_per_token: 0.40 }   # PLACEHOLDER
+  # Google — Gemini 3.x + 2.5
+  gemini-3.5-flash:      { input_micros_per_token: 0.30, output_micros_per_token: 1.20 } # PLACEHOLDER
+  gemini-3.1-pro-preview: { input_micros_per_token: 2.00, output_micros_per_token: 8.00 } # PLACEHOLDER
+  gemini-3.1-flash-lite: { input_micros_per_token: 0.10, output_micros_per_token: 0.40 } # PLACEHOLDER
   gemini-2.5-pro:     { input_micros_per_token: 2.00, output_micros_per_token: 8.00 }   # PLACEHOLDER
   gemini-2.5-flash:   { input_micros_per_token: 0.30, output_micros_per_token: 1.20 }   # PLACEHOLDER
   gemini-2.5-flash-lite: { input_micros_per_token: 0.10, output_micros_per_token: 0.40 } # PLACEHOLDER
