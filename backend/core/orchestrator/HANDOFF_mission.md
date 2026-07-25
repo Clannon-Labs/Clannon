@@ -42,6 +42,23 @@ per-member-size caps that don't exist yet), then AST-aware search
 to that build), then dependency-graph traversal (built on the AST tool's
 output). Nothing else blocking in the meantime.
 
+**§3 build-order coordination note, recorded now so it isn't lost (backend,
+low-pri, 2026-07-25 — security's archive-acceptance design is ratified,
+floors placed):** when §3 finally builds, (1) call `security.sanitizers.
+pre_sanitization.run(member_bytes)` per extracted member BEFORE
+`workspace.write_bytes`, reject the WHOLE archive on any block — no partial
+extraction, a silently-dropped repo file is worse than a rejected upload;
+(2) read the caps from `settings.SECURITY.archive_max_entries` (10000) /
+`archive_max_uncompressed_ratio` (20, D8-ceilinged) / `INTAKE.
+max_input_size_bytes` (per-member) — NOT local constants, same
+single-sourced-floor pattern `tools.py` already uses for the text
+sanitizer; (3) Layer-2 caps must be BYTE-VERIFIED during decompression
+(bounded read as you go, never trust `ZipInfo.file_size`, which is
+attacker-controlled metadata); (4) never recreate an OS symlink from a
+member's `external_attr` — zip-slip stays closed only as long as every
+member goes through `write_bytes` as plain bytes, never as a filesystem
+symlink op.
+
 ## BUILT (2026-07-25) — the first concrete batch: engineering (CB2), proven end-to-end
 
 Design ratified same-session (`proposals/archive/to-backend/2026-07-25_
