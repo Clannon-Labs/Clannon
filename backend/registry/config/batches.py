@@ -17,6 +17,12 @@ from registry.capabilities.handler import BatchDefinition
 
 DEFAULT_BATCHES_PATH = get_root() / "batches.yaml"
 
+# Config can tighten a defense, never silently loosen one (D7/D8 discipline):
+# a batches.yaml edit alone must not be able to hand a batch egress or elevated
+# access. A batch that genuinely needs NETWORK/ELEVATED later is a deliberate,
+# reviewed, explicit opt-in (a code change here), never a YAML-only grant.
+_FORBIDDEN_GRANTS = frozenset({PermissionLevel.NETWORK, PermissionLevel.ELEVATED})
+
 
 def _load_batches(path: str | Path) -> dict[str, BatchDefinition]:
     config_path = Path(path)
@@ -36,16 +42,26 @@ def _load_batches(path: str | Path) -> dict[str, BatchDefinition]:
         if not isinstance(entry, dict):
             raise ConfigError(f"batch {batch_key!r} entry must be a mapping")
         try:
+            grants = frozenset(PermissionLevel(str(g)) for g in entry.get("grants", []))
+        except ValueError as exc:
+            raise ConfigError(f"batch {batch_key!r} has an invalid grant: {exc}") from exc
+        escalated = grants & _FORBIDDEN_GRANTS
+        if escalated:
+            names = ", ".join(sorted(g.value for g in escalated))
+            raise ConfigError(
+                f"batch {batch_key!r} requests forbidden grant(s) {{{names}}} — "
+                "NETWORK/ELEVATED cannot be granted via batches.yaml alone; "
+                "that requires a deliberate, reviewed code change"
+            )
+        try:
             batches[str(batch_key)] = BatchDefinition(
                 domain=str(entry["domain"]),
                 expert_keys=frozenset(str(k) for k in entry.get("expert_keys", [])),
                 tool_keys=frozenset(str(k) for k in entry.get("tool_keys", [])),
-                grants=frozenset(PermissionLevel(str(g)) for g in entry.get("grants", [])),
+                grants=grants,
             )
         except KeyError as exc:
             raise ConfigError(f"batch {batch_key!r} is missing required field {exc}") from exc
-        except ValueError as exc:
-            raise ConfigError(f"batch {batch_key!r} has an invalid grant: {exc}") from exc
     return batches
 
 
