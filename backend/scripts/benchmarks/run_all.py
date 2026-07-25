@@ -10,13 +10,29 @@ Any harness whose module cannot be imported (not yet landed) is reported as
 NOT-MEASURED without aborting the run. This script is a reporting tool,
 not a gate — it always exits 0.
 
+Graph-db isolation: `main()` runs the whole scoreboard inside a disposable
+Kuzu db (never the real dev/prod `core/memory/data/graph_db`) — the same
+`_disposable_graph_db` pattern every graph-touching benchmark harness in
+`tests/benchmarks/` already uses individually. Added 2026-07-25: some
+harnesses (e.g. C1) never touch the graph directly in their own code, but
+their real `record_write_proposals` writes now fire the memory extractor
+for real (shipped the same day), which writes a graph twin through the
+UNMOCKED `graph_manager`/`graph_store` seam — a standalone `python
+scripts/benchmarks/run_all.py` run (outside pytest's autouse
+`_fresh_graph_store` fixture) would otherwise silently pollute the real
+default graph db on every run. One outer disposable context here covers
+every harness, including ones (like C1) that don't isolate themselves.
+
 Usage (from backend/):
     python scripts/benchmarks/run_all.py
 """
 from __future__ import annotations
 
 import importlib
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # Ensure backend/ and backend/tests/ are on sys.path so both backend modules
@@ -26,6 +42,35 @@ for _p in (_BACKEND, _BACKEND / "tests"):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
+
+import core.memory.graph_store as graph_store_mod  # noqa: E402 — after the sys.path setup above
+
+
+class _disposable_graph_db:
+    """Self-contained disposable Kuzu db — same pattern every graph-touching
+    benchmark harness in tests/benchmarks/ uses individually (see e.g.
+    c2_repo_intelligence.py's identical helper). Never touches the real
+    dev/prod graph db; safe even if a harness ALSO opens its own nested
+    disposable context (standard save/restore-on-exit nesting)."""
+
+    def __enter__(self) -> None:
+        self._dir = tempfile.mkdtemp(prefix="clannon-run-all-bench-")
+        self._prev_env = os.environ.get("VRAKSHA_GRAPH_DB_PATH")
+        os.environ["VRAKSHA_GRAPH_DB_PATH"] = str(Path(self._dir) / "graph_db")
+        graph_store_mod._db = None
+        graph_store_mod._conn = None
+        graph_store_mod._schema_ready = False
+        return None
+
+    def __exit__(self, *exc_info) -> None:
+        graph_store_mod._db = None
+        graph_store_mod._conn = None
+        graph_store_mod._schema_ready = False
+        if self._prev_env is None:
+            os.environ.pop("VRAKSHA_GRAPH_DB_PATH", None)
+        else:
+            os.environ["VRAKSHA_GRAPH_DB_PATH"] = self._prev_env
+        shutil.rmtree(self._dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -238,9 +283,10 @@ def render(results: list[tuple[str, str, str, str]]) -> str:
 
 def main() -> None:
     results = []
-    for bid, title, runner in _BENCHMARKS:
-        verdict, reason = runner()
-        results.append((bid, title, verdict, reason))
+    with _disposable_graph_db():
+        for bid, title, runner in _BENCHMARKS:
+            verdict, reason = runner()
+            results.append((bid, title, verdict, reason))
     print(render(results))
     sys.exit(0)
 
