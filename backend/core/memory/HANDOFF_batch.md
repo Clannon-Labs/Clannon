@@ -96,36 +96,49 @@ This is genuinely orthogonal to the knowledge-web build (rides `members()`/`edge
 `write()`, never `_traverse`), so it does NOT block anything below. It's flagged, not owned by
 this thread — check the proposal's `Status` before touching `_traverse` again.
 
+## Step 4: DONE (commit `809ec72`, 2026-07-25) — the memory extractor
+
+Built per the ratified design (§3.1), resumed after the ~2.5-week pause. Full detail in
+`reports/memory/report_v28.md`; summary:
+- `writer.py::extract_entities(content) -> ExtractedEntities` — the fail-closed LLM step,
+  sibling to `judge_supersession` (same shape/discipline). New prompt `prompts/memory/
+  entities.md`, registered as `memory_entities` in `prompts/registry.yaml`.
+- `write_policy.py::_write_graph_twin`, hooked into `_persist_one` (**fresh insert only** —
+  `point_id is None` before the upsert; a dedup-merge reuses the same vector_id, and
+  Fact/Claim `content` is create_only, so re-extracting on a merge is pure waste), gated on
+  **`kind ∈ {FACT, ASSUMPTION, DECISION}`** (kind, not tier — DECISION is EPISODIC but still
+  gets a twin). Builds `ENTITY` nodes (converged by normalized `canonical_name`), one
+  `FACT`/`CLAIM` node (`DECISION`/`FACT` → `FACT`; `ASSUMPTION` → `CLAIM`) with `vector_id` =
+  the memory's own point id, `RELATES_TO` edges entity↔fact and entity↔entity, `AUTHORED_BY`
+  for each name in `participants`. All node ids minted via `graph_store.node_id(scope, key)`
+  (the same formula `GraphManager.write()` uses internally) so edges land correctly. Written
+  via `graph_manager.manager.write()` — no foundation change needed.
+- Best-effort throughout, identical discipline to `_maybe_mark_superseded`: any fault (LLM
+  timeout/error, graph write fault) is logged and never surfaces into the turn.
+- `tests/memory_extractor.py` — 20 new tests (extractor contract, twin orchestration,
+  end-to-end kind+fresh-insert gating). Full targeted suite: 289 passed, 11 skipped
+  (unchanged skip set), zero regressions.
+
+**Not built (deliberately, per the design's own scoping):**
+- §3.2 (the contradiction judge, `writer.py::judge_contradiction`) — rides on top of the
+  extractor now that it exists; not yet started.
+- §3.3 (code symbol tier) / §3.4 (media extractor) — NOT this thread's build; orchestration's
+  / the media pipeline's, once this substrate is proven.
+
 ## The exact next step
 
-**Step 4 (not started): the memory extractor.** Per the ratified design (§3.1):
-- New `writer.py::extract_entities(content) -> ExtractedEntities` — a fail-closed LLM step,
-  sibling to the existing `judge_supersession` (same `build_agent(..., output_type=...,
-  retries=settings.MEMORY.distill_max_retries)` shape, same "any fault/doubt → empty result,
-  never raise" discipline).
-- Hook into `write_policy.py::record_write_proposals`, **after** a proposal clears the existing
-  confidence gate, gated on **`kind ∈ {FACT, ASSUMPTION, DECISION}`** (see the correction above
-  — NOT tier-based; `UNSPECIFIED` stays excluded).
-- Produces: `ENTITY` nodes for named things in the content, one `FACT`/`CLAIM` node
-  (`DECISION`/`FACT` kind → `FACT` node; `ASSUMPTION` → `CLAIM` node) with `vector_id` = the
-  memory's own point id, `RELATES_TO` edges entity↔fact and entity↔entity, `AUTHORED_BY` when
-  `participants` (CB4's field) is non-empty. Written via `GraphPort.write()` — best-effort, same
-  "never blocks the turn" discipline as `learn()` today.
-- Then §3.2 (the contradiction judge, `writer.py::judge_contradiction`, exact copy of
-  `judge_supersession`'s fail-closed shape) rides on top of the extractor once it exists.
-- §3.3 (code symbol tier) and §3.4 (media extractor) are NOT this thread's build — they're
-  orchestration's / the media pipeline's extractors respectively, once this substrate is
-  proven with the memory extractor.
-
-No proposal needed to start step 4 — it's already ratified, `core/memory/`-only, no foundation
-touch expected (the entity-extraction LLM call is a new prompt/agent, not a contract change).
+**The flagged `_traverse` exponential-blowup/crash bug** (see the section above — still
+`Status: pending` on the backend proposal as of this update). This needs deliberate
+red-teaming of the zero-edge-node degenerate shape (the thing that segfaulted the
+`ALL SHORTEST` attempt) before touching it again — NOT a quick patch. Un-skipping
+`tests/memory_graph_manager.py:83` is the regression gate. Read the "one open item" section
+above in full before starting; don't re-attempt `ALL SHORTEST` without red-teaming first.
 
 ## Where to look first when resuming
 
 1. `proposals/to-memory/` — check for anything new before assuming this handoff is current.
 2. `proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md` — check its `Status`.
-   If backend has ruled on `_traverse`, that may unblock re-selecting the deselected test (still
-   not this thread's job to fix unless explicitly assigned).
-3. `git log --oneline -5` in `backend/` — confirm `24914b5` is still `HEAD`, or see what landed
+   If backend has ruled on `_traverse`, read the ruling before starting the fix.
+3. `git log --oneline -5` in `backend/` — confirm `809ec72` is still `HEAD`, or see what landed
    since.
 4. If nothing new: start step 4 above.
