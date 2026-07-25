@@ -113,6 +113,96 @@ def test_write_then_read_round_trip():
     assert graph_store.breaks_if_removed(scope, "c.py").paths == frozenset()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# _traverse red-team — the degenerate shapes that matter after the rewrite
+# (proposals/archive/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md):
+# a bare `[:IMPORTS*1..N]` variable-length pattern enumerated every WALK (not
+# node) on a cyclic graph, exponential in the hop bound; the `ALL SHORTEST`
+# fix was fast+correct but SEGFAULTED Kuzu on a zero-edge node. The
+# replacement is a plain in-Python BFS over fixed 1-hop MATCH queries, which
+# has no variable-length pattern at all — these prove it is both correct AND
+# safe on exactly the shapes that broke the two prior approaches: a self-loop,
+# a multi-node cycle, and a zero-edge node sitting in an otherwise-cyclic
+# graph (the precise shape that crashed `ALL SHORTEST`).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_traverse_handles_a_self_loop_without_hanging_or_crashing():
+    scope = GraphScope(user_id="u1")
+    graph = CodeImportGraph(nodes=frozenset({"a.py"}), edges=frozenset({("a.py", "a.py")}))
+    graph_store.replace_code_graph(scope, graph)
+
+    result = graph_store.depends_on(scope, "a.py", max_hops=5)
+
+    assert result.degraded is False
+    assert result.paths == frozenset({"a.py"})  # a self-loop is reachable from itself in 1 hop
+
+
+def test_traverse_handles_a_multi_node_cycle_without_exponential_blowup():
+    scope = GraphScope(user_id="u1")
+    # a -> b -> c -> a: a genuine cycle, the shape that made the old
+    # `*1..N` pattern's walk count explode with the hop bound.
+    graph = CodeImportGraph(
+        nodes=frozenset({"a.py", "b.py", "c.py"}),
+        edges=frozenset({("a.py", "b.py"), ("b.py", "c.py"), ("c.py", "a.py")}),
+    )
+    graph_store.replace_code_graph(scope, graph)
+
+    result = graph_store.depends_on(scope, "a.py", max_hops=graph_store.MAX_HOPS_CEILING)
+
+    assert result.degraded is False
+    # every other node in the cycle is reachable; the walk back to a.py
+    # itself is the self-reachable case, correctly included via the cycle.
+    assert result.paths == frozenset({"a.py", "b.py", "c.py"})
+
+
+def test_traverse_a_zero_edge_node_inside_an_otherwise_cyclic_graph_is_safe():
+    """The exact shape that segfaulted the `ALL SHORTEST` attempt: a target
+    node with ZERO incident edges in scope, while the rest of the graph has
+    cycles. Must degrade to an empty (not degraded) result, never crash."""
+    scope = GraphScope(user_id="u1")
+    graph = CodeImportGraph(
+        nodes=frozenset({"a.py", "b.py", "isolated.py"}),
+        edges=frozenset({("a.py", "b.py"), ("b.py", "a.py")}),  # a<->b cycle; isolated.py has no edges at all
+    )
+    graph_store.replace_code_graph(scope, graph)
+
+    forward = graph_store.depends_on(scope, "isolated.py", max_hops=graph_store.MAX_HOPS_CEILING)
+    backward = graph_store.dependents_of(scope, "isolated.py", max_hops=graph_store.MAX_HOPS_CEILING)
+
+    assert forward.degraded is False and forward.paths == frozenset()
+    assert backward.degraded is False and backward.paths == frozenset()
+    # the cyclic part of the graph is unaffected
+    assert graph_store.depends_on(scope, "a.py", max_hops=5).paths == frozenset({"a.py", "b.py"})
+
+
+def test_traverse_at_max_hop_ceiling_on_a_larger_cyclic_graph_stays_fast():
+    """A denser cyclic graph at the full MAX_HOPS_CEILING bound (the exact
+    shape — `breaks_if_removed` — that used to take 8+ seconds at hops=16 and
+    exceed two minutes at hops=20 pre-fix) must return promptly. Bounded by
+    the test's own wall-clock assertion, not just "didn't time out the
+    runner" — a real regression guard, not a vibe."""
+    scope = GraphScope(user_id="u1")
+    n = 40
+    nodes = frozenset(f"n{i}.py" for i in range(n))
+    # a ring (n0 -> n1 -> ... -> n{n-1} -> n0) plus a few chords, so BFS must
+    # actually walk several layers and the graph is genuinely cyclic and
+    # denser than the 3-node cases above.
+    edges = {(f"n{i}.py", f"n{(i + 1) % n}.py") for i in range(n)}
+    edges |= {(f"n{i}.py", f"n{(i + 5) % n}.py") for i in range(n)}
+    graph = CodeImportGraph(nodes=nodes, edges=frozenset(edges))
+    graph_store.replace_code_graph(scope, graph)
+
+    start = time.monotonic()
+    result = graph_store.breaks_if_removed(scope, "n0.py")
+    elapsed = time.monotonic() - start
+
+    assert result.degraded is False
+    assert elapsed < 5.0, f"breaks_if_removed took {elapsed:.2f}s on a {n}-node cyclic graph — regression"
+    # a closed ring reaches back to n0.py itself too (same self-reachable-via-
+    # cycle semantics as test_traverse_handles_a_self_loop_without_hanging_or_crashing)
+    assert len(result.paths) == n
+
+
 def test_hop_request_beyond_ceiling_is_clamped_not_rejected():
     scope = GraphScope(user_id="u1")
     graph_store.replace_code_graph(scope, _chain_graph())

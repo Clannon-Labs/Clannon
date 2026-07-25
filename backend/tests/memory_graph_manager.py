@@ -80,16 +80,6 @@ def test_graph_manager_satisfies_graphport_protocol(manager):
 # End-to-end CB2 slice — the real backend/ tree, through the port
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.skip(
-    reason="KNOWN ISSUE (2026-07-06): graph_store._traverse's `[:IMPORTS*1..N]` exponentially "
-    "enumerates WALKS (not reachable nodes) on the now-cyclic 316-node/1073-edge backend/ import "
-    "graph — hangs past ~hops=16, exceeds 2 min at MAX_HOPS_CEILING=20. Pre-existing phase-1 bug, "
-    "surfaced by the import graph growing. The `ALL SHORTEST` fix is correct+fast but SEGFAULTS "
-    "Kuzu on a zero-edge node, so a real fix needs deliberate red-teaming of degenerate shapes "
-    "(zero-edge/self-loop/disconnected) — NOT a wind-down patch. Skipped to keep the suite green + "
-    "non-hanging until fixed. See proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md "
-    "+ docs/RESUME.md 'Known issues'."
-)
 def test_build_code_graph_over_real_backend_then_depends_on_through_port(manager):
     async def go():
         scope = GraphScope(user_id="system", repo_id="clannon-self")

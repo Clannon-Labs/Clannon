@@ -262,36 +262,75 @@ def lookup_by_path(scope: GraphScope, path: str) -> GraphReadResult:
 
 
 def _traverse(scope: GraphScope, path: str, max_hops: int, *, forward: bool) -> GraphReadResult:
+    """In-Python BFS over fixed 1-hop `MATCH` queries, bounded by `max_hops`,
+    with early termination once a layer discovers no new node.
+
+    This used to be one `[:IMPORTS*1..{hops}]` variable-length Cypher query.
+    Found (2026-07-06, `proposals/archive/to-backend/
+    2026-07-06_traversal-blowup-and-crash-flag.md`): that pattern enumerates
+    every DISTINCT WALK through the graph, not every reachable node — on a
+    cyclic graph the walk count is exponential in the hop bound even though
+    the reachable-node set plateaus early (measured on `backend/`'s own
+    316-node/1073-edge import graph: hops=16 already took 8.3s, hops=20 —
+    `MAX_HOPS_CEILING` — exceeded two minutes, all for the same 126-node
+    result `RETURN DISTINCT` was already trying to collapse down to). The
+    obvious fix, `ALL SHORTEST`, was verified correct and fast (0.012s) but
+    SEGFAULTED Kuzu's native library on a node with zero incident edges in
+    scope — a crash is worse than a slow query, so that fix was reverted, not
+    shipped.
+
+    Rather than hunt for a safer variable-length keyword (an unverified
+    Kuzu-version landmine either way), this walks the graph itself: each hop
+    is a single fixed-pattern `MATCH` over the current frontier (the exact
+    query shape already proven safe elsewhere in this module and in
+    `typed_graph.py`'s `_resolve_node_tables` — never a variable-length
+    pattern, so there is no walk-enumeration blowup and no `ALL SHORTEST`-
+    style crash surface at all). BFS naturally halts once a layer adds
+    nothing new, so a plateaued graph (like `backend/`'s own) finishes in a
+    handful of round trips regardless of how high `max_hops` is set — the
+    same "wasted hops past the plateau" the original query paid for on every
+    call, gone by construction. A zero-edge frontier node (the exact shape
+    that crashed `ALL SHORTEST`) is trivially safe here: the first hop's
+    `MATCH` returns no rows and the loop exits immediately, in plain Python,
+    no native traversal code involved."""
     if not scope.user_id:
         return GraphReadResult(degraded=True, notes="missing user_id — refused, fail-closed")
     conn = _kuzu()
     if conn is None:
         return GraphReadResult(degraded=True, notes="graph store unavailable")
     hops = _clamp_hops(max_hops)
-    nid = node_id(scope, path)
-    # Hop bound is an internally-clamped int (never user/model input) spliced
-    # into the pattern — Kuzu's Cypher dialect does not accept a parameter
-    # inside a variable-length relationship bound (`*1..$n` fails to parse).
+    start_id = node_id(scope, path)
     if forward:
         query = (
-            f"MATCH (a:CodeFile {{id: $id}})-[:IMPORTS*1..{hops}]->(b:CodeFile) "
+            "UNWIND $frontier AS fid MATCH (a:CodeFile {id: fid})-[:IMPORTS]->(b:CodeFile) "
             "WHERE a.user_id = $user_id AND a.repo_id = $repo_id "
             "AND b.user_id = $user_id AND b.repo_id = $repo_id "
             "RETURN DISTINCT b.path"
         )
     else:
         query = (
-            f"MATCH (a:CodeFile)-[:IMPORTS*1..{hops}]->(b:CodeFile {{id: $id}}) "
+            "UNWIND $frontier AS fid MATCH (a:CodeFile)-[:IMPORTS]->(b:CodeFile {id: fid}) "
             "WHERE a.user_id = $user_id AND a.repo_id = $repo_id "
             "AND b.user_id = $user_id AND b.repo_id = $repo_id "
             "RETURN DISTINCT a.path"
         )
+    params_base = {"user_id": scope.user_id, "repo_id": scope.repo_id}
+    visited: set[str] = {start_id}
+    found_paths: set[str] = set()
+    frontier = [start_id]
     try:
-        result = conn.execute(
-            query, {"id": nid, "user_id": scope.user_id, "repo_id": scope.repo_id}
-        )
-        paths = frozenset(row[0] for row in result.get_all())
-        return GraphReadResult(paths=paths)
+        for _ in range(hops):
+            if not frontier:
+                break
+            result = conn.execute(query, {**params_base, "frontier": frontier})
+            layer_paths = {row[0] for row in result.get_all()}
+            found_paths |= layer_paths  # record even nodes rediscovered via a cycle/self-loop
+            layer_ids = {node_id(scope, p) for p in layer_paths} - visited
+            if not layer_ids:
+                break  # plateaued — nothing new to explore, stop early regardless of remaining hops
+            visited |= layer_ids
+            frontier = list(layer_ids)
+        return GraphReadResult(paths=frozenset(found_paths))
     except Exception as exc:
         log.warning("kuzu read failed (degrading): %s", exc)
         return GraphReadResult(degraded=True, notes="graph store unavailable")
