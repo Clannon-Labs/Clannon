@@ -39,10 +39,11 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
    send-keys only — never an AI process).
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-06 (wind-down)
+## State snapshot (keep current at each good chunk) — updated 2026-07-25 (mid-session)
 
-- **Last pushed HEAD:** `88c85f9` (2026-07-06). **Tree is CLEAN, everything pushed, nothing
-  half-done** — this is a clean pause point. All code + config + docs safe on GitHub.
+- **Last pushed HEAD:** `6b3d4f4` (2026-07-25). Everything LANDED is pushed; specialists have live
+  WIP in their own trees (memory: run_all; orchestration: mission-wiring; that's expected mid-session).
+  Backend's own tree is clean.
 - **⚠️ OPERATIONAL — READ BEFORE RUNNING TESTS:** the 24 GB box **cannot run concurrent full
   pytest suites** (~5 GB each) — doing so OOM-killed two live specialist sessions this session.
   **Norm:** targeted tests + import-smoke for isolated/additive changes; run a full suite only
@@ -53,43 +54,53 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
      is live; configs placed for budget/pricing/memory/orchestrator/experts/tools/llm/verifier/security/
      **intake**. D1 foundation-constant moves largely done + single-sourced: MEMORY_*, LLM_*, SANITIZER_*/
      FILTER_MAX_RETRIES, intake RATE_LIMIT_* + MAX_INPUT_SIZE all removed from `foundation/vocab/constants.py`.
-     **NEXT config:** D10 (usage-metering window `api/app.py:689 window=30` → `budget.yaml`, scoped +
-     ready); VERIFIER_* removal; the ORCHESTRATOR_*/EXPERT_*/TOOL_* foundation-constant removal (production
-     repointed, **still blocked on repointing several TEST refs** — see `tests/{turn_wall_clock,model_settings,
-     orchestrator_turn_budget,request_overload_throttles_cheap}.py`); D11 `resilience.yaml` (touches memory's
-     `store.py` — coordinate); `models.yaml` → `config/models.yaml` with pricing colocated (touches
-     orchestration's registry loader — coordinate). Full map: `docs/config/CONFIG_INVENTORY.md`.
+     Since resume: **D10** (usage window), **VERIFIER_*** removed, **archive bomb-guard floors**
+     (`settings.SECURITY.archive_*`) all DONE. **NEXT config:** the ORCHESTRATOR_*/EXPERT_*/TOOL_*
+     foundation-constant removal (production repointed, blocked only on repointing a few TEST refs —
+     `tests/{turn_wall_clock,model_settings,orchestrator_turn_budget,request_overload_throttles_cheap}.py`;
+     ⚠️ do these edits ATOMICALLY + import-smoke — a botched multi-line-import insert broke `import core`
+     tree-wide once this session); D11 `resilience.yaml` (touches memory's `store.py` — coordinate);
+     `models.yaml` → `config/models.yaml` (touches orchestration's registry loader — coordinate). Full
+     map: `docs/config/CONFIG_INVENTORY.md`.
   2. **Batch + Redis budget** (PHASE_BATCH_REDIS, owner brief in `proposals/to-backend/`). Split: memory =
      Kuzu-graph + memory slices; orchestration = Mission Engine + batch orchestrator; backend = foundation
      seams + reviews/merges + the Redis budget core.
-- **Built + pushed THIS session:**
-  - **Money layer (Part A):** pure µ$ cost model `core/budget/cost.py`; **Redis atomic reserve/reconcile
-    broker `core/budget/redis_budget.py`** (`8d34c73`) — proven (no-overspend-under-concurrency, all-or-
-    nothing, fail-closed, idempotent); **security-hardened** (`ff2d964` — rejects negative estimate, `:`-in-id
-    guard, sentinel fix). Config: `budget.yaml`/`pricing.yaml` (⚠️ PLACEHOLDER prices — see below).
-  - **Mission Engine (Part B):** longevity-verified capstone (`88cd786`); cross-batch awareness slice shipped
-    (memory); **B1-item-3** `spawn_batch` consumes `BatchAwarenessPort` (`9e0aa19` + `1b30a1e` cancellation fix).
-  - **Kuzu knowledge-web substrate** (memory, `24914b5`) — Entity/Fact/Claim/MediaSegment nodes for CB2/CB3/EB3.
-  - **Foundation seam:** `mission_id`/`batch_id` on `VrakshaContext` (`478f34e`) — the ONE trusted source for
-    both `BudgetScope.mission_id` and cross-batch awareness (identity-set-once).
-- **In flight / next per specialist (each has a handoff doc — read it):**
-  - **Memory** (`core/memory/HANDOFF_batch.md`): knowledge-web substrate landed; NEXT = the memory extractor
-    (write graph twins on accepted SEMANTIC/PROCEDURAL/DECISION proposals — gate on `kind ∈ {FACT,ASSUMPTION,
-    DECISION}`, NOT tier) + `GraphManager` dispatch, then the CB2/CB3/EB3 benchmark proofs.
-  - **Orchestration** (`core/orchestrator/HANDOFF_mission.md`): B1-item-3 built; NEXT = the concrete first
-    batch (engineering/CB2) — GREEN-LIT, propose-first: `config/backend/batches.yaml` + decomposition-test
-    pass + one-batch-end-to-end proof. Then Mission-Engine loop-wiring (sets `ctx.mission_id`).
-  - **Security** (`backend/security/HANDOFF.md`): CB5 + config-wire + 2 reviews done; standby invariant
-    reviewer — orchestration's batch design comes to it for a sole-broker/scoping review when it lands.
-- **Backend's (my) own queue:** the **`retry.py` budget-enforcement anchor** — **DESIGN LOCKED,
-  ready to build**, full spec + security-review resolutions + the model-rate resolution in
-  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`. Build behind an OFF flag (inert until enabled).
-  Budget **seeding is now BUILT** (`core/budget/seed.py`, security-hardened) — so the anchor's data
-  plane is done; enabling enforcement is gated on real prices (owner) + prod seeding + the
-  mission_id-source wiring (orchestration). Also queued: the honest µ$ **rename** of
-  `BudgetPort`/`TokenBudget` (coordinate with orchestration — it consumes `TokenBudget` in
-  `mission.py`); the config long-tail (VERIFIER_* + ORCHESTRATOR_*/EXPERT_*/TOOL_* constant removals,
-  both blocked only on repointing a few TEST refs; D11 resilience.yaml; models.yaml→config/).
+- **Built + pushed SINCE RESUME (2026-07-25) — a big arc:**
+  - **Money-layer DATA PLANE complete + security-hardened:** spend broker `core/budget/redis_budget.py`
+    (proven: no-overspend-under-concurrency, all-or-nothing, fail-closed, idempotent) + seed
+    `core/budget/seed.py` (A1 single-source ceiling, SETNX-safe period/mission seeding). Two security
+    reviews caught real bugs — negative-estimate inflation (`ff2d964`) + the `user_id=="mission"` key
+    collision and `:`-injection (`d7e2009`) — both fixed + regression-tested.
+  - **Batch architecture — first LIVE instance + tooling:** engineering batch (`dfaec88`, `spawn_batch`
+    live, `has_batches=True`); patch-apply (`24b5227`, also fixed a live truncated-read/whole-file-write
+    clobber bug); nav/AST tooling designed, sequenced behind the archive-entry prerequisite (tree-sitter
+    approved-in-principle, dep at build-time).
+  - **Knowledge web SUBSTRATE complete + proven:** memory extractor (`809ec72`), contradiction judge
+    (`9afef44`), the `_traverse` exponential blowup RESOLVED via bounded in-Python BFS (`1e81903`),
+    CB2/CB3/EB3 benchmark harnesses (`6b3d4f4`, honestly PARTIAL where gated on §3.3/§3.4).
+  - **Archive uploads (CB2 real-repo track):** security's `uploads.py` half (`7bfaddf` — caught that
+    libmagic sniffs a zip as octet-stream, would've admitted ZERO real zips; fixed with the real zip
+    parser). D8 bomb-guard floors placed. Extraction half queued to orchestration.
+  - **Config-depth:** D10 usage window (`b2ff6a3`), VERIFIER_* removed (`885e4bd`), archive floors.
+- **In flight per specialist (handoff docs current):**
+  - **Memory:** knowledge-web substrate DONE + proven (all 4 resume tasks). NOW: fix `run_all.py` graph-db
+    isolation, then likely standby — §3.3 (code symbol tier) + §3.4 (media) are OTHER trees; the EB3
+    Claim↔MediaSegment schema edge is DEFERRED to EB3-build-time (do NOT add it speculatively).
+  - **Orchestration:** batch + patch-apply DONE. NOW BUILDING the **Mission Engine loop-wiring** (turns on
+    autonomous missions): `mission_id = session_id`, 3 native tools (start/advance/end_mission), an
+    `UnlimitedBudget` stub on new `Ports.budget` (the one-line swap seam for the real broker later). Nav
+    §3-§5 gated on the archive track. Batch-loader-ceiling + archive-extraction also queued.
+  - **Security:** all reviews + the archive-upload half DONE. Standby reviewer (mission-wiring tools +
+    archive-extraction come to it next); optionally building a no-bypass invariant grep-gate meanwhile.
+- **Backend's (my) own queue:** the **`retry.py` enforcement anchor** — DESIGN LOCKED (full spec +
+  security resolutions + the model-rate + the read-mission_id-fresh-per-call correction in
+  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`). GATED on orchestration's mission-wiring landing the
+  `ctx.mission_id` seam (the anchor reads it fresh per-LLM-call in `framework.py` — NOT a set-once mirror,
+  per orchestration's pydantic-ai-concurrency finding). Data plane (spend+seed) done; ENABLING gated on
+  real prices (owner) + prod seeding. Also queued: the µ$ **rename** of `BudgetPort`/`TokenBudget`
+  (coordinate — orchestration consumes `TokenBudget` in `mission.py`, so AFTER its mission-wiring lands);
+  the config long-tail (ORCHESTRATOR_*/EXPERT_*/TOOL_* removal — test-ref repoints, edit atomically; D11;
+  models.yaml→config/).
 - **Owner decisions pending** (`reports/DECISIONS_FOR_OWNER.md`): (1) OOM norm — my rec is the lightweight
   norm above (no action needed); (2) **budget go-live needs real per-model prices + infra values** —
   `pricing.yaml` + infra knobs are PLACEHOLDER; the loader is fail-closed so an un-priced model blocks
