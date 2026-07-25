@@ -39,7 +39,7 @@ def _budget(client) -> RedisBudget:
 
 async def _seed(client, *, user: int | None = None, mission: tuple[str, int] | None = None):
     if user is not None:
-        await client.set(f"budget:u1:{_PERIOD}", user)
+        await client.set(f"budget:user:u1:{_PERIOD}", user)
     if mission is not None:
         mid, amt = mission
         await client.set(f"budget:mission:{mid}", amt)
@@ -54,7 +54,7 @@ def test_reserve_grants_and_decrements_the_user_ceiling():
         b = _budget(r)
         resv = await b.reserve(BudgetScope(user_id="u1"), 300)
         assert isinstance(resv, BudgetReservation) and resv.estimated == 300
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 700  # taken atomically
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 700  # taken atomically
     _run(go())
 
 
@@ -64,7 +64,7 @@ def test_reserve_checks_both_ceilings_and_decrements_both():
         await _seed(r, user=1000, mission=("m1", 400))
         b = _budget(r)
         await b.reserve(BudgetScope(user_id="u1", mission_id="m1"), 250)
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 750
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 750
         assert int(await r.get("budget:mission:m1")) == 150
     _run(go())
 
@@ -79,7 +79,7 @@ def test_reserve_denies_when_user_short_without_touching_the_balance():
         with pytest.raises(BudgetExhausted) as exc:
             await b.reserve(BudgetScope(user_id="u1"), 500)
         assert exc.value.ceiling == "user"
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 100  # untouched — no partial take
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 100  # untouched — no partial take
     _run(go())
 
 
@@ -93,7 +93,7 @@ def test_reserve_mission_short_is_all_or_nothing_user_untouched():
         with pytest.raises(BudgetExhausted) as exc:
             await b.reserve(BudgetScope(user_id="u1", mission_id="m1"), 200)
         assert exc.value.ceiling == "mission"
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 10_000  # user NOT touched
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 10_000  # user NOT touched
         assert int(await r.get("budget:mission:m1")) == 50         # mission NOT touched
     _run(go())
 
@@ -128,7 +128,7 @@ def test_reserve_rejects_a_negative_estimate_without_inflating_the_balance():
         b = _budget(r)
         with pytest.raises(BudgetExhausted):
             await b.reserve(BudgetScope(user_id="u1"), -1_000_000)
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 100  # untouched, NOT inflated
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 100  # untouched, NOT inflated
     _run(go())
 
 
@@ -190,7 +190,7 @@ def test_no_overspend_under_concurrency():
         denied = [x for x in results if isinstance(x, BudgetExhausted)]
         assert len(granted) == 5, f"exactly 5 of 10 affordable, got {len(granted)}"
         assert len(denied) == 5
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 0  # never driven negative
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 0  # never driven negative
     _run(go())
 
 
@@ -203,7 +203,7 @@ def test_reconcile_refunds_the_over_estimate():
         b = _budget(r)
         resv = await b.reserve(BudgetScope(user_id="u1"), 300)   # balance 700
         await b.reconcile(resv, actual=120)                      # refund 180 → 880
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 880
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 880
     _run(go())
 
 
@@ -214,7 +214,7 @@ def test_reconcile_charges_the_shortfall_when_actual_exceeds_estimate():
         b = _budget(r)
         resv = await b.reserve(BudgetScope(user_id="u1"), 300)   # balance 700
         await b.reconcile(resv, actual=500)                      # charge extra 200 → 500
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 500
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 500
     _run(go())
 
 
@@ -227,7 +227,7 @@ def test_reconcile_is_idempotent_a_replay_does_not_double_settle():
         await b.reconcile(resv, actual=100)                      # refund 200 → 900
         await b.reconcile(resv, actual=100)                      # replay → no-op
         await b.reconcile(resv, actual=100)                      # replay → no-op
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 900
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 900
     _run(go())
 
 
@@ -238,7 +238,7 @@ def test_reconcile_settles_both_ceilings():
         b = _budget(r)
         resv = await b.reserve(BudgetScope(user_id="u1", mission_id="m1"), 250)  # u750 m150
         await b.reconcile(resv, actual=100)                                       # +150 each
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 900
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 900
         assert int(await r.get("budget:mission:m1")) == 300
     _run(go())
 

@@ -49,7 +49,7 @@ def test_seed_user_period_writes_the_budget():
         r = aioredis.FakeRedis()
         wrote = await seed_user_period(r, "u1", _PERIOD, 800_000)
         assert wrote is True
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 800_000
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 800_000
     _run(go())
 
 
@@ -59,10 +59,10 @@ def test_reseed_of_a_live_period_does_not_wipe_spent_balance():
     async def go():
         r = aioredis.FakeRedis()
         await seed_user_period(r, "u1", _PERIOD, 800_000)
-        await r.set(f"budget:u1:{_PERIOD}", 300_000)          # simulate 500k spent
+        await r.set(f"budget:user:u1:{_PERIOD}", 300_000)          # simulate 500k spent
         wrote = await seed_user_period(r, "u1", _PERIOD, 800_000)  # stray re-seed
         assert wrote is False
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 300_000  # untouched
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 300_000  # untouched
     _run(go())
 
 
@@ -70,10 +70,10 @@ def test_seed_overwrite_true_resets_the_current_period():
     async def go():
         r = aioredis.FakeRedis()
         await seed_user_period(r, "u1", _PERIOD, 800_000)
-        await r.set(f"budget:u1:{_PERIOD}", 10)
+        await r.set(f"budget:user:u1:{_PERIOD}", 10)
         wrote = await seed_user_period(r, "u1", _PERIOD, 800_000, overwrite=True)
         assert wrote is True
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 800_000
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 800_000
     _run(go())
 
 
@@ -81,7 +81,7 @@ def test_seed_clamps_negative_budget_and_rejects_empty_ids():
     async def go():
         r = aioredis.FakeRedis()
         await seed_user_period(r, "u1", _PERIOD, -100)
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 0     # negative → 0, never fail-open
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 0     # negative → 0, never fail-open
         assert await seed_user_period(r, "", _PERIOD, 100) is False
         assert await seed_user_period(r, "u1", "", 100) is False
     _run(go())
@@ -107,7 +107,7 @@ def test_seeded_budget_is_spendable_through_the_broker():
         b = RedisBudget(r, period_provider=lambda: _PERIOD)
         resv = await b.reserve(BudgetScope(user_id="u1"), 300_000)
         assert resv.estimated == 300_000
-        assert int(await r.get(f"budget:u1:{_PERIOD}")) == 500_000
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 500_000
         # spending past the seeded ceiling is refused (fail-closed)
         with pytest.raises(BudgetExhausted):
             await b.reserve(BudgetScope(user_id="u1"), 600_000)
@@ -121,4 +121,33 @@ def test_an_unseeded_user_cannot_spend():
         b = RedisBudget(r, period_provider=lambda: _PERIOD)
         with pytest.raises(BudgetExhausted):
             await b.reserve(BudgetScope(user_id="u1"), 1)
+    _run(go())
+
+
+# ── security review 2026-07-25 regressions ───────────────────────────────────────────────────
+
+def test_user_and_mission_namespaces_are_disjoint():
+    # Finding 1: a user whose id is literally "mission" must NOT collide with mission-cap keys and
+    # silently starve a mission's safety cap (SETNX returns False without raising).
+    async def go():
+        r = aioredis.FakeRedis()
+        await seed_user_period(r, "mission", "m2", 12)        # ordinary-looking user-period seed
+        wrote = await seed_mission_cap(r, "m2", 50_000)       # the REAL mission cap
+        assert wrote is True                                  # the cap lands, not starved
+        assert int(await r.get("budget:mission:m2")) == 50_000
+        assert int(await r.get("budget:user:mission:m2")) == 12   # the user seed is a separate key
+    _run(go())
+
+
+def test_seed_rejects_colon_in_ids_and_period():
+    # Finding 2: `:` is the key delimiter — reject it on the write side, same as BudgetScope does
+    # on the read side, so a "victim:2026-07" id can't inject/collide a key.
+    async def go():
+        r = aioredis.FakeRedis()
+        with pytest.raises(ValueError):
+            await seed_user_period(r, "victim:2026-07", "evil", 777)
+        with pytest.raises(ValueError):
+            await seed_user_period(r, "u1", "2026:07", 100)
+        with pytest.raises(ValueError):
+            await seed_mission_cap(r, "m:1", 100)
     _run(go())

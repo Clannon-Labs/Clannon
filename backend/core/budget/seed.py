@@ -23,6 +23,14 @@ import settings
 from core.budget.redis_budget import _mission_key, _user_key
 
 
+def _reject_colon(value: str, field: str) -> None:
+    """`:` is the budget-key delimiter, so an id/period containing it could inject or collide two
+    keys — the SAME hygiene `BudgetScope.__post_init__` enforces on the read/spend side. Enforce it
+    here on the write side too (security review 2026-07-25, finding 2): loud, never silent."""
+    if ":" in value:
+        raise ValueError(f"budget seed {field}={value!r} must not contain ':' (the key delimiter)")
+
+
 def ceiling_micros(amount_paid_micros: int) -> int:
     """The margin invariant (A1): the ceiling a user may spend, in integer µ$ — the ONE place it
     is computed, sourced from exactly `settings.BUDGET.spend_ceiling_fraction`. A negative
@@ -42,6 +50,8 @@ async def seed_user_period(
     deliberate administrative correction of the current period."""
     if not user_id or not period:
         return False
+    _reject_colon(user_id, "user_id")
+    _reject_colon(period, "period")
     budget = max(0, budget_micros)  # never seed a negative budget (would fail-open on reserve)
     key = _user_key(user_id, period)
     if overwrite:
@@ -59,6 +69,7 @@ async def seed_mission_cap(
     can't silently raise its cap. Returns True iff it wrote."""
     if not mission_id:
         return False
+    _reject_colon(mission_id, "mission_id")
     budget = max(0, budget_micros)
     key = _mission_key(mission_id)
     if overwrite:

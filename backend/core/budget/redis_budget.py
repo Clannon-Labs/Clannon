@@ -94,8 +94,11 @@ return delta
 
 # ── key layout (period on the user key so a reset is a new key, never a mutate) — module-level so
 # the seed/reset side (core.budget.seed) shares ONE source for the format, never a divergent copy.
+# Each id-space gets a LITERAL segment (user/mission/resv) so the namespaces are provably disjoint:
+# without the `user:` segment, `_user_key("mission", X)` would equal `_mission_key(X)` and a user
+# named "mission" could starve a mission's safety cap (security review 2026-07-25, finding 1).
 def _user_key(user_id: str, period: str) -> str:
-    return f"budget:{user_id}:{period}"
+    return f"budget:user:{user_id}:{period}"
 
 
 def _mission_key(mission_id: str) -> str:
