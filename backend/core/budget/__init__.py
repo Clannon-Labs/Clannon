@@ -7,5 +7,9 @@ fail-closed on an un-priced model. Later: the Redis atomic reserve/reconcile bro
 them. Kept separate from the pipeline stages: budget is a resource bound, not a stage.
 """
 from core.budget.cost import ModelCall, call_cost_micros
+from core.budget.seed import ceiling_micros, seed_mission_cap, seed_user_period
 
-__all__ = ["ModelCall", "call_cost_micros"]
+__all__ = [
+    "ModelCall", "call_cost_micros",
+    "ceiling_micros", "seed_user_period", "seed_mission_cap",
+]

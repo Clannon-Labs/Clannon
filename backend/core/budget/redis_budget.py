@@ -92,6 +92,20 @@ return delta
 """
 
 
+# ── key layout (period on the user key so a reset is a new key, never a mutate) — module-level so
+# the seed/reset side (core.budget.seed) shares ONE source for the format, never a divergent copy.
+def _user_key(user_id: str, period: str) -> str:
+    return f"budget:{user_id}:{period}"
+
+
+def _mission_key(mission_id: str) -> str:
+    return f"budget:mission:{mission_id}"
+
+
+def _resv_key(reservation_id: str) -> str:
+    return f"budget:resv:{reservation_id}"
+
+
 class RedisBudget:
     """`foundation.BudgetPort` over an async Redis client (`redis.asyncio.Redis`, or a
     fakeredis async client in tests). The client is injected so the broker owns no connection
@@ -110,19 +124,6 @@ class RedisBudget:
         self._reserve = redis_client.register_script(_RESERVE_LUA)
         self._reconcile = redis_client.register_script(_RECONCILE_LUA)
 
-    # ── key layout (period on the user key so a reset is a new key, never a mutate) ──
-    @staticmethod
-    def _user_key(user_id: str, period: str) -> str:
-        return f"budget:{user_id}:{period}"
-
-    @staticmethod
-    def _mission_key(mission_id: str) -> str:
-        return f"budget:mission:{mission_id}"
-
-    @staticmethod
-    def _resv_key(reservation_id: str) -> str:
-        return f"budget:resv:{reservation_id}"
-
     async def reserve(self, scope: BudgetScope, estimate: int) -> BudgetReservation:
         if not scope.user_id:  # identity-set-once; an unscoped reserve is a bug, fail closed
             raise BudgetExhausted("budget reserve with no user_id", ceiling="user")
@@ -137,14 +138,14 @@ class RedisBudget:
         period = self._period()
         reservation_id = uuid.uuid4().hex
         has_mission = bool(scope.mission_id)
-        user_key = self._user_key(scope.user_id, period)
+        user_key = _user_key(scope.user_id, period)
         keys = [
             user_key,
             # When there's no mission, the Lua never reads KEYS[2] (guarded by has_mission==0), so
             # any filler is inert — reuse the user key rather than a "budget:mission:_none" sentinel
             # that could (however improbably) collide with a real mission whose id is "_none".
-            self._mission_key(scope.mission_id) if has_mission else user_key,
-            self._resv_key(reservation_id),
+            _mission_key(scope.mission_id) if has_mission else user_key,
+            _resv_key(reservation_id),
         ]
         try:
             code, tag = await self._reserve(
@@ -167,10 +168,11 @@ class RedisBudget:
         scope = reservation.scope
         period = self._period()
         has_mission = bool(scope.mission_id)
+        user_key = _user_key(scope.user_id, period)
         keys = [
-            self._user_key(scope.user_id, period),
-            self._mission_key(scope.mission_id) if has_mission else "budget:mission:_none",
-            self._resv_key(reservation.reservation_id),
+            user_key,
+            _mission_key(scope.mission_id) if has_mission else user_key,  # inert filler (Lua guards KEYS[2])
+            _resv_key(reservation.reservation_id),
         ]
         try:
             await self._reconcile(keys=keys, args=[max(0, actual), "1" if has_mission else "0"])
@@ -182,9 +184,9 @@ class RedisBudget:
         # to unlimited — an unknown/unreachable budget must pause work, not wave it through.
         period = self._period()
         try:
-            ubal_raw = await self._redis.get(self._user_key(scope.user_id, period))
+            ubal_raw = await self._redis.get(_user_key(scope.user_id, period))
             mbal_raw = (
-                await self._redis.get(self._mission_key(scope.mission_id))
+                await self._redis.get(_mission_key(scope.mission_id))
                 if scope.mission_id
                 else None
             )
