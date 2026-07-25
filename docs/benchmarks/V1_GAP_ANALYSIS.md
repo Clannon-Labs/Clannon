@@ -15,20 +15,26 @@
 | # | Benchmark | Verdict | Closest-to-pass? | Structural cost | Needs graph? |
 |---|---|---|---|---|---|
 | CB1 | Persistent cross-session memory | **PARTIAL (strong)** | ★ 2nd | low (additive typing) | no |
-| CB2 | Large repository understanding | **ABSENT** | — | high | **yes** |
-| CB3 | Unified multi-modal representation | **ABSENT** (string-survival only) | — | high | **yes** |
+| CB2 | Large repository understanding | **PARTIAL** (file-level + cross-batch proven; symbol tier absent) | — | medium (symbol tier) | no — built |
+| CB3 | Unified multi-modal representation | **PARTIAL** (string-survival + graph-convergence mechanism proven; real media ingestion absent) | — | medium (media extractor) | no — built |
 | CB4 | Institutional decision memory | **PARTIAL** | ★ 3rd | medium (audit mirror) | no |
 | CB5 | Security validation | **PARTIAL (near-pass)** | ★ 1st | low | no |
 | CB6 | Multi-agent architectural consistency | **PARTIAL (mechanism live)** | ★ 4th | low | no |
 | EB1 | Knowledge evolution (temporal truth) | **PARTIAL** | rides CB1 | low | no |
 | EB2 | Autonomous project continuity | **PARTIAL** | rides CB1+CB4 | medium | no |
-| EB3 | Cross-media knowledge synthesis | **ABSENT** | — | high | **yes** |
+| EB3 | Cross-media knowledge synthesis | **PARTIAL** (entity-mediated link proven; direct edge is a schema gap, semantics absent) | — | medium | no — built |
 
 Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **0 Critical
-PASS, 4 PARTIAL, 2 ABSENT.** The three ABSENT benchmarks (CB2/CB3/EB3) all block
-on the same missing subsystem — the Kuzu knowledge-web (PROPOSED — docs/ARCHITECTURE.md §5.2) — so the Critical set cannot fully pass without a graph pass. The
-four PARTIAL benchmarks are advanceable now, no graph, and two of them (CB1, CB4)
-unlock two Exceptionals (EB1, EB2).
+PASS, 6 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
+CB2/CB3/EB3 blocked on (ratified 2026-07-06, built + benchmark-proven through
+2026-07-25 — `tests/benchmarks/c2_repo_intelligence.py`,
+`c3_knowledge_web_convergence.py`, `eb3_cross_media_synthesis.py`) moved all
+three from ABSENT to PARTIAL, "Needs graph?" from yes to built. Their remaining
+gaps are now CROSS-TREE dependencies (the code-symbol tier and the media
+extractor, §3.3/§3.4 of the ratified design), not a graph-substrate gap — see
+their detail sections below. The closest-to-pass ranking (★) and priority-order
+guidance predate this update and describe the four benchmarks that never
+depended on the graph.
 
 ---
 
@@ -54,23 +60,49 @@ additive contract (`docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md §7.4
 plus surface the retrieval "why" (score+tier already computed). **Highest-leverage
 non-graph win; also unlocks EB1.**
 
-### CB2 — Large Repository Understanding — ABSENT
-**No harness** (`run_all.py:134` registers it NOT-MEASURED), no dependency-graph,
-no traversal capability. This is precisely the Kuzu knowledge-web's reason to
-exist (the knowledge-web, PROPOSED — docs/ARCHITECTURE.md §5.2). Answering "what breaks if X is removed /
-transitive deps" without full-context ingestion **requires graph traversal**.
-**Path:** the graph-web — big structural, **propose-first** per mission. A *thin
-credible slice* that could pass a minimal CB2 without full Kuzu: a code-only
-static import/dependency graph over the repo (the same shape `check_invariants.py`
-already walks) answering "depends-on / breaks-if-removed." Spec it; don't rush it.
+### CB2 — Large Repository Understanding — PARTIAL (updated 2026-07-25)
+**BUILT:** the Kuzu knowledge-web substrate (ratified 2026-07-06, built through
+2026-07-25 — `GraphPort`/`GraphManager`/Kuzu behind the port; the "graph DB
+choice" half of ADR 0005 is resolved per its own status note). `tests/
+benchmarks/c2_repo_intelligence.py` proves the thin-slice file-level graph
+(`depends_on`/`breaks_if_removed`/`dependents_of` over Clannon's own real
+`backend/` tree — the `_traverse` exponential-blowup/crash bug that used to
+hang this exact query is fixed, 2026-07-25) AND the cross-batch `DERIVED_FROM`
+claim: two synthetic TASK nodes (standing in for two different batches) each
+get their own graph node, both landing in ONE shared graph, each still
+traceable back to its origin task — the half of "CB2 (full)" that does not
+need the code-symbol tier.
+**PARTIAL:** symbol-granularity traversal (function/struct-level nodes, not
+just file-level) needs the code-symbol tier (§3.3 of the ratified knowledge-web
+design, `proposals/archive/to-backend/2026-07-06_knowledge-web-design-cb2-cb3-eb3.md`)
+— a **cross-tree dependency on orchestration's extractor**, not built here.
+Natural-language architectural explanations remain NOT-YET (LLM synthesis over
+graph results, not the graph substrate's job).
+**Path:** no further work needed in `core/memory/` to advance CB2 further — the
+graph door is ready and proven; the symbol tier is orchestration's build
+whenever they're ready to consume it.
 
-### CB3 — Unified Multi-Modal Representation — ABSENT (string-survival only)
-**BUILT:** intake→sanitizer→normalizer preprocesses every modality; the media
-expert reads image/audio/video/PDF. `tests/benchmarks/c3_multimodal.py` proves a
-shared entity **string** survives normalization across modalities.
-**ABSENT:** shared **entities**, cross-media **relationships**, **contradiction
-detection**, unified knowledge — string-survival is not knowledge. All need the
-graph. **Path:** graph-web (same dependency as CB2). Defer.
+### CB3 — Unified Multi-Modal Representation — PARTIAL (updated 2026-07-25)
+**BUILT:** intake→sanitizer→normalizer preprocesses every modality (`tests/
+benchmarks/c3_multimodal.py`, shared-entity STRING survival across modalities
+— unchanged, still the honest ingestion-precondition proof). ADDITIONALLY, the
+knowledge-web substrate is now real: `tests/benchmarks/
+c3_knowledge_web_convergence.py` (a companion probe, not an edit to
+`c3_multimodal.py` — see that file's own docstring for why) proves the GRAPH
+convergence mechanism itself — a real memory-extractor-fed CLAIM and a
+hand-seeded MediaSegment (simulating the not-yet-built media extractor) both
+converge onto exactly ONE shared ENTITY node (§1.1's canonical-name-identity
+rule), read back through the real `GraphPort`, not merely asserted at the unit
+level.
+**PARTIAL, honestly:** the MediaSegment side is HAND-SEEDED, not produced by a
+real ingestion pipeline — automatic PDF/audio/video → entity extraction (§3.4
+of the ratified design) does not exist. Every media-worded requirement in the
+new harness is capped at PARTIAL, never PASS, for exactly this reason (a
+benchmark must never fake a pass). Shared entities/relationships/contradiction
+detection/unified knowledge over REAL media remain NOT-YET.
+**Path:** §3.4 (the media extractor) is the media pipeline's cross-tree build,
+not `core/memory/`'s — the graph door is ready and proven to receive its output
+whenever that pipeline exists. No further work needed in `core/memory/` itself.
 
 ### CB4 — Institutional Decision Memory — PARTIAL
 **BUILT:** `tests/benchmarks/c4_decision_memory.py` ingests the repo's real ADRs
@@ -118,7 +150,16 @@ pass makes CB6 real.**
   Exceptional to reach.**
 - **EB2 Autonomous Project Continuity — PARTIAL.** Rides CB1 (state) + CB4 (audit
   mirror). Reachable once both advance.
-- **EB3 Cross-Media Synthesis — ABSENT.** Needs the graph (rides CB3). Defer.
+- **EB3 Cross-Media Synthesis — PARTIAL (updated 2026-07-25).** `tests/
+  benchmarks/eb3_cross_media_synthesis.py` proves an entity-mediated cross-modal
+  link (a memory-derived CLAIM and a hand-seeded MediaSegment, both reachable
+  via one shared ENTITY) — real, substrate-provable, hermetic. It also surfaces
+  a genuine schema-completeness finding, verified empirically against the real
+  Kuzu schema (not assumed): neither `CONTRADICTS` (Claim-only by design, per
+  the ratified §1.4 table) nor `RelatesTo` (Entity-centric by design) has a
+  DIRECT Claim<->MediaSegment pair. A literal direct cross-modal edge needs a
+  schema decision (flagged to backend) layered on top of §3.4 (the media
+  extractor, cross-tree). Rides CB3's substrate.
 
 ---
 
@@ -131,8 +172,13 @@ pass makes CB6 real.**
 3. **CB4** — durable decision-log audit mirror. **Also serves CB6 + EB2 + the
    frontend story.** Propose-first. (Phase 5.)
 4. **CB6** — Integration Contract + a real contract-drift test. **This pass.**
-5. **CB2 / CB3 / EB3** — all block on the Kuzu knowledge-web. **Propose-first;
-   write a build spec; defer to a dedicated graph pass.** Do NOT half-build it.
+5. **CB2 / CB3 / EB3 — updated 2026-07-25.** The Kuzu knowledge-web they
+   blocked on is built + benchmark-proven (see their detail sections above).
+   Remaining work is now a **cross-tree dependency**, not a memory-specialist
+   graph-substrate gap: CB2's symbol tier is orchestration's build (§3.3);
+   CB3/EB3's real media ingestion is the media pipeline's (§3.4); EB3's
+   direct-edge schema question is a backend/schema decision. No further
+   graph-substrate work advances these three further on its own.
 
 **Immediate implementation work** (Phase 1/3, safe, self-contained, serves the
 top priorities): (a) memory **persisted-only** surfacing — the Manager returns
@@ -150,15 +196,19 @@ owner-authored 2026-07-04) is largely *how* the graph-blocked benchmarks get bui
 and it reframes the priority tail — but changes **nothing** about the near-term
 non-graph wins above (CB5/CB1/CB4 advance the same way regardless).
 
-- **CB2 (ABSENT → build via an engineering batch).** Instead of a bare Kuzu web,
-  CB2 becomes a batch: engineering expert(s) + heavy deterministic tools (AST-aware
-  search, dependency-graph traversal, precise patch-apply) that **navigate** a repo
-  larger than any context window rather than ingest it. The graph is still the
-  substrate for dependency traversal, but the *capability shape* is now an
-  expert-drives-tools batch, not a raw graph query. Still propose-first + big.
-- **CB3 / EB3 (ABSENT → media batch over the shared graph).** Unchanged dependency
-  on the knowledge-web for shared entities/relationships; the batch layer supplies
-  the coordinating media batch once the graph exists.
+- **CB2 (PARTIAL, graph substrate built → full pass via an engineering batch).**
+  Instead of a bare Kuzu web, CB2 becomes a batch: engineering expert(s) + heavy
+  deterministic tools (AST-aware search, dependency-graph traversal, precise
+  patch-apply) that **navigate** a repo larger than any context window rather
+  than ingest it. The graph substrate now exists and is benchmark-proven for
+  dependency traversal (see CB2's detail section above); the *capability shape*
+  for the full pass is still an expert-drives-tools batch, not a raw graph
+  query. Still propose-first + big.
+- **CB3 / EB3 (PARTIAL, graph substrate built → media batch over the shared
+  graph).** The knowledge-web dependency for shared entities/relationships is
+  now satisfied (see both benchmarks' detail sections above); what remains is
+  the media EXTRACTION pipeline (§3.4) itself — the batch layer supplies the
+  coordinating media batch once that pipeline exists.
 - **CB6 (PARTIAL → strengthened).** Batches must stay contract-compatible with each
   other and the central orchestrator — the same Integration-Contract discipline,
   applied *internally between batches*. This makes CB6 a live, ongoing test of the

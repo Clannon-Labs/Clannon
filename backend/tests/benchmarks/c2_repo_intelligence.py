@@ -42,6 +42,20 @@ durable facts unlikely to ever change (the single-write-door dependency
 itself: manager.py depends_on store.py) — the same tension C4 solves with
 its _MIN_ADRS floor rather than an exact ADR count.
 
+Cross-batch knowledge (added 2026-07-25, per the ratified knowledge-web design's
+§5 "CB2 (full)" commitment — proposals/archive/to-backend/
+2026-07-06_knowledge-web-design-cb2-cb3-eb3.md): once the memory extractor
+(§3.1) landed, the substrate can prove the OTHER half of "full cross-batch
+knowledge" that doesn't need the code-symbol tier (§3.3, still gated on
+orchestration's extractor, honestly scored NOT-YET below) — that separate
+batches' output lands in ONE shared knowledge graph, each piece still
+traceable back to the TASK that produced it, via `DERIVED_FROM` +
+`edges_of()`. Two synthetic TASK nodes (standing in for two different
+batches), each with its own FACT node `DERIVED_FROM` it — proven with the
+real `GraphManager.write()`/`edges_of()` port, not the internal store
+functions `tests/memory_knowledge_store.py` already covers at the unit level
+(this is the port-level, benchmark-shaped proof).
+
 Run:
     cd backend && .venv/bin/python -m pytest tests/benchmarks/c2_repo_intelligence.py -v
     PYTHONPATH=tests python -m benchmarks.c2_repo_intelligence   # prints report
@@ -60,7 +74,7 @@ from unittest.mock import patch
 
 import core.memory.graph_store as graph_store_mod
 from core.memory.graph_manager import GraphManager
-from foundation import GraphScope
+from foundation import EdgeLabel, EdgeOrigin, GraphEdge, GraphNode, GraphScope, NodeLabel
 
 try:  # package context (pytest collects this as benchmarks.c2_repo_intelligence)
     from .report import BenchmarkReport, Verdict
@@ -125,6 +139,51 @@ class _disposable_graph_db:
         shutil.rmtree(self._dir, ignore_errors=True)
 
 
+_CROSS_BATCH_MISSION = "m-cb2-bench"
+_CROSS_BATCH_TASKS = ("batch-a-task", "batch-b-task")
+
+
+async def _run_cross_batch_probe(manager: GraphManager) -> dict:
+    """The 'full cross-batch knowledge' half of CB2 (full) that does NOT need
+    the code-symbol tier: two synthetic TASK nodes stand in for two different
+    batches, each producing its own FACT node `DERIVED_FROM` it. Proves
+    separate batches' output lands in ONE shared knowledge graph, each piece
+    still traceable back to its origin — through the real `GraphPort.write()`/
+    `edges_of()`, not the internal store functions."""
+    task_ids = [graph_store_mod.node_id(_SCOPE, t) for t in _CROSS_BATCH_TASKS]
+    task_nodes = [
+        GraphNode(
+            node_id=tid, label=NodeLabel.TASK, scope=_SCOPE,
+            properties={"task_id": t, "mission_id": _CROSS_BATCH_MISSION,
+                        "summary": f"{t} did some work", "status": "done", "evidence": "",
+                        "updated_at": 1.0},
+        )
+        for tid, t in zip(task_ids, _CROSS_BATCH_TASKS)
+    ]
+    fact_ids = [graph_store_mod.node_id(_SCOPE, f"cb2-bench-fact-{i}") for i in range(len(_CROSS_BATCH_TASKS))]
+    fact_nodes = [
+        GraphNode(
+            node_id=fid, label=NodeLabel.FACT, scope=_SCOPE,
+            properties={"content": f"fact produced by {t}", "vector_id": f"cb2-bench-fact-{i}"},
+        )
+        for i, (fid, t) in enumerate(zip(fact_ids, _CROSS_BATCH_TASKS))
+    ]
+    derived_from_edges = [
+        GraphEdge(src_id=fid, dst_id=tid, label=EdgeLabel.DERIVED_FROM, origin=EdgeOrigin.INFERRED)
+        for fid, tid in zip(fact_ids, task_ids)
+    ]
+
+    write_result = await manager.write(_SCOPE, task_nodes + fact_nodes, derived_from_edges)
+    edges_of_task = [await manager.edges_of(_SCOPE, tid, EdgeLabel.DERIVED_FROM) for tid in task_ids]
+
+    return dict(
+        write=write_result,
+        task_ids=task_ids,
+        fact_ids=fact_ids,
+        edges_of_task=edges_of_task,
+    )
+
+
 async def _run_probe() -> dict:
     """Build the real code-import graph over Clannon's own backend/ tree, run
     the CB2-shaped queries through the port, and empirically pin the headline
@@ -166,6 +225,8 @@ async def _run_probe() -> dict:
         foundation_dependents_1hop = await manager.dependents_of(_SCOPE, node_id(_SCOPE, _FOUNDATION_INIT), max_hops=1)
         foundation_dependents_20hop = await manager.dependents_of(_SCOPE, node_id(_SCOPE, _FOUNDATION_INIT), max_hops=20)
 
+    cross_batch = await _run_cross_batch_probe(manager)
+
     return dict(
         build=build,
         depends_on_manager={n.properties["path"] for n in depends_on_manager.nodes},
@@ -173,6 +234,7 @@ async def _run_probe() -> dict:
         foundation_dependents_1hop={n.properties["path"] for n in foundation_dependents_1hop.nodes},
         foundation_dependents_20hop={n.properties["path"] for n in foundation_dependents_20hop.nodes},
         query_reread_calls=query_touched,
+        cross_batch=cross_batch,
     )
 
 
@@ -180,7 +242,8 @@ def _build_report(probe: dict) -> BenchmarkReport:
     report = BenchmarkReport(
         benchmark_id="C2", title="Large Repository Understanding (thin slice)",
         requirement_summary="navigate / trace_dependencies / follow_relationships / "
-                             "architectural_explanations / avoid_single_prompt",
+                             "cross_batch_knowledge / architectural_explanations / "
+                             "avoid_single_prompt",
     )
 
     build = probe["build"]
@@ -234,6 +297,41 @@ def _build_report(probe: dict) -> BenchmarkReport:
             f"superset_ok={superset_ok} (breaks={len(breaks)}, f1={len(f1)}, f20={len(f20)}).",
         )
 
+    # --- cross_batch_knowledge: separate batches' output lands in ONE shared
+    # graph, each piece still traceable to its origin TASK (§5's "CB2 (full)"
+    # cross-batch claim — the half that does NOT need the symbol tier) ---
+    cb = probe["cross_batch"]
+    cb_write, cb_task_ids, cb_fact_ids, cb_edges_of = (
+        cb["write"], cb["task_ids"], cb["fact_ids"], cb["edges_of_task"])
+    write_ok = not cb_write.degraded and len(cb_write.nodes) == 4 and len(cb_write.edges) == 2
+    traceable_ok = all(
+        len(edges.edges) == 1
+        and edges.edges[0].src_id == fid
+        and edges.edges[0].dst_id == tid
+        for edges, fid, tid in zip(cb_edges_of, cb_fact_ids, cb_task_ids)
+    )
+    if write_ok and traceable_ok:
+        report.add_requirement(
+            "cross_batch_knowledge", "Hold cross-batch knowledge in one shared graph", Verdict.PASS,
+            "two synthetic TASK nodes (standing in for two different batches) each "
+            "got their own FACT node DERIVED_FROM it, written through the same "
+            "GraphManager.write() call — both land in the SAME shared graph, and "
+            "each is still traceable back to its own origin TASK via edges_of(). "
+            "This is the port-level proof of the file-level-independent half of "
+            "'full cross-batch knowledge'; the code-symbol-tier half (§3.3, "
+            "function/struct-level nodes) is separately scored NOT-YET below.",
+            (f"task_ids = {cb_task_ids}", f"fact_ids = {cb_fact_ids}",
+             f"DERIVED_FROM(task_a) -> {[e.src_id for e in cb_edges_of[0].edges]}",
+             f"DERIVED_FROM(task_b) -> {[e.src_id for e in cb_edges_of[1].edges]}"),
+        )
+    else:
+        report.add_requirement(
+            "cross_batch_knowledge", "Hold cross-batch knowledge in one shared graph", Verdict.FAIL,
+            f"cross-batch write/read-back did not hold: write_ok={write_ok} "
+            f"(degraded={cb_write.degraded}, nodes={len(cb_write.nodes)}, "
+            f"edges={len(cb_write.edges)}), traceable_ok={traceable_ok}.",
+        )
+
     # --- architectural_explanations: honest, explicit NOT-YET ---
     report.add_requirement(
         "architectural_explanations", "Provide architectural explanations", Verdict.NOT_YET,
@@ -265,6 +363,8 @@ def _build_report(probe: dict) -> BenchmarkReport:
     report.add_case("breaks_if_removed:store.py", "recalled", f"{len(breaks)} files")
     report.add_case("dependents_of:foundation (hops=1)", "recalled", f"{len(f1)} files")
     report.add_case("dependents_of:foundation (hops=20)", "recalled", f"{len(f20)} files")
+    report.add_case("cross_batch:DERIVED_FROM(2 tasks)", "recalled",
+                     f"{len(cb_fact_ids)} facts, each traced back to its own task")
 
     report.add_note(
         "scenario: Clannon's own real backend/ tree (not a synthetic fixture) — "
@@ -286,6 +386,13 @@ def _build_report(probe: dict) -> BenchmarkReport:
         "file-level granularity only (no per-symbol/function-level nodes) and "
         "Python-only (the ast extractor does not walk the TypeScript frontend) — "
         "the same honest limits scripts/cb2_repo_intelligence_demo.py documents.")
+    report.add_note(
+        "'CB2 (full)' per the ratified knowledge-web design (§5) also needs "
+        "symbol-granularity traversal (function/struct-level, not just file-level) "
+        "— that's the code-symbol tier (§3.3), a cross-tree dependency on "
+        "orchestration's extractor, NOT built here. cross_batch_knowledge above "
+        "proves the OTHER half of 'full' (shared-graph, multi-batch traceability) "
+        "that doesn't need it.")
     report.add_note("serves Critical Benchmark 2 (Large Repository Understanding), thin slice.")
 
     return report
@@ -314,7 +421,8 @@ def test_c2_repo_intelligence_probe():
         "a genuine defect was found, not just an honest gap:\n" + report.render()
     )
     by_key = {r.key: r for r in report.requirements}
-    for key in ("navigate", "trace_dependencies", "follow_relationships", "avoid_single_prompt"):
+    for key in ("navigate", "trace_dependencies", "follow_relationships",
+                "cross_batch_knowledge", "avoid_single_prompt"):
         assert by_key[key].verdict is Verdict.PASS, "\n" + report.render()
     assert by_key["architectural_explanations"].verdict is Verdict.NOT_YET, "\n" + report.render()
 
@@ -337,7 +445,7 @@ def test_report_renders_structured_block(capsys):
     assert "BENCHMARK C2" in captured
     assert "OVERALL:" in captured
     for key in ("navigate", "trace_dependencies", "follow_relationships",
-                "architectural_explanations", "avoid_single_prompt"):
+                "cross_batch_knowledge", "architectural_explanations", "avoid_single_prompt"):
         assert key in captured
 
 

@@ -168,10 +168,7 @@ _BENCHMARKS: list[tuple[str, str, object]] = [
     (
         "E3",
         "Cross-Media Knowledge Synthesis",
-        lambda: (
-            "NOT-MEASURED",
-            "no harness; ADR 0005 PROPOSED, gated on C3 convergence",
-        ),
+        lambda: _run_standard("eb3_cross_media_synthesis"),
     ),
 ]
 
