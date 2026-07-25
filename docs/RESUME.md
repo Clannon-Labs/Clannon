@@ -92,11 +92,11 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
     §3-§5 gated on the archive track. Batch-loader-ceiling + archive-extraction also queued.
   - **Security:** all reviews + the archive-upload half DONE. Standby reviewer (mission-wiring tools +
     archive-extraction come to it next); optionally building a no-bypass invariant grep-gate meanwhile.
-- **Backend's (my) own queue:** the **`retry.py` enforcement anchor** — DESIGN LOCKED (full spec +
-  security resolutions + the model-rate + the read-mission_id-fresh-per-call correction in
-  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`). GATED on orchestration's mission-wiring landing the
-  `ctx.mission_id` seam (the anchor reads it fresh per-LLM-call in `framework.py` — NOT a set-once mirror,
-  per orchestration's pydantic-ai-concurrency finding). Data plane (spend+seed) done; ENABLING gated on
+- **Backend's (my) own queue:** the **`retry.py` enforcement anchor** — DESIGN LOCKED (full spec in
+  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`) and **NOW UNBLOCKED** — orchestration's mission-wiring
+  landed (`01e0625`/`d29f76e`): `ctx.mission_id` is set in loop.py's `_sync_mission_state`, and
+  `Ports.budget=UnlimitedBudget` is the one-line swap seam for the real broker. **THIS IS THE NEXT BUILD:**
+  the anchor reads ctx.mission_id fresh per-LLM-call in `framework.py`, behind an OFF flag. Data plane (spend+seed) done; ENABLING gated on
   real prices (owner) + prod seeding. Also queued: the µ$ **rename** of `BudgetPort`/`TokenBudget`
   (coordinate — orchestration consumes `TokenBudget` in `mission.py`, so AFTER its mission-wiring lands);
   the config long-tail (ORCHESTRATOR_*/EXPERT_*/TOOL_* removal — test-ref repoints, edit atomically; D11;
