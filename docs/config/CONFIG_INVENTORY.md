@@ -1,8 +1,17 @@
 # Central `config/` — Phase 1 Discovery: Inventory + Proposed Layout
 
-**Status: D1–D6 RULED by the owner (2026-07-05) — Phase 3 IN PROGRESS.** The rulings are
-recorded in `reports/DECISIONS_FOR_OWNER.md`. Layout below is approved. Externalization is
-proceeding one area per commit, behavior-preserving (each default equals today's value):
+**Status: D1–D12 RULED — Phase 3 well advanced.** Rulings in `reports/DECISIONS_FOR_OWNER.md`.
+
+> ⚠️ **The per-item lists below are partially STALE (last full sweep 2026-07-06).** Many are DONE
+> since: `VERIFIER_*`, `FILTER_MAX_RETRIES`, `SANITIZER_*`, intake `RATE_LIMIT_*` and
+> `MAX_INPUT_SIZE_BYTES` are all removed from `foundation/vocab/constants.py` and single-sourced in
+> `config/backend/*.yaml`; D10 (usage-metering window) + the D8 archive bomb-guard floors
+> (`settings.SECURITY.archive_*`) are placed. **For the authoritative "done vs. next" config state,
+> read `docs/RESUME.md`'s snapshot (kept current), NOT the per-item lists here** — this file stays
+> useful as the DISCOVERY map (where each tunable lives), but cross-check done-status against RESUME.
+
+The layout below is approved. Externalization proceeds one area per commit, behavior-preserving
+(each default equals today's value):
 - ✅ **budget** — `config/backend/budget.yaml` + the typed loader `backend/settings.py`
   (`SPEND_CEILING_FRACTION=0.80` single-source per D2, + the api/ history-budget knobs).
 - ⏳ next: fold the premature `backend/config/business.yaml` into `tiers.yaml`/`models.yaml`
