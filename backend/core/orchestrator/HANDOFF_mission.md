@@ -3,6 +3,49 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-25) — the first concrete batch: engineering (CB2), proven end-to-end
+
+Design ratified same-session (`proposals/archive/to-backend/2026-07-25_
+engineering-batch-design.md`); built + proven, commit `dfaec88`. `backend/
+batches.yaml` (one entry, `engineering`: `code.engineer`, tools `fs.read/
+fs.write/code.run`, grants `READ/WRITE/EXECUTE`) + `registry/config/batches.py`
+(fail-closed loader, mirrors `models.py`) + `wiring.py`'s one-line
+`batch_registry=load_batches()` — `has_batches` is `True` in production now;
+`spawn_batch` is live on the central orchestrator's tool list.
+
+**Real, non-obvious trap found while building (not by a failing test):**
+a batch's `tool_keys` must name every tool its member experts individually
+need — `ExpertHandler._toolbox_for()` INTERSECTS the batch's tool scope
+against each expert's own requested tools, so an omitted tool silently
+strips it from the expert too, even though the batch's own top-level model
+never sees workspace tools directly (`run_turn` filters `wants_workspace`
+tools out at every tier). Full trace: `capability.py:130` (the filter) →
+`experts.py:200` (`_toolbox_for`'s intersection) → `tools.py:60`
+(`scoped()`'s compose-never-widen docstring).
+
+**Proof:** `tests/orchestrator_engineering_batch.py`, 3 tests, real registry
++ real `batches.yaml` + real `code.engineer` (not fakes) — central → `spawn_
+batch` → the batch's own scoped turn → the expert → a real `fs.write` against
+a real workspace, plus a fault-path proving `FAILED` records without
+crashing the central turn. `think()` has no `model=` override (unlike
+`run_turn`), so `core.llm.framework.model_for_layer` is patched per-test to
+reach that third tier — a test-infra gap worth a small deliberate follow-up
+if a future expert-level test needs the same reach, not bundled in here.
+
+**Explicit, not silent (ratified design §6):** this proves the batch
+MECHANISM, not CB2's actual large-repo target — `code.engineer` still has
+only whole-file tools (no AST search, dep-graph traversal, patch-apply).
+Fast-follow, now unblocked to propose: those tools, each needing its own
+decomposition-test pass, plus the prerequisite "how does a large repo enter
+the ephemeral no-network `WorkspacePort` at all" design question underneath
+them. Full detail: `reports/orchestration/report_v36.md`.
+
+**Resume: security is reviewing the ratified design's grants/scoping in
+parallel (backend's note) — fold in anything it flags before proposing a
+second batch.** Otherwise nothing blocking; the natural next items are (a)
+the nav/patch-apply tooling fast-follow, or (b) a second batch (e.g.
+research) once backend/owner prioritize it.
+
 ## RESUMED (2026-07-25) — engineering-batch design filed, awaiting ratification
 
 Pause lifted (`proposals/to-orchestration/2026-07-25_RESUME-concrete-batch-
