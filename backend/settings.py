@@ -399,6 +399,16 @@ _FILTER_GROUNDING_FLOORS: dict[str, int] = {
 }
 _FILTER_GROUNDING_CEILINGS: dict[str, int] = {k: v * 4 for k, v in _FILTER_GROUNDING_FLOORS.items()}
 
+# D8 archive-upload bomb-guard ceilings (security review 2026-07-25) — Python constants, NEVER
+# YAML-overridable past these. Config may only LOWER a bomb guard (tighter); a config edit that
+# RAISES one past its ceiling (looser = more bomb surface) fails loud at load. These are the
+# SAFE MAXIMA; the archive-extraction enforcement lives in orchestration's _seed_inputs but reads
+# these floors, never its own constants (same cross-tree floor pattern as sanitizer_*/filter_*).
+_ARCHIVE_CEILINGS: dict[str, int] = {
+    "archive_max_entries": 10000,             # max members in an accepted repo zip
+    "archive_max_uncompressed_ratio": 20,     # max uncompressed:compressed ratio (zip-bomb heuristic)
+}
+
 
 class SecurityConfig(BaseModel):
     """Security-authorization policy (`config/backend/security.yaml`). BACKEND-CONTROLLED and
@@ -430,6 +440,10 @@ class SecurityConfig(BaseModel):
     filter_grounding_max_finding_chars: int = Field(gt=0)
     filter_grounding_max_tool_calls: int = Field(gt=0)
     filter_grounding_max_tool_result_chars: int = Field(gt=0)
+    # Archive-upload bomb guards — D8 CEILINGED (config may only LOWER, never raise past = loosen).
+    # Per-member size cap reuses INTAKE.max_input_size_bytes (no separate field — one number, no drift).
+    archive_max_entries: int = Field(gt=0)
+    archive_max_uncompressed_ratio: int = Field(gt=0)
 
     @model_validator(mode="after")
     def _pii_entities_meet_floor(self) -> "SecurityConfig":
@@ -475,6 +489,17 @@ class SecurityConfig(BaseModel):
                 raise ValueError(
                     f"{field}={getattr(self, field)} exceeds the hard sandbox ceiling {ceiling} "
                     "(docket D8) — config may only TIGHTEN the sandbox, never grant it more"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _archive_caps_within_ceilings(self) -> "SecurityConfig":
+        for field, ceiling in _ARCHIVE_CEILINGS.items():
+            if getattr(self, field) > ceiling:
+                raise ValueError(
+                    f"{field}={getattr(self, field)} exceeds the hard archive ceiling {ceiling} "
+                    "(docket D8, security review 2026-07-25) — config may only TIGHTEN a bomb "
+                    "guard, never loosen it"
                 )
         return self
 

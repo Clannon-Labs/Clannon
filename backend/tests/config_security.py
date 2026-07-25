@@ -31,6 +31,7 @@ def _kw(**over):
         ],
         filter_grounding_max_findings=8, filter_grounding_max_finding_chars=1500,
         filter_grounding_max_tool_calls=12, filter_grounding_max_tool_result_chars=1200,
+        archive_max_entries=10000, archive_max_uncompressed_ratio=20,
     )
     return {**base, **over}
 
@@ -130,3 +131,14 @@ def test_sandbox_config_can_never_loosen_past_the_ceiling(looser):
 def test_ops_timeouts_have_no_ceiling(ops):
     # These bound our own wait on the docker CLI, not the workload — no security direction.
     SecurityConfig(**_kw(**ops))
+
+
+def test_archive_bomb_guards_may_tighten_but_not_loosen_past_ceiling():
+    # D8 (security review 2026-07-25): config may LOWER a bomb guard (tighter), never RAISE it past
+    # the ceiling (looser = more bomb surface).
+    SecurityConfig(**_kw(archive_max_entries=5000))      # tighter — ok
+    SecurityConfig(**_kw(archive_max_entries=10000))     # at ceiling — ok
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(archive_max_entries=20000))            # loosen past ceiling — rejected
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(archive_max_uncompressed_ratio=100))   # loosen past ceiling — rejected

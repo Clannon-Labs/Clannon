@@ -66,3 +66,10 @@ filter_grounding_max_findings: 8            # floor 8, ceiling 32
 filter_grounding_max_finding_chars: 1500    # floor 1500, ceiling 6000
 filter_grounding_max_tool_calls: 12         # floor 12, ceiling 48
 filter_grounding_max_tool_result_chars: 1200 # floor 1200, ceiling 4800
+
+# ── ARCHIVE UPLOAD BOMB GUARDS (D8, CEILINGED) — security review 2026-07-25. Caps on an accepted
+# repo zip (CB2 real-repo track) so a decompression bomb can't be admitted or extracted. Config may
+# only LOWER these (tighter); raising past the ceiling fails loud. Per-member size cap reuses
+# max_input_size_bytes (one number, no drift). Enforced in orchestration's _seed_inputs, floor set here.
+archive_max_entries: 10000            # ceiling 10000 — max members in a repo zip
+archive_max_uncompressed_ratio: 20    # ceiling 20 — max uncompressed:compressed ratio (zip-bomb heuristic)
