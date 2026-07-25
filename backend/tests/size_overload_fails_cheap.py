@@ -3,7 +3,7 @@ Hermetic resilience test: oversized inputs fail at the cheap guard.
 
 Two size caps from foundation/vocab/constants.py:
 
-1. MAX_INPUT_SIZE_BYTES (50 MB, INTAKE)
+1. settings.INTAKE.max_input_size_bytes (50 MB, INTAKE)
    Any payload exceeding this cap is blocked at intake — the first and cheapest
    pipeline stage — before any sanitizer, verifier, normalizer, or orchestrator
    runs. The end-to-end chain test (test_oversize_rejected_before_any_paid_stage_
@@ -81,12 +81,12 @@ def _reset_rate_limiters():
 
 
 # ---------------------------------------------------------------------------
-# MAX_INPUT_SIZE_BYTES — rejected at intake, no model call
+# settings.INTAKE.max_input_size_bytes — rejected at intake, no model call
 # ---------------------------------------------------------------------------
 
 class TestMaxInputSizeBytes:
     """
-    A payload exceeding MAX_INPUT_SIZE_BYTES (50 MB) must be blocked at the
+    A payload exceeding settings.INTAKE.max_input_size_bytes (50 MB) must be blocked at the
     intake stage before any sanitizer, verifier, or orchestrator stage runs.
     """
 
@@ -153,7 +153,7 @@ class TestMaxInputSizeBytes:
 
     def test_boundary_exactly_at_limit_passes_intake(self):
         """
-        A text payload of exactly MAX_INPUT_SIZE_BYTES bytes must NOT be blocked.
+        A text payload of exactly settings.INTAKE.max_input_size_bytes bytes must NOT be blocked.
         The intake check is strict (>), so exactly-at-limit is allowed through.
         Binary blobs of this size are not tested here: libmagic may reject unknown
         MIME types for uniform-byte buffers, which is expected modality-check

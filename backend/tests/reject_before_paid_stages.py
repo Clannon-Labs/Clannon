@@ -151,7 +151,7 @@ def _run(payload, *, session_id="s", user_id="u"):
 # ---------------------------------------------------------------------------
 
 def test_oversize_blocked_before_paid_stages(seam_counter):
-    """Input exceeding MAX_INPUT_SIZE_BYTES is blocked at intake; seam never reached."""
+    """Input exceeding settings.INTAKE.max_input_size_bytes is blocked at intake; seam never reached."""
     big = "x" * (settings.INTAKE.max_input_size_bytes + 1)
     out = _run(big, session_id="s-oversize")
 

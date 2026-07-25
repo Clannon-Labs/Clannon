@@ -330,7 +330,7 @@ def test_orchestrator_output_token_cap_is_configured():
 
 def test_verifier_request_limit_matches_retry_budget():
     """
-    Verifier request_limit = VERIFIER_MAX_RETRIES + 1 (same pattern as in
+    Verifier request_limit = settings.VERIFIER.max_retries + 1 (same pattern as in
     tests/verifier.py — included here to confirm the budget guard pattern holds
     across all LLM stages, not just the orchestrator).
     """
