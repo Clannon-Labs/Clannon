@@ -95,20 +95,14 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
   `pricing.yaml` + infra knobs are PLACEHOLDER; the loader is fail-closed so an un-priced model blocks
   rather than leaks (safe until set).
 
-## Known issues (flagged, NOT yet fixed — address on resume)
+## Known issues
 
-- **`graph_store._traverse` exponential blowup + a Kuzu crash in the obvious fix (HIGH, 2026-07-06).**
-  The CB2 traversal query `[:IMPORTS*1..N]` enumerates every WALK (not reachable-node set) on the
-  now-cyclic `backend/` import graph (316 nodes / 1073 edges) → hangs past ~hops=16, **exceeds 2 min
-  at `MAX_HOPS_CEILING=20`**. Pre-existing phase-1 bug, surfaced by the graph growing; matters for
-  CB2's real target (large repos). The `ALL SHORTEST` fix is correct + fast (0.012s) but **SEGFAULTS
-  Kuzu on a zero-edge node** (core-dumps the process) — reverted, not shipped; plain `SHORTEST`
-  untested against the crash. **The one hanging test is SKIPPED with this reason**
-  (`tests/memory_graph_manager.py:83`) so the suite stays green + non-hanging — un-skip it as the
-  fix's regression gate. A real fix needs deliberate red-teaming of degenerate shapes
-  (zero-edge / self-loop / disconnected scope) + a Kuzu-version check, NOT a quick patch. Full
-  evidence + crash repro: `proposals/to-backend/2026-07-06_traversal-blowup-and-crash-flag.md`.
-  Owner: `core/memory/` (memory specialist), backend coordinates the cross-cutting review.
+- **RESOLVED (2026-07-25) — `graph_store._traverse` exponential blowup.** Memory replaced the
+  variable-length Cypher `[:IMPORTS*1..N]` (which enumerated every walk on the cyclic import graph →
+  2+ min at `MAX_HOPS_CEILING`) with a **bounded in-Python BFS over fixed 1-hop MATCH queries**
+  (`1e81903`) — no walk-enumeration blowup, no `ALL SHORTEST`-style crash surface by construction,
+  red-teamed against the zero-edge segfault shape. The previously-skipped
+  `tests/memory_graph_manager.py:83` is un-skipped and runs in ~7s. No open known issues.
 
 ## Ground truth locations
 Mission: `docs/benchmarks/mission/` + `docs/benchmarks/V1_GAP_ANALYSIS.md`. Architecture:
