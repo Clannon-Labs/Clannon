@@ -79,7 +79,7 @@ def test_engineering_batch_config_loads_and_activates_spawn_batch():
     assert "engineering" in caps._batches._batch_registry
     definition = caps._batches._batch_registry["engineering"]
     assert definition.expert_keys == frozenset({"code.engineer"})
-    assert definition.tool_keys == frozenset({"fs.read", "fs.write", "code.run"})
+    assert definition.tool_keys == frozenset({"fs.read", "fs.write", "fs.patch", "code.run"})
 
 
 def test_engineering_batch_end_to_end_spawns_runs_code_engineer_records_awareness():
@@ -200,3 +200,73 @@ def test_engineering_batch_records_failed_on_a_real_model_fault_and_central_stil
     assert result.answer_text == "batch failed, reporting"      # the central turn survives
     assert ctx.batch_findings == []                              # no findings buffered on failure
     assert awareness.statuses == [BatchLifecycleStatus.ACTIVE, BatchLifecycleStatus.FAILED]
+
+
+def test_engineering_batch_code_engineer_reads_a_slice_and_patches_it():
+    """The nav/patch-tooling design's acceptance criterion: code.engineer can read
+    a precise line range and patch it, inside the batch, through the real registry
+    -- not just fs.write from scratch. Seeds a file directly onto the real
+    DockerWorkspace via fs.write first (call 3), then reads a range of it (call 4)
+    and patches that range (call 5), proving fs.read/fs.patch are both actually
+    granted inside the engineering batch (present in batches.yaml's tool_keys)."""
+    ctx = _ctx()
+    awareness = _FakeAwareness()
+    caps = _caps(ctx, awareness)
+    calls = {"n": 0}
+
+    def spy(messages, info):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            tool = next(t for t in info.function_tools if t.name == "spawn_batch")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"batch_key": "engineering", "task": "fix line 2 of a.py"},
+            )])
+        if calls["n"] == 2:
+            tool = next(t for t in info.function_tools if t.name == "code_engineer")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"prompt": "fix line 2 of a.py"},
+            )])
+        if calls["n"] == 3:
+            tool = next(t for t in info.function_tools if t.name == "fs_write")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"path": "a.py", "content": "one\ntwo\nthree\n"},
+            )])
+        if calls["n"] == 4:
+            tool = next(t for t in info.function_tools if t.name == "fs_read")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"path": "a.py", "start_line": 2, "end_line": 2},
+            )])
+        if calls["n"] == 5:
+            tool = next(t for t in info.function_tools if t.name == "fs_patch")
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=tool.name, args={"path": "a.py", "start_line": 2, "end_line": 2, "replacement": "TWO"},
+            )])
+        if calls["n"] == 6:
+            out = info.output_tools[0]
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=out.name, args={"summary": "patched line 2", "full_content": "patched a.py", "confidence": 0.85},
+            )])
+        if calls["n"] == 7:
+            out = info.output_tools[0]
+            return ModelResponse(parts=[ToolCallPart(
+                tool_name=out.name, args={"answer_text": "patched a.py", "confidence": 0.8},
+            )])
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name, args={"answer_text": "done: a.py patched", "confidence": 0.9},
+        )])
+
+    model = FunctionModel(spy)
+    with patch("core.llm.framework.model_for_layer", return_value=model):
+        result = asyncio.run(caps.run_turn(
+            system_prompt="orchestrate", user_prompt="engineering task", output_type=OrchestratorAnswer,
+            model=model,
+        ))
+
+    assert result.answer_text == "done: a.py patched"
+    read_calls = [r for r in ctx.tool_calls if r.tool_name == "fs.read"]
+    patch_calls = [r for r in ctx.tool_calls if r.tool_name == "fs.patch"]
+    assert len(read_calls) == 1 and read_calls[0].success
+    assert "two" in read_calls[0].result["content"]
+    assert len(patch_calls) == 1 and patch_calls[0].success and patch_calls[0].result["ok"] is True
+    assert awareness.statuses == [BatchLifecycleStatus.ACTIVE, BatchLifecycleStatus.DONE]

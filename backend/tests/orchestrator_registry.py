@@ -149,6 +149,7 @@ _EXPECTED_TOOL_PERMISSION: dict[str, PermissionLevel] = {
     "code.run": PermissionLevel.EXECUTE,
     "fs.read": PermissionLevel.READ,
     "fs.write": PermissionLevel.WRITE,
+    "fs.patch": PermissionLevel.WRITE,
 }
 
 
