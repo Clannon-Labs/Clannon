@@ -3,6 +3,37 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## RESUMED (2026-07-25) — engineering-batch design filed, awaiting ratification
+
+Pause lifted (`proposals/to-orchestration/2026-07-25_RESUME-concrete-batch-
+UNPARKED.md`). Re-verified the PAUSED research below against current repo state
+before acting on it — nothing drifted in `core/orchestrator/`, `registry/`,
+`experts/`, `tools/` in the 2.5 weeks since (confirmed via `git log
+1b30a1e..HEAD` scoped to those paths: only the pause-handoff commit itself and
+one unrelated foundation-constant removal). Filed the design proposal:
+`proposals/to-backend/2026-07-25_engineering-batch-design.md` — resolves the
+open decision below (ship v1 on `code.engineer`'s current tools, fast-follow
+the heavy nav/patch tools separately) and flags two corrections found while
+re-tracing the actual code rather than trusting the wake messages' paraphrase:
+(1) `config/` consolidated to a single `business.yaml` since this was last
+discussed — a `batches.yaml`-equivalent belongs beside `models.yaml`
+(`backend/batches.yaml` + `registry/config/batches.py`), not under
+`config/backend/`; (2) `BatchDefinition` has no `model_role` field and
+`Capabilities.run_turn` hardcodes the `"orchestrator"` role at every tier
+today — proposed v1 ships without a per-batch override.
+
+**Also traced one non-obvious correctness point the design proposal spells
+out in full** (`Capabilities.scoped_to()` → `ExpertHandler._toolbox_for()`):
+a batch's `tool_keys` must include every tool its member experts individually
+need (not just what the batch's own top-level model calls directly), because
+the expert's own toolbox is built by INTERSECTING the batch's tool scope
+against the expert's requested tools — an engineering batch that omitted
+`fs.read`/`fs.write`/`code.run` from `tool_keys` would silently hand
+`code.engineer` an empty toolbox inside the batch.
+
+**Resume: waiting on backend's ratification** (file location call + model_role
+call) before building. Nothing else pending.
+
 ## PAUSED (backend-agent, weekly limits) — clean stop, 2026-07-06
 
 **Tree state: clean.** `git status` empty, `HEAD` == `origin/main` (0 ahead,
