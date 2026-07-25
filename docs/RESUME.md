@@ -81,10 +81,15 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
     pass + one-batch-end-to-end proof. Then Mission-Engine loop-wiring (sets `ctx.mission_id`).
   - **Security** (`backend/security/HANDOFF.md`): CB5 + config-wire + 2 reviews done; standby invariant
     reviewer — orchestration's batch design comes to it for a sole-broker/scoping review when it lands.
-- **Backend's (my) own queue:** the **`retry.py` budget-enforcement anchor** (reserve-before/reconcile-after
-  each LLM call) — GATED on budget **seeding + reset-behind-interface** (Stripe deferred) not yet built; the
-  honest µ$ **rename** of `BudgetPort`/`TokenBudget` (fields hold µ$ but read "tokens" — coordinate with
-  orchestration, it consumes `TokenBudget` in `mission.py`); the config long-tail above.
+- **Backend's (my) own queue:** the **`retry.py` budget-enforcement anchor** — **DESIGN LOCKED,
+  ready to build**, full spec + security-review resolutions + the model-rate resolution in
+  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`. Build behind an OFF flag (inert until enabled).
+  Budget **seeding is now BUILT** (`core/budget/seed.py`, security-hardened) — so the anchor's data
+  plane is done; enabling enforcement is gated on real prices (owner) + prod seeding + the
+  mission_id-source wiring (orchestration). Also queued: the honest µ$ **rename** of
+  `BudgetPort`/`TokenBudget` (coordinate with orchestration — it consumes `TokenBudget` in
+  `mission.py`); the config long-tail (VERIFIER_* + ORCHESTRATOR_*/EXPERT_*/TOOL_* constant removals,
+  both blocked only on repointing a few TEST refs; D11 resilience.yaml; models.yaml→config/).
 - **Owner decisions pending** (`reports/DECISIONS_FOR_OWNER.md`): (1) OOM norm — my rec is the lightweight
   norm above (no action needed); (2) **budget go-live needs real per-model prices + infra values** —
   `pricing.yaml` + infra knobs are PLACEHOLDER; the loader is fail-closed so an un-priced model blocks
