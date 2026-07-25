@@ -3,16 +3,27 @@ expert workspace. Policy: block the genuinely malicious, seed the ORIGINAL bytes
 (never redact a clean file)."""
 
 import asyncio
+import io
+import zipfile
 from types import SimpleNamespace as NS
 
 import pytest
 
+import settings
 from foundation import InputFile, ThreatLevel, VrakshaContext
 from registry.capabilities.handler.experts import ExpertHandler
 from registry.capabilities.handler.sandbox import DockerWorkspace
 from registry.capabilities.handler.support import ExpertEnv, SkillBook
 from security.sanitizers import uploads
 from core.orchestrator.utils.prompt import build_user_prompt
+
+
+def _zip_bytes(members: dict[str, bytes], compression=zipfile.ZIP_DEFLATED) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression) as zf:
+        for name, content in members.items():
+            zf.writestr(name, content)
+    return buf.getvalue()
 
 
 def _clean(monkeypatch):
@@ -52,8 +63,11 @@ def test_rejects_empty_and_oversized(monkeypatch):
 
 def test_rejects_unsupported_binary_type(monkeypatch):
     _clean(monkeypatch)
-    zip_bytes = b"PK\x03\x04" + b"\x00" * 64        # sniffs as application/zip — out of scope
-    item, reason = asyncio.run(uploads.scan_upload("bundle.zip", zip_bytes))
+    # starts with the zip local-file-header signature but isn't a real zip structure
+    # (no central directory/EOCD) -- neither sniffs as a known modality nor passes
+    # zipfile.is_zipfile, so it stays genuinely out of scope, not just "a bad zip"
+    junk = b"PK\x03\x04" + b"\x00" * 64
+    item, reason = asyncio.run(uploads.scan_upload("bundle.bin", junk))
     assert item is None and "unsupported" in reason
 
 
@@ -77,6 +91,64 @@ def test_admits_video_with_original_bytes(monkeypatch):
     mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"   # sniffs as video/mp4
     item, reason = asyncio.run(uploads.scan_upload("clip.mp4", mp4))
     assert reason is None and item.modality == "video" and item.data == mp4
+
+
+def test_admits_clean_archive_with_original_bytes(monkeypatch):
+    _clean(monkeypatch)
+    data = _zip_bytes({"src/main.py": "print('hi')\n", "README.md": "# repo\n"})
+    item, reason = asyncio.run(uploads.scan_upload("repo.zip", data))
+    assert reason is None
+    assert item.modality == "archive" and item.data == data   # original bytes, untouched
+
+
+def test_rejects_corrupt_or_incomplete_zip(monkeypatch):
+    _clean(monkeypatch)
+    # a real zip's local-file-header prefix with no central directory/EOCD -- sniffs
+    # via the raw signature but fails the zipfile.is_zipfile confirmation, so it never
+    # becomes modality "archive" (never reaches the bomb pre-check at all)
+    data = _zip_bytes({"a.txt": "hello"})
+    truncated = data[: len(data) // 2]
+    item, reason = asyncio.run(uploads.scan_upload("bad.zip", truncated))
+    assert item is None and "unsupported" in reason
+
+
+def test_archive_rejects_when_entry_count_exceeds_the_floor(monkeypatch):
+    _clean(monkeypatch)
+    tight = settings.SECURITY.model_copy(update={"archive_max_entries": 1})
+    monkeypatch.setattr(uploads.settings, "SECURITY", tight)
+    data = _zip_bytes({"a.txt": "one", "b.txt": "two"})
+    item, reason = asyncio.run(uploads.scan_upload("repo.zip", data))
+    assert item is None and "entries" in reason
+
+
+def test_archive_rejects_a_decompression_bomb_by_ratio(monkeypatch):
+    _clean(monkeypatch)
+    # a highly-compressible member: large declared uncompressed size, tiny compressed
+    # bytes -- exactly the zip-bomb shape the ratio guard exists to catch
+    data = _zip_bytes({"huge.bin": b"\x00" * 5_000_000})
+    tight = settings.SECURITY.model_copy(update={"archive_max_uncompressed_ratio": 5})
+    monkeypatch.setattr(uploads.settings, "SECURITY", tight)
+    item, reason = asyncio.run(uploads.scan_upload("bomb.zip", data))
+    assert item is None and "ratio" in reason
+
+
+def test_archive_within_the_real_shipped_floors_is_admitted(monkeypatch):
+    # proves the real, unmodified settings.SECURITY.archive_* floors (not a test
+    # override) admit an ordinary small repo -- the floors aren't accidentally so
+    # tight they reject a normal upload
+    _clean(monkeypatch)
+    data = _zip_bytes({f"src/file_{i}.py": "def f():\n    return 1\n" for i in range(20)})
+    item, reason = asyncio.run(uploads.scan_upload("repo.zip", data))
+    assert reason is None and item.modality == "archive"
+
+
+def test_archive_still_goes_through_the_malware_pregate(monkeypatch):
+    async def fake_run(data):
+        return NS(threat_level=ThreatLevel.HIGH, reason="ClamAV: Eicar-Test-Signature")
+    monkeypatch.setattr("security.sanitizers.pre_sanitization.run", fake_run)
+    data = _zip_bytes({"a.txt": "hello"})
+    item, reason = asyncio.run(uploads.scan_upload("repo.zip", data))
+    assert item is None and "security scan" in reason
 
 
 def test_blocks_malicious_content(monkeypatch):
