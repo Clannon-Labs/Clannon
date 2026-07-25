@@ -25,6 +25,7 @@ def test_budget_values_match_the_previous_hardcoded_defaults():
     # WHERE the value lives, never WHAT it is.
     assert settings.BUDGET.history_char_budget == 200_000
     assert settings.BUDGET.verbatim_turn_floor == 2
+    assert settings.BUDGET.usage_metering_window_days == 30   # D10: was hardcoded window=30 in app.py
 
 
 def test_spend_ceiling_is_the_ruled_default():

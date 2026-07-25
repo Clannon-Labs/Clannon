@@ -25,6 +25,7 @@ load_dotenv(".env")
 load_dotenv(".env.local", override=True)
 
 from observability import configure_logging
+import settings
 
 # Route every run's traces (module logs, provider HTTP, warnings, decision log)
 # to the one unified file, exactly like the CLI — before the pipeline imports below.
@@ -686,7 +687,7 @@ def usage(user: auth.User = Depends(auth.current_user)) -> dict:
     separately; this is the read-only view the sidebar meter and Settings render."""
     plan = next((p for p in config.PLANS if p["id"] == user.plan), config.PLANS[0])
     today = datetime.now(timezone.utc).date()
-    window = 30
+    window = settings.BUDGET.usage_metering_window_days   # D10: trailing window from config
     start = today - timedelta(days=window - 1)
     by_day = {(start + timedelta(days=i)).isoformat(): 0 for i in range(window)}
     for r in runs.STORE.list_for(user.id):
