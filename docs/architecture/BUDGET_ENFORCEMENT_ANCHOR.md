@@ -29,12 +29,19 @@ Reserve-once-outside-loop + `settled` + `finally` = no per-attempt leak, no doub
 (security review §1, confirmed sound). Reconcile is idempotent, so `finally` can't double-settle.
 
 ## Security review resolutions (all accepted — see archived anchor-review)
-- **#2 mission_id read LIVE per-call (the critical one).** Build `BudgetScope` at EACH reserve
-  from the live current identity — `user_id` from a set-once source (authenticated api/ entry) +
-  `mission_id` read LIVE (a ContextVar mirrored from `ctx.mission_id` at mission-start, never
-  cached at entry). A turn that becomes a mission mid-flight must NOT carry `mission_id=""` for the
-  rest of the mission — that would silently skip the mission safety cap. Coordinate the mission_id
-  source with orchestration (mission-start sets the ContextVar) so it can't be stale by construction.
+- **#2 mission_id read LIVE per-call (the critical one) — REFINED by orchestration's mission-wiring
+  review 2026-07-25.** Build `BudgetScope` at EACH reserve from the live current identity — `user_id`
+  from a set-once source (authenticated api/ entry) + `mission_id` read LIVE. **Do NOT use a
+  set-once ContextVar mirror**: pydantic-ai runs tool calls (and `run_experts` its experts)
+  concurrently via `asyncio.gather`/`create_task`, which COPY the context at task creation — a
+  `.set()` done inside one child task (e.g. a `start_mission` tool wrapper) is NOT visible to
+  sibling/later tasks in the same turn, reintroducing exactly this staleness from a different
+  mechanism. Instead read `ctx.mission_id` FRESH per-LLM-call in `core/llm/framework.py`'s
+  `run_structured`/`build_agent` path (via `deps.ctx.mission_id`, the same place `budget_layer` is
+  set), building the scope right before each `run_agent`. The ctx is the live source of truth
+  (orchestration's loop.py + `start_mission` set `ctx.mission_id`); the anchor reads it per-call.
+  A turn that becomes a mission mid-flight is enforced from the first call its `mission_id` is set,
+  regardless of pydantic-ai's concurrency — no separate mirror ContextVar needed.
 - **#4 loud skip when enforced-but-unscoped.** `enforcement_enabled=True` + `budget_scope is None`
   → log at ERROR (a wiring bug must be visible in prod, never silently unbilled), then skip. An
   intentional internal/CLI unscoped call uses an EXPLICIT opt-out marker (a `budget_exempt`
