@@ -94,7 +94,19 @@ def test_message_history_caching_scoped_to_multi_turn_layers():
 # --- budget anchor: mission_id is read LIVE from deps.ctx at each call, never a stale
 # ContextVar mirror (docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md resolution #2) --------
 
+def _enforcement_on(monkeypatch):
+    """`settings.BUDGET` is frozen — swap in a copy with enforcement on. The model_id/estimate
+    resolution in framework.py only runs when this flag is set (security review 2026-07-26,
+    finding 1: it must stay OFF-by-default-inert, so these tests opt in explicitly)."""
+    import settings
+    monkeypatch.setattr(
+        settings, "BUDGET",
+        settings.BudgetConfig(**{**settings.BUDGET.model_dump(), "enforcement_enabled": True}),
+    )
+
+
 def test_mission_id_is_read_live_from_deps_ctx_and_model_id_resolved(monkeypatch):
+    _enforcement_on(monkeypatch)
     import core.llm.framework as framework_mod
 
     captured = {}
@@ -118,6 +130,54 @@ def test_mission_id_is_read_live_from_deps_ctx_and_model_id_resolved(monkeypatch
     assert captured["budget_model_id"]                     # resolved to a bare (unprefixed) model id
     assert ":" not in captured["budget_model_id"]
     assert captured["budget_estimate_micros"] > 0
+
+
+def test_estimate_stays_zero_and_unresolved_when_enforcement_is_off(monkeypatch):
+    # The OFF-by-default proof: no registry lookup, no pricing lookup, at all.
+    import core.llm.framework as framework_mod
+
+    captured = {}
+
+    async def fake_run_agent(agent, *args, **kwargs):
+        captured.update(kwargs)
+        return _Result("hello")
+
+    monkeypatch.setattr(framework_mod, "run_agent", fake_run_agent)
+
+    handle = AgentHandle(_OkAgent(), "verifier")
+    asyncio.run(run_structured(handle, "prompt"))
+
+    assert captured["budget_model_id"] == ""
+    assert captured["budget_estimate_micros"] == 0
+
+
+def test_unpriced_model_blocks_rather_than_silently_reserving_zero(monkeypatch):
+    # Pins security review 2026-07-26 finding 1: a bare `except Exception: pass` used to
+    # swallow cost.py's fail-closed KeyError for an unpriced model into a silent 0 estimate,
+    # which trivially passes any reserve() check regardless of remaining balance. Now it must
+    # raise BudgetExhausted instead — loud, and it must never reach run_agent at all.
+    _enforcement_on(monkeypatch)
+    import core.llm.framework as framework_mod
+    from foundation import BudgetExhausted
+
+    monkeypatch.setattr(framework_mod, "model_name_for_layer", lambda layer: "totally-unpriced-model-xyz")
+
+    called = {"run_agent": False}
+
+    async def fake_run_agent(agent, *args, **kwargs):
+        called["run_agent"] = True
+        return _Result("hello")
+
+    monkeypatch.setattr(framework_mod, "run_agent", fake_run_agent)
+
+    handle = AgentHandle(_OkAgent(), "verifier")
+    try:
+        asyncio.run(run_structured(handle, "prompt"))
+        assert False, "an unpriced model must block, never silently run for free"
+    except BudgetExhausted:
+        pass
+
+    assert called["run_agent"] is False   # blocked before the call ever ran, not billed $0 after
 
 
 def test_mission_id_defaults_empty_when_deps_has_no_ctx(monkeypatch):

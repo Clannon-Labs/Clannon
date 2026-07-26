@@ -165,9 +165,13 @@ class RedisBudget:
             raise BudgetExhausted(f"{ceiling} budget ceiling reached", ceiling=ceiling)
         return BudgetReservation(reservation_id=reservation_id, scope=scope, estimated=estimate)
 
-    async def reconcile(self, reservation: BudgetReservation, actual: int) -> None:
-        # Never raises onto the caller's path (contract): a reconcile fault is logged and left
-        # for the out-of-band Postgres reconciliation, never surfaced onto the response.
+    async def reconcile(self, reservation: BudgetReservation, actual: int) -> bool:
+        # Never RAISES onto the caller's path (contract unchanged): a reconcile fault is logged
+        # here and the caller gets a `False` return instead of an exception. That return value
+        # is a SIGNAL for the caller to log more loudly at its own seam (retry.py does) — not a
+        # repair. There is no out-of-band Postgres true-up yet (security review 2026-07-26,
+        # finding 2), so a `False` here means the reservation may go unrefunded past its TTL if
+        # the caller's own retry also fails against the same store fault.
         scope = reservation.scope
         period = self._period()
         has_mission = bool(scope.mission_id)
@@ -179,8 +183,10 @@ class RedisBudget:
         ]
         try:
             await self._reconcile(keys=keys, args=[max(0, actual), "1" if has_mission else "0"])
+            return True
         except Exception as exc:
             log.error("budget reconcile failed (left for out-of-band settle): %s", exc)
+            return False
 
     async def remaining(self, scope: BudgetScope) -> TokenBudget:
         # Advisory snapshot; only reserve() is authoritative. Fails closed to EMPTY (0), never

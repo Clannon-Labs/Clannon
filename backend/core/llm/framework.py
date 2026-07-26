@@ -20,6 +20,7 @@ structured output, never an SDK object.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterable, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -35,12 +36,14 @@ from pydantic_ai.messages import (
 )
 
 from core.budget.cost import estimate_call_cost_micros
-from foundation import MaxRetriesExceededError, ModelUnavailableError, VrakshaError
+from foundation import BudgetExhausted, MaxRetriesExceededError, ModelUnavailableError, VrakshaError
 from registry.config import get_prompt
 import settings
 
 from .registry import model_for_layer, model_name_for_layer, model_settings_for_layer, usage_limits_for_layer
 from .retry import run_agent
+
+log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -197,30 +200,42 @@ async def run_structured(
     # (OrchestratorDeps) — every other caller (verifier, filter, memory, experts) naturally gets
     # mission_id="" (no mission ceiling), which is correct: only orchestrator-issued calls are
     # mission-scoped today. See docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md resolution #2.
-    # `model_for_layer` returns the RUNNABLE model (may be a FallbackModel wrapping a whole
-    # provider chain) — not a pricing key. `model_name_for_layer` gives the single
-    # provider-qualified string ("anthropic:claude-sonnet-5"); pricing.yaml keys the bare
-    # model id, so strip the provider prefix (matches how `model_name_for_layer` itself
-    # already resolves per-run overrides, so this stays override-aware for free).
-    # Best-effort, like usage.accumulate(): a layer name the registry doesn't know (the
-    # `model=` param exists ONLY to inject a TestModel/FunctionModel under a synthetic test
-    # layer, per this function's own docstring) must never crash the actual call — metering
-    # degrades to "unpriced this call" rather than breaking the run.
     budget_model_id = ""
     budget_estimate_micros = 0
-    try:
-        budget_model_id = model_name_for_layer(handle.layer).rsplit(":", 1)[-1]
-        budget_estimate_micros = estimate_call_cost_micros(
-            model_id=budget_model_id,
-            prompt=prompt,
-            conversation=conversation,
-            media_count=len(media) if media else 0,
-            output_tokens_limit=limits.output_tokens_limit,
-            elapsed_ceiling_s=settings.ORCHESTRATOR.turn_wall_clock_s,
-        )
-    except Exception:  # noqa: BLE001 — metering must never break the run it's metering
-        pass
     budget_mission_id = getattr(getattr(deps, "ctx", None), "mission_id", "") or ""
+    if settings.BUDGET.enforcement_enabled:
+        # Gated on the flag: while enforcement is off (the default), NOTHING here runs — no
+        # registry lookup, no pricing lookup — so a model missing from pricing.yaml can never
+        # affect a call today. When enforcement IS on, every real layer has already resolved
+        # through `model_for_layer` to build this very `handle` (build_agent/build_tool_agent
+        # require it), so `model_name_for_layer` cannot fail here in practice; the synthetic
+        # `model=` test-override path (AgentHandle built with a fake layer name, bypassing
+        # build_agent) never enables enforcement, so it never reaches this branch either.
+        #
+        # `model_for_layer` returns the RUNNABLE model (may be a FallbackModel wrapping a whole
+        # provider chain) — not a pricing key. `model_name_for_layer` gives the single
+        # provider-qualified string ("anthropic:claude-sonnet-5"); pricing.yaml keys the bare
+        # model id, so strip the provider prefix (matches how `model_name_for_layer` itself
+        # already resolves per-run overrides, so this stays override-aware for free).
+        budget_model_id = model_name_for_layer(handle.layer).rsplit(":", 1)[-1]
+        try:
+            budget_estimate_micros = estimate_call_cost_micros(
+                model_id=budget_model_id,
+                prompt=prompt,
+                conversation=conversation,
+                media_count=len(media) if media else 0,
+                output_tokens_limit=limits.output_tokens_limit,
+                elapsed_ceiling_s=settings.ORCHESTRATOR.turn_wall_clock_s,
+            )
+        except KeyError as exc:
+            # cost.py's own fail-closed contract: an un-priced model must BLOCK the spend,
+            # never run for free (security review 2026-07-26, finding 1 — a bare `except
+            # Exception: pass` here previously swallowed this KeyError into a silent
+            # `budget_estimate_micros = 0`, which reserves trivially and never bills). Loud
+            # by construction: BudgetExhausted is a VrakshaError, so it propagates through
+            # run_structured's `except VrakshaError: raise` unchanged, never mis-typed.
+            log.error("budget anchor: no price for model %r -- blocking the call (fail-closed)", budget_model_id)
+            raise BudgetExhausted(f"no price for model {budget_model_id!r}", ceiling="user", cause=exc) from exc
     try:
         if model is not None:
             with handle._agent.override(model=model):

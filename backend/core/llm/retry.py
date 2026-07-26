@@ -113,8 +113,21 @@ async def run_agent(
                             output_tokens=output_tokens,
                             elapsed_s=time.monotonic() - start,
                         ))
-                        await broker.reconcile(reservation, actual_micros)
-                        settled = True
+                        settled = await broker.reconcile(reservation, actual_micros)
+                        if not settled:
+                            # The broker swallowed a store fault internally (its contract: never
+                            # raise here) and already logged it once. This is a DISTINGUISHABLE
+                            # signal at this seam, not a repair — there is no out-of-band Postgres
+                            # true-up yet (security review 2026-07-26, finding 2), so the finally
+                            # block's own retry below is racing the same fault, not recovering
+                            # from it. Loud on purpose: an unrefunded reservation past its TTL is
+                            # a real overcharge, and this is the only record of it today.
+                            log.error(
+                                "budget reconcile returned failure for a SUCCESSFUL call "
+                                "(model=%s) -- no working recovery path exists yet; the "
+                                "reservation may go unrefunded if the fallback retry below "
+                                "hits the same store fault", budget_model_id,
+                            )
                     except Exception:  # noqa: BLE001 — see comment above
                         log.error(
                             "budget reconcile failed to price/settle a SUCCESSFUL call (model=%s) "
@@ -137,4 +150,15 @@ async def run_agent(
             # Any exit without a successful reconcile above (raised, budget-exhausted, or any
             # other non-success path) refunds in FULL — the safe direction, and reconcile() is
             # idempotent so this can never double-settle against the one success path.
-            await broker.reconcile(reservation, 0)
+            refunded = await broker.reconcile(reservation, 0)
+            if not refunded:
+                # Last resort also failed against the same store fault the first attempt hit
+                # (or this was the only attempt, on an exception path). No repair exists at
+                # this seam today — this reservation is now stuck until its TTL expires
+                # (security review 2026-07-26, finding 2; tracked as a go-live gate, not fixed
+                # by this log line). Loud because it is the only remaining record of the leak.
+                log.error(
+                    "budget anchor: the fallback full refund ALSO failed for reservation %s "
+                    "(model=%s) -- this reservation is stuck until its TTL expires",
+                    reservation.reservation_id, budget_model_id,
+                )

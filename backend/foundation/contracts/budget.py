@@ -103,12 +103,16 @@ class BudgetPort(Protocol):
         store is unreachable (fail-closed)."""
         ...
 
-    async def reconcile(self, reservation: BudgetReservation, actual: int) -> None:
+    async def reconcile(self, reservation: BudgetReservation, actual: int) -> bool:
         """Settle a reservation to the ACTUAL tokens used once the call returns: refund
         `estimated - actual` if over-reserved, charge the extra if under. Idempotent on
-        `reservation_id` (a retry must not double-settle). Does not raise onto the
-        caller's path — a reconcile fault is logged and squared against Postgres truth
-        out-of-band, never surfaced onto the response."""
+        `reservation_id` (a retry must not double-settle). Never RAISES onto the caller's
+        path — a store fault is logged internally and reported via the `bool` return
+        (`True` = settled, `False` = the fault was swallowed) instead, so the caller can
+        log distinctly at its own seam. That return value is a SIGNAL, not a repair: there
+        is no out-of-band Postgres true-up yet (tracked as a go-live gate, security review
+        2026-07-26 finding 2) — a `False` means the caller's own retry is racing the same
+        store fault, not a guaranteed recovery."""
         ...
 
     async def remaining(self, scope: BudgetScope) -> TokenBudget:
