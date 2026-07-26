@@ -146,27 +146,46 @@ class _SuspendingArtifactStore:
         return SimpleNamespace(id=f"{ns}/{name}")
 
 
-async def _simulate_create_run(store: RunStore, input_files: list) -> RunState:
-    """Mirrors app.py's create_run ordering exactly: create the run (visible to
-    request_cancel from this point on), await persist_inputs, THEN assign
-    run.task. If persist_inputs ever actually suspends, a cancel can land in
-    the gap between the first two steps and the third."""
-    run = store.create("u1", "test brief")
+def _make_root(store: RunStore) -> RunState:
+    return store.create("u1", "test brief")
+
+
+# a synthetic parent, read-only from create_followup's point of view (it only
+# reads .id/.session_id/.project_id) — it never needs to exist in `store` itself
+_PARENT = RunState(
+    id="run_parent0", user_id="u1", title="parent", brief="parent brief", session_id="run_parent0"
+)
+
+
+def _make_followup(store: RunStore) -> RunState:
+    return store.create_followup("u1", "followup ask", _PARENT)
+
+
+async def _simulate_create_run(store: RunStore, input_files: list, make_run=_make_root) -> RunState:
+    """Mirrors app.py's create_run / follow_up_run ordering exactly (both routes
+    share the identical shape — app.py:361-368 and :429-433): create the run
+    (visible to request_cancel from this point on), await persist_inputs, THEN
+    assign run.task. If persist_inputs ever actually suspends, a cancel can
+    land in the gap between the first two steps and the third."""
+    run = make_run(store)
     await run_driver.persist_inputs(run, input_files)
     run.task = asyncio.ensure_future(run_driver.execute(run, input_files))
     return run
 
 
+@pytest.mark.parametrize("make_run", [_make_root, _make_followup], ids=["create_run", "follow_up_run"])
 def test_cancel_can_race_task_registration_if_persist_inputs_suspends(
-    store, hermetic_execute, monkeypatch
+    store, hermetic_execute, monkeypatch, make_run
 ):
     """With a realistically-async artifact store, a cancel arriving while
     persist_inputs is in flight wins the "no live task" branch, reports
     "cancelled", and persists it — then the still-running create path assigns
     the orphaned task anyway, which delivers and OVERWRITES the persisted
-    "cancelled" row with "delivered". Proves app.py:365-368's "same tick, a
-    cancel can never race a not-yet-tracked task" comment is an accident of
-    LocalArtifactStore.put's implementation, not a structural guarantee."""
+    "cancelled" row with "delivered". Proves app.py:365-368's (and the
+    identical :429-433 in follow_up_run) "same tick, a cancel can never race a
+    not-yet-tracked task" comment is an accident of LocalArtifactStore.put's
+    implementation, not a structural guarantee — parametrized over both
+    routes since they share the exact same ordering."""
     hermetic_execute(_fake_flow())
     reached = asyncio.Event()
     release = asyncio.Event()
@@ -176,7 +195,7 @@ def test_cancel_can_race_task_registration_if_persist_inputs_suspends(
     input_file = SimpleNamespace(name="f.txt", data=b"hi", as_dict=lambda: {"name": "f.txt"})
 
     async def go():
-        create_fut = asyncio.ensure_future(_simulate_create_run(store, [input_file]))
+        create_fut = asyncio.ensure_future(_simulate_create_run(store, [input_file], make_run))
         await asyncio.wait_for(reached.wait(), timeout=2)
 
         # the run is registered and visible to request_cancel, but its task
@@ -214,11 +233,12 @@ def test_cancel_can_race_task_registration_if_persist_inputs_suspends(
     )
 
 
-def test_no_cancel_race_today_with_the_real_artifact_store(store, hermetic_execute):
+@pytest.mark.parametrize("make_run", [_make_root, _make_followup], ids=["create_run", "follow_up_run"])
+def test_no_cancel_race_today_with_the_real_artifact_store(store, hermetic_execute, make_run):
     """Companion to the test above: pins that TODAY's actual LocalArtifactStore
     (synchronous write_bytes under an async def) never suspends, so
     persist_inputs never yields, so run.task really is assigned in the same
-    scheduler tick as run creation — the safety net app.py relies on, made
+    scheduler tick as run creation — the safety net both routes rely on, made
     explicit so a future change to LocalArtifactStore is the trigger to
     revisit this, not a silent regression.
 
@@ -236,7 +256,7 @@ def test_no_cancel_race_today_with_the_real_artifact_store(store, hermetic_execu
         order: list[str] = []
         asyncio.get_running_loop().call_soon(lambda: order.append("probe"))
 
-        run = await _simulate_create_run(store, [input_file])
+        run = await _simulate_create_run(store, [input_file], make_run)
         order.append("task_registered")
 
         assert order == ["task_registered"], (
