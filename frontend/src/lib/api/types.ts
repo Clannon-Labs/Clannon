@@ -126,7 +126,14 @@ export interface Run extends RunSummary {
    *  "sanitize" | "verify" (input-side — nothing reached the models) |
    *  "filter" (output-side — a draft was produced then held back) | "security". */
   blockStage?: "sanitize" | "verify" | "filter" | "security" | null;
+  /** The output filter's verdict on this run. Not yet surfaced in the UI. */
+  verificationState?: VerificationState | null;
 }
+
+/** The output filter's verdict on a run's delivered/blocked draft. `null` only
+ *  when the filter never ran (an earlier gate blocked first). "not_applicable"
+ *  is a non-research turn that never claimed anything checkable — not a failure. */
+export type VerificationState = "grounded" | "partial" | "ungrounded" | "not_applicable";
 
 /** Events emitted on a live run stream (SSE `data:` payloads). */
 export type RunEvent =
@@ -140,7 +147,11 @@ export type RunEvent =
   | { type: "message_done" }
   | { type: "report_delta"; text: string }
   | { type: "report_done" }
-  | { type: "usage"; tokensUsed: number };
+  | { type: "usage"; tokensUsed: number }
+  /** Emitted once per run, right before the terminal `status` event. Typed but
+   *  not yet surfaced in the UI — backlogged, see proposals/archive/to-frontend/
+   *  2026-07-26_cb5-verification-seal-available.md. */
+  | { type: "verification"; state: VerificationState };
 
 /* ---------- memory ---------- */
 

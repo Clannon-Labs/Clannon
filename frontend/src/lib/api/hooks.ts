@@ -348,6 +348,10 @@ function foldRunEvent(s: LiveRunState, event: RunEvent): LiveRunState {
       return { ...s, reportDone: true };
     case "usage":
       return { ...s, tokensUsed: event.tokensUsed };
+    case "verification":
+      // Backlogged — verdict isn't surfaced in the UI yet. See
+      // proposals/archive/to-frontend/2026-07-26_cb5-verification-seal-available.md.
+      return s;
     default:
       return s;
   }
