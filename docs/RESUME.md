@@ -39,30 +39,36 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
    send-keys only — never an AI process).
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 3rd pass)
+## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 4th pass)
 
-- **Last pushed HEAD:** `fefd7b7` (2026-07-26). Everything LANDED is pushed. Backend's own tree is
-  clean EXCEPT a pile of uncommitted, not-mine-to-commit-blind files (see below).
-- **⚠️ AWAITING OWNER REPLY (`reports/REPLY_NEEDED_api-specialist-and-provider-infra.md`):**
-  1. A `Status: draft` proposal (`From: workspace-audit`, not a known agent) recommends launching a
-     4th specialist (`clannon-api`, on Codex) for `backend/api/**`, claiming unverified "Vote status:
-     1 (by owner)". Ruled **DEFER** (no verified owner corroboration anywhere in `backend/proposals/`;
-     the proposal's own §8 says defer when there's no queued backlog, and there isn't one right now).
-     Do NOT launch `clannon-api` or run `clannon-standup.sh dual` without a verified owner instruction.
-  2. **Uncommitted dual-provider (Claude Code + Codex) infra appeared mid-session, not authored by
-     me**: root `CLAUDE.md`'s `@AGENTS.md` include, root `AGENTS.md` (provider-continuity rules —
-     already binding via the heartbeat prompt), ~15 module `AGENTS.md` files, changes to
-     `scripts/{agent-session,clannon-heartbeat,clannon-standup}.sh`, new `scripts/clannon-provider-
-     {status,supervisor}.sh`. Looks coherent/deliberate but unverified as finished. **Do NOT `git
-     add -A` this pile** — wait for the owner reply before touching it.
-  3. `.agents/provider-handoffs/backend.md` (gitignored, local-only) has the live checkpoint; kept
-     current each cycle per the new provider-continuity convention. Mirrored here since `.agents/`
-     shares `proposals/`'s durability gap.
-- Specialists at this checkpoint: memory idle (genuinely, no independent work); **orchestration
-  hard-rate-limited until ~20:25 Asia/Kathmandu** (not idle by choice — don't nudge, it won't
-  respond); security idle (just finished the D1 sanitizer-cap repoint, reported, inbox empty);
-  frontend active. `backend/registry/capabilities/handler/code_symbols.py` (untracked) is
-  orchestration's in-flight CB2 work, left untouched — not backend's file.
+- **Last pushed HEAD:** `7ad3d8d` (2026-07-26). Everything LANDED is pushed. Backend's own tree is
+  clean (`RELEASE_v0.2.0.md` shows modified by someone else, not touched by backend).
+- **Owner replied** (`proposals/archive/to-backend/2026-07-26_owner-reply-api-and-provider-infra.md`)
+  to the prior pass's REPLY_NEEDED report — confirmed the dual-provider infra is the owner's own
+  work (trusted, asked backend to inspect + approve) and **overrode the DEFER ruling on the API
+  specialist**: explicit steer to delegate labor to the new Codex capacity rather than have the
+  backend coordinator keep absorbing `api/**` work inline (which is exactly what happened this
+  session — CB5, the SSE fix, and CB4 were all `api/**` work backend did itself).
+  1. **Provider infra reviewed + committed** (`dee152c`). Found + fixed ONE real defect during
+     review: `CLAUDE.md`'s OWNER REPLY CHANNEL paragraph had an unrelated URL
+     (`hcb.hackclub.com/ysws-the-carnivals`) spliced into the middle of the word "answers" — grepped
+     everything else for embedded URLs, isolated to that one spot. Also scoped `.gitignore` so only
+     `.agents/provider-handoffs/` is tracked (not the ephemeral `.agents/runtime/` state) — the
+     original edit had un-ignored all of `.agents/` wholesale.
+  2. **`clannon-api` launched** (4th specialist, owns `backend/api/**`) — charter + a 16-file
+     test-ownership list added to `backend/api/CLAUDE.md` (`7ad3d8d`, resolves the collision concern
+     from the earlier DEFER), "api" wired through every crew-listing script. First assignment: the
+     run-lifecycle invariant audit. **Found a real bug on first use**:
+     `clannon-provider-supervisor.sh` exits entirely on a role's first-ever launch (no prior session
+     to `--continue`) instead of falling back to fresh mode — its own retry logic should catch this
+     but didn't fire. Worked around by launching plain `claude` directly; specialist is up and
+     working. Not yet debugged — will recur for every future new role and every post-reboot resume.
+  3. `.agents/provider-handoffs/backend.md` is now TRACKED (committed, not gitignored) — the
+     durability-gap workaround from the prior pass (mirroring it here) is no longer needed for this
+     one file, though `proposals/`/`reports/` still are gitignored and still need this doc.
+- Specialists at this checkpoint: memory idle (genuinely, no independent work); orchestration back
+  online (rate limit reset), shipped CB2 code-symbol tier (`efbbfa6`); security idle (finished,
+  reported, inbox empty); frontend active; **api brand new**, working its first assignment.
 - **Since the `670a217` snapshot below, this pass (3rd) fixed 3 more real gaps + shipped 2 features:**
   - **D1 long tail**: `filter_max_revisions`/`max_text_input_chars` migrated to `settings.SECURITY`
     (`ceb4bb0`); `FILTER_TIMEOUT_S`/`FILTER_MAX_TOKENS` DELETED as dead code (zero consumers, confirmed
