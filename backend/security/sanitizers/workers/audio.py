@@ -26,7 +26,7 @@ import ffmpeg
 from mutagen import File as MutagenFile
 
 import settings
-from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 from ._base import highest_threat, run_subworker
 
@@ -136,7 +136,7 @@ def _probe_worker(path: Path) -> AudioWorkerResult:
     format_name = format_info.get("format_name")
     duration_s = _duration_from_probe(format_info, audio_streams)
 
-    if duration_s is not None and duration_s > constants.MAX_AUDIO_DURATION_S:
+    if duration_s is not None and duration_s > settings.SECURITY.max_audio_duration_s:
         return AudioWorkerResult(
             name="ffprobe",
             threat_level=ThreatLevel.HIGH,

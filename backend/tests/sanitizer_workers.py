@@ -38,7 +38,8 @@ import pikepdf
 import pytest
 from PIL import Image as PIL_Image
 
-from foundation import SanitizationError, ThreatLevel, constants
+import settings
+from foundation import SanitizationError, ThreatLevel
 from security.sanitizers.workers import audio as audio_worker
 from security.sanitizers.workers import image as image_worker
 from security.sanitizers.workers import pdf as pdf_worker
@@ -209,7 +210,7 @@ def test_image_oversized_dimension_raises_sanitization_error():
     An image whose largest dimension exceeds MAX_IMAGE_DIMENSION_PX raises
     SanitizationError before any metadata or pixel work (image.py:79-84).
     """
-    oversized = _png(constants.MAX_IMAGE_DIMENSION_PX + 1, 1)
+    oversized = _png(settings.SECURITY.max_image_dimension_px + 1, 1)
 
     with pytest.raises(SanitizationError) as exc_info:
         image_worker._scan_sync(oversized)
@@ -280,7 +281,7 @@ def test_pdf_page_count_exceeded_rejected(monkeypatch):
     fitz.open is monkeypatched so no 500-page document is needed.
     """
     class _FakeDoc:
-        page_count = constants.MAX_PDF_PAGES + 1
+        page_count = settings.SECURITY.max_pdf_pages + 1
 
         def __enter__(self):
             return self
@@ -295,7 +296,7 @@ def test_pdf_page_count_exceeded_rejected(monkeypatch):
     assert result.threat_level == ThreatLevel.HIGH
     assert result.passed is False
     assert result.page_count is not None
-    assert result.page_count > constants.MAX_PDF_PAGES
+    assert result.page_count > settings.SECURITY.max_pdf_pages
     assert "exceeds max page count" in (result.reason or "")
 
     _record("pdf", "page-count-exceeded-rejected", "REJECTED")
@@ -350,7 +351,7 @@ def test_audio_probe_duration_exceeded_rejected(monkeypatch):
     _probe_worker returns threat_level=HIGH when the probe reports a duration
     exceeding MAX_AUDIO_DURATION_S (audio.py:138-145).
     """
-    too_long = float(constants.MAX_AUDIO_DURATION_S) + 1.0
+    too_long = float(settings.SECURITY.max_audio_duration_s) + 1.0
 
     monkeypatch.setattr(
         audio_worker.ffmpeg,
@@ -366,7 +367,7 @@ def test_audio_probe_duration_exceeded_rejected(monkeypatch):
     assert result.threat_level == ThreatLevel.HIGH
     assert result.passed is False
     assert result.duration_s is not None
-    assert result.duration_s > constants.MAX_AUDIO_DURATION_S
+    assert result.duration_s > settings.SECURITY.max_audio_duration_s
     assert "exceeds max duration" in (result.reason or "")
 
     _record("audio", "probe-duration-exceeded-rejected", "REJECTED")
@@ -445,7 +446,7 @@ def test_video_probe_duration_exceeded_rejected(monkeypatch):
     _probe_worker returns threat_level=HIGH when probe reports duration exceeding
     MAX_VIDEO_DURATION_S (video.py:157-165).
     """
-    too_long = float(constants.MAX_VIDEO_DURATION_S) + 1.0
+    too_long = float(settings.SECURITY.max_video_duration_s) + 1.0
 
     monkeypatch.setattr(
         video_worker.ffmpeg,
@@ -468,7 +469,7 @@ def test_video_probe_duration_exceeded_rejected(monkeypatch):
     assert result.threat_level == ThreatLevel.HIGH
     assert result.passed is False
     assert result.duration_s is not None
-    assert result.duration_s > constants.MAX_VIDEO_DURATION_S
+    assert result.duration_s > settings.SECURITY.max_video_duration_s
     assert "exceeds max duration" in (result.reason or "")
 
     _record("video", "probe-duration-exceeded-rejected", "REJECTED")

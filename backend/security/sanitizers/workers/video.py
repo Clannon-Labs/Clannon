@@ -21,7 +21,7 @@ from typing import Any, Callable
 import ffmpeg
 
 import settings
-from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 from ._base import highest_threat, run_subworker
 
@@ -155,7 +155,7 @@ def _probe_worker(path: Path) -> VideoWorkerResult:
     height = int(first_stream.get("height") or 0)
     resolution = (width, height) if width and height else None
 
-    if duration_s is not None and duration_s > constants.MAX_VIDEO_DURATION_S:
+    if duration_s is not None and duration_s > settings.SECURITY.max_video_duration_s:
         return VideoWorkerResult(
             name="ffprobe",
             threat_level=ThreatLevel.HIGH,

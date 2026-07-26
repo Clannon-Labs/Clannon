@@ -18,7 +18,7 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 
 import settings
-from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 
 @dataclass
@@ -77,7 +77,7 @@ def _verify_image(payload: bytes) -> tuple[str, tuple[int, int]]:
         ) from exc
 
     width, height = image_size
-    if max(width, height) > constants.MAX_IMAGE_DIMENSION_PX:
+    if max(width, height) > settings.SECURITY.max_image_dimension_px:
         raise SanitizationError(
             f"Image dimension exceeds limit: {width}x{height}",
             modality="image",

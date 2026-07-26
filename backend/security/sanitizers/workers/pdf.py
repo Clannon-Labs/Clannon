@@ -22,7 +22,8 @@ import io
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from foundation import SanitizationError, ThreatLevel, constants, coerce_to_bytes
+import settings
+from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
 
 from ._base import highest_threat, run_subworker
 
@@ -144,7 +145,7 @@ def _page_count_worker(payload: bytes) -> PdfWorkerResult:
             worker="pymupdf",
         ) from exc
 
-    if page_count > constants.MAX_PDF_PAGES:
+    if page_count > settings.SECURITY.max_pdf_pages:
         return PdfWorkerResult(
             name="pymupdf-page-count",
             threat_level=ThreatLevel.HIGH,
