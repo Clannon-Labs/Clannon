@@ -3,7 +3,44 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## FILED (2026-07-26, latest) — CB2 code-symbol tier, design only
+## BUILT (2026-07-26, latest) — CB2 code-symbol tier (ratified + shipped)
+
+Ratified (§4 mine to build, backend agreed the `_graph`/`_budget` exclusion from
+`scoped_to()` was accidental bundling with the recursion guard, not deliberate)
+and built same session. `registry/capabilities/handler/code_symbols.py` (new):
+tree-sitter scan -> `ENTITY` nodes (`entity_type`, `canonical_name="path::name"`
+— confirmed against `graph_manager.py`'s actual key-property, not assumed) +
+resolved `CALLS` edges (ambiguous/unresolved silently skipped, v1 scope) +
+`DERIVED_FROM`-to-mission (not per-task — `ctx` has no `task_id`). Node ids
+harvested via `members()` after `write()`, same two-pass pattern `mission_
+operate.py::apply_turn` established. Opt-in chain: `Capabilities.scoped_to(graph
+=...)` -> `BatchHandler` threads it only when `BatchDefinition.grants_graph`
+(`batches.yaml`'s `engineering: true`) -> `ExpertHandler(graph=...)` ->
+`_index_code_symbols`, automatic/server-side, model-never-touches-it. Verified
+the mission-tool recursion guard survives (`scoped_to()` still never populates
+`_budget`, so the `graph AND budget` gate stays closed for batches). 18 new
+tests (`tests/orchestrator_code_symbols.py`, incl. one real-registry end-to-end
+proof of the whole opt-in chain). Full suite: 1475 passed, 0 failures — the
+prior sessions' 4 `sse_contract_drift` failures are gone (backend fixed
+upstream). Commit `efbbfa6`. Full detail: `reports/orchestration/report_v43.md`.
+
+**Commit-hygiene note, not a code issue:** a concurrent commit from another
+session swept unrelated files into the shared git index mid-commit — caught via
+`git status` before committing, resolved with an explicit trailing pathspec so
+only my 7 files landed. Worth remembering: always check `git status` for
+unexpected staged files before a bare `git commit` on this shared tree,
+especially right after a lock-file collision.
+
+**Resume: the nav/patch-tooling arc (§2-§5), cross-call persistence, AND the
+code-symbol tier are ALL now built.** `code.engineer` has real large-repo
+navigation instruments, state that survives across a mission's turns, and a
+live knowledge-graph trail of what it touched. Check `proposals/to-orchestration/`
+first. No known blocker. Deferred, unchanged: `ArtifactStore.delete` (mission-
+conclude cleanup) and the concurrent-call snapshot race — both named, neither
+solved. Otherwise next items are unprioritized — whatever backend/owner pull
+next from `V1_GAP_ANALYSIS.md`.
+
+## FILED (2026-07-26, earlier) — CB2 code-symbol tier, design only
 
 Nav/patch-tooling arc + cross-call persistence both shipped and pushed
 (`6c430c1` confirmed on `main`); picked the next backlog item —
