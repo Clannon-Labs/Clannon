@@ -24,20 +24,13 @@ from foundation import PermissionLevel, WorkspacePort
 
 from registry import tool
 
-import tree_sitter_c as tsc
-import tree_sitter_python as tspython
-from tree_sitter import Language, Node, Parser
+from tree_sitter import Node
+
+from tools._treesitter import EXT_LANGUAGE as _EXT_LANGUAGE, PARSERS as _PARSERS
 
 _MAX_FILES_SCANNED = 500     # bounds scan cost across a large repo
 _MAX_MATCHES = 200           # bounds the result payload
 _MAX_FILE_BYTES = 2_000_000  # skip parsing anything past this (not a text file, or absurdly large)
-
-_EXT_LANGUAGE = {"py": "python", "c": "c", "h": "c"}
-
-_PARSERS = {
-    "python": Parser(Language(tspython.language())),
-    "c": Parser(Language(tsc.language())),
-}
 
 # node types that DEFINE a symbol, per language, and how to pull the name node out
 # of one: python exposes a "name" field directly; C's function name sits behind a

@@ -127,7 +127,7 @@ def test_expert_run_conforms_to_shared_contract():
 # EXECUTE; a NETWORK-tool-granted expert MUST be NETWORK (invariant A depends on the
 # handler seeing the true permission); a tool-less reasoner is READ.
 _EXPECTED_REGISTRATION: dict[str, tuple[PermissionLevel, tuple[str, ...]]] = {
-    "code.engineer": (PermissionLevel.EXECUTE, ("code.ast_search", "code.run", "fs.patch", "fs.read", "fs.write")),
+    "code.engineer": (PermissionLevel.EXECUTE, ("code.ast_search", "code.dep_graph", "code.run", "fs.patch", "fs.read", "fs.write")),
     "data.analyst": (PermissionLevel.EXECUTE, ("code.run", "fs.read", "fs.write")),
     "docs.writer": (PermissionLevel.WRITE, ("fs.read", "fs.write")),
     "media.analyst": (PermissionLevel.READ, ("fs.read",)),
