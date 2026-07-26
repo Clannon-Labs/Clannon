@@ -12,6 +12,7 @@ reserve/reconcile broker (ADR-0004) consumes this number; it does not recompute 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 
@@ -52,3 +53,35 @@ def call_cost_micros(call: ModelCall) -> int:
         + budget.infra_cost_per_second_micros * elapsed
     )
     return ceil(token_micros + infra_micros)
+
+
+def estimate_call_cost_micros(
+    *,
+    model_id: str,
+    prompt: str,
+    conversation: Sequence[dict] | None,
+    media_count: int,
+    output_tokens_limit: int | None,
+    elapsed_ceiling_s: float,
+) -> int:
+    """Conservative PRE-CALL µ$ estimate for a `reserve()` — leans HIGH on every input so a
+    near-empty budget can't slip a call through (the enforcement anchor, `core/llm/retry.py`).
+
+    Input tokens are unknown before the call returns, so they're derived from prompt + history
+    character length via the same chars-per-token ratio memory hydration uses
+    (`settings.BUDGET.memory_chars_per_token`); each attached media item adds a flat allowance
+    (vision tokens aren't char-derived). Output uses the layer's hard usage-limit ceiling when
+    set, else a conservative fallback — no layer is ever estimated as free. `call_cost_micros`
+    (above) recomputes the EXACT cost from real usage at reconcile; this is only the up-front
+    worst case.
+    """
+    budget = settings.BUDGET
+    chars = len(prompt) + sum(len(turn.get("content") or "") for turn in (conversation or []))
+    input_est = ceil(chars / budget.memory_chars_per_token) + media_count * budget.media_token_estimate_per_item
+    output_est = output_tokens_limit if output_tokens_limit is not None else budget.output_token_estimate_fallback
+    return call_cost_micros(ModelCall(
+        model_id=model_id,
+        input_tokens=input_est,
+        output_tokens=output_est,
+        elapsed_s=elapsed_ceiling_s,
+    ))

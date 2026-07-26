@@ -46,3 +46,26 @@ infra_cost_per_second_micros: 20    # µ$ per wall-clock second of work — PLAC
 # budget/token area) alongside the other token budgets. Unit: tokens / ratio. Both > 0.
 default_memory_budget_tokens: 2000
 memory_chars_per_token: 4
+
+# ── ENFORCEMENT ANCHOR (core/llm/retry.py, docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md) ──
+# OFF by default: prod isn't seeded yet and pricing.yaml is still PLACEHOLDER (owner gate, see
+# reports/DECISIONS_FOR_OWNER.md — "Budget go-live needs real prices"). While false, retry.py's
+# reserve/reconcile is fully inert (zero behavior change, no Redis touched). Flip to true only
+# after: real per-model prices set, prod budgets seeded, and security's review of this anchor.
+enforcement_enabled: false
+
+# Where the real Redis-backed broker connects once enforcement is on (unused, unconnected,
+# while enforcement_enabled is false). Standard redis:// / rediss:// URL.
+redis_url: "redis://localhost:6379/0"
+
+# ── PRE-CALL ESTIMATE (reserve leans HIGH on purpose — see the anchor spec §"model-rate
+# resolution"). Input tokens aren't known before a call returns, so the estimate is derived
+# from prompt+history character length via memory_chars_per_token above; these two cover the
+# two things that heuristic can't see. Unit: tokens. Both > 0.
+# A vision/media attachment's real token cost isn't char-derived, so each attached item adds
+# this flat conservative allowance to the input estimate.
+media_token_estimate_per_item: 1500
+# Worst-case output tokens for a layer whose usage limits don't set a hard output cap (so the
+# estimate is never unbounded-low). Layers that DO set a cap (verifier, orchestrator) use that
+# cap instead — this is the fallback only.
+output_token_estimate_fallback: 4000

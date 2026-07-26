@@ -6,10 +6,12 @@ fail-closed on an un-priced model. Later: the Redis atomic reserve/reconcile bro
 `foundation.BudgetPort` (ADR-0004), which consumes these cost numbers but never recomputes
 them. Kept separate from the pipeline stages: budget is a resource bound, not a stage.
 """
-from core.budget.cost import ModelCall, call_cost_micros
+from core.budget.context import budget_exempt_scope, budget_user_scope, current_scope, get_broker
+from core.budget.cost import ModelCall, call_cost_micros, estimate_call_cost_micros
 from core.budget.seed import ceiling_micros, seed_mission_cap, seed_user_period
 
 __all__ = [
-    "ModelCall", "call_cost_micros",
+    "ModelCall", "call_cost_micros", "estimate_call_cost_micros",
     "ceiling_micros", "seed_user_period", "seed_mission_cap",
+    "budget_user_scope", "budget_exempt_scope", "current_scope", "get_broker",
 ]

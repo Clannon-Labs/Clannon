@@ -89,3 +89,49 @@ def test_message_history_caching_scoped_to_multi_turn_layers():
     from core.llm.registry import model_settings_for_layer
     assert model_settings_for_layer("orchestrator").get("anthropic_cache") is True   # reuses history across turns
     assert model_settings_for_layer("filter").get("anthropic_cache") is None         # one-shot, nothing to reuse
+
+
+# --- budget anchor: mission_id is read LIVE from deps.ctx at each call, never a stale
+# ContextVar mirror (docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md resolution #2) --------
+
+def test_mission_id_is_read_live_from_deps_ctx_and_model_id_resolved(monkeypatch):
+    import core.llm.framework as framework_mod
+
+    captured = {}
+
+    async def fake_run_agent(agent, *args, **kwargs):
+        captured.update(kwargs)
+        return _Result("hello")
+
+    monkeypatch.setattr(framework_mod, "run_agent", fake_run_agent)
+
+    class _Ctx:
+        mission_id = "mission-42"
+
+    class _Deps:
+        ctx = _Ctx()
+
+    handle = AgentHandle(_OkAgent(), "verifier")
+    asyncio.run(run_structured(handle, "prompt", deps=_Deps()))
+
+    assert captured["budget_mission_id"] == "mission-42"   # live off deps.ctx, not a ContextVar
+    assert captured["budget_model_id"]                     # resolved to a bare (unprefixed) model id
+    assert ":" not in captured["budget_model_id"]
+    assert captured["budget_estimate_micros"] > 0
+
+
+def test_mission_id_defaults_empty_when_deps_has_no_ctx(monkeypatch):
+    import core.llm.framework as framework_mod
+
+    captured = {}
+
+    async def fake_run_agent(agent, *args, **kwargs):
+        captured.update(kwargs)
+        return _Result("hello")
+
+    monkeypatch.setattr(framework_mod, "run_agent", fake_run_agent)
+
+    handle = AgentHandle(_OkAgent(), "verifier")
+    asyncio.run(run_structured(handle, "prompt"))  # no deps at all (verifier/filter path)
+
+    assert captured["budget_mission_id"] == ""

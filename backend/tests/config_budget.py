@@ -42,6 +42,18 @@ def test_run_driver_reads_the_budget_from_config():
     assert run_driver._VERBATIM_TURN_FLOOR == settings.BUDGET.verbatim_turn_floor
 
 
+def test_enforcement_is_off_by_default():
+    # The retry.py anchor must be inert until the owner flips this (real prices + seeding
+    # aren't in place yet — see reports/DECISIONS_FOR_OWNER.md).
+    assert settings.BUDGET.enforcement_enabled is False
+
+
+def test_estimate_knobs_are_positive():
+    assert settings.BUDGET.media_token_estimate_per_item > 0
+    assert settings.BUDGET.output_token_estimate_fallback > 0
+    assert settings.BUDGET.redis_url
+
+
 # ── 2. fail-loud validation: a bad money knob never loads silently ────────────────────────
 
 @pytest.mark.parametrize("bad_fraction", [0.0, -0.1, 1.01, 2.0])

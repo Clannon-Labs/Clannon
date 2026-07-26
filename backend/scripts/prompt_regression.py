@@ -145,17 +145,23 @@ async def main(which: str) -> int:
         print(f"  {n}: source={reg.get(n).source}")
     print()
 
+    # A direct dev-script call to run_structured, outside any api/ turn (no user_id scope is
+    # ever set here) — explicit opt-out so the budget anchor skips quietly instead of logging
+    # a wiring-bug ERROR once enforcement is on (BUDGET_ENFORCEMENT_ANCHOR.md resolution #4).
+    from core.budget.context import budget_exempt_scope
+
     tot_ok = tot_miss = tot_err = 0
-    if which in ("all", "verifier"):
-        print("VERIFIER (input gate):")
-        o, m, e = await _run_verifier()
-        tot_ok += o; tot_miss += m; tot_err += e
-        print()
-    if which in ("all", "filter"):
-        print("FILTER (output gate):")
-        o, m, e = await _run_filter()
-        tot_ok += o; tot_miss += m; tot_err += e
-        print()
+    with budget_exempt_scope():
+        if which in ("all", "verifier"):
+            print("VERIFIER (input gate):")
+            o, m, e = await _run_verifier()
+            tot_ok += o; tot_miss += m; tot_err += e
+            print()
+        if which in ("all", "filter"):
+            print("FILTER (output gate):")
+            o, m, e = await _run_filter()
+            tot_ok += o; tot_miss += m; tot_err += e
+            print()
 
     print(f"TOTAL: {tot_ok} ok / {tot_miss} miss / {tot_err} err")
     return 0 if (tot_miss == 0 and tot_err == 0) else 1

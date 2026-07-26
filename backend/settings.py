@@ -59,6 +59,10 @@ class BudgetConfig(BaseModel):
     infra_cost_per_second_micros: int = Field(ge=0)        # µ$ per wall-clock second (B2b)
     default_memory_budget_tokens: int = Field(gt=0)        # default hydration token budget
     memory_chars_per_token: int = Field(gt=0)              # chars/token fallback if tiktoken fails
+    enforcement_enabled: bool = False                      # retry.py anchor OFF switch (default false)
+    redis_url: str = Field(min_length=1)                   # the enforcement broker's Redis connection
+    media_token_estimate_per_item: int = Field(gt=0)       # flat input-token allowance per attachment
+    output_token_estimate_fallback: int = Field(gt=0)      # worst-case output when a layer has no cap
 
 
 def _load_budget() -> BudgetConfig:

@@ -34,10 +34,12 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from core.budget.cost import estimate_call_cost_micros
 from foundation import MaxRetriesExceededError, ModelUnavailableError, VrakshaError
 from registry.config import get_prompt
+import settings
 
-from .registry import model_for_layer, model_settings_for_layer, usage_limits_for_layer
+from .registry import model_for_layer, model_name_for_layer, model_settings_for_layer, usage_limits_for_layer
 from .retry import run_agent
 
 T = TypeVar("T")
@@ -189,17 +191,51 @@ async def run_structured(
     # text by default; [text, BinaryContent...] when a caller attaches media (the
     # media expert passes images here for a multimodal model)
     user_prompt = _with_media(prompt, media)
+    # The budget anchor's inputs, built HERE (not in retry.py) because this is the one place
+    # both the layer (-> real model id, for pricing) and the live deps (-> mission_id, when this
+    # call is inside a mission) are in scope. `deps.ctx` only exists for the orchestrator path
+    # (OrchestratorDeps) — every other caller (verifier, filter, memory, experts) naturally gets
+    # mission_id="" (no mission ceiling), which is correct: only orchestrator-issued calls are
+    # mission-scoped today. See docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md resolution #2.
+    # `model_for_layer` returns the RUNNABLE model (may be a FallbackModel wrapping a whole
+    # provider chain) — not a pricing key. `model_name_for_layer` gives the single
+    # provider-qualified string ("anthropic:claude-sonnet-5"); pricing.yaml keys the bare
+    # model id, so strip the provider prefix (matches how `model_name_for_layer` itself
+    # already resolves per-run overrides, so this stays override-aware for free).
+    # Best-effort, like usage.accumulate(): a layer name the registry doesn't know (the
+    # `model=` param exists ONLY to inject a TestModel/FunctionModel under a synthetic test
+    # layer, per this function's own docstring) must never crash the actual call — metering
+    # degrades to "unpriced this call" rather than breaking the run.
+    budget_model_id = ""
+    budget_estimate_micros = 0
+    try:
+        budget_model_id = model_name_for_layer(handle.layer).rsplit(":", 1)[-1]
+        budget_estimate_micros = estimate_call_cost_micros(
+            model_id=budget_model_id,
+            prompt=prompt,
+            conversation=conversation,
+            media_count=len(media) if media else 0,
+            output_tokens_limit=limits.output_tokens_limit,
+            elapsed_ceiling_s=settings.ORCHESTRATOR.turn_wall_clock_s,
+        )
+    except Exception:  # noqa: BLE001 — metering must never break the run it's metering
+        pass
+    budget_mission_id = getattr(getattr(deps, "ctx", None), "mission_id", "") or ""
     try:
         if model is not None:
             with handle._agent.override(model=model):
                 result = await run_agent(
                     handle._agent, user_prompt, deps=deps, usage_limits=limits,
                     event_stream_handler=esh, message_history=history,
+                    budget_model_id=budget_model_id, budget_mission_id=budget_mission_id,
+                    budget_estimate_micros=budget_estimate_micros,
                 )
         else:
             result = await run_agent(
                 handle._agent, user_prompt, deps=deps, usage_limits=limits,
                 event_stream_handler=esh, message_history=history,
+                budget_model_id=budget_model_id, budget_mission_id=budget_mission_id,
+                budget_estimate_micros=budget_estimate_micros,
             )
     except VrakshaError:
         raise

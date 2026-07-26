@@ -33,6 +33,7 @@ if os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
 
 from observability import DecisionLogSink, configure_logging  # noqa: E402
 from core import pipeline  # noqa: E402
+from core.budget.context import budget_exempt_scope  # noqa: E402
 
 
 def _stages_without(*names: str):
@@ -43,10 +44,13 @@ def _stages_without(*names: str):
 
 async def _run(brief: str, *, session: str, stages=None) -> "object":
     sink = DecisionLogSink()
-    return await pipeline.run(
-        brief, session_id=session, user_id="smoke-user",
-        decision_log=sink, stages=stages,
-    )
+    # Smoke runs are outside any api/ turn (no usage_scope either) — explicit opt-out so the
+    # budget anchor skips quietly instead of logging a wiring-bug ERROR once enforcement is on.
+    with budget_exempt_scope():
+        return await pipeline.run(
+            brief, session_id=session, user_id="smoke-user",
+            decision_log=sink, stages=stages,
+        )
 
 
 def _check(flow, *, expect_answer: bool = True) -> tuple[bool, str]:

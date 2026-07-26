@@ -216,11 +216,17 @@ async def _main() -> int:
     # time the user submits. Best-effort; the local ref keeps it from being GC'd.
     from core.warmup import warmup
     _warm = asyncio.ensure_future(warmup())  # noqa: F841 — keep a strong ref
-    if len(sys.argv) > 1:
-        return await _one_shot(sys.argv[1], user_id)
-    if not sys.stdin.isatty():
-        return await _one_shot(sys.stdin.read(), user_id)
-    return await _repl(user_id)
+    # The CLI doesn't meter usage_scope() either (see core/llm/usage.py) — it's a local,
+    # unbilled entry point outside api/'s turn. Explicit opt-out (not "absence of scope") so
+    # the budget anchor skips it quietly instead of logging a wiring-bug ERROR once enforcement
+    # is ever turned on (docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md resolution #4).
+    from core.budget.context import budget_exempt_scope
+    with budget_exempt_scope():
+        if len(sys.argv) > 1:
+            return await _one_shot(sys.argv[1], user_id)
+        if not sys.stdin.isatty():
+            return await _one_shot(sys.stdin.read(), user_id)
+        return await _repl(user_id)
 
 
 if __name__ == "__main__":

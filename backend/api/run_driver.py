@@ -29,6 +29,7 @@ from foundation import Flow, InputFile
 
 from core import pipeline
 from core.artifacts import LocalArtifactStore
+from core.budget.context import budget_user_scope
 from core.llm import model_overrides, usage_scope
 
 from observability import DecisionLogSink
@@ -316,7 +317,13 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # narrated on the decision log we already stream.
         # usage_scope meters the real tokens every LLM call in this turn spends, so
         # run.tokens_used (and the /usage aggregate) reflect actual spend, not 0.
-        with model_overrides(build_model_overrides(run.user_id, run.session_models)), usage_scope() as run_usage:
+        # budget_user_scope identifies this turn's spend for the retry.py enforcement anchor
+        # (core/llm/retry.py) — inert while settings.BUDGET.enforcement_enabled is False.
+        with (
+            model_overrides(build_model_overrides(run.user_id, run.session_models)),
+            usage_scope() as run_usage,
+            budget_user_scope(run.user_id),
+        ):
             flow: Flow[Any] = await pipeline.run(
                 run.brief,
                 session_id=run.session_id or run.id,

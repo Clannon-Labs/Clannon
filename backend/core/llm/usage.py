@@ -42,28 +42,41 @@ def _as_int(value: Any) -> int:
         return 0
 
 
-def accumulate(result: Any) -> None:
-    """Add one model run's usage to the active scope, if any. Best-effort: a usage
-    shape we don't recognise (or no active scope) is silently ignored — token
-    accounting must never break a run."""
-    acc = _USAGE.get()
-    if acc is None:
-        return
+def extract_usage(result: Any) -> tuple[int, int, int]:
+    """Pull `(input_tokens, output_tokens, requests)` out of a pydantic-ai run result.
+
+    `result.usage` carries the REAL provider-reported token counts. pydantic-ai >= 1.x
+    exposes it as a PROPERTY (a RunUsage); older versions exposed it as a method. Only
+    call it when it is a bare callable that is not already a usage object, so we read
+    the true counts without tripping the deprecation warning. Best-effort: a shape we
+    don't recognise returns zeros rather than raising — never let metering interfere
+    with the run. Shared by `accumulate` (the usage_scope meter) and the budget
+    anchor's reconcile (`core/llm/retry.py`), so there is exactly one unwrapper."""
     try:
-        # `result.usage` carries the REAL provider-reported token counts. pydantic-ai
-        # >= 1.x exposes it as a PROPERTY (a RunUsage); older versions exposed it as a
-        # method. Only call it when it is a bare callable that is not already a usage
-        # object, so we read the true counts without tripping the deprecation warning.
         usage = getattr(result, "usage", None)
         if callable(usage) and not hasattr(usage, "input_tokens"):
             usage = usage()
         if usage is None:
-            return
-        acc.input_tokens += _as_int(getattr(usage, "input_tokens", None))
-        acc.output_tokens += _as_int(getattr(usage, "output_tokens", None))
-        acc.requests += _as_int(getattr(usage, "requests", None))
+            return 0, 0, 0
+        return (
+            _as_int(getattr(usage, "input_tokens", None)),
+            _as_int(getattr(usage, "output_tokens", None)),
+            _as_int(getattr(usage, "requests", None)),
+        )
     except Exception:  # noqa: BLE001 — never let metering interfere with the run
+        return 0, 0, 0
+
+
+def accumulate(result: Any) -> None:
+    """Add one model run's usage to the active scope, if any. A no-op outside an
+    active `usage_scope()` (e.g. the CLI, which does not meter)."""
+    acc = _USAGE.get()
+    if acc is None:
         return
+    input_tokens, output_tokens, requests = extract_usage(result)
+    acc.input_tokens += input_tokens
+    acc.output_tokens += output_tokens
+    acc.requests += requests
 
 
 @contextmanager
