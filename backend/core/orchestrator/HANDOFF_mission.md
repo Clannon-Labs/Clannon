@@ -3,7 +3,32 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## BUILT (2026-07-26, latest) — cross-call workspace persistence (ratified + shipped)
+## FILED (2026-07-26, latest) — CB2 code-symbol tier, design only
+
+Nav/patch-tooling arc + cross-call persistence both shipped and pushed
+(`6c430c1` confirmed on `main`); picked the next backlog item —
+`V1_GAP_ANALYSIS.md`'s only remaining CB2 gap, the symbol tier, explicitly
+named "orchestration's build" in the ratified knowledge-web design §3.3.
+Design filed, **nothing built**: `proposals/to-backend/2026-07-26_cb2-code-
+symbol-tier-design.md`. Two corrections to that older design's assumptions,
+traced not assumed: (1) `ctx` has no `task_id` (only `mission_id`) — v1
+`DERIVED_FROM` targets the MISSION node, not a per-task TASK node; (2)
+`Capabilities.scoped_to()` (what a batch-scoped `code.engineer` run actually
+gets) never receives `GraphPort` — structurally impossible for the real CB2
+path (code.engineer running inside the `engineering` batch) to reach the
+graph today, not just unwired. Proposed fix: an opt-in `graph` param on
+`scoped_to()`, same shape as its existing `allow_memory_write` flag.
+Extraction/write recommended as automatic + server-side (mirrors `_capture_
+artifacts`/the mission-workspace snapshot), not a new model-facing tool —
+avoids handing a large symbol list back through the model. `CALLS` edges
+resolved only when exactly one same-named definition exists in-scan
+(unresolved = silently not written, matching `ast_search`'s own plain-name
+v1-scope precedent).
+
+**Resume: check `proposals/to-orchestration/` for backend's ruling before
+building anything from this design.**
+
+## BUILT (2026-07-26, earlier) — cross-call workspace persistence (ratified + shipped)
 
 Ratified (`proposals/archive/to-orchestration/2026-07-26_cross-call-persistence-
 ratified.md`, §1-§3 as designed, §4 cap placed by backend at 200 MiB
