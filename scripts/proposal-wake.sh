@@ -26,6 +26,27 @@ DEBOUNCE_S=60
 
 log() { echo "clannon-wake[$SIDE]: $*"; }   # goes to the user journal
 
+session_accepts_agent_input() {
+  local session="$1" command pane_pid child stat args
+  command="$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || true)"
+  case "$command" in
+    claude|codex) return 0 ;;
+    bash|zsh|fish|sh|dash)
+      pane_pid="$(tmux display-message -p -t "$session" '#{pane_pid}' 2>/dev/null || true)"
+      [ -n "$pane_pid" ] || return 1
+      for child in $(pgrep -P "$pane_pid" 2>/dev/null); do
+        stat="$(ps -o stat= -p "$child" 2>/dev/null | tr -d ' ')"
+        args="$(ps -o args= -p "$child" 2>/dev/null)"
+        case "$stat" in *T*|*Z*) continue ;; esac
+        case "$args" in
+          *clannon-provider-supervisor.sh*|claude\ *|codex\ *) return 0 ;;
+        esac
+      done
+      ;;
+  esac
+  return 1
+}
+
 # Anything actually pending? Re-scan instead of trusting the event: dotfiles,
 # editor swap/backup files (.swp, ~), and non-.md noise never count, and a
 # directory event caused by ARCHIVING (a file moving OUT) finds no pending
@@ -78,6 +99,10 @@ fi
 # it next starts.
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   log "session $SESSION not running — skipped (agent will catch it via inbox check)"
+  exit 0
+fi
+if ! session_accepts_agent_input "$SESSION"; then
+  log "session $SESSION has no live foreground agent — skipped (shell/stopped job protected)"
   exit 0
 fi
 
