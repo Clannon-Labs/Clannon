@@ -39,11 +39,24 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
    send-keys only — never an AI process).
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-25 (mid-session)
+## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session)
 
-- **Last pushed HEAD:** `6b3d4f4` (2026-07-25). Everything LANDED is pushed; specialists have live
-  WIP in their own trees (memory: run_all; orchestration: mission-wiring; that's expected mid-session).
-  Backend's own tree is clean.
+- **Last pushed HEAD:** `3b0f0e7` (2026-07-26). Everything LANDED is pushed; specialists have live
+  WIP in their own trees (orchestration: mission/registry work mid-session, expected). Backend's
+  own tree is clean.
+- **`retry.py` enforcement anchor LANDED** (`3b0f0e7`) — the money layer's last piece. Every LLM
+  call now reserves an estimated µ$ cost before it runs and reconciles the real cost after, at
+  `core/llm/retry.py::run_agent` (the sole `agent.run(` choke point). Behind
+  `settings.BUDGET.enforcement_enabled` (**false by default** — fully inert, no Redis touched,
+  byte-identical to before). New: `core/budget/context.py` (user_id set-once ContextVar +
+  exempt opt-out + lazy broker singleton), `core/budget/cost.py::estimate_call_cost_micros`
+  (pre-call worst-case), `core/llm/framework.py` builds the scope per-call (model_id via
+  `model_name_for_layer`, mission_id read LIVE off `deps.ctx` — never a ContextVar mirror, see
+  the anchor doc's resolution #2), `api/run_driver.py` sets the user scope alongside
+  `usage_scope()`. Full suite green (1397 passed, 13 env-skips), `check_invariants.py` clean
+  (7 PASS, 1 pre-existing WARN). **Remaining gates before flipping the flag on** (owner):
+  real per-model prices (pricing.yaml still PLACEHOLDER), prod budgets seeded, and a security
+  review of the built anchor code (queued — small, self-contained diff).
 - **⚠️ OPERATIONAL — READ BEFORE RUNNING TESTS:** the 24 GB box **cannot run concurrent full
   pytest suites** (~5 GB each) — doing so OOM-killed two live specialist sessions this session.
   **Norm:** targeted tests + import-smoke for isolated/additive changes; run a full suite only
@@ -92,14 +105,12 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
     §3-§5 gated on the archive track. Batch-loader-ceiling + archive-extraction also queued.
   - **Security:** all reviews + the archive-upload half DONE. Standby reviewer (mission-wiring tools +
     archive-extraction come to it next); optionally building a no-bypass invariant grep-gate meanwhile.
-- **Backend's (my) own queue:** the **`retry.py` enforcement anchor** — DESIGN LOCKED (full spec in
-  `docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md`) and **NOW UNBLOCKED** — orchestration's mission-wiring
-  landed (`01e0625`/`d29f76e`): `ctx.mission_id` is set in loop.py's `_sync_mission_state`, and
-  `Ports.budget=UnlimitedBudget` is the one-line swap seam for the real broker. **THIS IS THE NEXT BUILD:**
-  the anchor reads ctx.mission_id fresh per-LLM-call in `framework.py`, behind an OFF flag. Data plane (spend+seed) done; ENABLING gated on
-  real prices (owner) + prod seeding. Also queued: the µ$ **rename** of `BudgetPort`/`TokenBudget`
-  (coordinate — orchestration consumes `TokenBudget` in `mission.py`, so AFTER its mission-wiring lands);
-  the config long-tail (ORCHESTRATOR_*/EXPERT_*/TOOL_* removal — test-ref repoints, edit atomically; D11;
+- **Backend's (my) own queue:** the `retry.py` enforcement anchor is **DONE** (`3b0f0e7`, see above)
+  — money layer is now data-plane + enforcement-plane complete, OFF by default. **NEXT:** route the
+  anchor's diff to security for the enforcement-on gate review (small, self-contained — `core/budget/
+  context.py` + the `framework.py`/`retry.py` deltas); then the µ$ **rename** of `BudgetPort`/
+  `TokenBudget` (coordinate — orchestration consumes `TokenBudget` in `mission.py`); the config
+  long-tail (ORCHESTRATOR_*/EXPERT_*/TOOL_* removal — test-ref repoints, edit atomically; D11;
   models.yaml→config/).
 - **Owner decisions pending** (`reports/DECISIONS_FOR_OWNER.md`): (1) OOM norm — my rec is the lightweight
   norm above (no action needed); (2) **budget go-live needs real per-model prices + infra values** —
