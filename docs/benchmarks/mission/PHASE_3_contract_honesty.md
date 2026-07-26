@@ -2,12 +2,16 @@
 
 **Goal:** every UI-touched endpoint typed + stable; the seal earned.
 
-- [ ] **Earn the VERIFIED seal** (CB5 visibility): expose the output filter's real
-      groundedness/citation-integrity verdict as a typed field + states
-      (verified / partial / unverified) on the Run + a stream event. FilterResult
-      today discards the groundedness signal the LLM already computes
-      (security/filter/filter.py::_grounding_view). Define the contract in
-      INTEGRATION_CONTRACT.md; additive, no break.
+- [x] **Earn the VERIFIED seal** (CB5 visibility) — DONE (backend).
+      `RunState.verification_state` (mirrors `FilterResult.groundedness` verbatim:
+      grounded/partial/ungrounded/not_applicable) set unconditionally at
+      `api/run_driver.py` right where `block_stage` is set — on BOTH the pass and
+      block path, not just block (the bug: it was read only inside the blocked
+      branch before). Emitted as a `{"type":"verification","state":...}` stream
+      event, persisted, in `full_json()` as `verificationState`. Tests:
+      `tests/cb5_seal_surfacing.py`. NOT done: `INTEGRATION_CONTRACT.md` doesn't
+      exist yet (Phase 4 deliverable, per README) — fold this contract in when it's
+      written. Frontend UI/badge wiring is its own proposal, not filed yet.
 - [ ] Build-state honesty sweep of docs/ touched this pass (BUILT/PARTIAL/PROPOSED
       + file:line); delete/fix stale benchmark docs.
 - [ ] Security invariants unchanged — if any optimisation weakens user_id scoping /

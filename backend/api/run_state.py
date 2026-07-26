@@ -16,7 +16,7 @@ import asyncio
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 _REPORT_CHUNK_WORDS = 6
 
@@ -110,6 +110,12 @@ class RunState:
     # input-side gates (sanitize/verify) mean nothing reached the models; the
     # output filter means a draft was produced then held back.
     block_stage: str | None = None
+    # the output filter's real verdict on this turn's draft (CB5 "earned seal"),
+    # mirroring security.filter.schemas.FilterResult.groundedness verbatim — one
+    # source of truth. Set once the filter runs, on BOTH pass and block (a block
+    # is itself a verdict); None only if the filter never ran at all (e.g. an
+    # earlier gate already blocked the turn).
+    verification_state: Literal["grounded", "partial", "ungrounded", "not_applicable"] | None = None
     # the session this turn belongs to. Root turns own their session (= id);
     # follow-ups inherit the parent's, so the whole chat is one session.
     session_id: str = ""
@@ -134,6 +140,10 @@ class RunState:
     def on_status(self, status: str) -> None:
         self.status = status
         self.emit({"type": "status", "status": status})
+
+    def on_verification(self, state: str) -> None:
+        self.verification_state = state
+        self.emit({"type": "verification", "state": state})
 
     def on_log_entry(self, entry: Any) -> None:
         kind = getattr(entry, "kind", "observation")
@@ -233,4 +243,5 @@ class RunState:
             "parentRunId": self.parent_run_id,
             "sessionId": self.session_id or self.id,
             "blockStage": self.block_stage,
+            "verificationState": self.verification_state,
         }

@@ -57,6 +57,7 @@ PERSISTED = {
     "session_id",
     "project_id",
     "sources",
+    "verification_state",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -116,6 +117,7 @@ def _fully_populated_run() -> RunState:
     run.project_id = "proj_xyz"
     run.sources = [{"id": "src_1", "title": "example.com — clannon",
                     "url": "https://example.com/clannon", "domain": "example.com"}]
+    run.verification_state = "grounded"
     return run
 
 

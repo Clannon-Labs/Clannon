@@ -25,6 +25,7 @@ def _fake_flow(text="word " * 40):
         sanitization_blocked=False,
         verifier_blocked=False,
         filter_blocked=False,
+        filter_result=None,
         failed=False,
         failure_error=None,
         orchestrator_response=SimpleNamespace(text=text, message=""),

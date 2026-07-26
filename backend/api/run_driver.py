@@ -359,6 +359,13 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 run.message = _final_msg
                 run.emit({"type": "message_delta", "text": _final_msg})
 
+            # CB5 earned seal: surface the output filter's real verdict once it ran,
+            # on BOTH the pass and block path — a block is itself a verdict. Stays
+            # unemitted if an earlier gate (sanitize/verify) blocked before the
+            # filter ever ran. Emitted once, right before the terminal status below.
+            if ctx.filter_result is not None:
+                run.on_verification(ctx.filter_result.groundedness)
+
             if ctx.blocked or ctx.sanitization_blocked or ctx.verifier_blocked or ctx.filter_blocked:
                 # record WHICH gate blocked so the UI can explain it accurately
                 if ctx.sanitization_blocked:

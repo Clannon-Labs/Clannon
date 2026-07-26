@@ -30,6 +30,7 @@ def _fake_flow(*, blocked=False, failed=False, proposed=(), persisted=()):
         sanitization_blocked=False,
         verifier_blocked=False,
         filter_blocked=blocked,            # a filter block is the case the timing fix guards
+        filter_result=SimpleNamespace(groundedness="ungrounded" if blocked else "grounded"),
         failed=failed,
         failure_error=None,
         orchestrator_response=SimpleNamespace(text="the draft answer", message=""),

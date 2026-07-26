@@ -218,8 +218,8 @@ class RunStore:
             db.execute(
                 "INSERT OR REPLACE INTO runs "
                 "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,message,memory_writes_json,"
-                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json,inputs_json,project_id,sources_json) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json,inputs_json,project_id,sources_json,verification_state) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id, run.user_id, run.title, run.brief, run.status,
                     run.created_at, run.tokens_used, json.dumps(run.log),
@@ -228,6 +228,7 @@ class RunStore:
                     run.feedback_rating, run.feedback_comment, run.parent_run_id,
                     run.session_id or run.id, run.block_stage, json.dumps(run.artifacts),
                     json.dumps(run.inputs), run.project_id, json.dumps(run.sources),
+                    run.verification_state,
                 ),
             )
         # finished runs no longer need live queues in memory
@@ -256,6 +257,7 @@ class RunStore:
         run.inputs = json.loads(row["inputs_json"]) if "inputs_json" in keys and row["inputs_json"] else []
         run.project_id = row["project_id"] if "project_id" in keys else None
         run.sources = json.loads(row["sources_json"]) if "sources_json" in keys and row["sources_json"] else []
+        run.verification_state = row["verification_state"] if "verification_state" in keys else None
         return run
 
     def get(self, user_id: str, rid: str) -> RunState | None:
