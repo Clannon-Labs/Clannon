@@ -2,8 +2,8 @@
 
 One deadline (`ctx.turn_deadline`) is set at turn start and bounds BOTH the initial
 orchestrator pass and every filter-revision. Previously each of ≤FILTER_MAX_REVISIONS
-revisions got a FRESH `ORCHESTRATOR_TIMEOUT_S`, compounding to ~1440s/24min with no
-outer kill. Now a revision budgets against the time REMAINING; budget exhausted ⇒
+revisions got a FRESH copy of the orchestrator's own timeout, compounding to ~1440s/24min
+with no outer kill. Now a revision budgets against the time REMAINING; budget exhausted ⇒
 `wait_for` times out ⇒ fail closed. These prove the bound holds AND that a healthy
 budget doesn't break legitimate recovery.
 """
@@ -12,6 +12,7 @@ import asyncio
 import time
 from types import SimpleNamespace
 
+import settings
 from foundation import VrakshaContext, constants
 import core.pipeline as pipeline
 
@@ -43,7 +44,7 @@ def _patch(monkeypatch, run_loop):
 def test_revision_fails_closed_when_turn_budget_exhausted(monkeypatch):
     """An exhausted whole-turn deadline gives the revision ~0 budget, so a revision
     that would take real time times out and fails closed — it does NOT get a fresh
-    full ORCHESTRATOR_TIMEOUT_S (the compounding bug that allowed a ~24min runaway)."""
+    full orchestrator timeout (the compounding bug that allowed a ~24min runaway)."""
     async def slow_run_loop(normalized, ports, ctx):
         await asyncio.sleep(0.10)  # completes on a fresh full budget; must NOT here
         return SimpleNamespace(text="revised", confidence=0.9)
@@ -76,4 +77,4 @@ def test_revision_proceeds_with_healthy_turn_budget(monkeypatch):
 def test_turn_wall_clock_is_above_one_pass():
     """The ceiling must exceed a single legitimate pass, so a normal turn is never cut
     short and the bound only ever catches compounding/runaway."""
-    assert constants.TURN_WALL_CLOCK_S > constants.ORCHESTRATOR_TIMEOUT_S
+    assert settings.ORCHESTRATOR.turn_wall_clock_s > settings.ORCHESTRATOR.timeout_s

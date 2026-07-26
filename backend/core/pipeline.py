@@ -220,9 +220,10 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
         try:
             ports = build_default_ports(ctx)
             # Budget this revision against the WHOLE-TURN deadline set at turn start, so
-            # revisions can't compound past TURN_WALL_CLOCK_S (each used to get a fresh
-            # ORCHESTRATOR_TIMEOUT_S). Budget exhausted ⇒ wait_for times out ⇒ fail closed
-            # below. Falls back to the per-pass limit if no deadline was set (defensive).
+            # revisions can't compound past settings.ORCHESTRATOR.turn_wall_clock_s (each used
+            # to get a fresh settings.ORCHESTRATOR.timeout_s). Budget exhausted ⇒ wait_for times
+            # out ⇒ fail closed below. Falls back to the per-pass limit if no deadline was set
+            # (defensive).
             _budget = (max(0.0, ctx.turn_deadline - time.monotonic())
                        if ctx.turn_deadline else settings.ORCHESTRATOR.timeout_s)
             revised = await asyncio.wait_for(

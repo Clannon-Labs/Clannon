@@ -169,7 +169,6 @@ def test_anthropic_cache_settings_are_inert_on_other_providers():
 # does not. Update intentionally, never to make a red test green.
 
 from core.llm.registry import model_settings_for_layer, usage_limits_for_layer
-from foundation import constants
 import settings
 
 # the two anthropic prompt-prefix cache knobs every layer carries
@@ -198,7 +197,7 @@ EXPECTED_MODEL_SETTINGS = {
 # (request_limit, output_tokens_limit) for the no-override base path
 EXPECTED_USAGE_LIMITS = {
     "verifier": (settings.VERIFIER.max_retries + 1, settings.VERIFIER.max_tokens),
-    "orchestrator": (constants.ORCHESTRATOR_MAX_TURNS + 1, constants.ORCHESTRATOR_MAX_TOKENS),
+    "orchestrator": (settings.ORCHESTRATOR.max_turns + 1, settings.ORCHESTRATOR.max_tokens),
     # everything else is a one-shot structured agent: one request, no token cap baked in
     "filter": (1, None),
     "research": (1, None),
@@ -235,7 +234,7 @@ def test_usage_limits_per_layer_are_pinned(layer, expected):
 def test_usage_limits_per_run_overrides_resize_request_limit():
     # max_turns resizes the request cap to turns+1; the layer's base token cap is preserved
     orch = usage_limits_for_layer("orchestrator", max_turns=5)
-    assert (orch.request_limit, orch.output_tokens_limit) == (6, constants.ORCHESTRATOR_MAX_TOKENS)
+    assert (orch.request_limit, orch.output_tokens_limit) == (6, settings.ORCHESTRATOR.max_tokens)
     # a tool-driving layer with no base token cap: override sets requests, tokens stay unbounded
     research = usage_limits_for_layer("research", max_turns=8)
     assert (research.request_limit, research.output_tokens_limit) == (9, None)

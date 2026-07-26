@@ -10,7 +10,7 @@ Proves three layers of overload protection fire BEFORE any paid LLM stage runs:
      throttled at intake once the global burst capacity is exhausted.
 
   3. Per-layer token-budget guard (UsageLimits): the orchestrator's configured
-     request_limit (ORCHESTRATOR_MAX_TURNS + 1) and output_tokens_limit cap how
+     request_limit (settings.ORCHESTRATOR.max_turns + 1) and output_tokens_limit cap how
      many tokens a single run can spend, bounding compute cost per request.
 
   4. Railway short-circuit: a blocked Flow has should_stop == True; Flow.then()
@@ -26,7 +26,7 @@ import asyncio
 
 import pytest
 
-from foundation import Flow, constants
+from foundation import Flow
 import settings
 from core.intake import intake, rate_limiter
 from core.intake.rate_limiter import (
@@ -305,12 +305,12 @@ def test_rate_limited_flow_origin_is_intake():
 def test_orchestrator_request_limit_matches_max_turns_constant():
     """
     usage_limits_for_layer('orchestrator') sets request_limit to
-    ORCHESTRATOR_MAX_TURNS + 1 (turns + the mandatory final-answer request).
+    settings.ORCHESTRATOR.max_turns + 1 (turns + the mandatory final-answer request).
     This is the cap that fires UsageLimitExceeded if an orchestrator run attempts
     more LLM calls than the configured turn budget allows.
     """
     limits = usage_limits_for_layer("orchestrator")
-    expected = constants.ORCHESTRATOR_MAX_TURNS + 1
+    expected = settings.ORCHESTRATOR.max_turns + 1
     assert limits.request_limit == expected, (
         f"expected request_limit={expected}, got {limits.request_limit}"
     )
@@ -318,12 +318,12 @@ def test_orchestrator_request_limit_matches_max_turns_constant():
 
 def test_orchestrator_output_token_cap_is_configured():
     """
-    The orchestrator's output_tokens_limit matches ORCHESTRATOR_MAX_TOKENS,
+    The orchestrator's output_tokens_limit matches settings.ORCHESTRATOR.max_tokens,
     bounding the number of output tokens any single orchestrator run can generate.
     """
     limits = usage_limits_for_layer("orchestrator")
-    assert limits.output_tokens_limit == constants.ORCHESTRATOR_MAX_TOKENS, (
-        f"expected output_tokens_limit={constants.ORCHESTRATOR_MAX_TOKENS}, "
+    assert limits.output_tokens_limit == settings.ORCHESTRATOR.max_tokens, (
+        f"expected output_tokens_limit={settings.ORCHESTRATOR.max_tokens}, "
         f"got {limits.output_tokens_limit}"
     )
 

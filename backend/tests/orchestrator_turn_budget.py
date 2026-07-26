@@ -3,11 +3,11 @@ Hermetic turn-budget harness for the orchestrator and expert loops.
 
 WHAT THIS PINS:
   (a) The orchestrator loop is forced to a final answer once it hits
-      ORCHESTRATOR_MAX_TURNS -- a pathological spy that always requests another
+      settings.ORCHESTRATOR.max_turns -- a pathological spy that always requests another
       tool call must terminate, never run unbounded paid rounds.
-  (b) A single expert run is bounded by EXPERT_MAX_TURNS in the same way.
+  (b) A single expert run is bounded by settings.EXPERTS.max_turns in the same way.
   (c) The total number of model calls in each case is finite and <=
-      ORCHESTRATOR_MAX_TURNS + 2 / EXPERT_MAX_TURNS + 2 respectively.
+      settings.ORCHESTRATOR.max_turns + 2 / settings.EXPERTS.max_turns + 2 respectively.
 
 This test is DISTINCT from tests/orchestrator_recovery.py, which pins graceful
 degradation on rate-limit and timeout failures. This harness pins the TURN-CAP
@@ -26,7 +26,8 @@ from pydantic_ai import ModelResponse
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
-from foundation import VrakshaContext, constants
+import settings
+from foundation import VrakshaContext
 from registry.capabilities import discover
 from registry.capabilities.handler import Capabilities
 from registry.capabilities.schemas import ExpertOutput
@@ -43,12 +44,12 @@ def _caps():
 
 
 # ---------------------------------------------------------------------------
-# A. Orchestrator: loop capped at ORCHESTRATOR_MAX_TURNS
+# A. Orchestrator: loop capped at settings.ORCHESTRATOR.max_turns
 # ---------------------------------------------------------------------------
 
 def test_orchestrator_loop_is_bounded_at_cap():
     """A pathological spy that always calls 'remember' (always eager, never deferred)
-    must be forced to a final answer once the orchestrator hits ORCHESTRATOR_MAX_TURNS
+    must be forced to a final answer once the orchestrator hits settings.ORCHESTRATOR.max_turns
     -- it must NOT loop forever and consume unbounded paid rounds.
 
     Flags an unbounded loop as a REAL gap in two ways:
@@ -80,18 +81,18 @@ def test_orchestrator_loop_is_bounded_at_cap():
             user_prompt="loop forever",
             output_type=OrchestratorAnswer,
             model=FunctionModel(always_loop),
-            # NO max_turns override: uses the real ORCHESTRATOR_MAX_TURNS from constants
+            # NO max_turns override: uses the real settings.ORCHESTRATOR.max_turns
         )
 
     ans = asyncio.run(asyncio.wait_for(_run(), timeout=30))
 
-    cap = constants.ORCHESTRATOR_MAX_TURNS
+    cap = settings.ORCHESTRATOR.max_turns
     call_count = len(call_log)
     # Upper bound: cap+1 requests in the main loop + 1 for the forced-answer pass
     upper_bound = cap + 2
     print(
         f"\n[turn-budget] orchestrator: {call_count} model calls"
-        f" vs ORCHESTRATOR_MAX_TURNS={cap} (bound={upper_bound})"
+        f" vs settings.ORCHESTRATOR.max_turns={cap} (bound={upper_bound})"
     )
 
     assert isinstance(ans, OrchestratorAnswer), (
@@ -107,11 +108,11 @@ def test_orchestrator_loop_is_bounded_at_cap():
 
 
 # ---------------------------------------------------------------------------
-# B. Expert: loop capped at EXPERT_MAX_TURNS via think()
+# B. Expert: loop capped at settings.EXPERTS.max_turns via think()
 # ---------------------------------------------------------------------------
 
 def test_expert_loop_is_bounded_at_cap():
-    """An expert spy that always calls 'load_skill' must terminate at EXPERT_MAX_TURNS.
+    """An expert spy that always calls 'load_skill' must terminate at settings.EXPERTS.max_turns.
     Exercises the think() path in registry.capabilities.handler.support directly,
     with the model replaced by a FunctionModel spy.
 
@@ -164,13 +165,13 @@ def test_expert_loop_is_bounded_at_cap():
                 asyncio.wait_for(think(env, "loop inside an expert forever"), timeout=30)
             )
 
-    cap = constants.EXPERT_MAX_TURNS
+    cap = settings.EXPERTS.max_turns
     call_count = len(call_log)
     # Upper bound: cap+1 requests in the main loop + 1 for the forced-answer pass
     upper_bound = cap + 2
     print(
         f"\n[turn-budget] expert: {call_count} model calls"
-        f" vs EXPERT_MAX_TURNS={cap} (bound={upper_bound})"
+        f" vs settings.EXPERTS.max_turns={cap} (bound={upper_bound})"
     )
 
     assert isinstance(output, ExpertOutput), (
@@ -179,7 +180,7 @@ def test_expert_loop_is_bounded_at_cap():
     assert call_count > 0, "spy was never called -- something is wrong with the test setup"
     assert call_count <= upper_bound, (
         f"UNBOUNDED EXPERT LOOP: spy called {call_count} times but bound={upper_bound}. "
-        f"EXPERT_MAX_TURNS is NOT enforced in think() -- "
+        f"settings.EXPERTS.max_turns is NOT enforced in think() -- "
         f"a pathological expert can run unbounded paid rounds. This is a real gap."
     )
     assert output.full_content or output.summary, (

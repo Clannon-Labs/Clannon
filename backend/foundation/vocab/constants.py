@@ -29,14 +29,14 @@ Sections:
 # Overall request lifecycle. These are the outermost limits.
 # ---------------------------------------------------------------------------
 
-# The ENFORCED whole-turn wall clock. One deadline is set at turn start
-# (`ctx.turn_deadline`); the initial orchestrator pass AND every filter-revision budget
-# their `wait_for` against the time REMAINING, so a turn can never exceed this — even
+# The ENFORCED whole-turn wall clock — MIGRATED to config (D1, single-source):
+# config/backend/orchestrator.yaml -> settings.ORCHESTRATOR.turn_wall_clock_s. One deadline is
+# set at turn start (`ctx.turn_deadline`); the initial orchestrator pass AND every filter-revision
+# budget their `wait_for` against the time REMAINING, so a turn can never exceed this — even
 # across revisions. (Previously each of ≤FILTER_MAX_REVISIONS revisions got a FRESH
-# ORCHESTRATOR_TIMEOUT_S, compounding to ~1440s/24min with no outer kill.) Set above
-# ORCHESTRATOR_TIMEOUT_S so a single legitimate pass is never cut short; it is a hard
+# ORCHESTRATOR timeout, compounding to ~1440s/24min with no outer kill.) Set above the
+# orchestrator's own timeout so a single legitimate pass is never cut short; it is a hard
 # ceiling on runaway. Budget exhausted ⇒ fail closed (no delivery). Tunable.
-TURN_WALL_CLOCK_S           = 720.0   # max wall time for ONE full user turn (incl. revisions)
 # Output-filter recovery budget — see FILTER_MAX_REVISIONS in the FILTER section.
 
 
@@ -104,13 +104,11 @@ MAX_VIDEO_DURATION_S        = 300                 # 5 minutes max video
 # Main LLM. Gets the most time — it does the real reasoning.
 # ---------------------------------------------------------------------------
 
-ORCHESTRATOR_TIMEOUT_S      = 480.0  # whole-loop wall time, sized to the workflow worst case: a parallel
-                                     # expert batch + the synthesis writer (one EXPERT_TIMEOUT_S each,
-                                     # they run in sequence) + decompose/answer turns + fallback retries
-ORCHESTRATOR_MAX_TOKENS     = 8096
-ORCHESTRATOR_MAX_TURNS      = 20     # max tool rounds in one orchestrator turn
-                                     # before the cap forces a final answer
-ORCHESTRATOR_MAX_RETRIES    = 2      # retries on malformed orchestrator output before ERROR
+# ORCHESTRATOR_* (timeout_s, max_tokens, max_turns, max_retries) — MIGRATED to config (D1,
+# single-source): config/backend/orchestrator.yaml -> settings.ORCHESTRATOR.*. Whole-loop wall
+# time is sized to the workflow worst case: a parallel expert batch + the synthesis writer (one
+# expert timeout each, they run in sequence) + decompose/answer turns + fallback retries.
+# core/orchestrator/orchestrator.py + core/llm/registry.py read them from there now.
 
 
 # ---------------------------------------------------------------------------
@@ -118,13 +116,11 @@ ORCHESTRATOR_MAX_RETRIES    = 2      # retries on malformed orchestrator output 
 # Per-tool invocation limits. The sandbox gets its own timeout.
 # ---------------------------------------------------------------------------
 
-TOOL_TIMEOUT_S              = 30.0   # per tool call wall time
-TOOL_SANDBOX_TIMEOUT_S      = 25.0   # sandbox process must exit before tool timeout
-TOOL_MAX_RETRIES            = 2      # retries on transient sandbox errors
-TOOL_MAX_OUTPUT_BYTES       = 1 * 1024 * 1024   # 1 MB cap on tool output
-FETCH_MAX_RESPONSE_BYTES    = 5 * 1024 * 1024   # hard cap on a fetched HTTP body, enforced
-                                                # while streaming — a hostile/compromised server
-                                                # must never be able to stream us out of memory
+# TOOL_* (timeout_s, sandbox_timeout_s, max_retries, max_output_bytes) + FETCH_MAX_RESPONSE_BYTES
+# (the hard cap on a fetched HTTP body, enforced while streaming — a hostile/compromised server
+# must never be able to stream us out of memory) — MIGRATED to config (D1, single-source):
+# config/backend/tools.yaml -> settings.TOOLS.*. registry/capabilities + tools/ read them from
+# there now.
 
 
 # ---------------------------------------------------------------------------
@@ -132,15 +128,10 @@ FETCH_MAX_RESPONSE_BYTES    = 5 * 1024 * 1024   # hard cap on a fetched HTTP bod
 # Experts can run longer than tools — they may themselves invoke tools.
 # ---------------------------------------------------------------------------
 
-EXPERT_TIMEOUT_S            = 240.0  # per expert invocation; room for a thorough
-                                     # tool-driving expert (e.g. code: write + run +
-                                     # test over several exec rounds on a long prompt)
-EXPERT_MAX_CONCURRENT       = 3      # max experts running in parallel
-                                     # for one orchestrator turn
-EXPERT_MAX_OUTPUT_TOKENS    = 4096
-EXPERT_MAX_TURNS            = 8      # max tool rounds inside one expert's run
-                                     # (it is a tool-driving agent); bounds the
-                                     # native tool loop alongside EXPERT_TIMEOUT_S
+# EXPERT_* (timeout_s, max_concurrent, max_output_tokens, max_turns) — MIGRATED to config (D1,
+# single-source): config/backend/experts.yaml -> settings.EXPERTS.*. `max_turns` bounds the
+# native tool loop inside one expert's run (it is itself a tool-driving agent), alongside the
+# per-expert wall-clock timeout. registry/capabilities/handler/support.py reads them from there.
 
 
 # ---------------------------------------------------------------------------

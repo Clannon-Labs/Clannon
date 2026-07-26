@@ -16,9 +16,9 @@ need Redis added as a dependency, proposed separately). The mission ceiling
 Nothing here forces either to be built; it makes the ratified seam concrete so the
 implementation has a stable target.
 
-Budget is the MONEY sibling of the whole-turn wall clock (`constants.TURN_WALL_CLOCK_S`,
-the TIME bound): both are fail-closed resource bounds on one turn, so a runaway loop
-cannot overspend the owner's money or time.
+Budget is the MONEY sibling of the whole-turn wall clock (`settings.ORCHESTRATOR.
+turn_wall_clock_s`, the TIME bound): both are fail-closed resource bounds on one turn,
+so a runaway loop cannot overspend the owner's money or time.
 """
 
 from __future__ import annotations

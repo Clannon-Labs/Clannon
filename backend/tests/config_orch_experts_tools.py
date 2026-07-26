@@ -22,6 +22,10 @@ def test_orchestrator_values_match_todays_literals():
     assert (o.episodic_task_excerpt_chars, o.episodic_answer_excerpt_chars) == (200, 500)
     assert o.decision_record_content_chars == 500
     assert (o.degraded_per_finding_chars, o.degraded_max_findings, o.degraded_confidence) == (4000, 6, 0.1)
+    # D1-migrated bounds (formerly ORCHESTRATOR_TIMEOUT_S/MAX_TOKENS/MAX_TURNS/MAX_RETRIES and
+    # TURN_WALL_CLOCK_S in foundation/vocab/constants.py — now removed, this is the sole lock).
+    assert (o.timeout_s, o.max_tokens, o.max_turns, o.max_retries) == (480.0, 8096, 20, 2)
+    assert o.turn_wall_clock_s == 720.0
 
 
 def test_experts_values_match_todays_literals():
@@ -30,21 +34,9 @@ def test_experts_values_match_todays_literals():
     assert (e.max_transcript_chars, e.video_frame_every_s, e.max_video_frames, e.ffmpeg_timeout_s) == (50000, 5, 8, 90.0)
     assert e.media_inline_limit_bytes == 15728640
     assert (e.max_artifacts, e.max_artifact_bytes, e.need_context_max_items) == (20, 10485760, 5)
-
-
-def test_d1_migrated_bounds_equal_the_foundation_constants():
-    # ORCHESTRATOR_*/EXPERT_*/TOOL_* migrating out of foundation/vocab/constants.py (D1). Until
-    # the consumers repoint + the constants are removed, config MUST equal the constant (no-op swap).
-    import foundation.vocab.constants as c
-    o, e, t = settings.ORCHESTRATOR, settings.EXPERTS, settings.TOOLS
-    assert o.timeout_s == c.ORCHESTRATOR_TIMEOUT_S and o.max_tokens == c.ORCHESTRATOR_MAX_TOKENS
-    assert o.max_turns == c.ORCHESTRATOR_MAX_TURNS and o.max_retries == c.ORCHESTRATOR_MAX_RETRIES
-    assert o.turn_wall_clock_s == c.TURN_WALL_CLOCK_S
-    assert e.timeout_s == c.EXPERT_TIMEOUT_S and e.max_concurrent == c.EXPERT_MAX_CONCURRENT
-    assert e.max_output_tokens == c.EXPERT_MAX_OUTPUT_TOKENS and e.max_turns == c.EXPERT_MAX_TURNS
-    assert t.timeout_s == c.TOOL_TIMEOUT_S and t.sandbox_timeout_s == c.TOOL_SANDBOX_TIMEOUT_S
-    assert t.max_retries == c.TOOL_MAX_RETRIES and t.max_output_bytes == c.TOOL_MAX_OUTPUT_BYTES
-    assert t.fetch_max_response_bytes == c.FETCH_MAX_RESPONSE_BYTES
+    # D1-migrated bounds (formerly EXPERT_TIMEOUT_S/MAX_CONCURRENT/MAX_OUTPUT_TOKENS/MAX_TURNS
+    # in foundation/vocab/constants.py — now removed, this is the sole lock).
+    assert (e.timeout_s, e.max_concurrent, e.max_output_tokens, e.max_turns) == (240.0, 3, 4096, 8)
 
 
 def test_tools_values_match_todays_literals():
@@ -56,6 +48,10 @@ def test_tools_values_match_todays_literals():
     assert t.chart_max_bar_width == 80.0
     assert (t.remember_max_chars, t.recall_max_hits, t.remember_write_confidence) == (2000, 3, 0.95)
     assert t.tool_output_preview_chars == 1000
+    # D1-migrated bounds (formerly TOOL_TIMEOUT_S/SANDBOX_TIMEOUT_S/MAX_RETRIES/MAX_OUTPUT_BYTES
+    # + FETCH_MAX_RESPONSE_BYTES in foundation/vocab/constants.py — now removed, sole lock).
+    assert (t.timeout_s, t.sandbox_timeout_s, t.max_retries) == (30.0, 25.0, 2)
+    assert (t.max_output_bytes, t.fetch_max_response_bytes) == (1048576, 5242880)
 
 
 # ── fail-loud cross-field validators ────────────────────────────────────────────────────────
