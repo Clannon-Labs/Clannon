@@ -171,7 +171,6 @@ MEMORY_WRITE_MAX_RETRIES    = 3      # PLANNED — not yet wired (record_write_p
 # ---------------------------------------------------------------------------
 
 CB_FAILURE_THRESHOLD        = 5
-CB_RECOVERY_TIMEOUT_S       = 30.0
 CB_SUCCESS_THRESHOLD        = 2
 
 

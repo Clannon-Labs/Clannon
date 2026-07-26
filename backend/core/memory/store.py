@@ -17,7 +17,7 @@ import uuid
 from typing import Any
 
 import settings
-from foundation import MemoryKind, MemoryStore, constants
+from foundation import MemoryKind, MemoryStore
 
 from .config import MEMORY_DISABLED as DISABLED
 from .config import QDRANT_URL
@@ -32,7 +32,7 @@ COLLECTIONS: dict[MemoryStore, str] = {
     MemoryStore.PROCEDURAL: "vraksha_procedural",
 }
 
-_BREAKER_S = constants.CB_RECOVERY_TIMEOUT_S   # circuit-breaker recovery window (single source)
+_BREAKER_S = settings.RESILIENCE.cb_recovery_timeout_s   # circuit-breaker recovery window (single source)
 _client = None
 _down_until = 0.0
 _ensured: set[str] = set()
