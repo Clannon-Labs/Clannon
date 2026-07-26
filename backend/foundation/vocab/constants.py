@@ -70,18 +70,10 @@ TEXTUAL_MIME_TYPES = frozenset({
 # SANITIZERS — MIGRATED to config (D1, single-source): config/backend/security.yaml ->
 # settings.SECURITY.{sanitizer_timeout_total_s, sanitizer_timeout_worker_s,
 # sanitizer_max_workers, max_text_input_chars, max_pdf_pages, max_image_dimension_px,
-# max_audio_duration_s, max_video_duration_s}. max_text_input_chars is repointed
-# (core/normalizer/builders.py, core/verifier/constants.py — backend's own tree). The
-# other four are placed but NOT YET repointed — security/sanitizers/workers/
-# {image,pdf,audio,video}.py still read the constants below; that tree is the security
-# specialist's, so the repoint is proposed to them (proposals/to-security/), not done
-# here. Remove these four once that repoint lands.
+# max_audio_duration_s, max_video_duration_s}. security/sanitizers/workers/
+# {image,pdf,audio,video}.py + core/normalizer/builders.py + core/verifier/constants.py
+# all read them from there now — nothing left in this file for the sanitizer section.
 # ---------------------------------------------------------------------------
-
-MAX_PDF_PAGES               = 500                 # pages before we reject the pdf
-MAX_IMAGE_DIMENSION_PX      = 8192                # width or height cap in pixels
-MAX_AUDIO_DURATION_S        = 600                 # 10 minutes max audio
-MAX_VIDEO_DURATION_S        = 300                 # 5 minutes max video
 
 
 # ---------------------------------------------------------------------------
