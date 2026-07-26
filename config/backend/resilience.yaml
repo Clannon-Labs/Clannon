@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config/backend/resilience.yaml — circuit-breaker recovery window. BACKEND-CONTROLLED.
+# D11 (owner-ruled 2026-07-06: "yes — new config/backend/resilience.yaml").
+# Behavior-preserving: equals today's foundation/vocab/constants.py CB_RECOVERY_TIMEOUT_S.
+#
+# SCOPED DELIBERATELY to the one value with a real consumer today (core/memory/store.py's
+# qdrant circuit breaker). The rest of the "resilience" family named in the original config
+# survey (cb_failure_threshold, cb_success_threshold, the backpressure semaphore/queue-depth
+# knobs, the dead-letter file knobs) have NO consumer anywhere in the tree — no circuit-breaker
+# state machine, no pipeline-level semaphore, no dead-letter writer exists yet. Placing an unused
+# constant in config doesn't make it tunable; it's speculative config-surface dressed as a control
+# panel (Law 1). They stay in foundation/vocab/constants.py, declared but inert, until something
+# actually reads them — see reports/DECISIONS_FOR_OWNER.md for the owner-facing note on this call.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Seconds a circuit stays OPEN before moving to HALF_OPEN. Unit: seconds, > 0.
+cb_recovery_timeout_s: 30.0

@@ -516,6 +516,27 @@ def _load_security() -> SecurityConfig:
         raise RuntimeError(f"config/backend/security.yaml is invalid:\n{exc}") from exc
 
 
+class ResilienceConfig(BaseModel):
+    """Circuit-breaker recovery window (`config/backend/resilience.yaml`, D1 move D11).
+    `cb_recovery_timeout_s` is read by core/memory/store.py's qdrant circuit breaker — the
+    ONE resilience value with a real consumer today. Deliberately does NOT include the
+    unwired backpressure/dead-letter/circuit-threshold constants (see the yaml file's own
+    header) — they stay in foundation/vocab/constants.py, declared but inert, until a real
+    consumer exists; placing an unused constant in config doesn't make it tunable (Law 1)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cb_recovery_timeout_s: float = Field(gt=0.0)
+
+
+def _load_resilience() -> ResilienceConfig:
+    raw = _load_mapping("backend/resilience.yaml")
+    try:
+        return ResilienceConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/resilience.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
 MEMORY: MemoryConfig = _load_memory()
@@ -526,6 +547,7 @@ LLM: LlmConfig = _load_llm()
 VERIFIER: VerifierConfig = _load_verifier()
 SECURITY: SecurityConfig = _load_security()
 INTAKE: IntakeConfig = _load_intake()
+RESILIENCE: ResilienceConfig = _load_resilience()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -542,4 +564,5 @@ __all__ = [
     "VERIFIER", "VerifierConfig",
     "SECURITY", "SecurityConfig",
     "INTAKE", "IntakeConfig",
+    "RESILIENCE", "ResilienceConfig",
 ]
