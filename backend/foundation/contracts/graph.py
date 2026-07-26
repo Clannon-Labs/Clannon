@@ -41,6 +41,10 @@ class NodeLabel(str, Enum):
 class EdgeLabel(str, Enum):
     IMPORTS = "imports"          # code: A imports B
     DEFINES = "defines"          # code: file defines module/symbol
+    CALLS = "calls"              # code: symbol A calls symbol B (CB2 symbol tier,
+                                  # resolved only when exactly one same-named definition
+                                  # exists in-scan; ambiguous call-sites are unresolved,
+                                  # never guessed — orchestration's design, 2026-07-26)
     # Later phases:
     RELATES_TO = "relates_to"
     CONTRADICTS = "contradicts"
