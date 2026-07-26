@@ -73,3 +73,9 @@ filter_grounding_max_tool_result_chars: 1200 # floor 1200, ceiling 4800
 # max_input_size_bytes (one number, no drift). Enforced in orchestration's _seed_inputs, floor set here.
 archive_max_entries: 10000            # ceiling 10000 — max members in a repo zip
 archive_max_uncompressed_ratio: 20    # ceiling 20 — max uncompressed:compressed ratio (zip-bomb heuristic)
+
+# Cross-call workspace persistence (mission code.engineer snapshot-on-close, orchestration
+# proposal 2026-07-26 §4). Absolute cap, not a ratio — the outbound snapshot has no "original
+# compressed size" to bound against. A workspace over this skips its snapshot for that turn
+# rather than truncating it (a corrupt/partial snapshot would break the next restore).
+max_workspace_snapshot_bytes: 209715200   # ceiling 209715200 (200 MiB)

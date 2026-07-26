@@ -411,6 +411,13 @@ _FILTER_GROUNDING_CEILINGS: dict[str, int] = {k: v * 4 for k, v in _FILTER_GROUN
 _ARCHIVE_CEILINGS: dict[str, int] = {
     "archive_max_entries": 10000,             # max members in an accepted repo zip
     "archive_max_uncompressed_ratio": 20,     # max uncompressed:compressed ratio (zip-bomb heuristic)
+    # Cross-call workspace persistence (orchestration proposal 2026-07-26): the OUTBOUND
+    # snapshot of a mission's code.engineer workspace has no "original compressed size" to
+    # bound a ratio against (unlike an inbound upload), so this is an absolute ceiling, not
+    # a ratio. 200 MiB uncompressed is generous for a real repo + build/test output while
+    # still bounding per-mission storage cost; a workspace over this skips its snapshot
+    # rather than truncating it (orchestration's design, §4).
+    "max_workspace_snapshot_bytes": 200 * 1024 * 1024,
 }
 
 
@@ -448,6 +455,9 @@ class SecurityConfig(BaseModel):
     # Per-member size cap reuses INTAKE.max_input_size_bytes (no separate field — one number, no drift).
     archive_max_entries: int = Field(gt=0)
     archive_max_uncompressed_ratio: int = Field(gt=0)
+    # Cross-call workspace persistence snapshot cap — same D8 ceiling discipline,
+    # absolute rather than ratio (see _ARCHIVE_CEILINGS' comment for why).
+    max_workspace_snapshot_bytes: int = Field(gt=0)
 
     @model_validator(mode="after")
     def _pii_entities_meet_floor(self) -> "SecurityConfig":

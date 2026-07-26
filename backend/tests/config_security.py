@@ -32,6 +32,7 @@ def _kw(**over):
         filter_grounding_max_findings=8, filter_grounding_max_finding_chars=1500,
         filter_grounding_max_tool_calls=12, filter_grounding_max_tool_result_chars=1200,
         archive_max_entries=10000, archive_max_uncompressed_ratio=20,
+        max_workspace_snapshot_bytes=200 * 1024 * 1024,
     )
     return {**base, **over}
 
@@ -142,3 +143,16 @@ def test_archive_bomb_guards_may_tighten_but_not_loosen_past_ceiling():
         SecurityConfig(**_kw(archive_max_entries=20000))            # loosen past ceiling — rejected
     with pytest.raises(ValidationError):
         SecurityConfig(**_kw(archive_max_uncompressed_ratio=100))   # loosen past ceiling — rejected
+
+
+def test_workspace_snapshot_cap_may_tighten_but_not_loosen_past_ceiling():
+    # Cross-call workspace persistence (orchestration proposal 2026-07-26 §4): same D8
+    # ceiling discipline as the archive bomb guards, absolute rather than ratio.
+    SecurityConfig(**_kw(max_workspace_snapshot_bytes=50 * 1024 * 1024))    # tighter — ok
+    SecurityConfig(**_kw(max_workspace_snapshot_bytes=200 * 1024 * 1024))   # at ceiling — ok
+    with pytest.raises(ValidationError):
+        SecurityConfig(**_kw(max_workspace_snapshot_bytes=400 * 1024 * 1024))  # loosen — rejected
+
+
+def test_workspace_snapshot_cap_loaded():
+    assert settings.SECURITY.max_workspace_snapshot_bytes == 200 * 1024 * 1024
