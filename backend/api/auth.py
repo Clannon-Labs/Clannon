@@ -113,6 +113,28 @@ def _db() -> sqlite3.Connection:
         "CREATE INDEX IF NOT EXISTS security_audit_by_run "
         "ON security_audit (user_id, trace_id)"
     )
+    # CB4 institutional decision memory: a durable mirror of the live decision log's
+    # DERIVED records (core.orchestrator.utils.decision_log.derive_record), written
+    # once per terminal run, user_id-scoped. One row per decision point (tool_call /
+    # answer kinds only, per derive_record's own filter) — not a raw log dump.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS decision_records (
+            id TEXT PRIMARY KEY,
+            trace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            reasoning TEXT NOT NULL DEFAULT '',
+            participants_json TEXT NOT NULL DEFAULT '[]',
+            decided_at REAL NOT NULL
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS decision_records_by_run "
+        "ON decision_records (user_id, trace_id)"
+    )
     return conn
 
 

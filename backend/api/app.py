@@ -40,6 +40,7 @@ from core.artifacts import LocalArtifactStore
 from security.sanitizers import uploads as upload_scan
 
 from . import audit as _audit, auth, config, runs
+from . import decision_audit as _decisions
 from .run_state import TERMINAL_STATUSES
 from .config_validation import fail_fast_if_strict
 from .hardening import install_hardening
@@ -454,6 +455,18 @@ def run_audit(run_id: str, user: auth.User = Depends(auth.current_user)) -> list
     if run is None:
         raise HTTPException(404, "Run not found.")
     return [_audit.public_json(r) for r in _audit.get_for_run(user.id, run_id)]
+
+
+@app.get("/runs/{run_id}/decisions")
+def run_decisions(run_id: str, user: auth.User = Depends(auth.current_user)) -> list[dict]:
+    """Institutional decision-memory records for one run (CB4), in decision order,
+    scoped to its owner. Empty list when the run made no discrete tool_call/answer
+    decisions, or for a pre-CB4 run. 404 when the run does not belong to the
+    authenticated user."""
+    run = runs.STORE.get(user.id, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found.")
+    return [_decisions.public_json(r) for r in _decisions.get_for_run(user.id, run_id)]
 
 
 @app.delete("/sessions/{session_id}", status_code=204)

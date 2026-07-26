@@ -31,11 +31,13 @@ from core import pipeline
 from core.artifacts import LocalArtifactStore
 from core.budget.context import budget_user_scope
 from core.llm import model_overrides, usage_scope
+from core.orchestrator.utils.decision_log import derive_record as _derive_decision_record
 
 from observability import DecisionLogSink
 import settings
 
 from . import audit as _audit_trail, auth, config
+from . import decision_audit as _decision_audit
 from .run_state import RunState, _now, _process_summary
 from .run_store import STORE, INPUT_NS
 
@@ -365,6 +367,27 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             # filter ever ran. Emitted once, right before the terminal status below.
             if ctx.filter_result is not None:
                 run.on_verification(ctx.filter_result.groundedness)
+
+            # CB4 institutional decision memory: mirror the live decision log's
+            # DERIVED records durably, for every terminal outcome — a decision made
+            # on the way to a blocked/failed run is still institutional memory, not
+            # just a delivered one. Best-effort: a write fault here must never turn
+            # a finished run into a failed one (mirrors the block-audit try/except
+            # below).
+            try:
+                _decision_records = [
+                    r for r in (
+                        _derive_decision_record(entry, ctx) for entry in ctx.decision_log
+                    ) if r is not None
+                ]
+                _decision_audit.write_decision_records(
+                    user_id=ctx.user_id,
+                    session_id=ctx.session_id,
+                    trace_id=ctx.trace_id,
+                    records=_decision_records,
+                )
+            except Exception:  # noqa: BLE001 — decision-mirror write is best-effort
+                pass
 
             if ctx.blocked or ctx.sanitization_blocked or ctx.verifier_blocked or ctx.filter_blocked:
                 # record WHICH gate blocked so the UI can explain it accurately
