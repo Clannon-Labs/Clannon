@@ -97,10 +97,19 @@ if [ "$MODE" = dual ]; then
 
     case "$pane_command" in
       bash|zsh|fish|sh|dash)
-        # Shell with child process is not stale: it may be a supervisor between
-        # provider launches or owner-started background work.
-        if [ "$pane_pid" -gt 0 ] 2>/dev/null && pgrep -P "$pane_pid" >/dev/null 2>&1; then
-          active+=("$side(shell-has-child)")
+        # Stopped/zombie child is stale (e.g. a suspended supervisor after its
+        # provider quit). Any live child remains protected.
+        live_child=0
+        if [ "$pane_pid" -gt 0 ] 2>/dev/null; then
+          for child in $(pgrep -P "$pane_pid" 2>/dev/null); do
+            child_stat="$(ps -o stat= -p "$child" 2>/dev/null | tr -d ' ')"
+            case "$child_stat" in *T*|*Z*) continue ;; esac
+            live_child=1
+            break
+          done
+        fi
+        if [ "$live_child" -eq 1 ]; then
+          active+=("$side(shell-has-live-child)")
         else
           stale+=("$side")
         fi
