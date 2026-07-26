@@ -91,39 +91,45 @@ structural change (all batch + graph work).
 
 ## PROPOSAL PROTOCOL (cross-agent channel — no owner relay)
 
-FIVE interactive sessions work this repo: the BACKEND agent (this file's reader,
-root + backend/, the **coordinator**), the FRONTEND agent (frontend/), and three
+SIX interactive sessions work this repo: the BACKEND agent (this file's reader,
+root + backend/, the **coordinator**), the FRONTEND agent (frontend/), and four
 backend **specialists** the backend agent coordinates — MEMORY (`clannon-memory`,
 owns `core/memory/**`), ORCHESTRATION (`clannon-orchestration`, owns
-`core/orchestrator/**` + `registry/**` + `experts/**` + `tools/**`), and SECURITY
+`core/orchestrator/**` + `registry/**` + `experts/**` + `tools/**`), SECURITY
 (`clannon-security`, spawned 2026-07-06, owns `security/**` — `sanitizers/` +
-`filter/`). Their charters live in the SPECIALIST CHARTER section of their home
-module's `CLAUDE.md`. They exchange work through proposal FILES — never by
-editing another side's code, never by asking the owner to carry a message.
-Format spec + worked example: `proposals/README.md` (filename
-`YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary + an optional
-`Wake:` line; body with contract + acceptance criteria; receiver appends
-`## Response`, flips Status, archives).
+`filter/`), and API & RUNTIME (`clannon-api`, spawned 2026-07-26, owns `api/**` —
+run lifecycle, SSE, persistence, identity). Each specialist runs dual-provider
+(Claude Code + Codex failover, `scripts/clannon-provider-supervisor.sh`) — see
+`.agents/provider-handoffs/<role>.md` for cross-provider continuity. Their
+charters live in the SPECIALIST CHARTER section of their home module's
+`CLAUDE.md`. They exchange work through proposal FILES — never by editing
+another side's code, never by asking the owner to carry a message. Format spec +
+worked example: `proposals/README.md` (filename `YYYY-MM-DD_slug.md`; header
+From/To/Status/Priority/Summary + an optional `Wake:` line; body with contract +
+acceptance criteria; receiver appends `## Response`, flips Status, archives).
 
 **Topology = hub-and-spoke.** The specialists coordinate through the backend agent
 (the hub), not directly with each other. As coordinator, the backend agent: owns
 `foundation/` (the shared seam — the specialists PROPOSE foundation/contract/vocab
-changes, never edit it), owns the pipeline / `api/` / `delivery/` (security's OWN
-tree is `security/**`, no longer backend's to edit directly — propose-first there
-too), does CB5/CB4/CB6, and holds final integration + merge authority. A
-specialist that needs a foundation change or hits a cross-cutting decision
-proposes UP to the backend agent.
+changes, never edit it), owns the pipeline (`core/pipeline.py`) / `delivery/` /
+shared config `settings.py` (security's `security/**` and API's `api/**` are each
+their OWN tree, no longer backend's to edit directly — propose-first there too),
+does CB5/CB4/CB6, and holds final
+integration + merge authority. A specialist that needs a foundation change or
+hits a cross-cutting decision proposes UP to the backend agent.
 
 **At the START of every user interaction, BEFORE anything else, check your
 inbox:**
 
-- Backend agent: `proposals/to-backend/` (from the frontend agent + all three
+- Backend agent: `proposals/to-backend/` (from the frontend agent + all four
   specialists) and `backend/proposals/` (from the owner). You WRITE assignments to
-  `proposals/to-memory/`, `proposals/to-orchestration/`, and `proposals/to-security/`.
+  `proposals/to-memory/`, `proposals/to-orchestration/`, `proposals/to-security/`,
+  and `proposals/to-api/`.
 - Frontend agent: `proposals/to-frontend/` and `frontend/proposals/`.
 - Memory specialist: `proposals/to-memory/`. Orchestration specialist:
   `proposals/to-orchestration/`. Security specialist: `proposals/to-security/`.
-  All three reply into `proposals/to-backend/`.
+  API & Runtime specialist: `proposals/to-api/`. All four reply into
+  `proposals/to-backend/`.
 
 If pending proposals exist: tell the owner in one line — "N pending proposals:
 <slugs>" — then handle them (accept / reject / act, per their Priority and the working
@@ -139,7 +145,7 @@ your report, and design around the gap until answered. Do NOT relay through the
 owner. Proposals are the ONLY cross-agent channel.
 
 **Auto-wake:** writing to an inbox automatically types a message into the target
-agent's tmux session (`clannon-{backend,frontend,memory,orchestration,security}`; see
+agent's tmux session (`clannon-{backend,frontend,memory,orchestration,security,api}`; see
 `proposals/README.md` §Wake System). **You choose the message:** put a one-line
 `Wake:` header in the proposal and that exact line is typed (as `[auto-wake]
 <your line>`) — ping the other agent in your own words about what you need or

@@ -11,7 +11,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SIDE="${1:?usage: clannon-provider-supervisor.sh backend|frontend|memory|orchestration|security}"
+SIDE="${1:?usage: clannon-provider-supervisor.sh backend|frontend|memory|orchestration|security|api}"
 MODE="${2:-resume}"
 CONFIRM_S=300
 POLL_S=15
@@ -37,7 +37,11 @@ case "$SIDE" in
     ROLE_DIR="$ROOT/backend/security"; ROLE_HANDOFF="HANDOFF_security.md"
     ROLE_INBOXES="$ROOT/proposals/to-security/"
     ;;
-  *) echo "usage: $0 backend|frontend|memory|orchestration|security [resume|fresh]" >&2; exit 2 ;;
+  api)
+    ROLE_DIR="$ROOT/backend/api"; ROLE_HANDOFF="HANDOFF_api.md"
+    ROLE_INBOXES="$ROOT/proposals/to-api/"
+    ;;
+  *) echo "usage: $0 backend|frontend|memory|orchestration|security|api [resume|fresh]" >&2; exit 2 ;;
 esac
 case "$MODE" in resume|fresh) ;; *) echo "mode must be resume or fresh" >&2; exit 2 ;; esac
 
@@ -154,7 +158,7 @@ launch_provider() {
   case "$provider" in
     claude)
       local -a cmd=(claude --permission-mode dontAsk --name "clannon-$SIDE")
-      case "$SIDE" in memory|orchestration|security) cmd+=(--model claude-sonnet-5) ;; esac
+      case "$SIDE" in memory|orchestration|security|api) cmd+=(--model claude-sonnet-5) ;; esac
       # Resume latest role-local conversation whenever one exists.
       cmd+=(--continue "$prompt")
       "${cmd[@]}"
@@ -173,7 +177,7 @@ launch_fresh_provider() {
   case "$provider" in
     claude)
       local -a cmd=(claude --permission-mode dontAsk --name "clannon-$SIDE")
-      case "$SIDE" in memory|orchestration|security) cmd+=(--model claude-sonnet-5) ;; esac
+      case "$SIDE" in memory|orchestration|security|api) cmd+=(--model claude-sonnet-5) ;; esac
       cmd+=("$prompt")
       "${cmd[@]}"
       ;;

@@ -7,11 +7,12 @@
 #   ./scripts/agent-session.sh memory         → "clannon-memory",        cwd backend/core/memory/
 #   ./scripts/agent-session.sh orchestration  → "clannon-orchestration", cwd backend/core/orchestrator/
 #   ./scripts/agent-session.sh security       → "clannon-security",      cwd backend/security/
+#   ./scripts/agent-session.sh api            → "clannon-api",           cwd backend/api/
 #
 # This remains attach/create-only. To launch provider failover use:
 #   ./scripts/clannon-standup.sh dual [side...]
 #
-# backend/frontend are the two peer agents; memory/orchestration/security are
+# backend/frontend are the two peer agents; memory/orchestration/security/api are
 # backend SPECIALISTS the backend agent coordinates (their charters live in the
 # CLAUDE.md of their home dir). The wake system (clannon-wake@<side>.path) injects
 # "[auto-wake] ..." into these EXACT session names with tmux send-keys — Claude
@@ -28,7 +29,8 @@ case "$side" in
   memory)        session="clannon-memory";        dir="$ROOT/backend/core/memory" ;;
   orchestration) session="clannon-orchestration"; dir="$ROOT/backend/core/orchestrator" ;;
   security)      session="clannon-security";      dir="$ROOT/backend/security" ;;
-  *) echo "usage: $0 backend|frontend|memory|orchestration|security" >&2; exit 2 ;;
+  api)           session="clannon-api";           dir="$ROOT/backend/api" ;;
+  *) echo "usage: $0 backend|frontend|memory|orchestration|security|api" >&2; exit 2 ;;
 esac
 
 # -A: attach if it exists, create if not — idempotent either way.

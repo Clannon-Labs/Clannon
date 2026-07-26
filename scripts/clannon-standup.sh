@@ -24,7 +24,7 @@
 set -uo pipefail   # no -e: a wake to one session must not abort the rest
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-sides=(backend frontend memory orchestration security)
+sides=(backend frontend memory orchestration security api)
 
 dir_for() {
   case "$1" in
@@ -33,6 +33,7 @@ dir_for() {
     memory)        echo "$ROOT/backend/core/memory" ;;
     orchestration) echo "$ROOT/backend/core/orchestrator" ;;
     security)      echo "$ROOT/backend/security" ;;
+    api)           echo "$ROOT/backend/api" ;;
   esac
 }
 
@@ -50,6 +51,8 @@ msg_for() {
       echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your handoff HANDOFF_mission.md (in this dir) to pick up your Mission Engine state + what unblocks now that memory's members() landed, THEN your charter (core/orchestrator/CLAUDE.md) + inbox (proposals/to-orchestration/). Continue from the handoff — do NOT restart. Report to reports/orchestration/." ;;
     security)
       echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your charter (backend/security/CLAUDE.md) + inbox (proposals/to-security/), THEN continue your config-wire (settings.SECURITY.*) + CB5 work and stand as invariant reviewer for the budget/batch designs. Do NOT restart from scratch. Report to reports/security/." ;;
+    api)
+      echo "[auto-wake] RESUMING (fresh session — live context is empty). FIRST read your charter (backend/api/CLAUDE.md) + inbox (proposals/to-api/), THEN start with the run-lifecycle invariant audit (cancel/shutdown/persistence/SSE-reconnect races) per your charter's first assignment — write tests before changing structure. Do NOT restart from scratch. Report to reports/api/." ;;
   esac
 }
 
@@ -65,9 +68,9 @@ msg_for() {
 MODE=fresh
 case "${1:-}" in
   resume|fresh|dual) MODE="$1"; shift ;;
-  -h|--help)    echo "usage: $(basename "$0") [resume|fresh|dual] [side...]   (sides default: all 5; e.g. 'dual memory orchestration security')"; exit 0 ;;
+  -h|--help)    echo "usage: $(basename "$0") [resume|fresh|dual] [side...]   (sides default: all 6; e.g. 'dual memory orchestration security api')"; exit 0 ;;
 esac
-# Optional side selection after the mode restricts the crew (default = all five). Works from
+# Optional side selection after the mode restricts the crew (default = all six). Works from
 # ANYWHERE (in or out of tmux): every session is created detached with `tmux new-session -d`.
 if [ "$#" -gt 0 ]; then sides=("$@"); fi
 echo "clannon-standup: mode = $MODE | sides = ${sides[*]}"
@@ -97,7 +100,7 @@ for side in "${sides[@]}"; do
     # a specialist silently resuming on Opus would blow the token budget the tiering exists to save).
     if [ "$MODE" != dual ]; then
       case "$side" in
-        memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
+        memory|orchestration|security|api) launch="$launch --model claude-sonnet-5" ;;
       esac
     fi
     tmux new-session -d -s "$session" -c "$dir"
@@ -167,5 +170,5 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
-echo "clannon-standup: crew online ($MODE). Attach with:  tmux attach -t clannon-<backend|frontend|memory|orchestration|security>"
+echo "clannon-standup: crew online ($MODE). Attach with:  tmux attach -t clannon-<backend|frontend|memory|orchestration|security|api>"
 echo "clannon-standup:   (or ./scripts/agent-session.sh <side>).  Re-run any time — alive sessions are left untouched."

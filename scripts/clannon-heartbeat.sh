@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# clannon-heartbeat.sh <backend|frontend|memory|orchestration|security> — the KEEP-ALIVE
+# clannon-heartbeat.sh <backend|frontend|memory|orchestration|security|api> — the KEEP-ALIVE
 # ping. Fired by a systemd --user TIMER (clannon-heartbeat@<side>.timer →
 # .service) every ~20 minutes so an agent that has gone idle NEVER sleeps
 # permanently. This is the guarantee the inbox-triggered wake (proposal-wake.sh)
@@ -20,7 +20,7 @@
 
 set -uo pipefail   # deliberately no -e: every exit path below must be clean
 
-SIDE="${1:?usage: clannon-heartbeat.sh backend|frontend|memory|orchestration|security}"
+SIDE="${1:?usage: clannon-heartbeat.sh backend|frontend|memory|orchestration|security|api}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION="clannon-$SIDE"
 
