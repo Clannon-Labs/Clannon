@@ -23,23 +23,29 @@ Transfers API & Runtime specialist work between Claude Code and Codex.
   reconnect contract (claimed every reconnect replays the buffered sequence;
   false once a run is evicted to SQLite) — fixed the doc wording, pinned with
   a test. Full write-up in `reports/api/report_v1.md`.
-- Next: full suite run kicked off (backgrounded, this box serializes it — see
-  `docs/RESUME.md`). Once green, commit `backend/api/README.md` +
-  `backend/tests/run_lifecycle_invariants.py` scoped explicitly. Then: (a)
-  await backend agent's read on the proposed fix for finding #1 (reordering
-  task registration in app.py + moving persist_inputs inside execute()) before
-  implementing — flagged in the report because it has a small user-visible
-  timing effect (`run.inputs` populates a beat later); (b) continue the
-  charter's remaining required-proof-areas (cross-user access non-disclosure —
-  check whether `api_access_control.py` already covers run/artifact/audit/
-  project/session, or if gaps remain).
-- Files touched: `backend/tests/run_lifecycle_invariants.py` (new),
+- Next: committed in two passes (`31fc7af` then `c110893`, full suite green
+  both times — 1481 then 1482 passed, 13 skipped env-only, 0 failed).
+  `reports/api/report_v1.md` finalized. Now: (a) await backend agent's read on
+  the proposed fix for finding #2 (reordering task registration in app.py +
+  moving persist_inputs inside execute()) before implementing — flagged in the
+  report because it has a small user-visible timing effect (`run.inputs`
+  populates a beat later); (b) continue the charter's remaining
+  required-proof-areas (cross-user access non-disclosure — check whether
+  `api_access_control.py` already covers run/artifact/audit/project/session,
+  or if gaps remain).
+- Files touched: `backend/tests/run_lifecycle_invariants.py` (new, 7 tests),
   `backend/api/README.md` (one line, `/runs/:id/stream` row),
-  `reports/api/report_v1.md` (new). Nothing else — never assume other dirty
-  files in the shared tree belong to this session.
-- Verification: `run_lifecycle_invariants.py`'s 6 tests pass in isolation
-  (1.97s). Full-suite pass pending at time of this checkpoint write — confirm
-  before trusting this as "safe to build on" in a follow-up session.
+  `backend/api/run_driver.py` (one comment, `CancelledError` handler —
+  corrected, no behavior change), `reports/api/report_v1.md` (local,
+  gitignored). Nothing else — never assume other dirty files in the shared
+  tree belong to this session.
+- Verification: full suite green after BOTH commits (1481 passed then 1482
+  passed, 13 skipped env-only, 0 failed) — this is trustworthy to build on.
+  An advisor pass caught two issues in the first draft before this was final:
+  a garbled/wrong claim about the shutdown-vs-user comment being "already
+  correct" (it wasn't — fixed in commit 2), and a tripwire test that asserted
+  its own setup rather than the actual claim (strengthened with a `call_soon`
+  probe, verified it now actually fails against a suspending fake store).
 
 ## Change note
 
