@@ -444,6 +444,16 @@ class SecurityConfig(BaseModel):
     sanitizer_timeout_worker_s: float = Field(gt=0.0)
     sanitizer_max_workers: int = Field(gt=0)
     filter_max_retries: int = Field(ge=0)
+    # Output-filter recovery budget (D1 move) — 0 disables recovery (hard block on
+    # first rejection); the filter adjudicates every attempt and is always final.
+    filter_max_revisions: int = Field(ge=0)
+    # Sanitizer content caps (D1 move) — plain caps, no floor/ceiling (not bomb guards,
+    # just size/duration limits on otherwise-legitimate media).
+    max_text_input_chars: int = Field(gt=0)
+    max_pdf_pages: int = Field(gt=0)
+    max_image_dimension_px: int = Field(gt=0)
+    max_audio_duration_s: int = Field(gt=0)
+    max_video_duration_s: int = Field(gt=0)
     # PII redaction allow-list — floored (add-only).
     pii_redacted_entities: list[str]
     # Filter grounding window — floored + ceilinged.

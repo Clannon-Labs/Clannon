@@ -42,7 +42,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from foundation import Flow, constants
+from foundation import Flow
 import settings
 from core import intake, normalizer, verifier, orchestrator
 
@@ -202,14 +202,14 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
     while (
         ctx.filter_blocked
         and ctx.normalized_input is not None
-        and ctx.filter_retry_count < constants.FILTER_MAX_REVISIONS
+        and ctx.filter_retry_count < settings.SECURITY.filter_max_revisions
     ):
         ctx.filter_retry_count += 1
         ctx.decision_log.append(DecisionLogEntry(
             kind="warning",
             message=(
                 f"output filter rejected the draft — revising "
-                f"(attempt {ctx.filter_retry_count}/{constants.FILTER_MAX_REVISIONS})"
+                f"(attempt {ctx.filter_retry_count}/{settings.SECURITY.filter_max_revisions})"
             ),
         ))
         # hand the reason back and clear the block so the re-reasoned draft is judged fresh
@@ -279,7 +279,7 @@ async def _drive_with_revision(
     delivered (`_persist_turn_memory_if_delivered`), so a blocked draft never seeds it.
     """
     split = _split_at_filter(stages)
-    if split is None or constants.FILTER_MAX_REVISIONS <= 0:
+    if split is None or settings.SECURITY.filter_max_revisions <= 0:
         flow = await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
         await _persist_turn_memory_if_delivered(flow)
         return flow

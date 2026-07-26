@@ -16,8 +16,8 @@ from typing import Any
 from foundation import (
     Modality,
     NormalizedInput,
-    constants,
 )
+import settings
 from registry.config import load_model_registry
 
 from .extractors import extract_pdf_pages
@@ -28,7 +28,7 @@ def _normalize_text(payload: Any) -> NormalizedInput:
     """Return text with stable Unicode decoding and configured length metadata."""
     text, truncated = truncate_text(
         payload_to_text(payload),
-        constants.MAX_TEXT_INPUT_CHARS,
+        settings.SECURITY.max_text_input_chars,
     )
 
     return NormalizedInput(
@@ -55,7 +55,7 @@ def _normalize_pdf(payload: Any) -> NormalizedInput:
         for page in pages
         if page["text"]
     )
-    content, truncated = truncate_text(content, constants.MAX_TEXT_INPUT_CHARS)
+    content, truncated = truncate_text(content, settings.SECURITY.max_text_input_chars)
 
     return NormalizedInput(
         modality=Modality.PDF.value,

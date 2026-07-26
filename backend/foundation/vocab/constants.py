@@ -67,13 +67,17 @@ TEXTUAL_MIME_TYPES = frozenset({
 
 
 # ---------------------------------------------------------------------------
-# SANITIZERS — MIGRATED to config (D1, single-source). The combined + per-worker timeouts and
-# the concurrency cap now live in config/backend/security.yaml → settings.SECURITY.
-# {sanitizer_timeout_total_s, sanitizer_timeout_worker_s, sanitizer_max_workers}; security/'s
-# workers read them from there (owner control panel), not from a foundation constant.
+# SANITIZERS — MIGRATED to config (D1, single-source): config/backend/security.yaml ->
+# settings.SECURITY.{sanitizer_timeout_total_s, sanitizer_timeout_worker_s,
+# sanitizer_max_workers, max_text_input_chars, max_pdf_pages, max_image_dimension_px,
+# max_audio_duration_s, max_video_duration_s}. max_text_input_chars is repointed
+# (core/normalizer/builders.py, core/verifier/constants.py — backend's own tree). The
+# other four are placed but NOT YET repointed — security/sanitizers/workers/
+# {image,pdf,audio,video}.py still read the constants below; that tree is the security
+# specialist's, so the repoint is proposed to them (proposals/to-security/), not done
+# here. Remove these four once that repoint lands.
 # ---------------------------------------------------------------------------
 
-MAX_TEXT_INPUT_CHARS        = 100_000             # character cap on text content
 MAX_PDF_PAGES               = 500                 # pages before we reject the pdf
 MAX_IMAGE_DIMENSION_PX      = 8192                # width or height cap in pixels
 MAX_AUDIO_DURATION_S        = 600                 # 10 minutes max audio
@@ -139,15 +143,15 @@ MAX_VIDEO_DURATION_S        = 300                 # 5 minutes max video
 # Output filter LLM. Same class as verifier — fast, structured output only.
 # ---------------------------------------------------------------------------
 
-FILTER_TIMEOUT_S            = 12.0   # >= 10s: Gemini rejects deadlines under 10s
-FILTER_MAX_TOKENS           = 512
-# FILTER_MAX_RETRIES — MIGRATED to config (D1): settings.SECURITY.filter_max_retries.
-FILTER_MAX_REVISIONS        = 2      # THE single output-filter recovery budget (CLI + web): when the
-                                     # filter rejects a draft, the reason is fed back (ctx.filter_feedback)
-                                     # and the orchestrator re-reasons, up to this many times. The filter
-                                     # adjudicates every attempt and is always final; 0 disables recovery
-                                     # (hard block on first rejection). Implemented in
-                                     # core.pipeline.recover_from_filter_block.
+# FILTER_TIMEOUT_S / FILTER_MAX_TOKENS — DELETED (Law 1, dead code): declared here but
+# never actually wired into any LLM call (core/llm/registry.py's model_settings_for_layer
+# only special-cases "verifier" for a token+timeout cap — deliberately, per
+# tests/model_settings.py::test_verifier_is_the_only_layer_with_a_token_and_timeout_cap
+# — so "filter" was always on the generic uncapped path; these two constants had zero
+# consumers anywhere in the tree, confirmed by search, found while auditing this file).
+# FILTER_MAX_RETRIES / FILTER_MAX_REVISIONS — MIGRATED to config (D1): config/backend/
+# security.yaml -> settings.SECURITY.{filter_max_retries, filter_max_revisions}.
+# core.pipeline.recover_from_filter_block reads filter_max_revisions from there now.
 
 
 # ---------------------------------------------------------------------------

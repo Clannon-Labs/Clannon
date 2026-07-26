@@ -7,7 +7,8 @@ pipeline and the web run driver — narrated on the shared decision log."""
 import asyncio
 from types import SimpleNamespace
 
-from foundation import VrakshaContext, constants
+from foundation import VrakshaContext
+import settings
 import core.pipeline as pipeline
 
 
@@ -60,7 +61,7 @@ def test_recovery_is_bounded_and_fails_closed(monkeypatch):
     flow = _FakeFlow(_blocked_ctx())
     out = asyncio.run(pipeline.recover_from_filter_block(flow))
 
-    assert out.ctx.filter_retry_count == constants.FILTER_MAX_REVISIONS  # bounded
+    assert out.ctx.filter_retry_count == settings.SECURITY.filter_max_revisions  # bounded
     assert out.ctx.filter_blocked is True                               # fail closed
 
 
@@ -79,4 +80,4 @@ def test_recovery_narrates_each_attempt_on_the_decision_log(monkeypatch):
         e for e in flow.ctx.decision_log
         if getattr(e, "kind", "") == "warning" and "revising" in getattr(e, "message", "")
     ]
-    assert len(notices) == constants.FILTER_MAX_REVISIONS  # one per attempt, on the shared log
+    assert len(notices) == settings.SECURITY.filter_max_revisions  # one per attempt, on the shared log

@@ -23,7 +23,9 @@ def _kw(**over):
         sandbox_run_timeout_s=60.0, sandbox_max_output_chars=20000,
         sandbox_create_timeout_s=180.0, sandbox_teardown_timeout_s=20.0,
         sanitizer_timeout_total_s=15.0, sanitizer_timeout_worker_s=10.0, sanitizer_max_workers=10,
-        filter_max_retries=2,
+        filter_max_retries=2, filter_max_revisions=2,
+        max_text_input_chars=100000, max_pdf_pages=500, max_image_dimension_px=8192,
+        max_audio_duration_s=600, max_video_duration_s=300,
         pii_redacted_entities=[
             "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE", "US_BANK_NUMBER",
             "US_SSN", "US_ITIN", "US_PASSPORT", "US_DRIVER_LICENSE", "UK_NHS",

@@ -13,7 +13,7 @@ import time
 from types import SimpleNamespace
 
 import settings
-from foundation import VrakshaContext, constants
+from foundation import VrakshaContext
 import core.pipeline as pipeline
 
 
@@ -70,7 +70,7 @@ def test_revision_proceeds_with_healthy_turn_budget(monkeypatch):
     out = asyncio.run(pipeline.recover_from_filter_block(_FakeFlow(ctx)))
 
     assert out.ctx.failed is False                                       # no spurious timeout
-    assert out.ctx.filter_retry_count == constants.FILTER_MAX_REVISIONS  # ran the full loop
+    assert out.ctx.filter_retry_count == settings.SECURITY.filter_max_revisions  # ran the full loop
     assert out.ctx.orchestrator_response.text == "revised"              # revisions actually happened
 
 

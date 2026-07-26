@@ -1,7 +1,7 @@
 """
 Hermetic resilience test: oversized inputs fail at the cheap guard.
 
-Two size caps from foundation/vocab/constants.py:
+Two size caps, both in settings.SECURITY / settings.INTAKE (config/backend/*.yaml):
 
 1. settings.INTAKE.max_input_size_bytes (50 MB, INTAKE)
    Any payload exceeding this cap is blocked at intake — the first and cheapest
@@ -9,7 +9,7 @@ Two size caps from foundation/vocab/constants.py:
    runs. The end-to-end chain test (test_oversize_rejected_before_any_paid_stage_
    end_to_end) proves this with live tripwires on verify_with_llm and run_loop.
 
-2. MAX_TEXT_INPUT_CHARS (100 k chars, NORMALIZER)
+2. settings.SECURITY.max_text_input_chars (100 k chars, NORMALIZER)
    A text payload that passes the byte cap but exceeds the char limit is truncated
    in the code-only normalizer before the verifier or orchestrator ever see it.
    No model call is needed to enforce this cap; the normalizer test confirms it.
@@ -22,7 +22,7 @@ import asyncio
 
 import pytest
 
-from foundation import Flow, BlockReason, Origin, constants
+from foundation import Flow, BlockReason, Origin
 import settings
 from core.intake import intake, rate_limiter
 from core.normalizer import builders
@@ -183,21 +183,21 @@ class TestMaxTextInputChars:
         normalize_payload truncates oversized text to exactly MAX_TEXT_INPUT_CHARS
         and marks the result as truncated. No model is involved.
         """
-        oversized = "x" * (constants.MAX_TEXT_INPUT_CHARS + 1)
+        oversized = "x" * (settings.SECURITY.max_text_input_chars + 1)
 
         ni = builders.normalize_payload(oversized, modality="text")
 
-        assert len(ni.content) == constants.MAX_TEXT_INPUT_CHARS
+        assert len(ni.content) == settings.SECURITY.max_text_input_chars
         assert ni.metadata["truncated"] is True
-        assert ni.metadata["chars"] == constants.MAX_TEXT_INPUT_CHARS
+        assert ni.metadata["chars"] == settings.SECURITY.max_text_input_chars
 
     def test_at_char_limit_not_truncated(self):
         """Text of exactly MAX_TEXT_INPUT_CHARS chars must NOT be marked truncated."""
-        exactly = "y" * constants.MAX_TEXT_INPUT_CHARS
+        exactly = "y" * settings.SECURITY.max_text_input_chars
 
         ni = builders.normalize_payload(exactly, modality="text")
 
-        assert len(ni.content) == constants.MAX_TEXT_INPUT_CHARS
+        assert len(ni.content) == settings.SECURITY.max_text_input_chars
         assert ni.metadata["truncated"] is False
 
     def test_char_oversize_passes_intake_byte_check(self):
@@ -206,7 +206,7 @@ class TestMaxTextInputChars:
         far under the 50 MB byte cap — so it must NOT be blocked at intake.
         The char cap is the normalizer's concern, not intake's.
         """
-        oversized = "z" * (constants.MAX_TEXT_INPUT_CHARS + 1)
+        oversized = "z" * (settings.SECURITY.max_text_input_chars + 1)
 
         out = _run_intake(oversized, session="char-oversize-intake-check")
 

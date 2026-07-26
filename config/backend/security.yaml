@@ -38,6 +38,22 @@ sanitizer_timeout_total_s: 15.0   # all workers combined must finish within this
 sanitizer_timeout_worker_s: 10.0  # single worker timeout (text/pdf/image/…). > 0
 sanitizer_max_workers: 10         # global semaphore — max concurrent workers. > 0
 
+# ── OUTPUT FILTER recovery budget (D1 move) ─────────────────────────────────────────────────
+# THE single output-filter recovery budget (CLI + web): when the filter rejects a draft, the
+# reason is fed back and the orchestrator re-reasons, up to this many times. The filter
+# adjudicates every attempt and is always final; 0 disables recovery (hard block on first
+# rejection). core/pipeline.py::recover_from_filter_block reads this.
+filter_max_revisions: 2
+
+# ── SANITIZER CONTENT CAPS (D1 move) — plain size/duration limits, no ceiling ─────────────────
+# Not bomb guards (those are the archive_* ceilings above) — these bound otherwise-legitimate
+# media so a single upload can't blow up processing time or context size.
+max_text_input_chars: 100000      # character cap on text content (core/normalizer, core/verifier excerpt). > 0
+max_pdf_pages: 500                # pages before a PDF is rejected (security/sanitizers/workers/pdf.py). > 0
+max_image_dimension_px: 8192      # width or height cap in pixels (workers/image.py). > 0
+max_audio_duration_s: 600         # 10 minutes max audio (workers/audio.py). > 0
+max_video_duration_s: 300         # 5 minutes max video (workers/video.py). > 0
+
 # ── FILTER (security/filter/) — retry budget (plain D1) ───────────────────────────────────────
 filter_max_retries: 2             # retries on malformed filter output before ERROR. >= 0
 

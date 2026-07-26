@@ -1,6 +1,7 @@
 """Small verifier constants shared across verifier modules."""
 
-from foundation import Modality, constants
+from foundation import Modality
+import settings
 
 
 ROUTING_DIRECT = "direct"
@@ -15,4 +16,4 @@ NATIVE_MODALITIES = {
 }
 KNOWN_MODALITIES = TEXT_MODALITIES | NATIVE_MODALITIES
 
-VERIFIER_EXCERPT_CHARS = min(8_000, constants.MAX_TEXT_INPUT_CHARS)
+VERIFIER_EXCERPT_CHARS = min(8_000, settings.SECURITY.max_text_input_chars)
