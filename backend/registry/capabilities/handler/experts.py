@@ -15,21 +15,24 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import io
 import time
-import zipfile
 from pathlib import Path
 from uuid import uuid4
 
 import settings
-from foundation import ExpertCallRecord, PermissionLevel, SanitizationError, ToolCallRecord, VrakshaContext
-from security.sanitizers import pre_sanitization
+from foundation import ExpertCallRecord, PermissionLevel, ToolCallRecord, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
 from .sandbox import DockerWorkspace
 from .support import ExpertEnv, ScopedToolbox, SkillBook
 from .tools import MemorySearcher
+from .workspace_archive import (
+    mission_workspace_key as _mission_workspace_key,
+    snapshot_workspace as _snapshot_workspace,
+    validate_archive_members as _validate_archive_members,
+    write_members as _write_members,
+)
 
 
 class ExpertHandler:
@@ -94,7 +97,7 @@ class ExpertHandler:
                 # entries sequential malware-scan round trips, with nothing else to
                 # stop a slow/unreachable scanner from hanging this call indefinitely.
                 try:
-                    await asyncio.wait_for(self._seed_inputs(env, ctx), timeout=settings.EXPERTS.timeout_s)
+                    await asyncio.wait_for(self._seed_inputs(env, ctx, spec.key), timeout=settings.EXPERTS.timeout_s)
                 except asyncio.TimeoutError:
                     self._record_seed_fault(env, ctx)
                 except Exception as exc:  # noqa: BLE001 — a seed fault must degrade this
@@ -133,8 +136,11 @@ class ExpertHandler:
                     confidence=output.confidence, finding_ref=ref,
                 )
             finally:
-                # the per-run sandbox dies when the work is done (success or fail)
+                # cross-call persistence (mission-scoped, see _snapshot_mission_workspace):
+                # snapshot BEFORE the sandbox dies, success or fail — a failed run's
+                # partial state is still worth resuming from on the mission's next call
                 if env.workspace is not None:
+                    await self._snapshot_mission_workspace(spec.key, env, ctx)
                     await env.workspace.close()
 
     def _build_env(self, spec, ctx: VrakshaContext) -> ExpertEnv:
@@ -214,7 +220,7 @@ class ExpertHandler:
         )
         return ScopedToolbox(scoped, ctx)
 
-    async def _seed_inputs(self, env, ctx: VrakshaContext) -> None:
+    async def _seed_inputs(self, env, ctx: VrakshaContext, expert_key: str) -> None:
         """Place the run's uploaded input files into this expert's workspace so it
         can read them with its file tools. No-op unless the expert actually has a
         workspace and the run carried files. Records the seeded names (+ any honest
@@ -222,8 +228,18 @@ class ExpertHandler:
         there — a silent gap here would leave the expert working from an empty
         workspace with no idea why. Best-effort per file — except an "archive"
         modality file, which is extracted member-by-member (see `_extract_archive`)
-        rather than written as one opaque zip blob, and is all-or-nothing."""
+        rather than written as one opaque zip blob, and is all-or-nothing.
+
+        Cross-call persistence restore runs FIRST, before any of that: if this
+        mission (`ctx.mission_id`) has a workspace snapshot from an earlier call to
+        THIS expert, and this call did NOT bring a fresh archive upload of its own,
+        the snapshot is restored as the workspace's starting state. A fresh archive
+        upload is an explicit "here's the (possibly new) repo" signal and always
+        wins outright — no merge with a stale snapshot (see `_restore_mission_
+        workspace`'s own docstring)."""
         files = list(getattr(ctx, "input_files", None) or [])
+        if env.workspace is not None and ctx.mission_id and not any(f.modality == "archive" for f in files):
+            await self._restore_mission_workspace(env.workspace, ctx, expert_key)
         if env.workspace is None or not files:
             return
         seeded: list[str] = []
@@ -282,75 +298,96 @@ class ExpertHandler:
         path, or malware hit rejects the WHOLE archive, nothing written (a silently
         partial repo is worse than a rejected upload) — returns `([], reason)`, never
         a partial name list, so a caller can never mistake a rejected archive for a
-        seeded one.
-
-        `security/sanitizers/uploads.py` already admitted this archive past a
-        cheap, metadata-only Layer-1 bomb precheck (declared entry count + declared
-        uncompressed:compressed ratio) — a zip's own declared `ZipInfo.file_size` is
-        attacker-controlled, so THIS is the authoritative, byte-verified guard:
-        every cap below is checked against bytes actually read off the member, and
-        every member is re-scanned through the same malware gate the archive itself
-        crossed at admission (a clean container can still carry a malicious member).
-        Reads the SAME `settings.SECURITY.archive_*` floors + `settings.INTAKE.
-        max_input_size_bytes` (per-member cap) — never a local constant, so the two
-        layers can't silently drift apart.
-
-        Confinement is not reinvented here: every validated member still goes
-        through `workspace.write_bytes()`'s own path-confinement guard at write
-        time. `_archive_member_is_safe` is a cheap PRE-filter so the invalid-path
-        case is caught during validation (nothing written yet) rather than after
-        some earlier members are already on disk — members are never extracted via
-        `ZipFile.extract`/`extractall`, so a member's `external_attr` can never
-        recreate an OS symlink; every member reaches the workspace as plain bytes.
-        """
-        try:
-            zf = zipfile.ZipFile(io.BytesIO(f.data))
-        except zipfile.BadZipFile:
-            return [], "not a valid zip archive"
-        per_member_cap = settings.INTAKE.max_input_size_bytes
+        seeded one. The ratio-based bomb-guard cap here is specific to an UPLOAD
+        (bounded relative to what the user actually sent); `_restore_mission_
+        workspace` shares this same validate-then-write shape for a workspace
+        SNAPSHOT, which has no upload size to bound a ratio against, so it uses its
+        own absolute cap instead (`_validate_archive_members`'s `total_cap` param)."""
         total_cap = settings.SECURITY.archive_max_uncompressed_ratio * max(len(f.data), 1)
-        members: list[tuple[str, bytes]] = []
-        with zf:
-            infos = zf.infolist()
-            if len(infos) > settings.SECURITY.archive_max_entries:
-                return [], f"{len(infos)} entries exceeds the {settings.SECURITY.archive_max_entries} cap"
-            total = 0
-            for info in infos:
-                if info.is_dir():
-                    continue
-                if not _archive_member_is_safe(info.filename):
-                    return [], f"member {info.filename!r} has an unsafe path"
-                try:
-                    # bounded read: at most one byte past the cap, so a member lying
-                    # about its own size can never force a huge in-memory decompress
-                    with zf.open(info) as zef:
-                        data = zef.read(per_member_cap + 1)
-                except Exception:  # noqa: BLE001 — corrupt/unreadable member -> reject the archive
-                    return [], f"member {info.filename!r} could not be read"
-                if len(data) > per_member_cap:
-                    return [], f"member {info.filename!r} exceeds the {per_member_cap}-byte per-file cap"
-                total += len(data)
-                if total > total_cap:
-                    return [], f"decompressed content exceeds the {total_cap}-byte bomb-guard cap"
-                try:
-                    scan = await pre_sanitization.run(data)
-                except SanitizationError:
-                    return [], f"member {info.filename!r} could not be security-scanned"
-                if scan.threat_level.should_block:
-                    return [], f"member {info.filename!r} rejected by the security scan ({scan.reason or 'malicious content'})"
-                members.append((info.filename, data))
-        if not members:
-            return [], "archive has no file members (empty or directories only)"
-        seeded: list[str] = []
-        for name, data in members:
-            try:
-                await workspace.write_bytes(name, data)
-            except Exception:  # noqa: BLE001 — validation above already screens every
-                # realistic escape vector, so this is the rare exceptional case, not
-                # the expected path; don't claim a partial repo is the whole repo
-                return [], f"member {name!r} could not be written to the workspace"
-            seeded.append(name)
-        return seeded, None
+        members, reason = await _validate_archive_members(f.data, total_cap)
+        if reason is not None:
+            return [], reason
+        return await _write_members(workspace, members)
+
+    async def _snapshot_mission_workspace(self, expert_key: str, env, ctx: VrakshaContext) -> None:
+        """Cross-call persistence, the write side: zip this call's finished workspace
+        and store it keyed on `(mission_id, expert_key)`, so THIS expert's next call
+        within the SAME mission can pick up where this one left off (`_restore_
+        mission_workspace`). No-op outside a mission (`ctx.mission_id == ""`, the
+        only real value until missions are the caller) — zero behavior change to an
+        ordinary one-shot chat turn. Best-effort: an oversized workspace skips its
+        snapshot (never truncates one — a half-written zip would corrupt the NEXT
+        restore), a store fault is recorded but never fails the run that just
+        finished. Known v1 gap, not solved here: two concurrent calls to the same
+        `(mission_id, expert_key)` race on this write, last one wins — see the
+        ratified design's §6."""
+        if not ctx.mission_id:
+            return
+        data = await _snapshot_workspace(env.workspace)
+        if data is None:
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="fs.mission_snapshot", arguments={"expert": expert_key},
+                result=None, success=False, duration_ms=0.0,
+                error=f"workspace exceeded the {settings.SECURITY.max_workspace_snapshot_bytes}-byte "
+                      "snapshot cap; persistence skipped this call",
+            ))
+            return
+        try:
+            await self._artifact_store().put(_mission_workspace_key(ctx.mission_id, expert_key), "_workspace.zip", data)
+        except Exception as exc:  # noqa: BLE001 — persistence is best-effort, never fails a finished run
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="fs.mission_snapshot", arguments={"expert": expert_key},
+                result=None, success=False, duration_ms=0.0, error=str(exc)[:200],
+            ))
+
+    async def _restore_mission_workspace(self, workspace, ctx: VrakshaContext, expert_key: str) -> None:
+        """Cross-call persistence, the read side: if this mission has a snapshot from
+        an earlier call to THIS expert, restore it as the workspace's starting state
+        before anything else seeds in. A missing snapshot (this mission's first call
+        to this expert) is the expected, silent no-op case — `FileNotFoundError` is
+        `LocalArtifactStore`'s own signal for that (see its `get()`), not a fault.
+        Routes through the SAME validated-member path an upload uses
+        (`_validate_archive_members`/`_write_members`) — including the malware
+        re-scan per member: bytes this mission produced in an EARLIER turn could
+        still carry the effects of an earlier prompt-injected upload, so "it's our
+        own output" isn't a reason to skip the same gate an upload gets."""
+        key = _mission_workspace_key(ctx.mission_id, expert_key)
+        try:
+            data = await self._artifact_store().get(f"{key}/_workspace.zip")
+        except FileNotFoundError:
+            return
+        except Exception as exc:  # noqa: BLE001 — a store fault must not sink the run
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="fs.mission_restore", arguments={"expert": expert_key},
+                result=None, success=False, duration_ms=0.0, error=str(exc)[:200],
+            ))
+            return
+        members, reason = await _validate_archive_members(data, settings.SECURITY.max_workspace_snapshot_bytes)
+        if reason is not None:
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="fs.mission_restore", arguments={"expert": expert_key},
+                result=None, success=False, duration_ms=0.0, error=reason,
+            ))
+            return
+        names, reason = await _write_members(workspace, members)
+        if reason is not None:
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="fs.mission_restore", arguments={"expert": expert_key},
+                result=None, success=False, duration_ms=0.0, error=reason,
+            ))
+            return
+        ctx.tool_calls.append(ToolCallRecord(
+            tool_name="fs.mission_restore", arguments={"expert": expert_key},
+            result={"files_restored": len(names)}, success=True, duration_ms=0.0,
+        ))
+
+    def _artifact_store(self):
+        """Lazy `ArtifactStore` — shared by `_capture_artifacts` (output capture) and
+        the mission-workspace snapshot/restore pair above."""
+        if self._artifacts is None:
+            from core.artifacts import LocalArtifactStore
+            self._artifacts = LocalArtifactStore()
+        return self._artifacts
 
     async def _capture_artifacts(self, output, env, ctx: VrakshaContext) -> list[dict]:
         """Copy the expert's designated output files out of the (about-to-be-closed)
@@ -359,10 +396,7 @@ class ExpertHandler:
         paths = list(getattr(output, "artifacts", None) or [])
         if not paths or env.workspace is None:
             return []
-        store = self._artifacts
-        if store is None:
-            from core.artifacts import LocalArtifactStore
-            store = self._artifacts = LocalArtifactStore()
+        store = self._artifact_store()
         refs: list[dict] = []
         for path in paths[:settings.EXPERTS.max_artifacts]:
             try:
@@ -399,14 +433,3 @@ def _mark(output) -> dict:
     }
 
 
-def _archive_member_is_safe(name: str) -> bool:
-    """Zip-slip pre-filter for one archive member's path — mirrors the same rules
-    `DockerWorkspace._resolve` enforces (reject empty/absolute/NUL, reject a `..`
-    segment), checked here in-memory, before anything is written, so an unsafe
-    member aborts the whole archive rather than surfacing as a write failure after
-    earlier members are already on disk. `write_bytes`'s own confinement guard
-    still runs at write time — this doesn't replace it, just lets the reject
-    happen at the right point for an all-or-nothing extraction."""
-    if not name or name.startswith("/") or "\x00" in name:
-        return False
-    return ".." not in name.replace("\\", "/").split("/")

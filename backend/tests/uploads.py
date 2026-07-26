@@ -191,7 +191,7 @@ def test_seed_inputs_writes_files_and_records_names():
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("sales.csv", "text", b"a,b\n1,2\n", 8),
                        InputFile("notes.txt", "text", b"hi", 2)]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {"sales.csv": b"a,b\n1,2\n", "notes.txt": b"hi"}
     assert env.input_files == ["sales.csv", "notes.txt"]   # surfaced to the expert
 
@@ -200,13 +200,13 @@ def test_seed_inputs_noop_without_workspace_or_files():
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("x.csv", "text", b"x", 1)]
     env = _env(None)                                        # no workspace -> nothing seeded
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert env.input_files == []
 
     ws = _RecordingWS()
     env2 = _env(ws)
     empty = VrakshaContext.new("s")                         # ctx with no input files
-    asyncio.run(ExpertHandler()._seed_inputs(env2, empty))
+    asyncio.run(ExpertHandler()._seed_inputs(env2, empty, "code.engineer"))
     assert ws.files == {} and env2.input_files == []
 
 

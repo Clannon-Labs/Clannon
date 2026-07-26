@@ -72,7 +72,7 @@ def test_seed_inputs_extracts_archive_members_into_the_workspace(monkeypatch):
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [_archive_input({"src/main.py": b"print('hi')\n", "README.md": b"# repo\n"})]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {"src/main.py": b"print('hi')\n", "README.md": b"# repo\n"}
     assert sorted(env.input_files) == ["README.md", "src/main.py"]
     assert env.seed_failures == []
@@ -85,7 +85,7 @@ def test_seed_inputs_archive_skips_directory_entries(monkeypatch):
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("repo.zip", "archive", data, len(data))]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {"src/main.py": b"x = 1\n"}
 
 
@@ -99,7 +99,7 @@ def test_seed_inputs_archive_rejects_whole_archive_on_a_malicious_member(monkeyp
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [_archive_input({"clean.txt": b"hello", "bad.txt": b"evil"})]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     # all-or-nothing: the clean member is NOT written just because it scanned first
     assert ws.files == {} and env.input_files == []
     # and it's not a SILENT miss: the expert's own env carries why, and it's audited
@@ -118,7 +118,7 @@ def test_seed_inputs_archive_rejects_when_entry_count_exceeds_the_floor(monkeypa
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [_archive_input({"a.txt": b"one", "b.txt": b"two"})]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "entries" in env.seed_failures[0][1]
 
@@ -131,7 +131,7 @@ def test_seed_inputs_archive_rejects_a_member_over_the_per_member_cap(monkeypatc
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [_archive_input({"big.txt": b"way too long for the cap"})]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "per-file cap" in env.seed_failures[0][1]
 
@@ -146,7 +146,7 @@ def test_seed_inputs_archive_rejects_a_decompression_bomb_by_ratio(monkeypatch):
     # highly compressible -> tiny compressed archive, large actual decompressed bytes,
     # byte-verified (read off the member, not trusting the zip's own declared size)
     ctx.input_files = [_archive_input({"huge.bin": b"\x00" * 200_000})]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "bomb-guard" in env.seed_failures[0][1]
 
@@ -164,7 +164,7 @@ def test_seed_inputs_archive_rejects_a_zip_slip_member_path(monkeypatch):
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("repo.zip", "archive", buf.getvalue(), len(buf.getvalue()))]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "unsafe path" in env.seed_failures[0][1]
 
@@ -175,7 +175,7 @@ def test_seed_inputs_archive_corrupt_zip_seeds_nothing(monkeypatch):
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("repo.zip", "archive", b"not a real zip", 14)]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "not a valid zip" in env.seed_failures[0][1]
 
@@ -190,7 +190,7 @@ def test_seed_inputs_archive_extracts_onto_the_real_workspace(monkeypatch):
         env = _env(ws)
         ctx = VrakshaContext.new("s")
         ctx.input_files = [_archive_input({"src/main.py": b"print('hi')\n", "README.md": b"# repo\n"})]
-        asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+        asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
         assert asyncio.run(ws.read_bytes("src/main.py")) == b"print('hi')\n"
         assert asyncio.run(ws.read_bytes("README.md")) == b"# repo\n"
         assert sorted(env.input_files) == ["README.md", "src/main.py"]
@@ -220,7 +220,7 @@ def test_seed_inputs_archive_with_only_directory_entries_is_an_honest_miss(monke
     env = _env(ws)
     ctx = VrakshaContext.new("s")
     ctx.input_files = [InputFile("repo.zip", "archive", data, len(data))]
-    asyncio.run(ExpertHandler()._seed_inputs(env, ctx))
+    asyncio.run(ExpertHandler()._seed_inputs(env, ctx, "code.engineer"))
     assert ws.files == {} and env.input_files == []
     assert "no file members" in env.seed_failures[0][1]
 
