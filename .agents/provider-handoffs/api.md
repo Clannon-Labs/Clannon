@@ -23,22 +23,29 @@ Transfers API & Runtime specialist work between Claude Code and Codex.
   reconnect contract (claimed every reconnect replays the buffered sequence;
   false once a run is evicted to SQLite) — fixed the doc wording, pinned with
   a test. Full write-up in `reports/api/report_v1.md`.
-- Next: committed in two passes (`31fc7af` then `c110893`, full suite green
-  both times — 1481 then 1482 passed, 13 skipped env-only, 0 failed).
-  `reports/api/report_v1.md` finalized. Now: (a) await backend agent's read on
-  the proposed fix for finding #2 (reordering task registration in app.py +
-  moving persist_inputs inside execute()) before implementing — flagged in the
-  report because it has a small user-visible timing effect (`run.inputs`
-  populates a beat later); (b) continue the charter's remaining
-  required-proof-areas (cross-user access non-disclosure — check whether
-  `api_access_control.py` already covers run/artifact/audit/project/session,
-  or if gaps remain).
-- Files touched: `backend/tests/run_lifecycle_invariants.py` (new, 7 tests),
+- Next: committed in four passes (`31fc7af`, `c110893`, `fd17323`, `4a7552e`).
+  Full suite green after the structurally-significant ones (1481 then 1482
+  passed, 13 skipped env-only, 0 failed); the final follow_up_run
+  parametrization was test-only/behavior-preserving so verified targeted
+  (`run_lifecycle_invariants.py` 9 passed + adjacent run/SSE/health files 26
+  passed) per the box's memory-pressure norm, not a third full run.
+  `reports/api/report_v1.md` finalized. Filed
+  `proposals/to-backend/2026-07-26_run-task-registration-ordering.md`
+  (pending) asking for a read on finding #2's fix before implementing — a
+  small, API-internal structural change with a minor user-visible timing
+  effect (`run.inputs` populates a beat later on `GET /runs/:id`). DO NOT
+  implement that fix until a reply lands there — no heartbeat/notification in
+  this session constitutes approval. Once a reply lands (or independently):
+  continue the charter's remaining required-proof-areas (cross-user access
+  non-disclosure — check whether `api_access_control.py` already covers
+  run/artifact/audit/project/session, or if gaps remain).
+- Files touched: `backend/tests/run_lifecycle_invariants.py` (new, 9 tests),
   `backend/api/README.md` (one line, `/runs/:id/stream` row),
   `backend/api/run_driver.py` (one comment, `CancelledError` handler —
   corrected, no behavior change), `reports/api/report_v1.md` (local,
-  gitignored). Nothing else — never assume other dirty files in the shared
-  tree belong to this session.
+  gitignored), `proposals/to-backend/2026-07-26_run-task-registration-ordering.md`
+  (local, gitignored). Nothing else — never assume other dirty files in the
+  shared tree belong to this session.
 - Verification: full suite green after BOTH commits (1481 passed then 1482
   passed, 13 skipped env-only, 0 failed) — this is trustworthy to build on.
   An advisor pass caught two issues in the first draft before this was final:
