@@ -3,7 +3,39 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
-## FILED (2026-07-26, latest) — cross-call workspace persistence, design only
+## BUILT (2026-07-26, latest) — cross-call workspace persistence (ratified + shipped)
+
+Ratified (`proposals/archive/to-orchestration/2026-07-26_cross-call-persistence-
+ratified.md`, §1-§3 as designed, §4 cap placed by backend at 200 MiB
+`789392d`, §5 `ArtifactStore.delete` deferred, §6 named-not-solved agreed) and
+built same session. `ExpertHandler._snapshot_mission_workspace`/`_restore_
+mission_workspace` (`registry/capabilities/handler/experts.py`), keyed on
+`(mission_id, expert_key)` via `LocalArtifactStore.put`/`get` — no new port
+method. A fresh archive upload always wins outright over a stale snapshot (no
+merge). Restore re-scans every member through the same malware gate an upload
+gets. `_extract_archive`'s validation core split out into a new module,
+`registry/capabilities/handler/workspace_archive.py` (`experts.py` was heading
+past the 500-line cap; the split is also the right structural shape on its
+own). 8 new tests (`tests/orchestrator_workspace_persistence.py`), full suite
+1445 passed (same 4 pre-existing unrelated `sse_contract_drift` failures).
+Commit `ea0a79d`. Full detail: `reports/orchestration/report_v42.md`.
+
+**Not built, deferred per backend's ruling, not forgotten:**
+`ArtifactStore.delete` (foundation, backend's seam) for mission-conclude
+cleanup — a concluded mission's workspace snapshot sits as one bounded (≤200
+MiB) leftover zip until this lands. **Named, not solved:** concurrent `code.
+engineer` calls in the same mission race on the shared snapshot key, last close
+wins — deliberately not engineered around in v1 (Prime Directive: don't build
+for a hypothetical before it's observed).
+
+**Resume: nav/patch-tooling arc (§2-§5) + this persistence piece are ALL now
+built.** `code.engineer` has real large-repo navigation instruments AND state
+that survives across a mission's turns. Check `proposals/to-orchestration/`
+first. No known blocker; next items are unprioritized — whatever backend/owner
+pull next from `V1_GAP_ANALYSIS.md`, or the two flagged fast-follows above if
+either becomes load-bearing.
+
+## FILED (2026-07-26, earlier) — cross-call workspace persistence, design only
 
 The remaining gap flagged in report_v41 (a repo extracted for one `code.engineer`
 call doesn't survive to the next, even within one mission) now has a design filed:
