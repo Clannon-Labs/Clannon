@@ -43,9 +43,9 @@ case "$SIDE" in
     ROLE_DIR="$ROOT/backend/api"; ROLE_HANDOFF="HANDOFF_api.md"
     ROLE_INBOXES="$ROOT/proposals/to-api/"
     ;;
-  *) echo "usage: $0 backend|frontend|memory|orchestration|security|api [resume|fresh]" >&2; exit 2 ;;
+  *) echo "usage: $0 backend|frontend|memory|orchestration|security|api [resume|fresh|codex]" >&2; exit 2 ;;
 esac
-case "$MODE" in resume|fresh) ;; *) echo "mode must be resume or fresh" >&2; exit 2 ;; esac
+case "$MODE" in resume|fresh|codex) ;; *) echo "mode must be resume, fresh, or codex" >&2; exit 2 ;; esac
 
 RUNTIME_DIR="${CLANNON_PROVIDER_RUNTIME_DIR:-$ROOT/.agents/runtime}"
 HANDOFF_DIR="$ROOT/.agents/provider-handoffs"
@@ -252,9 +252,16 @@ ensure_handoff
 provider="$(read_state_value provider)"
 [ "$provider" = claude ] || [ "$provider" = codex ] || provider=claude
 fresh_next=""
+force_initial=""
+[ "$MODE" = codex ] && force_initial=codex
 
 while true; do
-  choice="$(choose_provider)"
+  if [ -n "$force_initial" ]; then
+    choice="$force_initial"
+    force_initial=""
+  else
+    choice="$(choose_provider)"
+  fi
   case "$choice" in
     wait:*)
       provider="${choice#wait:}"; provider="${provider%%:*}"
