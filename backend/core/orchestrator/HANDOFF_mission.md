@@ -3,6 +3,38 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-26, later still) — §5 dependency-graph traversal (code.dep_graph)
+
+The nav-patch-tooling arc is now DONE: §2 patch-apply, §3 archive extraction, §4
+AST search, §5 dep-graph traversal — all built + proven. New tool `code.dep_graph`
+(`tools/dep_graph.py`): BFS over import/include edges (Python import/from, C
+#include) extracted via the same tree-sitter parses `code.ast_search` uses,
+outward from a starting file — `dependencies` (outgoing), `dependents` (incoming,
+who imports this file), or `both`, bounded `max_depth`/node/edge caps, cycle-safe.
+Factored the shared tree-sitter parser setup out of `ast_search.py` into new
+`tools/_treesitter.py` first (was duplicated infra risk the moment a second
+AST-based tool showed up, not just a repeated constant). Three-places checklist +
+both pin lists updated again. 14 new tests (`tests/dep_graph.py`), full suite green
+(1424 passed; the 10 failures present in the full run were traced individually —
+4 pre-existing on a clean tree in `tests/benchmarks/sse_contract_drift.py`, outside
+my trees; 6 more pass cleanly in isolation both with and without this change —
+order-dependent pollution elsewhere in the suite, not this build). Commit
+`908500d`. Full detail: `reports/orchestration/report_v41.md`.
+
+**Also noticed while committing, not acted on:** root `CLAUDE.md` now names a
+FIFTH interactive session — a SECURITY specialist (`clannon-security`, owns
+`security/**`) — that didn't exist in this file's last read. Doesn't change
+anything in my tree; flagging so a future resume doesn't assume the old
+four-session topology.
+
+**Resume: check `proposals/to-orchestration/` first.** No known blocker. The
+nav/patch-tooling design's full scope (§1-§5) is now built; the honest remaining
+gap toward CB2's actual large-repo target is cross-call persistence (a repo
+extracted for one `code.engineer` call doesn't survive to the next — flagged
+since report_v39, ties to the Mission Engine, no design started). Otherwise next
+items are unprioritized: that persistence design, or whatever backend/owner next
+pull from `V1_GAP_ANALYSIS.md`.
+
 ## BUILT (2026-07-26, later) — §4 AST-aware search (code.ast_search)
 
 Backend actioned the deferred tree-sitter dependency ruling (`f4c6e51`,
