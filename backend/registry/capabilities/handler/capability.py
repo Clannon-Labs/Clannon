@@ -65,14 +65,14 @@ class Capabilities:
         `graph`/`budget` (mission-engine loop-wiring) follow the same rule: only
         `.open()` can populate them, `scoped_to()` never does."""
         tools = ToolHandler(registry=registry)
-        experts = ExpertHandler(registry=registry, tools=tools)
-        batches = BatchHandler(batch_registry=batch_registry, registry=registry, awareness=awareness)
+        experts = ExpertHandler(registry=registry, tools=tools, graph=graph)
+        batches = BatchHandler(batch_registry=batch_registry, registry=registry, awareness=awareness, graph=graph)
         return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches, _graph=graph, _budget=budget)
 
     @classmethod
     def scoped_to(
         cls, ctx: VrakshaContext, *, expert_keys, tool_keys, grants,
-        allow_memory_write: bool = False, registry=default_registry,
+        allow_memory_write: bool = False, graph: GraphPort | None = None, registry=default_registry,
     ) -> "Capabilities":
         """Open a gateway restricted to specific expert/tool keys and permission
         grants — for a batch orchestrator scoped to one domain (batch-orchestrator
@@ -92,12 +92,19 @@ class Capabilities:
         explicitly. `recall` (read-only, this session only) is unaffected — this
         gates the WRITE side only.
 
+        `graph` (CB2 code-symbol tier, ratified 2026-07-26) is the SAME opt-in
+        shape: `None` by default, explicitly passed by a caller that decided this
+        particular batch should reach the graph (see `batches.py`'s per-`BatchDefinition
+        .grants_graph` flag) — not bundled with the `_batches`/recursion-guard
+        exclusion below, since reading/writing plain graph nodes carries none of
+        that recursion risk (confirmed with backend before building this way).
+
         Deliberately takes no `batch_registry` param — `_batches` stays `None`
         on the returned instance, so a batch's own scoped gateway never offers
         `spawn_batch` to its own model (the recursion guard; see batches.py)."""
         tools = ToolHandler(registry=registry).scoped(allowed_keys=tool_keys, grants=grants)
-        experts = ExpertHandler(registry=registry, tools=tools).scoped(allowed_keys=expert_keys)
-        return cls(ctx=ctx, _tools=tools, _experts=experts, _allow_memory_write=allow_memory_write)
+        experts = ExpertHandler(registry=registry, tools=tools, graph=graph).scoped(allowed_keys=expert_keys)
+        return cls(ctx=ctx, _tools=tools, _experts=experts, _allow_memory_write=allow_memory_write, _graph=graph)
 
     @property
     def _registry(self):

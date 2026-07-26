@@ -20,10 +20,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import settings
-from foundation import ExpertCallRecord, PermissionLevel, ToolCallRecord, VrakshaContext
+from foundation import ExpertCallRecord, GraphPort, PermissionLevel, ToolCallRecord, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from ..schemas import ExpertFindings, ExpertRequest, ExpertSummary
+from . import code_symbols
 from .sandbox import DockerWorkspace
 from .support import ExpertEnv, ScopedToolbox, SkillBook
 from .tools import MemorySearcher
@@ -38,10 +39,14 @@ from .workspace_archive import (
 class ExpertHandler:
     """Implements ExpertHandlerPort over the capability registry."""
 
-    def __init__(self, registry=default_registry, tools=None, artifact_store=None, allowed_keys=None) -> None:
+    def __init__(
+        self, registry=default_registry, tools=None, artifact_store=None, allowed_keys=None,
+        graph: GraphPort | None = None,
+    ) -> None:
         self._registry = registry
         self._tools = tools                          # a ToolHandler, for scoping
         self._artifacts = artifact_store             # an ArtifactStore; lazy LocalArtifactStore if None
+        self._graph = graph                          # a GraphPort; None unless explicitly opted in (CB2 symbol tier)
         self._semaphore = asyncio.Semaphore(settings.EXPERTS.max_concurrent)
         self._allowed_keys = None if allowed_keys is None else frozenset(allowed_keys)
 
@@ -49,15 +54,18 @@ class ExpertHandler:
         """A handler restricted to specific expert keys (for a batch orchestrator) —
         mirrors `ToolHandler.scoped()`, including its compose-never-widen discipline:
         an already-scoped handler's `.scoped()` can only narrow further. Shares this
-        handler's `tools`/`artifact_store` so a scoped expert still gets a correctly
-        (and, via `ToolHandler.scoped()`'s own intersection, correctly NARROWED)
-        scoped toolbox through `_toolbox_for`."""
+        handler's `tools`/`artifact_store`/`graph` so a scoped expert still gets a
+        correctly (and, via `ToolHandler.scoped()`'s own intersection, correctly
+        NARROWED) scoped toolbox through `_toolbox_for`."""
         narrowed = (
             allowed_keys if self._allowed_keys is None
             else self._allowed_keys if allowed_keys is None
             else self._allowed_keys & frozenset(allowed_keys)
         )
-        return ExpertHandler(self._registry, tools=self._tools, artifact_store=self._artifacts, allowed_keys=narrowed)
+        return ExpertHandler(
+            self._registry, tools=self._tools, artifact_store=self._artifacts,
+            graph=self._graph, allowed_keys=narrowed,
+        )
 
     async def run_experts(
         self, requests: list[ExpertRequest], ctx: VrakshaContext
@@ -115,6 +123,7 @@ class ExpertHandler:
                 # capture designated output artifacts out of the workspace BEFORE it
                 # is torn down (the finally below closes it)
                 artifacts = await self._capture_artifacts(output, env, ctx)
+                await self._index_code_symbols(env, ctx)
                 ctx.expert_findings.append(
                     ExpertFindings(
                         expert=spec.key, ref=ref, full_content=output.full_content,
@@ -388,6 +397,28 @@ class ExpertHandler:
             from core.artifacts import LocalArtifactStore
             self._artifacts = LocalArtifactStore()
         return self._artifacts
+
+    async def _index_code_symbols(self, env, ctx: VrakshaContext) -> None:
+        """CB2 code-symbol tier (`code_symbols.index_code_symbols`) — server-side,
+        automatic, never model-facing, same posture as `_capture_artifacts`/
+        `_snapshot_mission_workspace`. Only fires when THIS `ExpertHandler` was
+        explicitly given a `GraphPort` (`self._graph is not None` — an opt-in per
+        `Capabilities.scoped_to()`'s `graph` param, see `batches.py`'s
+        `grants_graph`; `.open()`'s central-tier handler always has one). Never a
+        gate on the run that just finished — a fault here is recorded, not raised."""
+        if self._graph is None or env.workspace is None:
+            return
+        entities, calls_edges, error = await code_symbols.index_code_symbols(self._graph, ctx, env.workspace)
+        if error:
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="graph.index_symbols", arguments={}, result=None,
+                success=False, duration_ms=0.0, error=error,
+            ))
+        elif entities:
+            ctx.tool_calls.append(ToolCallRecord(
+                tool_name="graph.index_symbols", arguments={},
+                result={"entities": entities, "calls_edges": calls_edges}, success=True, duration_ms=0.0,
+            ))
 
     async def _capture_artifacts(self, output, env, ctx: VrakshaContext) -> list[dict]:
         """Copy the expert's designated output files out of the (about-to-be-closed)

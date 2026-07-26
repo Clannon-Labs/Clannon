@@ -16,3 +16,7 @@ engineering:
   expert_keys: [code.engineer]
   tool_keys: [fs.read, fs.write, fs.patch, code.run, code.ast_search, code.dep_graph]
   grants: [read, write, execute]
+  # CB2 code-symbol tier (ratified 2026-07-26): opts this batch's code.engineer
+  # into the automatic, server-side symbol-graph indexer (registry/capabilities/
+  # handler/code_symbols.py) — an explicit per-batch grant, not a blanket unlock.
+  grants_graph: true

@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass
 from uuid import uuid4
 
-from foundation import BatchAwarenessPort, BatchLifecycleStatus, CrossBatchAwareness, PermissionLevel, VrakshaContext
+from foundation import BatchAwarenessPort, BatchLifecycleStatus, CrossBatchAwareness, GraphPort, PermissionLevel, VrakshaContext
 
 from .. import registry as default_registry
 from ..schemas import BatchFindings, BatchSummary
@@ -56,6 +56,7 @@ class BatchDefinition:
     tool_keys: frozenset[str]
     grants: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
     allow_memory_write: bool = False   # ratified default-excludes-remember posture (design v2 §C)
+    grants_graph: bool = False   # CB2 code-symbol tier opt-in (ratified 2026-07-26) — per-batch, not blanket
     system_prompt: str = (
         "You are a scoped batch orchestrator working one sub-task of a larger mission. "
         "Use only the experts/tools you have been granted. Answer only the task given to you."
@@ -83,11 +84,12 @@ class BatchHandler:
 
     def __init__(
         self, batch_registry: dict[str, BatchDefinition] | None = None, registry=default_registry,
-        awareness: BatchAwarenessPort | None = None,
+        awareness: BatchAwarenessPort | None = None, graph: GraphPort | None = None,
     ) -> None:
         self._batch_registry = dict(batch_registry or {})
         self._registry = registry   # the CapabilityRegistry to open scoped Capabilities against
         self._awareness = awareness   # None until wiring.py threads a real BatchAwarenessPort (b1-item-3)
+        self._graph = graph   # the CENTRAL tier's GraphPort; only reaches a batch if its own grants_graph opts in
         self._semaphore = asyncio.Semaphore(_BATCH_MAX_CONCURRENT)
 
     @property
@@ -132,6 +134,7 @@ class BatchHandler:
                     tool_keys=definition.tool_keys,
                     grants=definition.grants,
                     allow_memory_write=definition.allow_memory_write,
+                    graph=self._graph if definition.grants_graph else None,
                     registry=self._registry,
                 )
 

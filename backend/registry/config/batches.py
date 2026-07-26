@@ -59,6 +59,7 @@ def _load_batches(path: str | Path) -> dict[str, BatchDefinition]:
                 expert_keys=frozenset(str(k) for k in entry.get("expert_keys", [])),
                 tool_keys=frozenset(str(k) for k in entry.get("tool_keys", [])),
                 grants=grants,
+                grants_graph=bool(entry.get("grants_graph", False)),
             )
         except KeyError as exc:
             raise ConfigError(f"batch {batch_key!r} is missing required field {exc}") from exc
