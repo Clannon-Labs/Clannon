@@ -9,6 +9,8 @@
 # CLI can resume the other's private session.
 
 set -uo pipefail
+# Resume failure is control flow: callers must not make it fatal via SHELLOPTS.
+set +e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIDE="${1:?usage: clannon-provider-supervisor.sh backend|frontend|memory|orchestration|security|api}"
@@ -277,14 +279,21 @@ while true; do
   if [ "$fresh_next" = "$provider" ]; then
     fresh_next=""
     was_fresh=1
-    launch_fresh_provider "$provider" "$prompt"
+    if launch_fresh_provider "$provider" "$prompt"; then
+      rc=0
+    else
+      rc=$?
+    fi
   else
-    launch_provider "$provider" "$prompt"
+    if launch_provider "$provider" "$prompt"; then
+      rc=0
+    else
+      rc=$?
+    fi
   fi
-  rc=$?
   rm -f "$active_file"
   kill "$monitor" 2>/dev/null || true
-  wait "$monitor" 2>/dev/null
+  wait "$monitor" 2>/dev/null || true
 
   if [ -e "$switch_file" ]; then
     rm -f "$switch_file"
