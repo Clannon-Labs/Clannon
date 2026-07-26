@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME="$ROOT/.agents/runtime"
 
 printf 'Clannon provider state (%s):\n' "$(date '+%F %T %Z')"
-for side in backend frontend memory orchestration security; do
+for side in backend frontend memory orchestration security api; do
   state="$RUNTIME/$side.state"
   provider="$(sed -n 's/^provider=//p' "$state" 2>/dev/null | tail -n 1)"
   [ -n "$provider" ] || provider="not-started"

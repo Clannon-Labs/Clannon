@@ -42,7 +42,7 @@ dir_for() {
 msg_for() {
   case "$1" in
     backend)
-      echo "[auto-wake] RESUMING — this is a fresh session, so your live context is empty; the durable state is on disk/GitHub. FIRST read docs/RESUME.md (the committed resume runbook) + .claude/contexts/HANDOFF.md (local anchor) to reload full state, THEN check your inbox (proposals/to-backend/ + backend/proposals/), re-arm the coordinator heartbeat (ScheduleWakeup ~1200s), and drive the mission + coordinate the two specialists (memory, orchestration). Continue from where the runbook says, don't restart." ;;
+      echo "[auto-wake] RESUMING — this is a fresh session, so your live context is empty; the durable state is on disk/GitHub. FIRST read docs/RESUME.md (the committed resume runbook) + .claude/contexts/HANDOFF.md (local anchor) to reload full state, THEN check your inbox (proposals/to-backend/ + backend/proposals/), re-arm the coordinator heartbeat (ScheduleWakeup ~1200s), and drive the mission + coordinate all four specialists (memory, orchestration, security, api). Continue from where the runbook says, don't restart." ;;
     frontend)
       echo "[auto-wake] RESUMING (fresh session) — FIRST read your handoff HANDOFF.md (in this dir) to pick up where you paused, THEN check your inbox (proposals/to-frontend/ + frontend/proposals/) and continue your frontend work per your CLAUDE.md." ;;
     memory)
@@ -87,7 +87,7 @@ for side in "${sides[@]}"; do
     fi
   else
     dir="$(dir_for "$side")"
-    # Model tiering: the two backend SPECIALISTS (implementors) run on Sonnet 5 to
+    # Model tiering: backend SPECIALISTS (implementors) run on Sonnet 5 to
     # cut token burn; backend (coordinator/reviewer/net) + frontend stay on their
     # default (Opus). The quality net is the backend agent's Opus review of every
     # specialist proposal + merge — not the model. Reversible: drop the flag to

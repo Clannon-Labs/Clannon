@@ -47,11 +47,21 @@ case "$SIDE" in
 esac
 case "$MODE" in resume|fresh) ;; *) echo "mode must be resume or fresh" >&2; exit 2 ;; esac
 
-RUNTIME_DIR="$ROOT/.agents/runtime"
+RUNTIME_DIR="${CLANNON_PROVIDER_RUNTIME_DIR:-$ROOT/.agents/runtime}"
 HANDOFF_DIR="$ROOT/.agents/provider-handoffs"
 STATE_FILE="$RUNTIME_DIR/$SIDE.state"
 COMMON_HANDOFF="$HANDOFF_DIR/$SIDE.md"
-mkdir -p "$RUNTIME_DIR" "$HANDOFF_DIR"
+if ! mkdir -p "$RUNTIME_DIR" "$HANDOFF_DIR"; then
+  echo "clannon-provider[$SIDE]: cannot create runtime/handoff directory" >&2
+  exit 1
+fi
+runtime_probe="$RUNTIME_DIR/.writable.$$"
+if ! : > "$runtime_probe"; then
+  echo "clannon-provider[$SIDE]: runtime directory is not writable: $RUNTIME_DIR" >&2
+  echo "Set CLANNON_PROVIDER_RUNTIME_DIR to a writable private directory." >&2
+  exit 1
+fi
+rm -f "$runtime_probe"
 
 log() { echo "clannon-provider[$SIDE]: $*"; }
 
@@ -221,7 +231,8 @@ monitor_limit() {
 }
 
 provider_available_at() {
-  local provider="$1" file="$RUNTIME_DIR/$SIDE.$provider.unavailable-until"
+  local provider="$1"
+  local file="$RUNTIME_DIR/$SIDE.$provider.unavailable-until"
   cat "$file" 2>/dev/null || echo 0
 }
 
@@ -292,6 +303,20 @@ while true; do
     fi
   fi
   rm -f "$active_file"
+
+  # Some CLI builds print a hard usage-limit error and exit immediately instead
+  # of leaving the TUI open. Process exit is already conclusive failure, so the
+  # five-minute "maybe still generating" dwell is unnecessary in this path.
+  # Record reset/cooldown before clearing the pane, then let normal switch logic
+  # start the other provider.
+  if [ "$rc" -ne 0 ] && pane_has_limit "$provider"; then
+    reset_epoch="$(parse_reset_epoch "$provider" 2>/dev/null || true)"
+    [ -n "$reset_epoch" ] || reset_epoch=$(( $(date +%s) + CONFIRM_S ))
+    printf '%s\n' "$reset_epoch" > "$RUNTIME_DIR/$SIDE.$provider.unavailable-until"
+    printf '%s\n' "$provider" > "$switch_file"
+    log "$provider exited with confirmed usage-limit text; switching provider"
+  fi
+
   kill "$monitor" 2>/dev/null || true
   wait "$monitor" 2>/dev/null || true
 
