@@ -3,6 +3,25 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## FILED (2026-07-26, latest) — cross-call workspace persistence, design only
+
+The remaining gap flagged in report_v41 (a repo extracted for one `code.engineer`
+call doesn't survive to the next, even within one mission) now has a design filed:
+`proposals/to-backend/2026-07-26_workspace-cross-call-persistence-design.md`.
+**Nothing built yet — awaiting ratification.** Headline: keyed on `(mission_id,
+expert_key)`, snapshot-on-close/restore-on-seed via `LocalArtifactStore.put`/`get`
+(no new `WorkspacePort` method), reuses `_extract_archive`'s validator (needs a
+small split-out refactor first: `_validate_archive_members`). Two open decisions
+routed to backend: the snapshot byte-cap number (§4, product/infra call, same
+shape as the original archive-upload cap), and whether `ArtifactStore` gains a
+`delete` method for mission-conclude cleanup (§5, foundation seam) or that's
+deferred. §6 names a real, deliberately unsolved gap: concurrent `code.engineer`
+calls in the same mission race on the shared snapshot — flagged, not engineered
+around in v1.
+
+**Resume: check `proposals/to-orchestration/` for backend's ruling before
+building anything from this design.**
+
 ## BUILT (2026-07-26, later still) — §5 dependency-graph traversal (code.dep_graph)
 
 The nav-patch-tooling arc is now DONE: §2 patch-apply, §3 archive extraction, §4
