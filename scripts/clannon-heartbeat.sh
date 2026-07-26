@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# clannon-heartbeat.sh <backend|frontend|memory|orchestration> — the KEEP-ALIVE
+# clannon-heartbeat.sh <backend|frontend|memory|orchestration|security> — the KEEP-ALIVE
 # ping. Fired by a systemd --user TIMER (clannon-heartbeat@<side>.timer →
 # .service) every ~20 minutes so an agent that has gone idle NEVER sleeps
 # permanently. This is the guarantee the inbox-triggered wake (proposal-wake.sh)
@@ -20,7 +20,7 @@
 
 set -uo pipefail   # deliberately no -e: every exit path below must be clean
 
-SIDE="${1:?usage: clannon-heartbeat.sh backend|frontend|memory|orchestration}"
+SIDE="${1:?usage: clannon-heartbeat.sh backend|frontend|memory|orchestration|security}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION="clannon-$SIDE"
 
@@ -123,9 +123,9 @@ fi
 # unpushed. Per-side so a specialist ping tells IT to resume its own track.
 case "$SIDE" in
   backend)
-    MSG="[COORDINATOR HEARTBEAT · a specialist is idle] A specialist went idle (or the 20-min safety tick). OWNER POLICY: the team NEVER sits idle — not a second wasted. If your live context is empty (fresh session) FIRST read docs/RESUME.md. Then: (1) capture-pane EVERY specialist (clannon-memory/orchestration + any you spawned) and for EACH idle one, assign its next INDEPENDENT task (one that won't collide with what another is mid-editing) via its to-<side>/ inbox — deliver rulings there, not just an archived Response; leave idle ONLY if it truly has no safe independent work. (2) check proposals/to-backend/ and push any unpushed commits after the suite is green (sole pusher, explicit pathspec). (3) THEN keep driving YOUR OWN remaining work (config-depth placements, D1 foundation moves, the mission) — do NOT go quiet while backend work remains; stop only when the whole backlog is empty for everyone." ;;
+    MSG="[COORDINATOR HEARTBEAT · a specialist is idle] A specialist went idle (or the 20-min safety tick). OWNER POLICY: the team NEVER sits idle — not a second wasted. If your live context is empty (fresh session) FIRST read docs/RESUME.md + $ROOT/.agents/provider-handoffs/backend.md. Then: (1) capture-pane EVERY specialist (clannon-memory/orchestration/security + any you spawned) and for EACH idle one, assign its next INDEPENDENT task (one that won't collide with what another is mid-editing) via its to-<side>/ inbox — deliver rulings there, not just an archived Response; leave idle ONLY if it truly has no safe independent work. (2) check proposals/to-backend/ and push any unpushed commits after the suite is green (sole pusher, explicit pathspec). (3) THEN keep driving YOUR OWN remaining work (config-depth placements, D1 foundation moves, the mission) — do NOT go quiet while backend work remains; stop only when the whole backlog is empty for everyone. Before compaction/context exhaustion, update $ROOT/.agents/provider-handoffs/backend.md with current+previous checkpoint and change reason." ;;
   *)
-    MSG="[HEARTBEAT · auto keep-alive] 20-min tick so you never sleep. If idle: re-read your handoff (HANDOFF*.md in this dir) + charter + inbox and continue your track; if mid-task, ignore this. Report to reports/$SIDE/. MEMORY-PRESSURE NORM (24GB box, up to 4 agents): the full ~5GB pytest suite OOM-thrashes when several run at once — for an ISOLATED or BEHAVIOR-PRESERVING change, verify with an import-smoke + the tests scoped to your files (e.g. pytest tests/<your-area>_*.py) instead of the whole suite; reserve a full-suite run for broad-surface changes, and don't start one while another agent's suite is running. If your suite has been running >5 min it's thrashing — kill it (pkill -f 'pytest tests/ -q') and use the targeted path. Goal is still verified-green-before-commit, just via a method the box can run." ;;
+    MSG="[HEARTBEAT · auto keep-alive] 20-min tick so you never sleep. If idle: re-read your role handoff (HANDOFF*.md in this dir) + $ROOT/.agents/provider-handoffs/$SIDE.md + charter + inbox and continue your track; if mid-task, ignore this. Before compaction/context exhaustion, update shared provider handoff with current+previous checkpoint and change reason. Report to reports/$SIDE/. MEMORY-PRESSURE NORM (24GB box, up to 4 agents): the full ~5GB pytest suite OOM-thrashes when several run at once — for an ISOLATED or BEHAVIOR-PRESERVING change, verify with an import-smoke + the tests scoped to your files (e.g. pytest tests/<your-area>_*.py) instead of the whole suite; reserve a full-suite run for broad-surface changes, and don't start one while another agent's suite is running. If your suite has been running >5 min it's thrashing — kill it (pkill -f 'pytest tests/ -q') and use the targeted path. Goal is still verified-green-before-commit, just via a method the box can run." ;;
 esac
 
 # Same tmux idiom as proposal-wake.sh: `-l` types the text LITERALLY (never

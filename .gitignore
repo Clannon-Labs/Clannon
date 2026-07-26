@@ -73,8 +73,12 @@ experiments/
 llm_view_snapshot.json
 
 # Agents
-.codex/
-.agents/
+# .codex/
+# .agents/provider-handoffs/ is TRACKED — the shared cross-provider checkpoint
+# files are source, same durability logic as docs/RESUME.md. Only the
+# per-machine ephemeral runtime state (PIDs, unavailable-until timestamps) is
+# ignored below.
+.agents/runtime/
 # .claude/ is TRACKED (subagents, commands, shared settings are source).
 # Only personal/machine-local settings are ignored:
 .claude/settings.local.json

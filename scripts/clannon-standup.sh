@@ -3,8 +3,9 @@
 # clannon-standup.sh — one command to bring the whole crew online.
 #
 #   ./scripts/clannon-standup.sh
+#   ./scripts/clannon-standup.sh dual
 #
-# For each of the four agents (backend, frontend, memory, orchestration): create
+# For each agent: create
 # its tmux session with the right cwd (if not already up) and launch Claude Code
 # there in BYPASS-PERMISSIONS mode (--dangerously-skip-permissions), so none of
 # them stops to ask the owner to approve tool calls. Then wake each with an
@@ -15,8 +16,10 @@
 # it is NOT relaunched (that would type into a live session) — it is only woken.
 # Attach any session with:  ./scripts/agent-session.sh <side>   (or tmux attach -t clannon-<side>)
 #
-# BYPASS PERMISSIONS IS DELIBERATE: the owner asked for it so the crew runs
-# unattended. It is the same posture as the .claude/settings.local.json defaultMode.
+# Existing `fresh`/`resume` modes retain their original Claude-only behavior.
+# `dual` is additive: provider supervisor starts Claude first, resumes latest
+# role-local session, and switches to sandboxed Codex only after a usage-limit
+# message remains visible for five minutes.
 
 set -uo pipefail   # no -e: a wake to one session must not abort the rest
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,10 +59,13 @@ msg_for() {
 #          closing the terminals or rebooting: every agent picks up its exact session.
 # fresh  : cold-start a NEW session per agent + send the reorientation wake (read handoff). Only
 #          for a true cold clone where no prior session exists on disk.
+# dual   : resume latest Claude session through clannon-provider-supervisor.sh;
+#          confirmed subscription limits fail over Claude <-> Codex using the
+#          shared provider handoff under .agents/provider-handoffs/.
 MODE=fresh
 case "${1:-}" in
-  resume|fresh) MODE="$1"; shift ;;
-  -h|--help)    echo "usage: $(basename "$0") [resume|fresh] [side...]   (sides default: all 5; e.g. 'resume memory orchestration security')"; exit 0 ;;
+  resume|fresh|dual) MODE="$1"; shift ;;
+  -h|--help)    echo "usage: $(basename "$0") [resume|fresh|dual] [side...]   (sides default: all 5; e.g. 'dual memory orchestration security')"; exit 0 ;;
 esac
 # Optional side selection after the mode restricts the crew (default = all five). Works from
 # ANYWHERE (in or out of tmux): every session is created detached with `tmux new-session -d`.
@@ -71,7 +77,11 @@ created=0
 for side in "${sides[@]}"; do
   session="clannon-$side"
   if tmux has-session -t "$session" 2>/dev/null; then
-    echo "clannon-standup: $session already up — will wake (not relaunching claude)."
+    if [ "$MODE" = dual ]; then
+      echo "clannon-standup: $session already up — left untouched; stop it before rerunning dual to install supervisor."
+    else
+      echo "clannon-standup: $session already up — will wake (not relaunching claude)."
+    fi
   else
     dir="$(dir_for "$side")"
     # Model tiering: the two backend SPECIALISTS (implementors) run on Sonnet 5 to
@@ -82,11 +92,14 @@ for side in "${sides[@]}"; do
     # `--continue` (resume) picks the most-recent session for this cwd = the agent's live one.
     launch="claude --dangerously-skip-permissions"
     [ "$MODE" = resume ] && launch="$launch --continue"
+    [ "$MODE" = dual ] && launch="$ROOT/scripts/clannon-provider-supervisor.sh $side resume"
     # Keep the specialist model tier explicit in BOTH modes (don't rely on resume remembering it —
     # a specialist silently resuming on Opus would blow the token budget the tiering exists to save).
-    case "$side" in
-      memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
-    esac
+    if [ "$MODE" != dual ]; then
+      case "$side" in
+        memory|orchestration|security) launch="$launch --model claude-sonnet-5" ;;
+      esac
+    fi
     tmux new-session -d -s "$session" -c "$dir"
     # type the launch command literally, then a detached Enter to submit it
     tmux send-keys -t "$session" -l "$launch"
@@ -115,6 +128,9 @@ fi
 # coordinator running this script).
 if [ "$MODE" = fresh ]; then
   wake_sides=("${sides[@]}")
+elif [ "$MODE" = dual ]; then
+  # Supervisor supplies its own provider-neutral resume prompt after launch.
+  wake_sides=()
 else
   wake_sides=("${launched[@]:-}")
 fi

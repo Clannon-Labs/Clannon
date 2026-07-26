@@ -8,6 +8,9 @@
 #   ./scripts/agent-session.sh orchestration  → "clannon-orchestration", cwd backend/core/orchestrator/
 #   ./scripts/agent-session.sh security       → "clannon-security",      cwd backend/security/
 #
+# This remains attach/create-only. To launch provider failover use:
+#   ./scripts/clannon-standup.sh dual [side...]
+#
 # backend/frontend are the two peer agents; memory/orchestration/security are
 # backend SPECIALISTS the backend agent coordinates (their charters live in the
 # CLAUDE.md of their home dir). The wake system (clannon-wake@<side>.path) injects

@@ -1,5 +1,7 @@
 # CLAUDE.md — Clannon (production monorepo)
 
+@AGENTS.md
+
 ## ⚖️ THE CODING LAWS — read first, every session, every agent, before you write a line
 
 These are **LAWS, not preferences.** You do not weigh them against convenience — the law wins.
