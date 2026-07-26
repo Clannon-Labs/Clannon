@@ -263,10 +263,20 @@ class TestRegistry:
             verdict, _ = e2[2]()
         assert verdict == "PARTIAL"
 
-    def test_e3_is_static_not_measured(self):
+    def test_e3_now_delegates_to_run_standard(self):
+        """E3's harness has landed (eb3_cross_media_synthesis.py) — the registry
+        entry moved from a static NOT-MEASURED placeholder to _run_standard, same
+        as C1/C2/C3/C4/C5/E2. Mocked, not asserted against the real harness's
+        specific current verdict — this file's own convention (see TestRunE1 /
+        test_c2_now_delegates_to_run_standard / test_e2_now_delegates_to_run_standard)
+        is to test the WIRING here, not couple to one harness's scenario design."""
+        report = _make_report("NOT-YET")
+        fake = types.ModuleType("benchmarks.eb3_cross_media_synthesis")
+        fake.run = lambda: report
         e3 = next(b for b in run_all._BENCHMARKS if b[0] == "E3")
-        verdict, reason = e3[2]()
-        assert verdict == "NOT-MEASURED"
+        with patch.dict(sys.modules, {"benchmarks.eb3_cross_media_synthesis": fake}):
+            verdict, _ = e3[2]()
+        assert verdict == "NOT-YET"
 
 
 # ---------------------------------------------------------------------------
