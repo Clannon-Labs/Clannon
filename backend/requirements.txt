@@ -139,3 +139,21 @@ kuzu==0.11.3                 # embedded property-graph DB behind GraphPort; preb
 redis==8.0.1                 # async client for the atomic reserve/reconcile broker behind
                              # BudgetPort. The check-and-decrement runs as a Lua EVAL so it is
                              # indivisible server-side (no lost-update overspend). Pinned for repro.
+
+# ============================================================
+# AST-AWARE CODE SEARCH (orchestration §4, CB2 code-navigation) — dependency
+# ruling: approved in principle 2026-07-25 (proposals/archive/to-backend/
+# 2026-07-25_nav-patch-tooling-design.md), added at BUILD-time now that §1
+# (archive upload modality) + §3 (extraction into a workspace) have landed —
+# no dep goes in ahead of a consumer. Host-side Python only, no sandbox/image
+# change: genuine multi-language AST/CST parsing, fast, incremental — the only
+# option of the three considered that actually serves the stated large-C-repo
+# target (stdlib `ast` is Python-only; shelling out to ctags needs a sandbox
+# image change). Grammars start with the two languages the design named
+# (Python: this codebase; C: the CB2 benchmark target) — add more only when a
+# real consumer needs another language, not speculatively.
+# ============================================================
+
+tree-sitter==0.26.0          # core Python bindings (parser + query engine)
+tree-sitter-c==0.24.2        # C grammar — the CB2 large-repo benchmark target
+tree-sitter-python==0.25.0   # Python grammar — this codebase
