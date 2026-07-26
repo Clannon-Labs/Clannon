@@ -21,24 +21,40 @@ Findings this file backs (see reports/api/ for the write-up):
    simultaneous violation of "exactly one terminal status + one final
    persistence action" and "degrade honestly" (a cancelled client is lied to).
    `test_no_cancel_race_today_with_the_real_artifact_store` pins that the
-   accident holds for the actual `LocalArtifactStore` shipped today.
-2. Delete-mid-flight (`RunStore.delete_session`) does NOT set `cancel_requested`
+   accident holds for the actual `LocalArtifactStore` shipped today — via a
+   `call_soon` probe that must NOT run before task registration, not merely
+   checking that `run.task` ended up set (which would pass either way).
+2. Server shutdown (app.py's lifespan shutdown loop) routes through the SAME
+   `RunStore.request_cancel` as a user's `POST /runs/:id/cancel` — deliberately:
+   an in-flight run at process exit is honestly finalized as `cancelled` and
+   persisted, not left dangling for the next boot to resurrect.
+   `test_shutdown_drain_finalizes_inflight_run_as_cancelled` pins this end to
+   end through the real `lifespan` context manager. `run_driver.py`'s
+   `CancelledError` handler comment previously implied shutdown should NOT be
+   treated as a stop — corrected; `cancel_requested` distinguishes "a stop THIS
+   server signalled" (user cancel OR shutdown) from any other CancelledError
+   source, not "user vs. shutdown".
+3. Delete-mid-flight (`RunStore.delete_session`) does NOT set `cancel_requested`
    — confirmed correct: `execute()`'s `except CancelledError` re-raises (a
    delete is not a user cancel), and the `finally` still skips `persist()`
    because `run.deleted` is set. Pinned so it stays this way.
-3. `run_usage.total_tokens`, read in the `except` handlers after the `with
+4. `run_usage.total_tokens`, read in the `except` handlers after the `with
    usage_scope(): ...` block has unwound, stays valid — `usage_scope`'s
    context manager only resets a ContextVar; it never mutates the `Usage`
    object callers hold a reference to. Pinned.
-4. SSE subscriber queues are removed from `run.subscribers` on every
+5. SSE subscriber queues are removed from `run.subscribers` on every
    disconnect, live or not — no leak across repeated connect/cancel cycles.
-5. A reconnect to a run that has ALREADY been persisted (evicted from the
+6. A reconnect to a run that has ALREADY been persisted (evicted from the
    in-memory store) replays zero buffered frames and closes immediately —
    `events` is deliberately runtime-only (tests/run_state_roundtrip.py), so
    `_from_row` never repopulates it. `api/README.md` previously read as if
    every reconnect replays the buffered sequence regardless; corrected there
    to say this only holds for a still-live run, and a client revisiting a
-   finished run must fetch `GET /runs/:id` for content instead.
+   finished run must fetch `GET /runs/:id` for content instead. Confirmed this
+   is docs-only, not a live gap: frontend/src/lib/api/hooks.ts's `useLiveRun`
+   never opens the SSE stream at all once `run.status` (from the REST query)
+   is terminal, so a reconnect to a finished run already renders from
+   `GET /runs/:id` in practice.
 """
 
 from __future__ import annotations
@@ -59,13 +75,17 @@ import api.run_driver as run_driver
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    """A RunStore backed by a throwaway SQLite file, wired into run_driver's own
-    module-level reference (run_driver imported STORE by name, so patching
-    api.run_store.STORE alone would miss it)."""
-    from api import config
+    """A RunStore backed by a throwaway SQLite file, wired into every module that
+    imported STORE by name (run_driver, and api.runs — the façade app.py's
+    lifespan shutdown loop reads via `runs.STORE`) — patching api.run_store.STORE
+    alone would miss both."""
+    from api import config, run_store
+    import api.runs as runs_mod
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "lifecycle.db"))
     fresh = RunStore()
+    monkeypatch.setattr(run_store, "STORE", fresh)
+    monkeypatch.setattr(runs_mod, "STORE", fresh)
     monkeypatch.setattr(run_driver, "STORE", fresh)
     return fresh
 
@@ -200,20 +220,74 @@ def test_no_cancel_race_today_with_the_real_artifact_store(store, hermetic_execu
     persist_inputs never yields, so run.task really is assigned in the same
     scheduler tick as run creation — the safety net app.py relies on, made
     explicit so a future change to LocalArtifactStore is the trigger to
-    revisit this, not a silent regression."""
+    revisit this, not a silent regression.
+
+    Asserting `run.task is not None` after `_simulate_create_run` returns would
+    pass regardless of whether persist_inputs ever yielded (it's just checking
+    the return value of the function that assigns it) — that doesn't test the
+    "same tick" claim at all. The actual claim is that NOTHING else gets a
+    chance to run in the gap: schedule a probe via `call_soon` (fires the next
+    time the loop regains control, however briefly) BEFORE creating the run,
+    and assert it still hasn't run by the time task assignment completes."""
     hermetic_execute(_fake_flow())
     input_file = SimpleNamespace(name="f.txt", data=b"hi", as_dict=lambda: {"name": "f.txt"})
 
     async def go():
+        order: list[str] = []
+        asyncio.get_running_loop().call_soon(lambda: order.append("probe"))
+
         run = await _simulate_create_run(store, [input_file])
-        # by the time _simulate_create_run returns, task assignment already
-        # happened — no concurrent coroutine ever got a chance to run in between
-        assert run.task is not None
+        order.append("task_registered")
+
+        assert order == ["task_registered"], (
+            f"expected no interleaving before task registration, got {order!r} — "
+            "persist_inputs yielded to the loop, so the create->task-registration "
+            "gap is open even with today's real LocalArtifactStore"
+        )
         await run.task
         return run.id
 
     rid = asyncio.run(asyncio.wait_for(go(), timeout=5))
     assert store.get("u1", rid).status == "delivered"
+
+
+def test_shutdown_drain_finalizes_inflight_run_as_cancelled(store, monkeypatch):
+    """app.py's lifespan shutdown loop calls the SAME `RunStore.request_cancel`
+    as `POST /runs/:id/cancel` (app.py:78) — so it also sets `cancel_requested`,
+    and execute()'s `except CancelledError` honors it exactly like a user stop:
+    the run persists as `cancelled`, not left dangling for the next boot to
+    resurrect. This is deliberate (see the corrected comment in run_driver.py's
+    CancelledError handler) — pin it end to end through the real `lifespan`
+    context manager, not just the flag."""
+    import core.warmup as wm
+    import api.app as app_mod
+
+    monkeypatch.setattr(wm, "warmup", lambda: asyncio.sleep(0))
+
+    async def never_returns(*a, **k):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(run_driver.pipeline, "run", never_returns)
+    monkeypatch.setattr(run_driver, "build_model_overrides", lambda *a, **k: {})
+    monkeypatch.setattr(run_driver.auth, "fetch_wiki", lambda *a, **k: [])
+
+    async def go():
+        run = store.create("u1", "brief")
+        run.task = asyncio.ensure_future(run_driver.execute(run, []))
+        await asyncio.sleep(0)  # let it reach the await inside pipeline.run
+
+        async with app_mod.lifespan(app_mod.app):
+            pass  # immediate startup + shutdown; shutdown drains this run's task
+
+        assert run.task.done() and not run.task.cancelled(), (
+            "execute() must swallow the shutdown-initiated CancelledError and "
+            "complete normally, not propagate it as a bare task cancellation"
+        )
+        assert run.status == "cancelled"
+        return run.id
+
+    rid = asyncio.run(asyncio.wait_for(go(), timeout=15))
+    assert store.get("u1", rid).status == "cancelled"
 
 
 # ── (2) delete-mid-flight must not resurrect a removed row ───────────────────

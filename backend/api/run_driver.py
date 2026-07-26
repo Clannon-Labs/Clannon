@@ -474,11 +474,16 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 run.on_status("delivered")
 
     except asyncio.CancelledError:
-        # cooperative cancel via POST /runs/:id/cancel: the task was cancelled, which
-        # unwound the pipeline at its next await (no output-filter delivery ran). Mark
-        # the run `cancelled` and let `finally` finish the stream + persist. Only honor
-        # a cancel the USER asked for — any other CancelledError (e.g. server shutdown)
-        # is not a user stop, so re-raise it instead of mislabeling the run.
+        # the task was cancelled, which unwound the pipeline at its next await (no
+        # output-filter delivery ran). Mark the run `cancelled` and let `finally`
+        # finish the stream + persist — but only for a stop THIS server signalled
+        # through RunStore.request_cancel (sets cancel_requested), which covers
+        # both POST /runs/:id/cancel AND the lifespan shutdown drain (app.py's
+        # shutdown loop calls request_cancel too, so an in-flight run at process
+        # exit is honestly reported `cancelled`, not resurrected as something
+        # else on the next boot). A CancelledError from anywhere ELSE (a bug, an
+        # unrelated external cancel) did NOT go through request_cancel, so
+        # cancel_requested is still False — re-raise instead of mislabeling it.
         if not run.cancel_requested:
             raise
         # charge the tokens spent up to the stop (completed model calls accumulated
