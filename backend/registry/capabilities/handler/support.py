@@ -149,6 +149,7 @@ class ExpertEnv:
     context_broker: Callable | None = None  # the need-context channel: async (query) -> str, built by the handler (user-scoped, curated, audit-recorded). None for NETWORK experts — memory + an outbound channel in one prompt is an exfil surface
     workspace: WorkspacePort | None = None  # per-run sandbox, if this expert is granted workspace tools; closed when the run ends
     input_files: list = field(default_factory=list)  # names of uploaded files seeded into the workspace for this run (set by the handler)
+    seed_failures: list = field(default_factory=list)  # (upload_name, reason) for an input file that seeded NOTHING — an honest miss, never silent (set by the handler)
 
 
 # ---------------------------------------------------------------------------
@@ -227,17 +228,42 @@ def _memory_note(env: ExpertEnv) -> str:
     )
 
 
+# An extracted archive can seed thousands of member paths (up to settings.SECURITY.
+# archive_max_entries) — list them, not just a raw count, so the expert can `fs.read`
+# specific files by name; the file-tool listing itself is what stays unbounded and
+# discoverable, this cap is only about not flooding the PROMPT with every path.
+_MAX_LISTED_INPUT_FILES = 40
+
+
 def _input_files_note(env: ExpertEnv) -> str:
     """A line telling the expert which uploaded files are already in its workspace,
-    so it reads them with its file tools instead of assuming their contents. Empty
-    when nothing was seeded (no uploads, or this expert has no workspace)."""
+    so it reads them with its file tools instead of assuming their contents — PLUS,
+    just as loudly, which uploads seeded NOTHING and why, so a rejected archive reads
+    as "this repo isn't here, here's why" instead of the expert silently flailing (or
+    fabricating) over an empty workspace. Empty when nothing was seeded and nothing
+    failed (no uploads, or this expert has no workspace)."""
     names = getattr(env, "input_files", None)
-    if not names:
+    failures = getattr(env, "seed_failures", None)
+    if not names and not failures:
         return ""
-    return (
-        "\n\nInput files for this task have been placed in your workspace: "
-        f"{', '.join(names)}. Read them with your file tools — do not assume their contents."
-    )
+    note = ""
+    if names:
+        shown = ", ".join(names[:_MAX_LISTED_INPUT_FILES])
+        if len(names) > _MAX_LISTED_INPUT_FILES:
+            shown += f", and {len(names) - _MAX_LISTED_INPUT_FILES} more"
+        note += (
+            "\n\nInput files for this task have been placed in your workspace: "
+            f"{shown}. Read them with your file tools — do not assume their contents. "
+            "If this looks like a repo/codebase, list the workspace to see everything, "
+            "don't rely only on this preview."
+        )
+    if failures:
+        listed = "; ".join(f"{name} ({reason})" for name, reason in failures)
+        note += (
+            "\n\nThe following uploaded file(s) could NOT be placed in your workspace "
+            f"and are NOT present — do not assume they exist or guess their contents: {listed}."
+        )
+    return note
 
 
 async def think(env: ExpertEnv, user_prompt: str, *, media=None) -> ExpertOutput:

@@ -3,6 +3,27 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-26) — §3 archive-into-workspace extraction (CB2 real-repo-input)
+
+Unblocked: `git log` showed security's archive-modality half of `security/
+sanitizers/uploads.py` landed (`7bfaddf`) since the last session, closing the
+gate this section was waiting on. Built + proven:
+`ExpertHandler._seed_inputs`/`_extract_archive` (`registry/capabilities/
+handler/experts.py`) now extracts an admitted `archive`-modality `InputFile`
+into the workspace member-by-member (byte-verified caps, per-member malware
+re-scan, all-or-nothing on any breach) instead of writing the zip as one
+opaque blob. Full detail, including two real gaps an advisor review caught
+before this was called done (silent rejection on failure; an unbounded prompt
+listing for a large repo) and how they were fixed:
+`reports/orchestration/report_v39.md`.
+
+**Resume: §4 AST-aware search next**, per the ratified design's build order
+(`proposals/archive/to-backend/2026-07-25_nav-patch-tooling-design.md` §6) —
+gated on backend's tree-sitter dependency ruling (approved in principle in
+the ratification, not yet actioned as an actual `requirements.txt` addition
+or a contract design). Check `proposals/to-orchestration/` first; if backend
+hasn't ruled, that's the nudge to send, not new design work.
+
 ## BUILT (2026-07-25, later still) — Mission Engine wired into loop.py; autonomous missions are LIVE
 
 The long-standing blocker at the top of this file ("Mission Engine built +
