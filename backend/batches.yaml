@@ -14,5 +14,5 @@
 engineering:
   domain: engineering
   expert_keys: [code.engineer]
-  tool_keys: [fs.read, fs.write, fs.patch, code.run]
+  tool_keys: [fs.read, fs.write, fs.patch, code.run, code.ast_search]
   grants: [read, write, execute]

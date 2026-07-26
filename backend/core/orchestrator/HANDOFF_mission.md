@@ -3,6 +3,44 @@
 Owner is closing up for the night. This is the resume point for the Mission
 Engine build — read this first, before re-deriving state from scratch.
 
+## BUILT (2026-07-26, later) — §4 AST-aware search (code.ast_search)
+
+Backend actioned the deferred tree-sitter dependency ruling (`f4c6e51`,
+`requirements.txt`) and pinged the inbox (`proposals/archive/to-orchestration/
+2026-07-26_tree-sitter-dependency-ruling.md`, now archived+responded). Built
+`tools/ast_search.py`: `code.ast_search`, one new tool (deterministic, no LLM,
+matches `fs.patch`'s decomposition — `code.engineer` gains a sharper
+instrument, not a new expert). Python + C via real tree-sitter parses; finds a
+symbol's definitions (function/class/struct/union/enum) and plain-name
+call-sites. Wired through the three-places checklist (`code.engineer`'s
+`tools` tuple, `batches.yaml`'s `engineering.tool_keys`, the two
+security-sensitive pin lists in `tests/expert_contract.py` + `tests/
+orchestrator_engineering_batch.py`).
+
+An advisor review caught a real bug pre-commit: the `kind` (definition/
+reference) filter was applied AFTER the tree walk collected up to the match
+cap unfiltered — a file dense with call-sites of a name could fill the cap
+before reaching its own (later) definition, silently reporting "not found."
+Fixed: `kind` now narrows what the walk itself collects. Also tightened
+honesty: a file skipped (unreadable, oversized, or a per-file match-cap hit)
+is now counted in a new `files_skipped` field and reflected in `truncated` —
+previously that could silently under-report a result as complete when it
+wasn't. 14 tests (`tests/ast_search.py`), full suite green. Full detail:
+`reports/orchestration/report_v40.md`.
+
+**v1 scope, explicit not silent:** plain-name matches only (`foo(x)`, not
+`obj.foo(x)` — the callee there is an `attribute` node, unmatched). Documented
+in the tool's own description, not silently claimed as full coverage.
+
+**Resume: §5 dependency-graph traversal next**, per the ratified design's
+build order (`proposals/archive/to-backend/2026-07-25_nav-patch-tooling-
+design.md` §6) — built ON `code.ast_search`'s parse output (import/include
+edges extracted the same structural way symbol definitions are). Not designed
+yet; check `proposals/to-orchestration/` first. Also still open, unchanged:
+cross-call persistence (an extracted repo doesn't survive past one expert
+call — flagged in report_v39, ties to the now-wired Mission Engine, no design
+started).
+
 ## BUILT (2026-07-26) — §3 archive-into-workspace extraction (CB2 real-repo-input)
 
 Unblocked: `git log` showed security's archive-modality half of `security/

@@ -81,6 +81,9 @@ Writes or updates files — documents, code files, reports. Requires explicit pe
 **File Patch Tool**
 Replaces, inserts, or deletes a precise line range inside a file instead of overwriting the whole thing — the precise-editing primitive for large files (fs.read's whole-file cap silently truncates past ~40k chars; a targeted read+patch reaches past that and avoids clobbering the rest of the file on write). Used by the Code Expert.
 
+**AST Search Tool**
+Finds a symbol's definitions and call-sites via a real parse (Python and C, via tree-sitter), not a text/grep match — won't false-positive on a comment or string containing the name. The CB2 large-repo navigation primitive: used before editing a function/class/struct the Code Expert didn't just write itself, to see where else it's defined or called. Scoped to plain-name matches (`foo(x)`, not `obj.foo(x)`) in this version.
+
 **Vector Search Tool**
 Queries Qdrant for semantically similar memories. Used by the Memory Manager during hydration. Always scoped to `user_id`.
 
