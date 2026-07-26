@@ -28,7 +28,7 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    constitution), this file, `docs/benchmarks/mission/README.md` (the mission map),
    `reports/DECISIONS_FOR_OWNER.md` (pending owner calls), and — if present — `.claude/contexts/HANDOFF.md`
    (local anchor) + the newest `reports/report_v*.md`. If `proposals/` survived, check every inbox
-   (`proposals/to-backend|to-memory|to-orchestration`) for pending items.
+   (`proposals/to-backend|to-memory|to-orchestration|to-security`) for pending items.
 4. **Re-establish ownership + restart the loop.** Re-assign the batch/config split (below), then the
    coordinator arms the self-paced heartbeat (a `ScheduleWakeup` ~1200s) that keeps the team from
    idling. Two systemd `--user` layers back this up and survive a reboot: `clannon-wake@*.path`
@@ -39,11 +39,28 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
    send-keys only — never an AI process).
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session)
+## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 2nd pass)
 
-- **Last pushed HEAD:** `3b0f0e7` (2026-07-26). Everything LANDED is pushed; specialists have live
-  WIP in their own trees (orchestration: mission/registry work mid-session, expected). Backend's
-  own tree is clean.
+- **Last pushed HEAD:** `670a217` (2026-07-26). Everything LANDED is pushed; specialists have live
+  WIP in their own trees (orchestration: §5 dependency-graph traversal design mid-session, expected).
+  Backend's own tree is clean.
+- **Since the `3b0f0e7` snapshot below, this pass fixed a real gap + shipped one feature + one doc fix:**
+  - **D11 was half-committed — fixed.** `backend/settings.py`'s `ResilienceConfig`/`RESILIENCE` and
+    `config/backend/resilience.yaml` had never been committed even though memory's repoint commit
+    (`6b59429`, already merged) assumed they existed — `store.py` on `main` was reading
+    `settings.RESILIENCE` with no `RESILIENCE` defined. Caught before it reached a fresh clone
+    (remote was still one commit behind); committed `55f1fb6`. **Lesson: verify a config placement
+    actually landed before a specialist's repoint commit that assumes it lands on top of it.**
+  - **CB5 seal surfacing shipped** (`9f9d6a4`) — closes the last unchecked box in
+    `PHASE_3_contract_honesty.md`. `RunState.verification_state` + a `verification` SSE event,
+    built off security's follow-up proposal spec. See that commit's message for full detail.
+  - **Root `CLAUDE.md` doc fix** (`670a217`) — it said "FOUR interactive sessions / two specialists,"
+    missing the SECURITY specialist (`clannon-security`, real since 2026-07-06, own tree
+    `security/**`). Now correctly says five/three and lists `proposals/to-security/`.
+  - Filed + archived 2 cross-agent proposals this pass (archive-extraction ratification accepted;
+    CB5 follow-up built+closed), flagged 15 open Dependabot alerts (all npm/frontend, not touched)
+    to the frontend agent, flagged the new verification-seal fields to frontend as an optional
+    UI opportunity (low priority, not blocking).
 - **`retry.py` enforcement anchor LANDED** (`3b0f0e7`) — the money layer's last piece. Every LLM
   call now reserves an estimated µ$ cost before it runs and reconciles the real cost after, at
   `core/llm/retry.py::run_agent` (the sole `agent.run(` choke point). Behind
