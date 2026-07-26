@@ -28,7 +28,8 @@
     "report_delta":  { "required_keys": ["text"],       "backend_required": true },
     "report_done":   { "required_keys": [],             "backend_required": true },
     "sources":       { "required_keys": ["sources"],    "backend_required": true },
-    "usage":         { "required_keys": ["tokensUsed"], "backend_required": false }
+    "usage":         { "required_keys": ["tokensUsed"], "backend_required": false },
+    "verification":  { "required_keys": ["state"],      "backend_required": false }
   },
   "nested_shapes": {
     "DecisionLogEntry": {
