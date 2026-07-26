@@ -39,11 +39,47 @@ loss erases the in-flight design record. Mitigations: ratified designs get captu
    `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
    send-keys only — never an AI process).
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 2nd pass)
+## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 3rd pass)
 
-- **Last pushed HEAD:** `670a217` (2026-07-26). Everything LANDED is pushed; specialists have live
-  WIP in their own trees (orchestration: §5 dependency-graph traversal design mid-session, expected).
-  Backend's own tree is clean.
+- **Last pushed HEAD:** `fefd7b7` (2026-07-26). Everything LANDED is pushed. Backend's own tree is
+  clean EXCEPT a pile of uncommitted, not-mine-to-commit-blind files (see below).
+- **⚠️ AWAITING OWNER REPLY (`reports/REPLY_NEEDED_api-specialist-and-provider-infra.md`):**
+  1. A `Status: draft` proposal (`From: workspace-audit`, not a known agent) recommends launching a
+     4th specialist (`clannon-api`, on Codex) for `backend/api/**`, claiming unverified "Vote status:
+     1 (by owner)". Ruled **DEFER** (no verified owner corroboration anywhere in `backend/proposals/`;
+     the proposal's own §8 says defer when there's no queued backlog, and there isn't one right now).
+     Do NOT launch `clannon-api` or run `clannon-standup.sh dual` without a verified owner instruction.
+  2. **Uncommitted dual-provider (Claude Code + Codex) infra appeared mid-session, not authored by
+     me**: root `CLAUDE.md`'s `@AGENTS.md` include, root `AGENTS.md` (provider-continuity rules —
+     already binding via the heartbeat prompt), ~15 module `AGENTS.md` files, changes to
+     `scripts/{agent-session,clannon-heartbeat,clannon-standup}.sh`, new `scripts/clannon-provider-
+     {status,supervisor}.sh`. Looks coherent/deliberate but unverified as finished. **Do NOT `git
+     add -A` this pile** — wait for the owner reply before touching it.
+  3. `.agents/provider-handoffs/backend.md` (gitignored, local-only) has the live checkpoint; kept
+     current each cycle per the new provider-continuity convention. Mirrored here since `.agents/`
+     shares `proposals/`'s durability gap.
+- Specialists at this checkpoint: memory idle (genuinely, no independent work); **orchestration
+  hard-rate-limited until ~20:25 Asia/Kathmandu** (not idle by choice — don't nudge, it won't
+  respond); security idle (just finished the D1 sanitizer-cap repoint, reported, inbox empty);
+  frontend active. `backend/registry/capabilities/handler/code_symbols.py` (untracked) is
+  orchestration's in-flight CB2 work, left untouched — not backend's file.
+- **Since the `670a217` snapshot below, this pass (3rd) fixed 3 more real gaps + shipped 2 features:**
+  - **D1 long tail**: `filter_max_revisions`/`max_text_input_chars` migrated to `settings.SECURITY`
+    (`ceb4bb0`); `FILTER_TIMEOUT_S`/`FILTER_MAX_TOKENS` DELETED as dead code (zero consumers, confirmed
+    against an explicit golden test proving filter deliberately has no token/timeout cap). Caught
+    myself mid-session directly editing `security/sanitizers/workers/*.py` (security's tree, not
+    mine) — reverted before committing, proposed the repoint to security instead; they built it
+    (`a0b0837`), I deleted the resulting dead constants after (`fefd7b7`).
+  - **CB5 seal surfacing's SSE-contract-drift fallout closed**: my own earlier commit (`9f9d6a4`)
+    had broken `tests/benchmarks/sse_contract_drift.py` (4 failures) by adding a stream event without
+    updating `api/README.md` or the harness — fixed the backend-side half (`6c430c1`); frontend closed
+    the rest (`5419c7b`); refreshed the pinned fixture (`3b37d41`) — now 8/8 green.
+  - **Orchestration's cross-call workspace persistence** ratified + config placed
+    (`max_workspace_snapshot_bytes`, `789392d`) — they shipped it (`ea0a79d`).
+  - **Orchestration's CB2 code-symbol-tier design** ratified + `EdgeLabel.CALLS` placed (`3dcd1ef`) —
+    they're building the rest, currently rate-limited mid-build.
+  - **D6 fully closed**: `backend/config/business.yaml` (dead duplicate of the already-placed
+    `tiers/limits/model-catalog.yaml`) deleted, `api/config.py` repointed to `settings.*` (`b0e6b91`).
 - **Since the `3b0f0e7` snapshot below, this pass fixed a real gap + shipped one feature + one doc fix:**
   - **D11 was half-committed — fixed.** `backend/settings.py`'s `ResilienceConfig`/`RESILIENCE` and
     `config/backend/resilience.yaml` had never been committed even though memory's repoint commit
