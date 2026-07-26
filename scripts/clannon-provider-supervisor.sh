@@ -126,14 +126,13 @@ pane_has_limit() {
 }
 
 parse_reset_epoch() {
-  local provider="$1" pane="${TMUX_PANE:-}" line clock epoch now
+  local provider="$1" pane="${TMUX_PANE:-}" pane_text clock epoch now
   [ -n "$pane" ] || return 1
-  line="$(
-    tmux capture-pane -t "$pane" -p -S -160 2>/dev/null |
-      grep -iE "$(limit_pattern "$provider")" |
-      tail -n 1
-  )"
-  clock="$(printf '%s\n' "$line" | grep -ioE 'resets[[:space:]]+[0-9]{1,2}:[0-9]{2}[[:space:]]*(am|pm)' | head -n 1 | sed -E 's/^resets[[:space:]]+//I')"
+  # TUI wraps narrow panes, sometimes splitting "resets" and its clock across
+  # physical lines. Normalize captured pane into one searchable line.
+  pane_text="$(tmux capture-pane -t "$pane" -p -S -160 2>/dev/null | tr '\n' ' ')"
+  printf '%s\n' "$pane_text" | grep -qiE "$(limit_pattern "$provider")" || return 1
+  clock="$(printf '%s\n' "$pane_text" | grep -ioE 'resets[[:space:]]+[0-9]{1,2}:[0-9]{2}[[:space:]]*(am|pm)' | tail -n 1 | sed -E 's/^resets[[:space:]]+//I')"
   [ -n "$clock" ] || return 1
   epoch="$(date -d "today $clock" +%s 2>/dev/null)" || return 1
   now="$(date +%s)"
