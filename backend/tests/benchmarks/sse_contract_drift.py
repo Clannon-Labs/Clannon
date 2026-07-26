@@ -204,6 +204,11 @@ def _backend_contract() -> dict:
     r.on_status("delivered")
     _harvest(r)
 
+    # verification event (CB5 earned seal)
+    r = _new()
+    r.on_verification("grounded")
+    _harvest(r)
+
     # every decision-log kind through the real mapper -- this also pins which kinds
     # become `log` entries vs the `message` channel (kind="message" -> message_delta)
     for kind in get_args(DecisionLogKind):
