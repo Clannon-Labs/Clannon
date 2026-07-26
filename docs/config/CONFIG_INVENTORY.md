@@ -14,10 +14,15 @@ The layout below is approved. Externalization proceeds one area per commit, beha
 (each default equals today's value):
 - ✅ **budget** — `config/backend/budget.yaml` + the typed loader `backend/settings.py`
   (`SPEND_CEILING_FRACTION=0.80` single-source per D2, + the api/ history-budget knobs).
-- ⏳ next: fold the premature `backend/config/business.yaml` into `tiers.yaml`/`models.yaml`
-  and delete it (D6); the `foundation/` product-knob move (D1); then memory/orchestrator/
-  tools/security/llm/copy; the memory-tree budget knobs (`_DEFAULT_BUDGET_TOKENS`,
-  `_CHARS_PER_TOKEN`) migrate into `budget.yaml` via a memory-agent slice (their tree).
+- ✅ **D6 — business.yaml retired.** `settings.TIERS`/`LIMITS`/`MODEL_CATALOG` now load
+  `config/backend/{tiers,limits,model-catalog}.yaml`; `api/config.py` unpacks them into
+  its flat contract (`PLANS`/`FEATURES`/`DEFAULT_PLAN`/`BRIEF_*`/`WIKI_UPLOAD_*`/
+  `SELECTABLE_MODELS`/`MEDIA_MODELS` — same names, same values). The old
+  `backend/config/` package (the premature `business.yaml` draft) is deleted — the 3
+  YAML files existed already (placed in an earlier pass) but were never wired into
+  `settings.py`, so `backend/config/business.yaml` was still the live source until now.
+- ⏳ next: `models.yaml` → `config/models.yaml` (touches orchestration's registry
+  loader, coordinate); the `foundation/` product-knob long tail beyond D1's first pass.
 
 _(Original Phase-1 discovery map + the D1–D6 decision text follow, kept for the record.)_
 

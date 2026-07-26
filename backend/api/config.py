@@ -12,24 +12,42 @@ from __future__ import annotations
 
 import os
 
-# Business values — the owner's control panel (config/business.yaml). Imported here so
-# api/ (and the /config payload) read the single source, never a private duplicate.
-from config import (
-    PLANS,
-    FEATURES,
-    LIMITS,
-    BRIEF_MIN_CHARS,
-    BRIEF_MAX_CHARS,
-    MAX_INPUT_FILES,
-    WIKI_UPLOAD_MAX_FILES,
-    WIKI_UPLOAD_MAX_BYTES,
-    WIKI_UPLOAD_EXTENSIONS,
-    SELECTABLE_MODELS,
-    MEDIA_MODELS,
-    DEFAULT_PLAN as _BUSINESS_DEFAULT_PLAN,
+# Business values — the owner's control panel (config/backend/{tiers,limits,
+# model-catalog}.yaml via settings.py's typed loader, D6). Imported here so api/ (and
+# the /config payload) read the single source, never a private duplicate. Aliased to
+# avoid shadowing this module's OWN `LIMITS`/`MODEL_CATALOG` (different shapes below:
+# the settings objects are the typed config, this module's are the serving payloads).
+from settings import (
+    TIERS as _TIERS,
+    LIMITS as _LIMITS_CFG,
+    MODEL_CATALOG as _MODEL_CATALOG_CFG,
 )
 
 VERSION = "0.1-dev"
+
+# --- business values, unpacked from settings.py into this module's flat contract ----
+PLANS: list[dict] = [p.model_dump() for p in _TIERS.plans]
+FEATURES: dict = _TIERS.features.model_dump()
+_BUSINESS_DEFAULT_PLAN: str = _TIERS.default_plan
+
+BRIEF_MIN_CHARS: int = _LIMITS_CFG.briefMinChars
+BRIEF_MAX_CHARS: int = _LIMITS_CFG.briefMaxChars
+MAX_INPUT_FILES: int = _LIMITS_CFG.maxInputFiles
+WIKI_UPLOAD_MAX_FILES: int = _LIMITS_CFG.wikiUploadMaxFiles
+WIKI_UPLOAD_MAX_BYTES: int = _LIMITS_CFG.wikiUploadMaxBytes
+WIKI_UPLOAD_EXTENSIONS: tuple[str, ...] = tuple(_LIMITS_CFG.wikiUploadExtensions)
+# The /config.limits payload shape (camelCase, matching the frontend contract).
+LIMITS: dict = {
+    "briefMinChars": BRIEF_MIN_CHARS,
+    "briefMaxChars": BRIEF_MAX_CHARS,
+    "maxInputFiles": MAX_INPUT_FILES,
+    "wikiUploadMaxFiles": WIKI_UPLOAD_MAX_FILES,
+    "wikiUploadMaxBytes": WIKI_UPLOAD_MAX_BYTES,
+    "wikiUploadExtensions": list(WIKI_UPLOAD_EXTENSIONS),
+}
+
+SELECTABLE_MODELS: list[str] = _MODEL_CATALOG_CFG.selectable
+MEDIA_MODELS: list[str] = _MODEL_CATALOG_CFG.media
 
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 # Origins allowed to call the API with credentials (the session cookie). Comma-
@@ -39,8 +57,8 @@ FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 CORS_ORIGINS = [
     o.strip() for o in os.getenv("SERVER_CORS_ORIGINS", FRONTEND_ORIGIN).split(",") if o.strip()
 ]
-# Plan assigned to new signups — the business default (config/business.yaml), with a
-# deployment env override (SERVER_DEFAULT_PLAN) for e.g. "pro" in local dev.
+# Plan assigned to new signups — the business default (config/backend/tiers.yaml), with
+# a deployment env override (SERVER_DEFAULT_PLAN) for e.g. "pro" in local dev.
 DEFAULT_PLAN = os.getenv("SERVER_DEFAULT_PLAN") or _BUSINESS_DEFAULT_PLAN
 COOKIE_NAME = "clannon_session"
 COOKIE_SECURE = os.getenv("SERVER_COOKIE_SECURE", "0") == "1"
@@ -51,13 +69,6 @@ COOKIE_SECURE = os.getenv("SERVER_COOKIE_SECURE", "0") == "1"
 COOKIE_DOMAIN = os.getenv("SERVER_COOKIE_DOMAIN") or None
 SESSION_TTL_S = 60 * 60 * 24 * 14  # 14 days
 DB_PATH = os.getenv("SERVER_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "clannon.db"))
-
-# PLANS + FEATURES are imported from config/ (the owner's control panel) above —
-# defined once in config/business.yaml, served here via /config.
-
-# Product input limits (BRIEF_*, MAX_INPUT_FILES, WIKI_UPLOAD_*, and the LIMITS payload)
-# are imported from config/ above — server-enforced here, surfaced to the UI via
-# /config.limits so the client validates against the exact numbers the server enforces.
 
 # Transport-layer body-size ceiling enforced by hardening.BodySizeLimitMiddleware BEFORE
 # any route or pipeline stage runs.  Must exceed any legitimate payload: the largest
@@ -71,8 +82,8 @@ AUTH_RATE_WINDOW_S = 60
 AUTH_RATE_MAX_ATTEMPTS = 10
 
 # The user-selectable model catalog (SELECTABLE_MODELS text/reasoning + MEDIA_MODELS
-# multimodal) is imported from config/ above — curating what users can pick is a business
-# decision, so it lives in config/business.yaml.
+# multimodal) is unpacked from settings.MODEL_CATALOG above — curating what users can
+# pick is a business decision, so it lives in config/backend/model-catalog.yaml.
 #
 # SECURITY note (unchanged): the verifier + output-filter layers are system-managed and
 # NOT user-selectable — users must never swap in a weaker model and degrade their own

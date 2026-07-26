@@ -9,10 +9,10 @@ truth, LAW 4). Everything it exposes is BACKEND-CONTROLLED: server-enforced, nev
 accepted from a client.
 
 Migration note (CENTRAL_CONFIG Phase 3): this is the new typed loader that
-`config/README.md` names. It is being populated ONE config area per commit,
-behavior-preserving (each default equals today's hardcoded value). The first area is the
-budget/margin knobs; plans/limits/model-catalog still load through the older `config/`
-package until their areas migrate here and that package is retired (decision D6).
+`config/README.md` names. It was populated ONE config area per commit,
+behavior-preserving (each default equals today's hardcoded value). D6 (plans/limits/
+model-catalog) is now migrated here too — `backend/config/` (the old business.yaml
+package) is retired.
 """
 from __future__ import annotations
 
@@ -537,6 +537,97 @@ def _load_resilience() -> ResilienceConfig:
         raise RuntimeError(f"config/backend/resilience.yaml is invalid:\n{exc}") from exc
 
 
+class TierFeatures(BaseModel):
+    """Feature flags surfaced to the frontend via GET /config."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    demo: bool
+    billing: bool
+
+
+class Plan(BaseModel):
+    """One pricing tier. Field names are camelCase (not the usual snake_case in this
+    file) because this shape is served VERBATIM as JSON via GET /config — the frontend
+    contract owns the casing here, not Python convention."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    name: str
+    monthlyUsd: int = Field(ge=0)
+    tokenBudget: int = Field(gt=0)
+    tagline: str
+    memoryTiers: list[str]
+    features: list[str]
+    highlight: bool = False
+
+
+class TiersConfig(BaseModel):
+    """Plans/pricing/feature-flags (`config/backend/tiers.yaml`) — the owner's product
+    control panel (D6: retires the old `backend/config/business.yaml` package). Served
+    to the frontend verbatim via GET /config so the UI can never drift from what the
+    backend believes."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    default_plan: str
+    features: TierFeatures
+    plans: list[Plan]
+
+
+def _load_tiers() -> TiersConfig:
+    raw = _load_mapping("backend/tiers.yaml")
+    try:
+        return TiersConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/tiers.yaml is invalid:\n{exc}") from exc
+
+
+class LimitsConfig(BaseModel):
+    """Product input limits (`config/backend/limits.yaml`), server-enforced and mirrored
+    to the UI via GET /config.limits so the client validates against the exact numbers
+    the server enforces, never a drifting client copy. camelCase fields for the same
+    reason as `Plan` above — this shape is served verbatim as JSON."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    briefMinChars: int = Field(gt=0)
+    briefMaxChars: int = Field(gt=0)
+    maxInputFiles: int = Field(gt=0)
+    wikiUploadMaxFiles: int = Field(gt=0)
+    wikiUploadMaxBytes: int = Field(gt=0)
+    wikiUploadExtensions: list[str]
+
+
+def _load_limits() -> LimitsConfig:
+    raw = _load_mapping("backend/limits.yaml")
+    try:
+        return LimitsConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/limits.yaml is invalid:\n{exc}") from exc
+
+
+class ModelCatalogConfig(BaseModel):
+    """The user-selectable model catalog (`config/backend/model-catalog.yaml`) — what
+    Settings -> Models offers. Curating this list is a business/product decision; the
+    model each layer actually RUNS comes from `config/models.yaml` routing, a separate
+    concern (registry's tree)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    selectable: list[str]
+    media: list[str]
+
+
+def _load_model_catalog() -> ModelCatalogConfig:
+    raw = _load_mapping("backend/model-catalog.yaml")
+    try:
+        return ModelCatalogConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/model-catalog.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
 MEMORY: MemoryConfig = _load_memory()
@@ -548,6 +639,9 @@ VERIFIER: VerifierConfig = _load_verifier()
 SECURITY: SecurityConfig = _load_security()
 INTAKE: IntakeConfig = _load_intake()
 RESILIENCE: ResilienceConfig = _load_resilience()
+TIERS: TiersConfig = _load_tiers()
+LIMITS: LimitsConfig = _load_limits()
+MODEL_CATALOG: ModelCatalogConfig = _load_model_catalog()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -565,4 +659,7 @@ __all__ = [
     "SECURITY", "SecurityConfig",
     "INTAKE", "IntakeConfig",
     "RESILIENCE", "ResilienceConfig",
+    "TIERS", "TiersConfig", "Plan", "TierFeatures",
+    "LIMITS", "LimitsConfig",
+    "MODEL_CATALOG", "ModelCatalogConfig",
 ]
