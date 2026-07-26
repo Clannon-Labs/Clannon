@@ -75,16 +75,61 @@ esac
 if [ "$#" -gt 0 ]; then sides=("$@"); fi
 echo "clannon-standup: mode = $MODE | sides = ${sides[*]}"
 
+# DUAL preflight is atomic across selected crew. Exiting Claude/Codex leaves its
+# tmux shell alive, so mere session existence does not mean an agent is active.
+# If ANY pane is attached, running a provider/supervisor, or has child work, touch
+# nothing and report it. Only an all-missing/all-stale set is safe to recycle.
+if [ "$MODE" = dual ]; then
+  active=()
+  stale=()
+  for side in "${sides[@]}"; do
+    session="clannon-$side"
+    tmux has-session -t "$session" 2>/dev/null || continue
+
+    attached="$(tmux display-message -p -t "$session" '#{session_attached}' 2>/dev/null || echo 0)"
+    pane_command="$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo unknown)"
+    pane_pid="$(tmux display-message -p -t "$session" '#{pane_pid}' 2>/dev/null || echo 0)"
+
+    if [ "$attached" -gt 0 ] 2>/dev/null; then
+      active+=("$side(attached:$pane_command)")
+      continue
+    fi
+
+    case "$pane_command" in
+      bash|zsh|fish|sh|dash)
+        # Shell with child process is not stale: it may be a supervisor between
+        # provider launches or owner-started background work.
+        if [ "$pane_pid" -gt 0 ] 2>/dev/null && pgrep -P "$pane_pid" >/dev/null 2>&1; then
+          active+=("$side(shell-has-child)")
+        else
+          stale+=("$side")
+        fi
+        ;;
+      *)
+        active+=("$side($pane_command)")
+        ;;
+    esac
+  done
+
+  if [ "${#active[@]}" -gt 0 ]; then
+    echo "clannon-standup: active crew detected — no sessions changed: ${active[*]}"
+    echo "clannon-standup: rerun after active agents finish/exit."
+    exit 0
+  fi
+
+  for side in "${stale[@]}"; do
+    session="clannon-$side"
+    tmux kill-session -t "$session"
+    echo "clannon-standup: removed stale idle shell $session."
+  done
+fi
+
 launched=()   # sides this run actually started (resume nudges only these — never an already-working agent)
 created=0
 for side in "${sides[@]}"; do
   session="clannon-$side"
   if tmux has-session -t "$session" 2>/dev/null; then
-    if [ "$MODE" = dual ]; then
-      echo "clannon-standup: $session already up — left untouched; stop it before rerunning dual to install supervisor."
-    else
-      echo "clannon-standup: $session already up — will wake (not relaunching claude)."
-    fi
+    echo "clannon-standup: $session already up — will wake (not relaunching claude)."
   else
     dir="$(dir_for "$side")"
     # Model tiering: backend SPECIALISTS (implementors) run on Sonnet 5 to
