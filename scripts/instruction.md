@@ -1,105 +1,129 @@
 # Clannon crew — operator instructions
 
-Run commands from repository root:
+Run everything from the repo root:
 
 ```bash
 cd ~/Vault/projects/Clannon
 ```
 
-## Start or restore whole crew
+Full design + reasoning: `docs/architecture/CREW_WORKFLOW.md`.
+
+---
+
+## Start an agent
 
 ```bash
-./scripts/clannon-standup.sh dual
+./scripts/crew.sh start backend
 ```
 
-This is normal one-command startup.
+Roles: `backend` `frontend` `memory` `orchestration` `security` `api`
 
-- Covers `backend`, `frontend`, `memory`, `orchestration`, `security`, and `api`.
-- Resumes latest provider-native sessions when possible.
-- Tries Claude Code first.
-- Confirmed Claude usage limit switches role to Codex.
-- Confirmed Codex limit returns to Claude when available.
-- Reads role handoff, shared provider handoff, inbox, reports, and Git state.
-- If any live/attached agent is detected, changes nothing and reports active role.
-- If all old tmux sessions are missing or stale idle shells, removes stale shells
-  and recreates crew automatically.
+- Resumes that role's existing conversation if there is one; starts fresh
+  otherwise.
+- If the role is **already running**, it says so and changes nothing. It will
+  never type into a session that is working.
+- If a session is left over but its agent has exited ("dead-shell"), it
+  recycles it automatically.
 
-## Check which provider each role uses
+Options:
 
 ```bash
-./scripts/clannon-provider-status.sh
+./scripts/crew.sh start api --codex    # run this role on Codex instead of Claude
+./scripts/crew.sh start api --fresh    # ignore prior conversation, start clean
 ```
 
-## Watch agent in terminal
+### Start only what you need
 
-Attach one session:
+There is no "start everything" command any more, on purpose. Six agents on one
+box in one git tree caused memory pressure and collisions. **Backend alone is a
+normal setup.** Add a specialist when there is work in its tree.
 
 ```bash
-tmux attach -t clannon-backend
-tmux attach -t clannon-frontend
-tmux attach -t clannon-memory
-tmux attach -t clannon-orchestration
-tmux attach -t clannon-security
-tmux attach -t clannon-api
+./scripts/crew.sh start backend
+./scripts/crew.sh start api        # only if there's api/ work queued
 ```
 
-Use separate terminal tab/window for each role you want to watch.
+---
 
-Detach without stopping agent:
-
-```text
-Ctrl-b, then d
-```
-
-Do not type `exit` when you only want to stop watching. `exit` terminates current
-provider/session; tmux detach keeps it working.
-
-## Attach helper
-
-Equivalent helper:
+## See what's running
 
 ```bash
-./scripts/agent-session.sh backend
-./scripts/agent-session.sh frontend
-./scripts/agent-session.sh memory
-./scripts/agent-session.sh orchestration
-./scripts/agent-session.sh security
-./scripts/agent-session.sh api
+./scripts/crew.sh status
 ```
 
-## Start selected roles only
+Shows each role's state (`running` / `dead-shell` / `stopped`), which provider
+it's on, and how much was written to today's `comms/`.
+
+---
+
+## Watch an agent
 
 ```bash
-./scripts/clannon-standup.sh dual memory orchestration security api
+./scripts/crew.sh attach backend
 ```
 
-## Important messages
+Detach with **`Ctrl-b`, then `d`**. The agent keeps working.
 
-`active crew detected — no sessions changed`
+Do **not** type `exit` — that kills the agent. Detach instead.
 
-: At least one selected tmux pane is attached or running work. Existing work was
-  protected. Attach/status-check it; rerun after active agent exits if restart is
-  intended.
+You can type instructions to an agent yourself while attached; that's you
+talking to it, which is fine. What no longer exists is *automation* typing into
+sessions (see below).
 
-`removed stale idle shell`
+---
 
-: Claude/Codex exited but tmux shell remained. Script safely removed stale shell
-  before relaunch.
-
-`starting claude`
-
-: Supervisor is trying/resuming Claude Code.
-
-`starting codex`
-
-: Claude is limited/unavailable, or role was explicitly restarted Codex-first.
-
-## Normal daily flow
+## Stop an agent
 
 ```bash
-./scripts/clannon-standup.sh dual
-./scripts/clannon-provider-status.sh
-tmux attach -t clannon-backend
+./scripts/crew.sh stop memory
 ```
 
-Detach with `Ctrl-b`, then `d`. Crew continues working.
+If an agent is live, this warns and waits 5s first (Ctrl-C aborts) — a killed
+agent doesn't get to write its handoff. **Better: attach and ask it to stop
+cleanly**, so it records where it got to in
+`.agents/provider-handoffs/<role>.md`.
+
+---
+
+## What changed from the old setup
+
+The old system pushed messages into agents' terminals automatically — a systemd
+unit watched each inbox and typed into the session; another timer typed "are you
+idle?" every 20 minutes. That is **all removed**. It garbled prompts, interrupted
+agents mid-thought, and caused the coordinator to trample specialists that were
+deliberately holding.
+
+Now agents **pull**: they read `comms/<today>/` themselves when they start and
+when they finish a piece of work. Nothing interrupts them.
+
+Also gone: automatic Claude→Codex failover. The two don't share conversation
+memory, so it never really "continued" anything — it just re-read a handoff,
+which is what a normal restart does anyway. Now you pick the provider when you
+start a role (`--codex`), and an agent nearing its limit writes its handoff and
+stops.
+
+Old commands (`clannon-standup.sh`, `agent-session.sh`,
+`clannon-provider-status.sh`, ...) are deleted. `crew.sh` covers all of it.
+
+---
+
+## Where the agents talk
+
+| Location | What goes there | Tracked in git? |
+|---|---|---|
+| `comms/YYYY-MM-DD/<role>.md` | short status / notifications | **yes** |
+| `proposals/to-<role>/` | decisions needing a ruling | no (local) |
+| `reports/<role>/report_vN.md` | in-depth writeups | no (local) |
+
+`comms/README.md` has the format. It's plain markdown — you can read and write
+it yourself to leave the team notes.
+
+---
+
+## Typical session
+
+```bash
+./scripts/crew.sh start backend
+./scripts/crew.sh status
+./scripts/crew.sh attach backend      # Ctrl-b d to leave it running
+```

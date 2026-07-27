@@ -8,38 +8,65 @@ survives even a total machine loss (unlike `proposals/`, `reports/`, `HANDOFF.md
 
 | Kind of loss | What happens | What's lost |
 |---|---|---|
-| **Power dies / internet off** (disk intact) | The 4 agent processes stop; the API becomes unreachable. **Nothing is lost** — all code is on GitHub, and all local state (proposals, reports, HANDOFF, memory, agent transcripts) survives on disk. | Nothing (just live agent context; resume from transcripts). |
+| **Power dies / internet off** (disk intact) | The running agent processes stop; the API becomes unreachable. **Nothing is lost** — all code is on GitHub, and all local state (proposals, reports, HANDOFF, memory, agent transcripts) survives on disk. | Nothing (just live agent context; resume from transcripts). |
 | **Disk / machine lost** (disk failure, ephemeral instance) | Only what's pushed to GitHub survives. | `proposals/` (all cross-agent design + ratifications), `reports/`, `HANDOFF.*`, any uncommitted WIP, `~/.claude` memory + transcripts — ALL gitignored/local. |
 
-**The one durability gap:** the cross-agent coordination brain (`proposals/`) is gitignored, so a disk
-loss erases the in-flight design record. Mitigations: ratified designs get captured in committed docs
-(`docs/architecture/**`, ADRs, this file's state snapshot); and see the owner-decision on backing up
-`proposals/` in `reports/DECISIONS_FOR_OWNER.md`.
+**The durability gap, and what closes it:** `proposals/` and `reports/` are gitignored, so a disk loss
+erases the in-flight design record. Since 2026-07-27, **`comms/` is TRACKED** — the daily
+cross-agent message log survives a clone, and the rule is that a `comms/` entry must be actionable on
+its own (never only a pointer into gitignored `reports/`). Ratified designs still get promoted into
+committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
 
 ## Resume procedure
 
 1. **Pull the code.** `git -C <repo> fetch && git checkout main && git pull` — HEAD should be the
    last pushed commit (see snapshot below). All code + committed docs are here.
-2. **Relaunch the 4 agents.** `scripts/clannon-standup.sh` opens all four in tmux
-   (`clannon-{backend,memory,orchestration,frontend}`) with the right models + permissions. If the
-   local disk survived, each agent can `--resume` its prior transcript; from a fresh clone they start
-   fresh and re-orient from the docs.
-3. **Re-orient the coordinator (backend/root = me).** Read, in order: `LAW/README.md` (the
-   constitution), this file, `docs/benchmarks/mission/README.md` (the mission map),
-   `reports/DECISIONS_FOR_OWNER.md` (pending owner calls), and — if present — `.claude/contexts/HANDOFF.md`
-   (local anchor) + the newest `reports/report_v*.md`. If `proposals/` survived, check every inbox
-   (`proposals/to-backend|to-memory|to-orchestration|to-security`) for pending items.
-4. **Re-establish ownership + restart the loop.** Re-assign the batch/config split (below), then the
-   coordinator arms the self-paced heartbeat (a `ScheduleWakeup` ~1200s) that keeps the team from
-   idling. Two systemd `--user` layers back this up and survive a reboot: `clannon-wake@*.path`
-   re-fires on inbox writes (event-driven), and `clannon-heartbeat@backend.timer` fires every 20 min
-   unconditionally (the **keep-alive floor** — guarantees the coordinator never sleeps permanently even
-   with a quiet inbox or a broken ScheduleWakeup chain). `clannon-standup.sh` re-installs + enables the
-   timer idempotently, so it self-heals on a fresh clone. Units are version-controlled in
-   `scripts/systemd/`; the ping scripts are `scripts/{proposal-wake,clannon-heartbeat}.sh` (tmux
-   send-keys only — never an AI process).
+2. **Start only the agents you need.** `./scripts/crew.sh start backend` (add
+   `--codex` to run a role on Codex). There is deliberately no "start everything"
+   command — see `docs/architecture/CREW_WORKFLOW.md` §4.2. `crew.sh status` shows
+   what's up; `crew.sh attach <role>` to watch. Operator guide:
+   `scripts/instruction.md`.
+3. **Re-orient the coordinator (backend/root).** Read, in order:
+   `LAW/README.md` (the constitution), **`docs/architecture/CREW_WORKFLOW.md`**
+   (how the crew works — canonical, supersedes older coordination docs), this
+   file, `docs/benchmarks/mission/README.md` (the mission map),
+   `.agents/provider-handoffs/backend.md` (live checkpoint), and
+   `reports/DECISIONS_FOR_OWNER.md` (pending owner calls).
+4. **Check your channels — you PULL, nothing notifies you.**
+   `comms/<today>/` (short daily status from every role, tracked in git) and
+   your proposal inbox (`proposals/to-backend/` + `backend/proposals/`).
+   Re-check both after each unit of work.
 
-## State snapshot (keep current at each good chunk) — updated 2026-07-26 (mid-session, 4th pass)
+   There is **no** auto-wake, no idle heartbeat, and no self-armed wakeup loop —
+   all three were deleted in the 2026-07-27 redesign because push-based
+   injection interrupted agents mid-task. **Idle is a legitimate state:** if the
+   queue is genuinely empty, write your handoff and stop.
+
+## State snapshot (keep current at each good chunk) — updated 2026-07-27
+
+- **2026-07-27 — CREW WORKFLOW REDESIGNED FROM SCRATCH.** Owner instruction
+  (`proposals/to-backend/rethinking-decisions.md`): stop bolting fixes on a weak base.
+  Canonical result: **`docs/architecture/CREW_WORKFLOW.md`** — read it before acting on
+  any older coordination doc; it supersedes all of them.
+  - **Push-based messaging is gone.** systemd wake path units + heartbeat timers disabled,
+    removed from `~/.config/systemd/user/`, and their templates deleted from the repo.
+    Nothing injects into a running agent's session any more.
+  - **7 scripts deleted, replaced by 1:** `scripts/crew.sh` (`start|status|attach|stop`).
+    Old commands (`clannon-standup.sh`, `agent-session.sh`, `clannon-provider-*.sh`,
+    `proposal-wake.sh`, `clannon-heartbeat.sh`, `proposal-status.sh`) no longer exist.
+  - **New tracked channel `comms/YYYY-MM-DD/<role>.md`** — short daily status, one file
+    per role (sharded so concurrent appends can't clobber). `proposals/` = rulings only,
+    `reports/` = depth. See `comms/README.md`.
+  - **No auto provider failover.** Provider chosen at launch (`--codex`); an agent near
+    its limit writes a handoff and stops.
+  - **"Never sits idle" RETIRED** — the most expensive bad instruction we followed.
+  - **Challenge-the-owner mandate** added to root `CLAUDE.md` + `AGENTS.md`.
+- Open, not urgent: CB4 decision-mirror gap (cancelled/crashed runs write zero decision
+  records — the write only fires inside `execute()`'s main try). Flagged in
+  `.agents/provider-handoffs/api.md`; unowned so far.
+- Frontend has uncommitted WIP in the tree — not backend's, leave it alone.
+
+## State snapshot (keep current at each good chunk) — 2026-07-26 (mid-session, 4th pass) — historical
 
 - **Last pushed HEAD:** `7ad3d8d` (2026-07-26). Everything LANDED is pushed. Backend's own tree is
   clean (`RELEASE_v0.2.0.md` shows modified by someone else, not touched by backend).

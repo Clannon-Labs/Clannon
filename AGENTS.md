@@ -19,10 +19,31 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
+Challenge bad instructions:
+- Before acting on any instruction — owner's included — confirm it actually helps team.
+- If not: say so BEFORE work. State harm, why, what you'd do instead.
+- Owner reaffirms → follow it, say you're proceeding. Disagree before, never after.
+- Compliance not goal. Working system is. Executing bad instruction = failure, not alibi.
+- Worked example: "team NEVER sits idle" policy → busywork, wasted tokens, agents
+  trampling each other. Nobody challenged it for days. Silence cost more than pushback.
+  Now retired. Watch for instructions optimizing proxy metric (utilization, message
+  volume) instead of goal (working software). Challenge those first time heard.
+
+Messaging — PULL, never push:
+- Nothing injects input into running session. Auto-wake + idle heartbeat DELETED.
+- You check own channels: at session start, after finishing unit of work.
+- `comms/YYYY-MM-DD/<role>.md` — short daily status. Write only your own file.
+- `proposals/to-<role>/` — decisions needing ruling. `reports/<role>/` — depth.
+- Idle is legitimate. Empty queue → write handoff, stop. Don't invent work.
+
 Provider continuity:
 - Claude Code and Codex private sessions are not interchangeable.
+- Provider chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
+  auto-switched mid-session.
 - Shared live checkpoint: `.agents/provider-handoffs/<role>.md`.
 - Before compaction, planned exit, or context exhaustion: update current checkpoint;
   retain earlier checkpoint under `Previous checkpoint`; explain change reason.
 - Specialists never open owner approval prompts. Route decisions to backend through
   proposals. Owner-only decisions go to clearly named `reports/REPLY_NEEDED_*.md`.
+
+Full design: `docs/architecture/CREW_WORKFLOW.md` (canonical).

@@ -33,6 +33,28 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the six self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
+## ⚖️ CHALLENGE INSTRUCTIONS THAT WOULD HARM THE TEAM (owner instruction, 2026-07-27)
+
+**Before acting on any instruction — the owner's included — confirm it will
+actually benefit the team.** If it will not, say so plainly BEFORE doing the
+work: what the harm is, why, and what you would do instead. If the owner
+reaffirms, follow their decision and say you're proceeding. Disagreement goes
+*before* the work, never afterwards as an excuse.
+
+Compliance is not the goal; a working system is. Faithfully executing a bad
+instruction is a failure, not an alibi.
+
+**The worked example, so this is not decoration.** For days the standing policy
+was *"the team NEVER sits idle — not a second wasted."* It was issued in good
+faith. Its real effects: manufactured busywork, wasted tokens, git churn, and a
+coordinator interrupting specialists that were deliberately holding. Nobody
+challenged it. That silence cost far more than the disagreement would have. It
+is now retired (`docs/architecture/CREW_WORKFLOW.md` §2.2).
+
+The general shape to watch for: **an instruction that optimises a proxy metric
+(utilisation, message volume, session count) instead of the goal (working,
+maintainable software).** Challenge that the first time you hear it.
+
 ## ROOT MANAGER ROLE
 
 This CLAUDE.md belongs to the repository root and is intended for the
@@ -98,15 +120,15 @@ owns `core/memory/**`), ORCHESTRATION (`clannon-orchestration`, owns
 `core/orchestrator/**` + `registry/**` + `experts/**` + `tools/**`), SECURITY
 (`clannon-security`, spawned 2026-07-06, owns `security/**` — `sanitizers/` +
 `filter/`), and API & RUNTIME (`clannon-api`, spawned 2026-07-26, owns `api/**` —
-run lifecycle, SSE, persistence, identity). Each specialist runs dual-provider
-(Claude Code + Codex failover, `scripts/clannon-provider-supervisor.sh`) — see
-`.agents/provider-handoffs/<role>.md` for cross-provider continuity. Their
-charters live in the SPECIALIST CHARTER section of their home module's
-`CLAUDE.md`. They exchange work through proposal FILES — never by editing
-another side's code, never by asking the owner to carry a message. Format spec +
-worked example: `proposals/README.md` (filename `YYYY-MM-DD_slug.md`; header
-From/To/Status/Priority/Summary + an optional `Wake:` line; body with contract +
-acceptance criteria; receiver appends `## Response`, flips Status, archives).
+run lifecycle, SSE, persistence, identity). A role runs on **either** Claude or
+Codex — chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
+auto-switched mid-session; continuity across a provider change comes from
+`.agents/provider-handoffs/<role>.md`. Their charters live in the SPECIALIST
+CHARTER section of their home module's `CLAUDE.md`. They exchange work through
+FILES — never by editing another side's code, never by asking the owner to
+carry a message. Format spec + worked example: `proposals/README.md` (filename
+`YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary; body with contract
++ acceptance criteria; receiver appends `## Response`, flips Status, archives).
 
 **Topology = hub-and-spoke.** The specialists coordinate through the backend agent
 (the hub), not directly with each other. As coordinator, the backend agent: owns
@@ -118,42 +140,37 @@ does CB5/CB4/CB6, and holds final
 integration + merge authority. A specialist that needs a foundation change or
 hits a cross-cutting decision proposes UP to the backend agent.
 
-**At the START of every user interaction, BEFORE anything else, check your
-inbox:**
+**PULL, NEVER PUSH — read this before anything else about messaging.**
+Nothing injects input into a running agent's session. The old auto-wake
+(systemd typing into tmux panes) and the 20-min idle heartbeat are **deleted**,
+along with the `Wake:` header that fed them. You are never interrupted
+mid-task, and you never interrupt anyone.
 
-- Backend agent: `proposals/to-backend/` (from the frontend agent + all four
-  specialists) and `backend/proposals/` (from the owner). You WRITE assignments to
-  `proposals/to-memory/`, `proposals/to-orchestration/`, `proposals/to-security/`,
-  and `proposals/to-api/`.
-- Frontend agent: `proposals/to-frontend/` and `frontend/proposals/`.
-- Memory specialist: `proposals/to-memory/`. Orchestration specialist:
-  `proposals/to-orchestration/`. Security specialist: `proposals/to-security/`.
-  API & Runtime specialist: `proposals/to-api/`. All four reply into
-  `proposals/to-backend/`.
+**You check your own channels — at session start, and after finishing a unit of
+work:**
 
-If pending proposals exist: tell the owner in one line — "N pending proposals:
-<slugs>" — then handle them (accept / reject / act, per their Priority and the working
-rules in this file) unless the owner's current request is urgent, in which case
-ask which comes first. Never leave a proposal pending that you could have
-handled; when done, append your `## Response`, flip Status, and move the file
-to `proposals/archive/<your-inbox-name>/`.
+1. `comms/<today>/` — the team's short daily messages. Read every role's file;
+   act on anything naming you. Write your own day file
+   (`comms/YYYY-MM-DD/<your-role>.md`) to tell others what you did or need.
+   **Never edit another role's file.**
+2. Your proposal inbox — for decisions that need YOUR ruling:
+   - Backend agent: `proposals/to-backend/` + `backend/proposals/` (from the owner).
+     Writes assignments to `proposals/to-{memory,orchestration,security,api,frontend}/`.
+   - Each specialist: `proposals/to-<role>/`. All reply into `proposals/to-backend/`.
 
-When YOUR work needs something from the OTHER side (an API change, a contract,
-a new endpoint, UI for a backend feature): write a proposal file into the other
-agent's inbox (`proposals/to-frontend/` or `proposals/to-backend/`), note it in
-your report, and design around the gap until answered. Do NOT relay through the
-owner. Proposals are the ONLY cross-agent channel.
+Handle pending proposals per their Priority; append `## Response`, flip
+`Status:`, and move the file to `proposals/archive/<inbox>/`. Never leave one
+pending that you could have handled. When YOUR work needs something from
+another tree, write a proposal into their inbox and design around the gap until
+it is answered — never edit their code, never relay through the owner.
 
-**Auto-wake:** writing to an inbox automatically types a message into the target
-agent's tmux session (`clannon-{backend,frontend,memory,orchestration,security,api}`; see
-`proposals/README.md` §Wake System). **You choose the message:** put a one-line
-`Wake:` header in the proposal and that exact line is typed (as `[auto-wake]
-<your line>`) — ping the other agent in your own words about what you need or
-what changed. Omit `Wake:` for the generic "New proposal in your inbox" default.
-If you receive an `[auto-wake]` message, treat it EXACTLY like the owner saying
-"check your inbox": run the inbox check above and handle what you find. Don't
-wait for a wake to check — the start-of-interaction check still applies (the
-wake only covers you being idle).
+**Idle is a legitimate state.** The old "the team NEVER sits idle, not a second
+wasted" policy is **retired** — it produced manufactured busywork, git churn,
+and agents trampling each other. If your queue is genuinely empty: write your
+handoff and stop. "Is there real work?" has a valid "no" answer.
+
+Full design + rationale: **`docs/architecture/CREW_WORKFLOW.md`** (canonical —
+it wins over any older description of coordination).
 
 The root manager is responsible for:
 

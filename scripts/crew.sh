@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+#
+# crew.sh — start, watch, and stop the Clannon agents.
+#
+#   ./scripts/crew.sh start <role> [--codex] [--fresh]
+#   ./scripts/crew.sh status
+#   ./scripts/crew.sh attach <role>
+#   ./scripts/crew.sh stop <role>
+#
+# Roles: backend frontend memory orchestration security api
+#
+# THE ONE RULE THIS SCRIPT EXISTS TO RESPECT:
+#   Nothing here ever types into a RUNNING agent's session. There is no
+#   send-keys anywhere in this file. `start` launches an agent as the tmux
+#   session's own initial command; if a role is already up, start refuses and
+#   does nothing. Messaging between agents is pull-based via comms/ — see
+#   docs/architecture/CREW_WORKFLOW.md §2.1.
+#
+# Replaces (all deleted): clannon-standup.sh, clannon-provider-supervisor.sh,
+# clannon-provider-status.sh, agent-session.sh, proposal-wake.sh,
+# clannon-heartbeat.sh, and the systemd wake/heartbeat units. See
+# docs/architecture/CREW_WORKFLOW.md §8 for why each one went.
+
+set -uo pipefail   # no -e: a failure on one role must not abort a multi-role loop
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROLES="backend frontend memory orchestration security api"
+
+die() { echo "crew: $*" >&2; exit 2; }
+
+dir_for() {
+  case "$1" in
+    backend)       echo "$ROOT" ;;
+    frontend)      echo "$ROOT/frontend" ;;
+    memory)        echo "$ROOT/backend/core/memory" ;;
+    orchestration) echo "$ROOT/backend/core/orchestrator" ;;
+    security)      echo "$ROOT/backend/security" ;;
+    api)           echo "$ROOT/backend/api" ;;
+    *)             return 1 ;;
+  esac
+}
+
+valid_role() { dir_for "$1" >/dev/null 2>&1; }
+
+# Specialists run on Sonnet to keep token burn down; the coordinator and the
+# frontend keep the stronger default model. The quality net is the coordinator's
+# review of every specialist change — not the model tier.
+is_specialist() {
+  case "$1" in memory|orchestration|security|api) return 0 ;; *) return 1 ;; esac
+}
+
+# --- session liveness -------------------------------------------------------
+# A tmux session can outlive its agent: when claude/codex exits, the wrapper
+# shell stays and the session looks "up" while nothing is working. Two of the
+# six emergency fixes on the old scripts were about exactly this. Distinguish
+# properly: a session is LIVE only if the pane is running a provider, or a
+# shell that has a provider as a child.
+
+session_exists() { tmux has-session -t "clannon-$1" 2>/dev/null; }
+
+live_provider() {   # echoes "claude" | "codex" | "" (empty = no agent running)
+  local session="clannon-$1" cmd pane_pid child args
+  cmd="$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || true)"
+  case "$cmd" in
+    claude|codex) echo "$cmd"; return 0 ;;
+  esac
+  pane_pid="$(tmux display-message -p -t "$session" '#{pane_pid}' 2>/dev/null || true)"
+  [ -n "$pane_pid" ] || { echo ""; return 0; }
+  for child in $(pgrep -P "$pane_pid" 2>/dev/null); do
+    args="$(ps -o args= -p "$child" 2>/dev/null)"
+    case "$args" in
+      claude\ *|*/claude\ *) echo "claude"; return 0 ;;
+      codex\ *|*/codex\ *)   echo "codex";  return 0 ;;
+    esac
+  done
+  echo ""
+}
+
+is_live() { [ -n "$(live_provider "$1")" ]; }
+
+# --- launch -----------------------------------------------------------------
+
+launch_command() {   # role provider fresh -> the shell command the session runs
+  local role="$1" provider="$2" fresh="$3" cmd
+  case "$provider" in
+    claude)
+      cmd="claude --dangerously-skip-permissions"
+      is_specialist "$role" && cmd="$cmd --model claude-sonnet-5"
+      [ "$fresh" = no ] && cmd="$cmd --continue"
+      ;;
+    codex)
+      # danger-full-access deliberately: workspace-write denied .git/index.lock
+      # and .agents/ writes, which blocked a specialist from committing its own
+      # work and updating its own handoff. Same unattended posture as Claude's
+      # --dangerously-skip-permissions.
+      cmd="codex --sandbox danger-full-access --ask-for-approval never"
+      [ "$fresh" = no ] && cmd="codex resume --last --sandbox danger-full-access --ask-for-approval never"
+      ;;
+  esac
+  # Keep the session alive after the agent exits so its scrollback stays
+  # inspectable; `crew.sh start` will recycle the dead shell on the next run.
+  echo "$cmd; echo; echo '[crew] agent exited — session kept for inspection. Ctrl-b d to detach.'; exec bash"
+}
+
+cmd_start() {
+  local role="" provider=claude fresh=no arg
+  for arg in "$@"; do
+    case "$arg" in
+      --codex) provider=codex ;;
+      --fresh) fresh=yes ;;
+      --*)     die "unknown flag: $arg" ;;
+      *)       role="$arg" ;;
+    esac
+  done
+  [ -n "$role" ] || die "usage: crew.sh start <role> [--codex] [--fresh]"
+  valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+
+  local session="clannon-$role" dir running
+  dir="$(dir_for "$role")"
+
+  if session_exists "$role"; then
+    running="$(live_provider "$role")"
+    if [ -n "$running" ]; then
+      echo "crew: $session is already running ($running) — nothing changed."
+      echo "crew: watch it with:  ./scripts/crew.sh attach $role"
+      return 0
+    fi
+    echo "crew: $session exists but no agent is running in it — recycling."
+    tmux kill-session -t "$session" 2>/dev/null
+  fi
+
+  tmux new-session -d -s "$session" -c "$dir" "$(launch_command "$role" "$provider" "$fresh")"
+  echo "crew: started $session  [$provider$([ "$fresh" = yes ] && echo ", fresh" || echo ", resuming")]  cwd $dir"
+  echo "crew: watch it with:  ./scripts/crew.sh attach $role"
+}
+
+cmd_status() {
+  local role state provider dir_note
+  printf 'Clannon crew — %s\n\n' "$(date '+%F %T %Z')"
+  printf '  %-14s %-10s %s\n' ROLE STATE PROVIDER
+  for role in $ROLES; do
+    if ! session_exists "$role"; then
+      state="stopped"; provider="-"
+    else
+      provider="$(live_provider "$role")"
+      if [ -n "$provider" ]; then state="running"; else state="dead-shell"; provider="-"; fi
+    fi
+    printf '  %-14s %-10s %s\n' "$role" "$state" "$provider"
+  done
+  echo
+  echo "  stopped     no tmux session — start with: crew.sh start <role>"
+  echo "  dead-shell  session outlived its agent — crew.sh start <role> recycles it"
+  echo
+  local today="$ROOT/comms/$(date +%F)"
+  if [ -d "$today" ]; then
+    echo "  today's comms ($(date +%F)):"
+    for f in "$today"/*.md; do
+      [ -e "$f" ] || continue
+      printf '    %-16s %s lines\n' "$(basename "$f" .md)" "$(wc -l < "$f" | tr -d ' ')"
+    done
+  else
+    echo "  today's comms: none yet ($today)"
+  fi
+}
+
+cmd_attach() {
+  local role="${1:-}"
+  [ -n "$role" ] || die "usage: crew.sh attach <role>"
+  valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+  session_exists "$role" || die "clannon-$role is not running — start it with: crew.sh start $role"
+  echo "crew: attaching to clannon-$role — detach with Ctrl-b then d (do NOT type 'exit')."
+  exec tmux attach -t "clannon-$role"
+}
+
+cmd_stop() {
+  local role="${1:-}"
+  [ -n "$role" ] || die "usage: crew.sh stop <role>"
+  valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+  session_exists "$role" || { echo "crew: clannon-$role is not running."; return 0; }
+  if is_live "$role"; then
+    echo "crew: WARNING — an agent is running in clannon-$role."
+    echo "crew: it will not get a chance to write its handoff (.agents/provider-handoffs/$role.md)."
+    echo "crew: prefer attaching and letting it stop cleanly. Killing in 5s — Ctrl-C to abort."
+    sleep 5
+  fi
+  tmux kill-session -t "clannon-$role" 2>/dev/null
+  echo "crew: stopped clannon-$role."
+}
+
+case "${1:-}" in
+  start)  shift; cmd_start "$@" ;;
+  status) cmd_status ;;
+  attach) shift; cmd_attach "$@" ;;
+  stop)   shift; cmd_stop "$@" ;;
+  -h|--help|"")
+    sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *) die "unknown command: $1 (try: start | status | attach | stop)" ;;
+esac

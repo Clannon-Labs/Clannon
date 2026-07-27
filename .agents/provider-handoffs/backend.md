@@ -4,70 +4,52 @@ Transfers live backend-coordinator work between Claude Code and Codex.
 
 ## Current checkpoint
 
-- Provider: Claude Code (resumed via clannon-provider-supervisor.sh after a
-  rate-limit round-trip — this exact conversation thread continued via
-  `--continue`, so full context survived; only git/file state needed catching
-  up on, not conversation memory)
-- Updated: 2026-07-26 ~23:20
-- Task: caught up on everything that happened while this session was
-  rate-limited. Two things ran in parallel: the OWNER hand-debugged the crew
-  failover system directly (6 commits, own git identity `thecybro`: complete
-  Claude-to-Codex crew failover, recycle stale crew sessions, allow
-  supervised Codex-first restart, never inject wakes into shell panes,
-  recycle detached stopped supervisors, parse wrapped provider reset times —
-  all in `scripts/`, all pushed as part of this batch); and `clannon-api`
-  ALSO failed over to Codex and did substantial work (task-registration
-  ordering fix implemented, an SSE duplicate-event race found+fixed, a
-  HIGH-priority false-delivery persistence-ordering bug found+fixed, a
-  fake-green test in run_cancel.py found+fixed) but couldn't commit or update
-  its own tracked handoff — Codex's `--sandbox workspace-write` rejected
-  `.git/index.lock` and `.agents/` writes.
-- **Found + fixed a real permission bug live**: this session itself got
-  resumed with `--permission-mode dontAsk`, which silently denied tmux
-  control entirely (a whole tool category, not a per-call prompt) — caught
-  when I tried to capture-pane a specialist and got a hard denial. Root cause
-  in `clannon-provider-supervisor.sh`: it used `dontAsk` for Claude and
-  `--sandbox workspace-write` for Codex, neither of which matches the crew's
-  actual established posture (`--dangerously-skip-permissions` everywhere
-  else, "the owner asked for it so the crew runs unattended"). Fixed both to
-  `--dangerously-skip-permissions` / `--sandbox danger-full-access`
-  (`f9ec955`). **This fix only applies to NEW launches — every currently-
-  running tmux session (including this one) is still running under the old,
-  more restrictive flags until manually restarted.**
-- Reviewed clannon-api's Codex-produced diff in full before committing
-  (didn't just trust the report) — 60 targeted tests independently re-run
-  green. Committed as one logical unit (`74ec81e`), responded to and archived
-  all 4 of its pending proposals, granted it `run_cancel.py` test ownership,
-  consolidated its own provider-handoff checkpoint on its behalf (`a4a181c`).
-  Also committed a separate Codex session's Integration Contract mission work
-  (Phase 0 + Phase 4, `fded1ec`) and the owner's own new operator-instructions
-  doc (`d0fac15`).
-- 17 commits pushed this batch, HEAD `a4a181c`, remote confirmed matching.
-- Next: **tell the owner to restart all 6 crew tmux sessions** so the
-  permission fix actually takes effect (kill each `clannon-<side>` session,
-  then `./scripts/clannon-standup.sh dual` to relaunch everything under the
-  corrected flags) — I flagged this live in chat, they said they'd do it
-  themselves. After restart: this exact backend session ends and a new one
-  resumes via `--continue` with full history intact (same as this
-  round-trip), just now with working tmux access. Also still open: the CB4
-  decision-mirror gap (cancelled/crashed runs write zero decision records)
-  flagged to clannon-api's handoff but not yet formally proposed/fixed by
-  anyone.
-- Files touched: see Git status; never assume dirty files belong to this
-  provider — frontend's uncommitted changes (next.config.ts, verified-seal
-  wiring, a new verification-status component) are frontend's own in-progress
-  work, left untouched.
-- Verification: all commits this batch suite-green (targeted) before push;
-  full detail in each commit message + `docs/RESUME.md`.
+- Provider: Claude Code (running standalone, NOT in tmux — the owner started it
+  directly to do this rewrite)
+- Updated: 2026-07-27
+- Task: **DONE — full crew-workflow redesign**, on the owner's explicit
+  instruction (`proposals/to-backend/rethinking-decisions.md`) to rebuild from
+  scratch rather than bolt more fixes on. Canonical result:
+  **`docs/architecture/CREW_WORKFLOW.md`** — read that first, it supersedes every
+  older description of agent coordination.
+- What changed:
+  - **All push-based messaging deleted.** systemd wake path units + heartbeat
+    timers disabled, unenabled, and their unit files removed from
+    `~/.config/systemd/user/` AND `scripts/systemd/` (the standup script used to
+    silently reinstall them — that install block is gone with the script).
+  - **Deleted scripts:** `clannon-standup.sh`, `clannon-provider-supervisor.sh`,
+    `clannon-provider-status.sh`, `agent-session.sh`, `proposal-wake.sh`,
+    `clannon-heartbeat.sh`, `proposal-status.sh`. **Replaced by one:
+    `scripts/crew.sh`** (`start|status|attach|stop`). No send-keys anywhere in it.
+  - **New channel `comms/YYYY-MM-DD/<role>.md`** — tracked in git, one file per
+    role per day (sharded so concurrent appends can't clobber). Short status.
+    `proposals/` stays for rulings, `reports/` for depth. See `comms/README.md`.
+  - **No automatic provider failover.** Provider is chosen at launch
+    (`crew.sh start <role> --codex`). Rationale in CREW_WORKFLOW §5.4.
+  - **"Never sits idle" policy RETIRED** — it was the single most expensive bad
+    instruction; see CREW_WORKFLOW §0 and §2.2.
+  - **Challenge-the-owner mandate added** to root `CLAUDE.md` + `AGENTS.md`.
+- Next: the owner starts the crew when ready via `./scripts/crew.sh start backend`
+  (see `scripts/instruction.md`). **Do NOT restart the old way** — the old
+  commands no longer exist.
+- Open items inherited, none urgent:
+  - CB4 decision-mirror gap: cancelled/crashed runs write zero decision records
+    (the write only fires inside `execute()`'s main try block). Flagged in
+    `.agents/provider-handoffs/api.md`, not yet fixed or proposed by anyone.
+  - Frontend has uncommitted work in the tree (`next.config.ts`,
+    `verified-seal.tsx`, `hooks.ts`, plus two untracked files under
+    `frontend/src/`). **Not backend's — do not touch, stash, or clean.**
+- Verification: `crew.sh` syntax-checked and smoke-tested (`status`, dead-shell
+  detection, `stop`) with no live agents running. Nothing else in the repo was
+  touched by this pass — no backend/ or frontend/ source changes.
 
 ## Change note
 
-Updated after a full rate-limit round-trip surfaced a real permission-config
-bug (tmux denied under `dontAsk`) that would have silently degraded every
-future resume the same way. Fixed at the source (the supervisor script) so
-it can't recur, but the fix needs a manual crew restart to take effect on
-already-running sessions — flagging that loudly here in case a future session
-picks this up before the owner has restarted the crew.
+Complete redesign, not an increment. The previous checkpoint's standing order —
+"tell the owner to restart all 6 crew sessions so the permission fix takes
+effect" — is **obsolete and must not be acted on**: the scripts it referred to
+are deleted, and the permission fix it described lives on in `crew.sh`'s launch
+flags. Superseded wholesale by CREW_WORKFLOW.md.
 
 ## Previous checkpoint (2026-07-26 ~21:50)
 
