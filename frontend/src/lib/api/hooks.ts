@@ -18,6 +18,7 @@ import type {
   RunStatus,
   Source,
   User,
+  VerificationState,
 } from "./types";
 
 export const queryKeys = {
@@ -294,6 +295,11 @@ export interface LiveRunState {
   live: boolean;
   /** True between a dropped stream and a successful resubscribe. */
   reconnecting: boolean;
+  /** Output-filter verdict, live from SSE `verification` (arrives before the
+   *  report streams — INTEGRATION_CONTRACT.md §4) or merged in from the
+   *  persisted run below on refresh. Animation-only: the run page renders
+   *  the seal itself off the merged/persisted value, per contract §5. */
+  verificationState: VerificationState | null;
 }
 
 const TERMINAL: RunStatus[] = ["delivered", "blocked", "failed", "cancelled"];
@@ -318,6 +324,7 @@ const initialLiveState = (): LiveRunState => ({
   streamError: null,
   live: false,
   reconnecting: false,
+  verificationState: null,
 });
 
 /** Fold one stream event into the live state. Unknown future event types are
@@ -349,9 +356,7 @@ function foldRunEvent(s: LiveRunState, event: RunEvent): LiveRunState {
     case "usage":
       return { ...s, tokensUsed: event.tokensUsed };
     case "verification":
-      // Backlogged — verdict isn't surfaced in the UI yet. See
-      // proposals/archive/to-frontend/2026-07-26_cb5-verification-seal-available.md.
-      return s;
+      return { ...s, verificationState: event.state };
     default:
       return s;
   }
@@ -467,5 +472,10 @@ export function useLiveRun(run: Run | undefined): LiveRunState {
     reportText: state.reportText || run.report || "",
     reportDone: state.reportDone || Boolean(run.report),
     tokensUsed: Math.max(state.tokensUsed, run.tokensUsed),
+    // SSE prepares the verdict in state, but never earns a rendered claim.
+    // Only a terminal REST row can authorize the seal (contract §5).
+    verificationState: TERMINAL.includes(run.status)
+      ? run.verificationState ?? null
+      : null,
   };
 }

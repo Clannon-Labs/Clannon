@@ -19,7 +19,7 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { Tooltip, InfoTip } from "@/components/ui/tooltip";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useRun, useLiveRun, useRunThread, useDownloadArtifact, useCancelRun } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Report } from "@/components/app/report";
@@ -31,7 +31,7 @@ import { PriorTurns } from "@/components/app/prior-turns";
 import { UserMessage } from "@/components/app/thread";
 import { ArtifactPreview } from "@/components/app/artifact-preview";
 import { Mark } from "@/components/brand/logo";
-import { VerifiedSeal } from "@/components/brand/verified-seal";
+import { VerificationStatus } from "@/components/app/verification-status";
 import type { Run, Artifact } from "@/lib/api";
 import { formatBytes, formatTokens } from "@/lib/utils";
 
@@ -365,40 +365,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                       transition={{ duration: 0.25, ease: EASE }}
                       className="flex items-center gap-1"
                     >
-                      <span className="tag-label mr-1 flex items-center gap-2 text-primary sm:mr-2">
-                        {/* the seal is the LAST beat: after the rule strikes
-                            across the masthead (0.35s below), it presses in —
-                            scale + settle rotation like a stamp landing by hand,
-                            with a moss emboss bloom ringing out behind it */}
-                        <span className="relative inline-flex">
-                          {!reduce && (
-                            <motion.span
-                              aria-hidden
-                              className="absolute inset-0 rounded-full bg-primary/25 blur-[3px]"
-                              initial={{ scale: 0.5, opacity: 0 }}
-                              animate={{ scale: [0.5, 1.6], opacity: [0, 0.7, 0] }}
-                              transition={{ duration: 0.7, ease: EASE, delay: 0.45, times: [0, 0.4, 1] }}
-                            />
-                          )}
-                          <motion.span
-                            initial={reduce ? false : { scale: 0.5, opacity: 0, rotate: 10 }}
-                            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                            transition={
-                              reduce
-                                ? undefined
-                                : { type: "spring", stiffness: 420, damping: 17, delay: 0.45 }
-                            }
-                            className="inline-flex"
-                          >
-                            <VerifiedSeal className="size-8" />
-                          </motion.span>
-                        </span>
-                        <span className="sr-only sm:not-sr-only">Verified</span>
-                      </span>
-                      <InfoTip
-                        align="end"
-                        label="Every claim was checked against its source before delivery. If it couldn't be grounded, it wouldn't ship."
-                      />
+                      <VerificationStatus state={live.verificationState} />
                       <Tooltip label="Copy markdown" align="end">
                         <button
                           type="button"

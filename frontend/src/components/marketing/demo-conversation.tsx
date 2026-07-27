@@ -22,7 +22,6 @@ import { RunStatusBadge } from "@/components/app/run-status";
 import { RunActivity } from "@/components/app/run-activity";
 import { UserMessage } from "@/components/app/thread";
 import { Mark } from "@/components/brand/logo";
-import { VerifiedSeal } from "@/components/brand/verified-seal";
 import { cn, formatTokens } from "@/lib/utils";
 
 /** An icon per starter, in the order DEMO_BRIEFS defines them. */
@@ -276,10 +275,7 @@ export function DemoConversation() {
                       </span>
                     </h2>
                     {s.reportDone && (
-                      <span className="tag-label flex items-center gap-1.5 text-primary">
-                        <VerifiedSeal className="size-6" />
-                        <span className="sr-only sm:not-sr-only">Verified</span>
-                      </span>
+                      <span className="tag-label text-muted-foreground">Demo complete</span>
                     )}
                   </header>
                   <div className="px-5 py-6 sm:px-8 sm:py-8">

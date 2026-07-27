@@ -8,10 +8,22 @@ const isDev = process.env.NODE_ENV === "development";
 // Every non-internal IPv4 address of this machine. Used for allowedDevOrigins
 // so opening the dev app over the LAN (e.g. a phone) doesn't trip Next's
 // cross-origin dev-resource guard — auto-detected, so a new IP never breaks it.
-const lanHosts = Object.values(os.networkInterfaces())
-  .flat()
-  .filter((iface): iface is NetworkInterfaceInfo => !!iface && iface.family === "IPv4" && !iface.internal)
-  .map((iface) => iface.address);
+function detectLanHosts(): string[] {
+  if (!isDev) return [];
+
+  try {
+    return Object.values(os.networkInterfaces())
+      .flat()
+      .filter((iface): iface is NetworkInterfaceInfo => !!iface && iface.family === "IPv4" && !iface.internal)
+      .map((iface) => iface.address);
+  } catch {
+    // LAN access is a dev convenience. Restricted containers can deny network
+    // enumeration; localhost must keep working instead of breaking all builds.
+    return [];
+  }
+}
+
+const lanHosts = detectLanHosts();
 
 /**
  * Security headers. The CSP allows 'unsafe-inline' for script/style
