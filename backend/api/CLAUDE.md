@@ -93,13 +93,19 @@ a blocking proposal.
 
 **Proposal protocol (your ONLY cross-agent channel — hub-and-spoke through the
 backend agent):**
-- **At the START of every session + every wake, check your inbox: `proposals/to-api/`.**
+- **Daily comms (read + write every session):** read `comms/<today>/` — every
+  role's short status file — and write your own,
+  `comms/YYYY-MM-DD/api.md`. Never edit another role's file. Tracked in git.
+  Nothing notifies you: there is no auto-wake any more, you PULL. Use `comms/`
+  for status/FYI; use proposals only for decisions needing a ruling.
+  **Idle is legitimate** — empty queue means write your handoff and stop, not
+  invent work. Full design: `docs/architecture/CREW_WORKFLOW.md`.
+- **At the START of every session, and after each unit of work, check your inbox: `proposals/to-api/`.**
   Pending → handle by Priority, append `## Response`, flip Status, archive to
   `proposals/archive/to-api/`.
 - **Need something from the backend agent** (a config placement, a `foundation`/
   contract change, a `core`/`security` seam, a persisted-schema or frontend-visible
-  contract change): write `proposals/to-backend/YYYY-MM-DD_slug.md` with a one-line
-  `Wake:` header; design around the gap until answered. Coordinate through the
+  contract change): write `proposals/to-backend/YYYY-MM-DD_slug.md`; design around the gap until answered. Coordinate through the
   **backend agent** (the hub), never directly with memory/orchestration/security.
   When a ruling of yours needs the sender to act, deliver it to THEIR inbox, not
   just an archived Response.
@@ -118,7 +124,7 @@ backend agent):**
   sole pusher — don't push). **Report** to `reports/api/report_vN.md` (one new file
   per finished piece).
 - **Cross-provider continuity**: this role runs dual-provider (Claude Code + Codex,
-  `scripts/clannon-provider-supervisor.sh api`). Update `.agents/provider-handoffs/
+  `./scripts/crew.sh start api --codex`). Update `.agents/provider-handoffs/
   api.md` before a planned exit, compaction, or suspected context exhaustion —
   preserve the prior checkpoint under "Previous checkpoint", explain what changed
   under "Change note". Never assume a dirty file in the shared tree is yours.

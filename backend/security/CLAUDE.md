@@ -46,12 +46,18 @@ placement, an `api` seam)? **PROPOSE it** (below) — never edit it.
    and any sanitizer/filter hardening on the mission's list.
 
 **Proposal protocol (your ONLY cross-agent channel — hub-and-spoke through the backend agent):**
-- **At the START of every session + every wake, check your inbox: `proposals/to-security/`.**
+- **Daily comms (read + write every session):** read `comms/<today>/` — every
+  role's short status file — and write your own,
+  `comms/YYYY-MM-DD/security.md`. Never edit another role's file. Tracked in git.
+  Nothing notifies you: there is no auto-wake any more, you PULL. Use `comms/`
+  for status/FYI; use proposals only for decisions needing a ruling.
+  **Idle is legitimate** — empty queue means write your handoff and stop, not
+  invent work. Full design: `docs/architecture/CREW_WORKFLOW.md`.
+- **At the START of every session, and after each unit of work, check your inbox: `proposals/to-security/`.**
   Pending → handle by Priority, append `## Response`, flip Status, archive to
   `proposals/archive/to-security/`.
 - **Need something from the backend agent** (a config placement, a `foundation`/contract change,
-  an `api`/`core` seam): write `proposals/to-backend/YYYY-MM-DD_slug.md` with a one-line `Wake:`
-  header; design around the gap until answered. Coordinate through the **backend agent** (the
+  an `api`/`core` seam): write `proposals/to-backend/YYYY-MM-DD_slug.md`; design around the gap until answered. Coordinate through the **backend agent** (the
   hub), never directly with memory/orchestration. When a ruling of yours needs the sender to
   act, deliver it to THEIR inbox, not just an archived Response.
 

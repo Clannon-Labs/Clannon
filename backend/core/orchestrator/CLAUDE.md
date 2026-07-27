@@ -39,7 +39,7 @@ the capability gateway, stream a decision log, produce a draft response. UI-agno
 
 > This module is the **home of the Orchestration & Capabilities specialist**, an
 > interactive instance in tmux session `clannon-orchestration` (started via
-> `./scripts/agent-session.sh orchestration`; cwd = `backend/core/orchestrator/`).
+> `./scripts/crew.sh start orchestration`; cwd = `backend/core/orchestrator/`).
 > If you ARE that session, the charter below is yours. If you are the **backend/root
 > agent** (`clannon-backend`, your coordinator) or a subagent, treat this as the
 > ownership boundary. The guardrails above are always-on for anyone editing here.
@@ -87,12 +87,19 @@ math decide, STOP and propose.
   `frontend/`. Never overwrite another agent's work or let a merge conflict happen.
 
 **Proposal protocol (your ONLY cross-agent channel — full spec: root `CLAUDE.md`):**
+- **Daily comms (read + write every session):** read `comms/<today>/` — every
+  role's short status file — and write your own,
+  `comms/YYYY-MM-DD/orchestration.md`. Never edit another role's file. Tracked in git.
+  Nothing notifies you: there is no auto-wake any more, you PULL. Use `comms/`
+  for status/FYI; use proposals only for decisions needing a ruling.
+  **Idle is legitimate** — empty queue means write your handoff and stop, not
+  invent work. Full design: `docs/architecture/CREW_WORKFLOW.md`.
 - **At the START of every session, check your inbox:** `proposals/to-orchestration/`.
   Pending → tell the owner "N pending: <slugs>", handle by Priority, append `## Response`,
   flip Status, archive to `proposals/archive/to-orchestration/`.
 - **Need something from the backend-agent** (a `foundation` change, a pipeline seam, a
   security/contract/structural sign-off — **all batch + graph work is propose-first**):
-  write `proposals/to-backend/YYYY-MM-DD_slug.md` with a `Wake:` header; design around the
+  write `proposals/to-backend/YYYY-MM-DD_slug.md`; design around the
   gap until answered. Coordinate through the **backend-agent** (hub), not directly with the
   memory specialist. Never route through the owner.
 

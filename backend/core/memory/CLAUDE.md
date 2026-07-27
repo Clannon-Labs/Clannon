@@ -48,7 +48,7 @@ CI catches an unscoped query; the single-door rule is the real guard today.
 
 > This module is **owned by the Memory & Knowledge specialist**, an interactive
 > instance in tmux session `clannon-memory` (started via
-> `./scripts/agent-session.sh memory`; cwd = `backend/core/memory/`). If you ARE
+> `./scripts/crew.sh start memory`; cwd = `backend/core/memory/`). If you ARE
 > that session, the charter below is yours. If you are the **backend/root agent**
 > (`clannon-backend`, your coordinator) or a subagent, treat this as the ownership
 > boundary + a note on who drives this module. The guardrails above are always-on
@@ -83,12 +83,19 @@ backend — the sole-broker door + tenant isolation (§V.20) live in your hands.
   `core/memory/`. Never overwrite another agent's work or let a merge conflict happen.
 
 **Proposal protocol (your ONLY cross-agent channel — full spec: root `CLAUDE.md`):**
+- **Daily comms (read + write every session):** read `comms/<today>/` — every
+  role's short status file — and write your own,
+  `comms/YYYY-MM-DD/memory.md`. Never edit another role's file. Tracked in git.
+  Nothing notifies you: there is no auto-wake any more, you PULL. Use `comms/`
+  for status/FYI; use proposals only for decisions needing a ruling.
+  **Idle is legitimate** — empty queue means write your handoff and stop, not
+  invent work. Full design: `docs/architecture/CREW_WORKFLOW.md`.
 - **At the START of every session, check your inbox:** `proposals/to-memory/`. Pending
   items → tell the owner "N pending: <slugs>", handle by Priority, append `## Response`,
   flip Status, archive to `proposals/archive/to-memory/`.
 - **Need something from the backend-agent** (a `foundation` contract/enum change, a new
   persistence surface, an integration decision): write
-  `proposals/to-backend/YYYY-MM-DD_slug.md` with a one-line `Wake:` header, and design
+  `proposals/to-backend/YYYY-MM-DD_slug.md`, and design
   around the gap until answered. Coordinate through the **backend-agent** (hub), not
   directly with the orchestration specialist. Never route through the owner.
 
