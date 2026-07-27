@@ -16,10 +16,11 @@ this (e.g. the verifier) still fails closed.
 This is also the money-enforcement anchor (``docs/architecture/
 BUDGET_ENFORCEMENT_ANCHOR.md``): the ONLY place ``agent.run`` is called (invariant
 gate in ``scripts/check_invariants.py``), so it is the single choke point every
-LLM stage funnels through. Behind ``settings.BUDGET.enforcement_enabled`` (OFF by
-default — inert, zero behavior change), it reserves an estimated µ$ cost before
-the retry loop and reconciles the real cost after, refunding in full on any
-non-success exit.
+LLM stage funnels through. A model wrapper counts and blocks requests independently
+of PydanticAI's own ``UsageLimits`` enforcement. Behind
+``settings.BUDGET.enforcement_enabled`` (OFF by default — inert, zero behavior
+change), this seam also reserves an estimated µ$ cost before the retry loop and
+reconciles the real cost after, refunding in full on any non-success exit.
 """
 
 from __future__ import annotations
@@ -27,19 +28,47 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from pydantic_ai import Agent
+from pydantic_ai.models.wrapper import WrapperModel
 
 from core.budget import context as budget_context
 from core.budget.cost import ModelCall, call_cost_micros
-from foundation import constants
+from foundation import MaxRetriesExceededError, constants
 import settings
 
 from . import usage
 from .failures import is_transient as _is_transient
 
 log = logging.getLogger(__name__)
+
+
+class _RequestGuardModel(WrapperModel):
+    """Fail before a model request can exceed this run's configured ceiling."""
+
+    def __init__(self, wrapped: Any, request_limit: int) -> None:
+        super().__init__(wrapped)
+        self._request_limit = request_limit
+        self._requests = 0
+
+    def _claim_request(self) -> None:
+        if self._requests >= self._request_limit:
+            raise MaxRetriesExceededError(
+                f"model run hit its request cap ({self._request_limit})"
+            )
+        self._requests += 1
+
+    async def request(self, *args: Any, **kwargs: Any) -> Any:
+        self._claim_request()
+        return await self.wrapped.request(*args, **kwargs)
+
+    @asynccontextmanager
+    async def request_stream(self, *args: Any, **kwargs: Any) -> Any:
+        self._claim_request()
+        async with self.wrapped.request_stream(*args, **kwargs) as stream:
+            yield stream
 
 
 async def run_agent(
@@ -65,6 +94,13 @@ async def run_agent(
     """
     attempts = settings.LLM.transient_max_retries + 1
     delay = settings.LLM.retry_base_delay_s
+    limits = kwargs.get("usage_limits")
+    request_limit = getattr(limits, "request_limit", None)
+    if request_limit is not None:
+        requested_model = kwargs.get("model") or agent.model
+        # One wrapper instance spans SDK-internal tool rounds AND our outer
+        # transient retries. It blocks before request N+1 reaches provider.
+        kwargs["model"] = _RequestGuardModel(requested_model, request_limit)
     # A FallbackModel that exhausts its chain already tried EVERY provider this round.
     # Re-running the whole chain on the full retry budget multiplies latency by the chain
     # length (N providers per attempt) for little gain — if every provider is rate-limited

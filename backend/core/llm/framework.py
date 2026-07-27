@@ -237,21 +237,12 @@ async def run_structured(
             log.error("budget anchor: no price for model %r -- blocking the call (fail-closed)", budget_model_id)
             raise BudgetExhausted(f"no price for model {budget_model_id!r}", ceiling="user", cause=exc) from exc
     try:
-        if model is not None:
-            with handle._agent.override(model=model):
-                result = await run_agent(
-                    handle._agent, user_prompt, deps=deps, usage_limits=limits,
-                    event_stream_handler=esh, message_history=history,
-                    budget_model_id=budget_model_id, budget_mission_id=budget_mission_id,
-                    budget_estimate_micros=budget_estimate_micros,
-                )
-        else:
-            result = await run_agent(
-                handle._agent, user_prompt, deps=deps, usage_limits=limits,
-                event_stream_handler=esh, message_history=history,
-                budget_model_id=budget_model_id, budget_mission_id=budget_mission_id,
-                budget_estimate_micros=budget_estimate_micros,
-            )
+        result = await run_agent(
+            handle._agent, user_prompt, deps=deps, usage_limits=limits,
+            event_stream_handler=esh, message_history=history, model=model,
+            budget_model_id=budget_model_id, budget_mission_id=budget_mission_id,
+            budget_estimate_micros=budget_estimate_micros,
+        )
     except VrakshaError:
         raise
     except UsageLimitExceeded as exc:

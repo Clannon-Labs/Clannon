@@ -3,10 +3,16 @@
 import asyncio
 
 import httpx
+import pytest
+from pydantic_ai import Agent, ModelResponse
 from pydantic_ai.exceptions import ModelHTTPError, UsageLimitExceeded
+from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.models.function import FunctionModel
 
 from core.llm import retry
 from core.llm.retry import run_agent
+from core.llm.registry import usage_limits_for_layer
+from foundation import MaxRetriesExceededError
 
 
 class FakeAgent:
@@ -84,6 +90,33 @@ def test_usage_limit_is_not_retried(monkeypatch):
         pass
 
     assert agent.calls == 1
+
+
+def test_owned_request_guard_holds_when_sdk_limit_does_not_fire(monkeypatch):
+    """Our wrapper blocks request N+1 even if PydanticAI's check is inert."""
+    monkeypatch.setattr(
+        "pydantic_ai.usage.UsageLimits.check_before_request",
+        lambda self, usage: None,
+    )
+    calls = 0
+
+    def always_loop(messages, info):
+        nonlocal calls
+        calls += 1
+        return ModelResponse(parts=[
+            ToolCallPart(tool_name="loop", args={}),
+        ])
+
+    async def loop():
+        return None
+
+    limits = usage_limits_for_layer("orchestrator", max_turns=2)
+    agent = Agent(FunctionModel(always_loop), tools=[loop])
+
+    with pytest.raises(MaxRetriesExceededError):
+        asyncio.run(run_agent(agent, "prompt", usage_limits=limits))
+
+    assert calls == limits.request_limit
 
 
 def test_connection_timeout_is_transient(monkeypatch):
