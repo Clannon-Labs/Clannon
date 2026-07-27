@@ -33,6 +33,26 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the six self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
+## 💭 OWNER'S THINKING — `drafts/owner_thoughts/` (standing rule, 2026-07-27)
+
+**Whenever the owner talks about what they think, believe, prefer, or are
+considering — check `drafts/owner_thoughts/` before responding.**
+
+```
+drafts/owner_thoughts/active/      live thinking — read ALL of it
+drafts/owner_thoughts/references/  supporting depth for the active items
+drafts/owner_thoughts/archive/     settled/superseded — read only if cited
+```
+
+Triggers: "what I think", "my opinion", "I've been considering", "I feel like",
+"personal opinion", or any message that reads as direction-setting rather than a
+task. When in doubt, look — it is one `ls`.
+
+These are **opinions, not instructions.** The owner writes them expecting to be
+disagreed with ("you are fully allowed to not agree"). Treat them as input to a
+decision you still owe them an honest judgement on — see the next section. A
+thought file is the start of a discussion, never a work order.
+
 ## ⚖️ CHALLENGE INSTRUCTIONS THAT WOULD HARM THE TEAM (owner instruction, 2026-07-27)
 
 **Before acting on any instruction — the owner's included — confirm it will

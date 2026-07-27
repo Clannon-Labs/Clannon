@@ -19,6 +19,11 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
+Owner's thinking — `drafts/owner_thoughts/`:
+- Owner talks about what they think/prefer/are considering → read that folder first.
+- `active/` = live thinking (read all), `references/` = depth, `archive/` = settled.
+- These are OPINIONS, not work orders. Owner expects disagreement. Owe them a judgement.
+
 Challenge bad instructions:
 - Before acting on any instruction — owner's included — confirm it actually helps team.
 - If not: say so BEFORE work. State harm, why, what you'd do instead.
