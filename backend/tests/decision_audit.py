@@ -8,7 +8,7 @@ Verifies the write/read contract for the durable decision-record store:
   - Writes are fail-closed without user_id: no record is created, no read
     is returned.
   - run_driver.execute wires the write correctly for EVERY terminal outcome
-    (delivered, blocked, failed) — not just delivered runs.
+    (delivered, blocked, cancelled, failed) — not just delivered runs.
 
 Hermetic: no network, no real models, no real SQLite (patched to a per-test
 temp file).
@@ -199,6 +199,49 @@ def test_execute_blocked_run_still_writes_decision_records(monkeypatch, tmp_path
 
     records = da_mod.get_for_run(user_id, run_id)
     assert len(records) == 1, f"Expected 1 decision record on a blocked run, got {len(records)}"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "pipeline_error"),
+    [
+        ("cancelled", asyncio.CancelledError()),
+        ("failed", RuntimeError("pipeline crashed")),
+    ],
+)
+def test_execute_interrupted_run_still_writes_decision_records(
+    monkeypatch, tmp_path, outcome, pipeline_error,
+):
+    """Decisions emitted before cancellation/crash remain institutional memory."""
+    db_file = str(tmp_path / f"wiring_{outcome}.db")
+    monkeypatch.setattr(auth_mod, "_db", lambda: _make_db(db_file))
+
+    user_id, run_id, session_id = f"u_{outcome}", f"run_{outcome}", f"sess_{outcome}"
+    run = _run(user_id, run_id, session_id)
+    if outcome == "cancelled":
+        run.cancel_requested = True
+
+    async def _stub_pipeline(*a, **kwargs):
+        kwargs["decision_log"].append(
+            DecisionLogEntry(
+                kind="tool_call",
+                message="called web.search",
+                turn=1,
+                detail={"tool": "web.search"},
+            )
+        )
+        raise pipeline_error
+
+    monkeypatch.setattr(core.pipeline, "run", _stub_pipeline)
+    monkeypatch.setattr(STORE, "session_turns", lambda uid, sid: [])
+    monkeypatch.setattr(STORE, "persist", lambda run: None)
+    monkeypatch.setattr(auth_mod, "model_prefs_get", lambda uid: {})
+
+    asyncio.run(run_driver.execute(run))
+
+    assert run.status == outcome
+    records = da_mod.get_for_run(user_id, run_id)
+    assert len(records) == 1
+    assert records[0]["decision"] == "called web.search"
 
 
 def test_execute_writes_zero_records_for_pure_narration(monkeypatch, tmp_path):

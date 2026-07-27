@@ -311,6 +311,8 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             run.on_experts_settled(flow.ctx.expert_calls)
 
     run_usage = None   # bound by usage_scope below; read in the except handlers too
+    ctx = None
+    decision_log = DecisionLogSink(run.on_log_entry)
     try:
         # Runs become cancellable before this I/O starts: routes register this execute()
         # task immediately after STORE.create(), closing the create/cancel race even when
@@ -340,7 +342,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 # ctx.trace_id) are addressable by the same id the API serves them under
                 trace_id=run.id,
                 # observe the decision log live without touching pipeline code
-                decision_log=DecisionLogSink(run.on_log_entry),
+                decision_log=decision_log,
                 prepare=_prepare,
                 on_stage=_on_stage,
                 on_stage_end=_on_stage_end,
@@ -373,27 +375,6 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             # filter ever ran. Emitted once, right before the terminal status below.
             if ctx.filter_result is not None:
                 run.on_verification(ctx.filter_result.groundedness)
-
-            # CB4 institutional decision memory: mirror the live decision log's
-            # DERIVED records durably, for every terminal outcome — a decision made
-            # on the way to a blocked/failed run is still institutional memory, not
-            # just a delivered one. Best-effort: a write fault here must never turn
-            # a finished run into a failed one (mirrors the block-audit try/except
-            # below).
-            try:
-                _decision_records = [
-                    r for r in (
-                        _derive_decision_record(entry, ctx) for entry in ctx.decision_log
-                    ) if r is not None
-                ]
-                _decision_audit.write_decision_records(
-                    user_id=ctx.user_id,
-                    session_id=ctx.session_id,
-                    trace_id=ctx.trace_id,
-                    records=_decision_records,
-                )
-            except Exception:  # noqa: BLE001 — decision-mirror write is best-effort
-                pass
 
             if ctx.blocked or ctx.sanitization_blocked or ctx.verifier_blocked or ctx.filter_blocked:
                 # record WHICH gate blocked so the UI can explain it accurately
@@ -509,6 +490,32 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # by this finally — that would resurrect the row the delete just removed.
         publish_terminal = run.status in TERMINAL_STATUSES and not run.deleted
         if publish_terminal:
+            # CB4 institutional decision memory mirrors decisions captured before
+            # EVERY terminal outcome. A crash/cancellation has no returned Flow, so
+            # derive against a minimal context carrying the live observing sink.
+            # Best-effort: mirror failure cannot change run outcome or reach client.
+            try:
+                audit_ctx = ctx or Flow.new(
+                    run.brief,
+                    session_id=run.session_id or run.id,
+                    user_id=run.user_id,
+                    trace_id=run.id,
+                ).ctx
+                audit_log = audit_ctx.decision_log if ctx is not None else decision_log
+                audit_ctx.decision_log = audit_log
+                _decision_records = [
+                    record
+                    for entry in audit_log
+                    if (record := _derive_decision_record(entry, audit_ctx)) is not None
+                ]
+                _decision_audit.write_decision_records(
+                    user_id=audit_ctx.user_id,
+                    session_id=audit_ctx.session_id,
+                    trace_id=audit_ctx.trace_id,
+                    records=_decision_records,
+                )
+            except Exception:  # noqa: BLE001 — decision-mirror write is best-effort
+                pass
             try:
                 # Durability precedes terminal publication: a client must never be
                 # told delivery completed when final state failed to commit.
