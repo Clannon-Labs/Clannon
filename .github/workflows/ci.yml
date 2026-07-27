@@ -33,7 +33,7 @@ jobs:
       - name: install
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       # the suite mocks/skips external services (qdrant, clamav), so it runs without them
       - name: pytest
