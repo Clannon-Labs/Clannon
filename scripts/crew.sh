@@ -245,11 +245,12 @@ resolve_provider() {   # explicit flag wins; else the policy file; else codex
 }
 
 cmd_run() {
-  local role="" brief="" provider="" subdir="" arg next=""
+  local role="" brief="" provider="" arg next=""
+  local -a subdirs=()
   for arg in "$@"; do
     case "$next" in
       brief) brief="$arg"; next=""; continue ;;
-      dir)   subdir="$arg"; next=""; continue ;;
+      dir)   subdirs+=("$arg"); next=""; continue ;;
     esac
     case "$arg" in
       --brief)  next=brief ;;
@@ -267,7 +268,7 @@ cmd_run() {
   # it delegates instead of doing the labour itself — but it must be SCOPED, because
   # the backend "tree" is the whole repo and an unscoped worker there would have no
   # ownership boundary at all. Hence --dir is mandatory for the backend role.
-  if [ "$role" = backend ] && [ -z "$subdir" ]; then
+  if [ "$role" = backend ] && [ "${#subdirs[@]}" -eq 0 ]; then
     die "dispatching to 'backend' needs --dir <path> to scope it (its tree is the whole repo). e.g. --dir backend/core/llm"
   fi
   [ -f "$brief" ] || die "brief not found: $brief"
@@ -276,11 +277,22 @@ cmd_run() {
 
   local dir lock stamp out log
   dir="$(dir_for "$role")"
-  if [ -n "$subdir" ]; then
-    # Narrow the worker to a subtree: its cwd, its stated ownership in the mandate,
-    # and the dirty-tree check all follow --dir.
-    case "$subdir" in /*) dir="$subdir" ;; *) dir="$ROOT/$subdir" ;; esac
-    [ -d "$dir" ] || die "--dir does not exist: $dir"
+  # --dir is REPEATABLE, because real ownership is almost always a SET of paths:
+  # the source plus the tests that prove it. The specialist charters already work
+  # this way (api owns backend/api/** *and* a list of test files). A single-path
+  # scope made every honest task fail — a worker told "you own core/llm" cannot
+  # write the test that proves its change, and correctly refuses.
+  local -a owned=()
+  if [ "${#subdirs[@]}" -gt 0 ]; then
+    local d
+    for d in "${subdirs[@]}"; do
+      case "$d" in /*) ;; *) d="$ROOT/$d" ;; esac
+      [ -e "$d" ] || die "--dir does not exist: $d"
+      owned+=("$d")
+    done
+    dir="${owned[0]}"      # cwd is the first path given
+  else
+    owned=("$dir")
   fi
   mkdir -p "$RUNS_DIR"
   lock="$RUNS_DIR/$role.lock"
@@ -293,9 +305,9 @@ cmd_run() {
 
   # Refuse to dispatch into a tree the coordinator has left dirty — the worker
   # would build on top of uncommitted work and the diff would be unreviewable.
-  if [ -n "$(git -C "$ROOT" status --porcelain -- "$dir" 2>/dev/null)" ]; then
+  if [ -n "$(git -C "$ROOT" status --porcelain -- "${owned[@]}" 2>/dev/null)" ]; then
     echo "crew: WARNING — '$role' tree has uncommitted changes:" >&2
-    git -C "$ROOT" status --short -- "$dir" >&2
+    git -C "$ROOT" status --short -- "${owned[@]}" >&2
     echo "crew: commit or stash them first so the worker's diff is reviewable." >&2
     exit 3
   fi
@@ -312,10 +324,12 @@ $(cat <<EOF
 
 ---
 DISPATCH MANDATE (added automatically by crew.sh — applies to this whole task):
-- You are working as the '$role' role. You own ONLY this path for this task: $dir
-  Read the nearest CLAUDE.md at or above $dir for the rules that apply to it.
-  If the brief above names a different tree than $dir, STOP and say so — do not
-  guess which is right. That contradiction is the dispatcher's mistake, not yours.
+- You are working as the '$role' role. For this task you own EXACTLY these paths,
+  and nothing else:
+$(printf "    %s\n" "${owned[@]}")
+  Your working directory is $dir. Read the nearest CLAUDE.md at or above it for
+  the rules that apply. If the brief needs a path that is NOT in the list above,
+  stop and say which one — that is the dispatcher's mistake, not yours.
 - Do NOT commit and do NOT push. Leave your changes uncommitted in the working
   tree. The backend coordinator reviews and commits everything. This is not
   negotiable: concurrent workers racing on .git/index.lock is a real failure
