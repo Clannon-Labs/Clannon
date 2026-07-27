@@ -1,12 +1,5 @@
 # Release: v0.2.0 — memory sole-broker, agent mesh, security hardening
 
-> Publish under tag **`v0.2.0`** (already pushed, points at `89b3ed4`).
-> Suggested title: `v0.2.0 — memory sole-broker, agent mesh, security hardening`
-> Release body = everything below the line. This file is a paste-buffer —
-> delete it after publishing; `CHANGELOG.md` is the durable record.
-
----
-
 278 commits since v0.1.0 — 64 features, 32 fixes. Highlights:
 
 ### 🧠 Memory becomes sole-broker
