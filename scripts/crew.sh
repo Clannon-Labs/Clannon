@@ -80,21 +80,43 @@ is_live() { [ -n "$(live_provider "$1")" ]; }
 
 # --- launch -----------------------------------------------------------------
 
-launch_command() {   # role provider fresh -> the shell command the session runs
-  local role="$1" provider="$2" fresh="$3" cmd
+# Does Claude have a resumable conversation for this directory? Claude stores
+# transcripts per working directory under ~/.claude/projects/<path-with-dashes>.
+# We check BEFORE launching rather than passing --continue and hoping: a
+# --continue with no prior session exits immediately with "No conversation found
+# to continue", which would drop the pane straight to a dead shell. Detecting up
+# front means there is no failure path to recover from.
+claude_has_session() {
+  local dir="$1" encoded
+  encoded="${dir//\//-}"
+  compgen -G "$HOME/.claude/projects/$encoded/*.jsonl" >/dev/null 2>&1
+}
+
+launch_command() {   # role provider fresh dir -> the shell command the session runs
+  local role="$1" provider="$2" fresh="$3" dir="$4" cmd
   case "$provider" in
     claude)
       cmd="claude --dangerously-skip-permissions"
       is_specialist "$role" && cmd="$cmd --model claude-sonnet-5"
-      [ "$fresh" = no ] && cmd="$cmd --continue"
+      if [ "$fresh" = no ] && claude_has_session "$dir"; then
+        cmd="$cmd --continue"
+      fi
       ;;
     codex)
+      # ALWAYS fresh, deliberately. `codex resume --last` picks the most recent
+      # Codex session GLOBALLY, not the most recent one for this directory — so
+      # starting the memory role could silently resume the api role's
+      # conversation. There is no per-cwd resume flag. A fresh Codex session
+      # re-orients from its charter + .agents/provider-handoffs/<role>.md +
+      # comms/, which is exactly the path CREW_WORKFLOW.md §5 designs for
+      # (Codex implements from a written brief, it does not need conversational
+      # continuity).
+      #
       # danger-full-access deliberately: workspace-write denied .git/index.lock
       # and .agents/ writes, which blocked a specialist from committing its own
       # work and updating its own handoff. Same unattended posture as Claude's
       # --dangerously-skip-permissions.
       cmd="codex --sandbox danger-full-access --ask-for-approval never"
-      [ "$fresh" = no ] && cmd="codex resume --last --sandbox danger-full-access --ask-for-approval never"
       ;;
   esac
   # Keep the session alive after the agent exits so its scrollback stays
@@ -129,8 +151,15 @@ cmd_start() {
     tmux kill-session -t "$session" 2>/dev/null
   fi
 
-  tmux new-session -d -s "$session" -c "$dir" "$(launch_command "$role" "$provider" "$fresh")"
-  echo "crew: started $session  [$provider$([ "$fresh" = yes ] && echo ", fresh" || echo ", resuming")]  cwd $dir"
+  local mode
+  if [ "$provider" = codex ]; then mode="fresh (codex always starts fresh — see launch_command)"
+  elif [ "$fresh" = yes ]; then mode="fresh (forced)"
+  elif claude_has_session "$dir"; then mode="resuming prior conversation"
+  else mode="fresh (no prior conversation for this directory)"
+  fi
+
+  tmux new-session -d -s "$session" -c "$dir" "$(launch_command "$role" "$provider" "$fresh" "$dir")"
+  echo "crew: started $session  [$provider, $mode]  cwd $dir"
   echo "crew: watch it with:  ./scripts/crew.sh attach $role"
 }
 
