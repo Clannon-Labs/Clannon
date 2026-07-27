@@ -1,0 +1,19 @@
+# Default provider for headless delegated work (scripts/crew.sh run).
+#
+# An explicit --claude / --codex on the command line ALWAYS wins over this.
+# This is only the default when the dispatcher is left to choose.
+#
+# WHY THIS VALUE, AND WHEN TO REVISIT — do not leave this stale:
+#
+#   Set to `codex` on 2026-07-27 at the owner's request: the Claude weekly
+#   limit was nearly exhausted, so routing delegated implementation work to
+#   Codex conserves Claude budget for coordination, architecture, and review
+#   (which is the split CREW_WORKFLOW.md §5.2 recommends anyway).
+#
+#   REVISIT when the Claude weekly limit resets. At that point `codex` is
+#   still a defensible default for scoped implementation work — but it should
+#   be a deliberate choice, not an artifact of a temporary budget squeeze.
+#
+# Valid values: codex | claude
+
+PROVIDER_DEFAULT=codex

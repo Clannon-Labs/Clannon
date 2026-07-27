@@ -6,8 +6,16 @@
 #   ./scripts/crew.sh status
 #   ./scripts/crew.sh attach <role>
 #   ./scripts/crew.sh stop <role>
+#   ./scripts/crew.sh run <role> --brief <file> [--claude|--codex]
 #
 # Roles: backend frontend memory orchestration security api
+#
+# TWO WAYS AN AGENT RUNS — they do not overlap:
+#   start/attach  interactive session in tmux. For the OWNER to drive an agent.
+#   run           headless one-shot worker. For the COORDINATOR to delegate a
+#                 scoped task. No tmux, no session, exits when done.
+# Neither injects into a live session, so the pull-not-push rule holds for both
+# (docs/architecture/CREW_WORKFLOW.md §2.1, §4.4).
 #
 # THE ONE RULE THIS SCRIPT EXISTS TO RESPECT:
 #   Nothing here ever types into a RUNNING agent's session. There is no
@@ -216,13 +224,137 @@ cmd_stop() {
   echo "crew: stopped clannon-$role."
 }
 
+# --- run: headless delegated worker ----------------------------------------
+# The coordinator writes a brief, dispatches a worker into one role's tree, and
+# reads the result back from a file. The worker never commits (see the mandate
+# appended to every brief below): two workers racing on .git/index.lock is a
+# real failure we have already seen once, and reviewing before committing is
+# the coordinator's job anyway.
+
+RUNS_DIR="$ROOT/.agents/runs"
+
+resolve_provider() {   # explicit flag wins; else the policy file; else codex
+  local explicit="$1" policy=""
+  if [ -n "$explicit" ]; then echo "$explicit"; return; fi
+  [ -f "$ROOT/.agents/provider-policy" ] &&
+    policy="$(sed -n 's/^PROVIDER_DEFAULT=//p' "$ROOT/.agents/provider-policy" | tail -n1)"
+  echo "${policy:-codex}"
+}
+
+cmd_run() {
+  local role="" brief="" provider="" arg next=""
+  for arg in "$@"; do
+    case "$next" in brief) brief="$arg"; next=""; continue ;; esac
+    case "$arg" in
+      --brief)  next=brief ;;
+      --claude) provider=claude ;;
+      --codex)  provider=codex ;;
+      --*)      die "unknown flag: $arg" ;;
+      *)        role="$arg" ;;
+    esac
+  done
+  [ -n "$role" ] && [ -n "$brief" ] || die "usage: crew.sh run <role> --brief <file> [--claude|--codex]"
+  valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+  [ "$role" = backend ] || true
+  if [ "$role" = backend ]; then
+    die "refusing to dispatch to 'backend' — that is the coordinator (you). Delegate to a specialist."
+  fi
+  [ -f "$brief" ] || die "brief not found: $brief"
+  provider="$(resolve_provider "$provider")"
+  case "$provider" in claude|codex) ;; *) die "bad provider: $provider" ;; esac
+
+  local dir lock stamp out log
+  dir="$(dir_for "$role")"
+  mkdir -p "$RUNS_DIR"
+  lock="$RUNS_DIR/$role.lock"
+
+  # One worker per role at a time. Roles own disjoint trees, so this is all the
+  # mutual exclusion needed to keep two workers off the same files.
+  if [ -e "$lock" ] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
+    die "a worker is already running for '$role' (pid $(cat "$lock")). Wait for it, or clear $lock if stale."
+  fi
+
+  # Refuse to dispatch into a tree the coordinator has left dirty — the worker
+  # would build on top of uncommitted work and the diff would be unreviewable.
+  if [ -n "$(git -C "$ROOT" status --porcelain -- "$dir" 2>/dev/null)" ]; then
+    echo "crew: WARNING — '$role' tree has uncommitted changes:" >&2
+    git -C "$ROOT" status --short -- "$dir" >&2
+    echo "crew: commit or stash them first so the worker's diff is reviewable." >&2
+    exit 3
+  fi
+
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  out="$RUNS_DIR/$stamp-$role.out"
+  log="$RUNS_DIR/$stamp-$role.log"
+
+  # Every brief gets the same non-negotiable footer. Structural, not per-brief:
+  # a mandate the coordinator has to remember to type is one it will forget.
+  local full_brief
+  full_brief="$(cat "$brief")
+$(cat <<EOF
+
+---
+DISPATCH MANDATE (added automatically by crew.sh — applies to this whole task):
+- You are the '$role' specialist. You own ONLY: $dir
+  Read $dir/CLAUDE.md for your charter before doing anything.
+- Do NOT commit and do NOT push. Leave your changes uncommitted in the working
+  tree. The backend coordinator reviews and commits everything. This is not
+  negotiable: concurrent workers racing on .git/index.lock is a real failure
+  mode we have hit before.
+- Do NOT edit any tree other than your own. If the task seems to need one,
+  stop and say so in your final message instead of doing it.
+- Verify your work (run the relevant tests) and say exactly what you ran and
+  what the result was. Never claim a pass you did not observe.
+- Your FINAL MESSAGE is the only thing the coordinator reads directly. Make it
+  self-contained: what you changed (with file paths), what you verified and
+  how, and anything you found but deliberately did not do.
+EOF
+)"
+
+  echo "crew: dispatching $role worker  [$provider]  cwd $dir"
+  echo "crew: brief   $brief"
+  echo "crew: output  $out"
+
+  local rc=0 started ended
+  started="$(date +%s)"
+  echo $$ > "$lock"
+  case "$provider" in
+    claude)
+      ( cd "$dir" && claude -p "$full_brief" --dangerously-skip-permissions ) >"$out" 2>"$log" || rc=$?
+      ;;
+    codex)
+      codex exec "$full_brief" -C "$dir" --skip-git-repo-check \
+        --sandbox danger-full-access -o "$out" >"$log" 2>&1 || rc=$?
+      ;;
+  esac
+  ended="$(date +%s)"
+  rm -f "$lock"
+
+  # Provenance: the dispatcher records who did what, because a worker can
+  # forget to and the dispatcher cannot. One tracked line in comms/, full logs
+  # in gitignored .agents/runs/.
+  local today="$ROOT/comms/$(date +%F)" line
+  mkdir -p "$today"
+  line="- \`$(date +%H:%M)\` **$role** worker via **$provider** — $(basename "$brief") — exit $rc, $((ended-started))s — output: \`.agents/runs/$(basename "$out")\`"
+  if ! grep -q "^## dispatched workers" "$today/backend.md" 2>/dev/null; then
+    printf '\n## dispatched workers\n' >> "$today/backend.md"
+  fi
+  echo "$line" >> "$today/backend.md"
+
+  echo "crew: worker finished — exit $rc, $((ended-started))s"
+  echo "crew: --- final message ---"
+  cat "$out" 2>/dev/null
+  return $rc
+}
+
 case "${1:-}" in
   start)  shift; cmd_start "$@" ;;
+  run)    shift; cmd_run "$@" ;;
   status) cmd_status ;;
   attach) shift; cmd_attach "$@" ;;
   stop)   shift; cmd_stop "$@" ;;
   -h|--help|"")
-    sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '3,26p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *) die "unknown command: $1 (try: start | status | attach | stop)" ;;
 esac

@@ -47,3 +47,6 @@ Contract pass; nobody owns it yet. Depth: `.agents/provider-handoffs/api.md`.
 Nothing in `backend/` or `frontend/` source was touched by this pass — docs,
 scripts, and charters only. Frontend has uncommitted WIP in the tree; left
 strictly alone.
+
+## dispatched workers
+- `17:59` **api** worker via **codex** — brief-api-cb4.md — exit 0, 172s — output: `.agents/runs/20260727-175706-api.out`

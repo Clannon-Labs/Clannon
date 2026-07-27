@@ -79,6 +79,7 @@ llm_view_snapshot.json
 # per-machine ephemeral runtime state (PIDs, unavailable-until timestamps) is
 # ignored below.
 .agents/runtime/
+.agents/runs/
 # .claude/ is TRACKED (subagents, commands, shared settings are source).
 # Only personal/machine-local settings are ignored:
 .claude/settings.local.json

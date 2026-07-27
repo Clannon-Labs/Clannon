@@ -205,6 +205,54 @@ one specialist. All six at once should be a deliberate choice, not a default.
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
 
+### 4.4 Two ways an agent runs — interactive vs. delegated
+
+These do not overlap, and neither injects into a live session, so §2.1 holds for
+both.
+
+| | `start` / `attach` | `run` |
+|---|---|---|
+| Shape | interactive session in tmux | headless one-shot worker |
+| Who drives it | **the owner** | **the coordinator** |
+| Lifetime | until stopped | exits when the task is done |
+| tmux? | yes | **none** |
+
+```bash
+./scripts/crew.sh run <role> --brief <file> [--claude|--codex]
+```
+
+This is how the coordinator gets work done without doing it. Write a brief
+(§5.3), dispatch it into a role's tree, read the worker's final message back
+from `.agents/runs/<stamp>-<role>.out`, and — if the next step needs it — cite
+that output in the next worker's brief. **Chaining needs no machinery**: it is
+one file read and one file write. Do not build a job queue.
+
+**Because `run` needs no tmux, the owner only ever has one session open: the
+coordinator's.**
+
+Rules the dispatcher enforces structurally, so they cannot be forgotten:
+
+- **Workers never commit or push.** Every brief gets a mandate appended
+  automatically. Two workers racing on `.git/index.lock` is a failure we have
+  already hit once; the coordinator reviews and commits, which is its job
+  anyway.
+- **One worker per role.** A lock file per role; roles own disjoint trees, so
+  that is all the mutual exclusion needed.
+- **No dispatch into a dirty tree.** If the coordinator left uncommitted changes
+  in that role's tree, the worker's diff would be unreviewable. Refuses with a
+  clear message.
+- **Always fresh.** No headless resume — a self-contained brief is the contract,
+  and resuming reintroduces the wrong-session risk §5.4 removes.
+- **Provenance is automatic.** The dispatcher (not the worker, which could
+  forget) records role, provider, brief, exit status, duration, and output path
+  — full logs to gitignored `.agents/runs/`, one tracked line to
+  `comms/<today>/backend.md`. That is how "who did what" stays answerable.
+
+**Provider choice.** Explicit `--claude` / `--codex` always wins. Otherwise the
+dispatcher reads `.agents/provider-policy` — a one-line default with the reason
+and a revisit condition written next to it, so a temporary budget decision
+cannot quietly become permanent policy.
+
 ---
 
 ## 5. Provider strategy — Claude and Codex
