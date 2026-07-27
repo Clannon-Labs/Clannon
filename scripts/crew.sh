@@ -245,11 +245,15 @@ resolve_provider() {   # explicit flag wins; else the policy file; else codex
 }
 
 cmd_run() {
-  local role="" brief="" provider="" arg next=""
+  local role="" brief="" provider="" subdir="" arg next=""
   for arg in "$@"; do
-    case "$next" in brief) brief="$arg"; next=""; continue ;; esac
+    case "$next" in
+      brief) brief="$arg"; next=""; continue ;;
+      dir)   subdir="$arg"; next=""; continue ;;
+    esac
     case "$arg" in
       --brief)  next=brief ;;
+      --dir)    next=dir ;;
       --claude) provider=claude ;;
       --codex)  provider=codex ;;
       --*)      die "unknown flag: $arg" ;;
@@ -258,9 +262,13 @@ cmd_run() {
   done
   [ -n "$role" ] && [ -n "$brief" ] || die "usage: crew.sh run <role> --brief <file> [--claude|--codex]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
-  [ "$role" = backend ] || true
-  if [ "$role" = backend ]; then
-    die "refusing to dispatch to 'backend' — that is the coordinator (you). Delegate to a specialist."
+  # The coordinator owns real trees too (foundation/, core/llm, core/pipeline.py,
+  # config/, scripts/, docs/). Dispatching a worker into one of those is exactly how
+  # it delegates instead of doing the labour itself — but it must be SCOPED, because
+  # the backend "tree" is the whole repo and an unscoped worker there would have no
+  # ownership boundary at all. Hence --dir is mandatory for the backend role.
+  if [ "$role" = backend ] && [ -z "$subdir" ]; then
+    die "dispatching to 'backend' needs --dir <path> to scope it (its tree is the whole repo). e.g. --dir backend/core/llm"
   fi
   [ -f "$brief" ] || die "brief not found: $brief"
   provider="$(resolve_provider "$provider")"
@@ -268,6 +276,12 @@ cmd_run() {
 
   local dir lock stamp out log
   dir="$(dir_for "$role")"
+  if [ -n "$subdir" ]; then
+    # Narrow the worker to a subtree: its cwd, its stated ownership in the mandate,
+    # and the dirty-tree check all follow --dir.
+    case "$subdir" in /*) dir="$subdir" ;; *) dir="$ROOT/$subdir" ;; esac
+    [ -d "$dir" ] || die "--dir does not exist: $dir"
+  fi
   mkdir -p "$RUNS_DIR"
   lock="$RUNS_DIR/$role.lock"
 
@@ -298,8 +312,10 @@ $(cat <<EOF
 
 ---
 DISPATCH MANDATE (added automatically by crew.sh — applies to this whole task):
-- You are the '$role' specialist. You own ONLY: $dir
-  Read $dir/CLAUDE.md for your charter before doing anything.
+- You are working as the '$role' role. You own ONLY this path for this task: $dir
+  Read the nearest CLAUDE.md at or above $dir for the rules that apply to it.
+  If the brief above names a different tree than $dir, STOP and say so — do not
+  guess which is right. That contradiction is the dispatcher's mistake, not yours.
 - Do NOT commit and do NOT push. Leave your changes uncommitted in the working
   tree. The backend coordinator reviews and commits everything. This is not
   negotiable: concurrent workers racing on .git/index.lock is a real failure
