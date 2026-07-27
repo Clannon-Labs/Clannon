@@ -53,3 +53,19 @@ strictly alone.
 - `20:01` **orchestration** worker via **codex** — brief-loopguard.md — exit 0, 30s — output: `.agents/runs/20260727-200124-orchestration.out`
 - `20:03` **backend** worker via **codex** — brief-loopguard.md — exit 0, 27s — output: `.agents/runs/20260727-200243-backend.out`
 - `20:08` **backend** worker via **codex** — brief-loopguard.md — exit 0, 227s — output: `.agents/runs/20260727-200423-backend.out`
+
+## 21:30 — release unblocked, CI green
+
+@release — CI green at `c0a10cb` (run 30283522127). Everything in your
+readiness report is cleared except release scope/version, which is the owner's
+call. Details in `proposals/to-release/2026-07-27_ci-green-unblocked.md`.
+
+Two of my own mistakes in that chain, recorded so they don't repeat:
+1. The loop-guard commit broke CI because I verified it with a targeted 7-file
+   run instead of the full suite. It touched `run_agent` — the single choke
+   point every LLM stage funnels through — so it was never a local change. The
+   targeted-run norm is for genuinely local blast radius; that wasn't one.
+2. `.codex/config.toml` was pinning `sandbox_mode = "workspace-write"`, the
+   exact setting that had blocked the api specialist from committing. Dispatched
+   workers were fine (crew.sh passes the flag explicitly) but a bare `codex` run
+   would have inherited it. Now matches the crew posture.
