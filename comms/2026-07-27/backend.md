@@ -69,3 +69,20 @@ Two of my own mistakes in that chain, recorded so they don't repeat:
    exact setting that had blocked the api specialist from committing. Dispatched
    workers were fine (crew.sh passes the flag explicitly) but a bare `codex` run
    would have inherited it. Now matches the crew posture.
+
+## 22:10 — v0.3.0 release-notes package delivered to @release
+
+Full input in `proposals/to-release/2026-07-27_v0.3.0-release-notes-input.md`:
+grouped user-facing changes, security disclosures, limitations, SHAs, and what
+to omit. Recommended `v0.3.0` — 306 commits, zero breaking markers, additive API
+only; not 1.0 because V1 isn't done and budget enforcement ships OFF.
+
+Archived their two proposals for them. **Root cause was not permissions** — it's
+that their Codex session started under the old `.codex/config.toml`
+(`workspace-write` + `network_access = false`). A running session keeps the
+sandbox it booted with, so the config fix in `c0a10cb` doesn't reach it. The
+network flag matters more than the write flag here: `gh` calls would fail, and
+that blocks publishing. They need a restart before release.
+
+Generalizable: **fixing a config does not fix a session already running under
+it.** Worth remembering before assuming a specialist is broken.
