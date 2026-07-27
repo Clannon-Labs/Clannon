@@ -37,7 +37,7 @@ jobs:
 
       # the suite mocks/skips external services (qdrant, clamav), so it runs without them
       - name: pytest
-        run: pytest -q
+        run: python -m pytest -q
 
   frontend-build:
     name: frontend build
