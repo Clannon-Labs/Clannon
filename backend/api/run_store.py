@@ -152,6 +152,8 @@ class RunStore:
           - "cancelling" the in-flight task was signalled to stop; the authoritative
                          `cancelled` status arrives over the SSE stream (→ 200),
           - "cancelled"  finalized directly (no live task to interrupt — an edge).
+          - "failed"     direct finalization could not be persisted; retained live
+                         and honestly surfaced as failed (→ 200 informational).
 
         Cancellation is cooperative: cancelling the run's asyncio task raises
         CancelledError at the next await inside the pipeline, unwinding through the
@@ -172,9 +174,25 @@ class RunStore:
             return "cancelling"
         # No live task to interrupt (e.g. the run is between scheduling and start, or
         # already winding down). Finalize directly so the user still gets a clean stop.
-        run.on_status("cancelled")
+        run.status = "cancelled"
+        try:
+            # Match execute() terminalization: durable state must exist before a
+            # terminal success becomes public.
+            self.persist(run)
+        except Exception as exc:  # noqa: BLE001 — retain live and degrade honestly
+            run.status = "failed"
+            run.on_log_entry(
+                type("E", (), {
+                    "kind": "error",
+                    "message": f"final persistence failed ({type(exc).__name__})",
+                    "detail": {},
+                })()
+            )
+            run.emit({"type": "status", "status": "failed"})
+            run.finish()
+            return "failed"
+        run.emit({"type": "status", "status": "cancelled"})
         run.finish()
-        self.persist(run)
         return "cancelled"
 
     def delete_session(self, user_id: str, session_id: str) -> int:

@@ -359,12 +359,9 @@ async def create_run(
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
     run = runs.STORE.create(user.id, brief, project_id)
-    # persist the uploads so later turns in the session can re-read them (sets run.inputs)
-    await runs.persist_inputs(run, input_files)
     run.session_models = session_models
-    # keep the task handle on the run so it can be cooperatively cancelled mid-flight.
-    # Assigned synchronously here (before the task actually starts on the next loop
-    # tick) so a cancel can never race a not-yet-tracked task.
+    # Register before any post-creation await: once STORE exposes the run, every
+    # cancellation path must have a live task to stop.
     run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 
@@ -389,7 +386,9 @@ async def cancel_run(run_id: str, user: auth.User = Depends(auth.current_user)) 
         raise HTTPException(404, "Run not found.")
     if outcome == "noop":
         return Response(status_code=204)  # already terminal — idempotent success
-    return JSONResponse({"status": outcome}, status_code=200)  # "cancelling" | "cancelled"
+    return JSONResponse(
+        {"status": outcome}, status_code=200
+    )  # "cancelling" | direct-finalized "cancelled" | persistence "failed"
 
 
 class FeedbackBody(BaseModel):
@@ -427,9 +426,8 @@ async def follow_up_run(
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
     run = runs.STORE.create_followup(user.id, ask, parent)
-    # persist the uploads so later turns in the session can re-read them (sets run.inputs)
-    await runs.persist_inputs(run, input_files)
     run.session_models = session_models
+    # Match root-run ordering: registration is atomic with exposing the run.
     run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
     return {"id": run.id}
 

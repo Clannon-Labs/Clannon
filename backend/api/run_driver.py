@@ -38,7 +38,7 @@ import settings
 
 from . import audit as _audit_trail, auth, config
 from . import decision_audit as _decision_audit
-from .run_state import RunState, _now, _process_summary
+from .run_state import RunState, TERMINAL_STATUSES, _now, _process_summary
 from .run_store import STORE, INPUT_NS
 
 
@@ -280,7 +280,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
     objects. They are combined with the files uploaded EARLIER in the session (re-loaded
     from the store) so the orchestrator can read any file from any turn, then seeded into
     a file-capable expert's workspace. The brief itself still crosses the full pipeline."""
-    session_files = await _gather_session_files(run, input_files)
+    session_files: list = []
 
     def _prepare(flow: Flow[Any]) -> None:
         """Seed the context the API owns, before any stage runs."""
@@ -312,6 +312,12 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
 
     run_usage = None   # bound by usage_scope below; read in the except handlers too
     try:
+        # Runs become cancellable before this I/O starts: routes register this execute()
+        # task immediately after STORE.create(), closing the create/cancel race even when
+        # artifact persistence uses a genuinely asynchronous backend.
+        await persist_inputs(run, input_files or [])
+        session_files = await _gather_session_files(run, input_files)
+
         # user model preferences apply to every stage in this run. The pipeline is
         # the single end-to-end runner; the API only observes it (status, decision
         # log, expert reconciliation) and owns the classification + delivery. Output-
@@ -399,7 +405,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                     run.block_stage = "filter"
                 else:
                     run.block_stage = "security"
-                run.on_status("blocked")
+                run.status = "blocked"
                 # durable audit record — one per blocked run, scoped to owner.
                 # The ENTIRE operation (gathering the fields AND the write) is guarded:
                 # audit is best-effort and must never turn a blocked run into a failed
@@ -432,7 +438,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                             "detail": {},
                         })()
                     )
-                run.on_status("failed")
+                run.status = "failed"
             else:
                 text = ctx.final_response or (
                     ctx.orchestrator_response.text if ctx.orchestrator_response else ""
@@ -471,7 +477,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 # DELIVERED badge over a still-streaming report in the UI (frontend pins
                 # the moment to the terminal status event).
                 await run.stream_report(str(text))
-                run.on_status("delivered")
+                run.status = "delivered"
 
     except asyncio.CancelledError:
         # the task was cancelled, which unwound the pipeline at its next await (no
@@ -490,18 +496,32 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # before the cancel interrupted the in-flight one), per the usage-based model.
         if run_usage is not None:
             run.tokens_used = run_usage.total_tokens
-        run.on_status("cancelled")
+        run.status = "cancelled"
     except Exception as exc:  # the web layer never lets a run take the server down
         if run_usage is not None:
             run.tokens_used = run_usage.total_tokens
         run.on_log_entry(
             type("E", (), {"kind": "error", "message": f"pipeline error: {exc}", "detail": {}})()
         )
-        run.on_status("failed")
+        run.status = "failed"
     finally:
-        run.emit({"type": "message_done"})   # close the conversational channel for this turn
-        run.finish()
         # a run deleted mid-flight (its session was removed) must not be re-persisted
         # by this finally — that would resurrect the row the delete just removed.
-        if not run.deleted:
-            STORE.persist(run)
+        publish_terminal = run.status in TERMINAL_STATUSES and not run.deleted
+        if publish_terminal:
+            try:
+                # Durability precedes terminal publication: a client must never be
+                # told delivery completed when final state failed to commit.
+                STORE.persist(run)
+            except Exception as exc:  # noqa: BLE001 — convert storage fault honestly
+                run.status = "failed"
+                run.on_log_entry(
+                    type("E", (), {
+                        "kind": "error",
+                        "message": f"final persistence failed ({type(exc).__name__})",
+                        "detail": {},
+                    })()
+                )
+            run.emit({"type": "status", "status": run.status})
+        run.emit({"type": "message_done"})   # close the conversational channel for this turn
+        run.finish()

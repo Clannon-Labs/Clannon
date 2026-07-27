@@ -17,10 +17,14 @@ from .run_state import RunState, TERMINAL_STATUSES
 
 async def sse_stream(run: RunState) -> AsyncGenerator[str, None]:
     """Replay buffered events, then live ones, as SSE frames."""
+    # No await separates snapshot from registration, so event-loop tasks cannot
+    # interleave here. Snapshot first prevents an event from entering both replay
+    # and the live queue; registration immediately after prevents missed events.
+    replay = list(run.events)
     queue: asyncio.Queue = asyncio.Queue()
     run.subscribers.append(queue)
     try:
-        for event in list(run.events):
+        for event in replay:
             yield f"data: {json.dumps(event)}\n\n"
         # A reconnect to a finished run has nothing more coming — replay, then close.
         # Since the terminal-order fix (report_done strictly BEFORE status:delivered —

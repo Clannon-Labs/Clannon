@@ -9,21 +9,11 @@ tests/sse_failure_terminal.py.
 
 Findings this file backs (see reports/api/ for the write-up):
 
-1. "cancel can never race task registration" (app.py create_run/follow_up_run
-   comment) is true TODAY only because `LocalArtifactStore.put` is a coroutine
-   that never actually suspends (plain synchronous `write_bytes`, no real
-   await). `test_cancel_can_race_task_registration_if_persist_inputs_suspends`
-   proves the invariant is an accident of that implementation detail, not a
-   structural guarantee: swap in any genuinely-async store (S3, aiofiles, a DB
-   call) and a concurrent cancel can win the race, get told "cancelled", have
-   it persisted — and then the orphaned task keeps running the real pipeline
-   and silently overwrites that row with "delivered" moments later. That is a
-   simultaneous violation of "exactly one terminal status + one final
-   persistence action" and "degrade honestly" (a cancelled client is lied to).
-   `test_no_cancel_race_today_with_the_real_artifact_store` pins that the
-   accident holds for the actual `LocalArtifactStore` shipped today — via a
-   `call_soon` probe that must NOT run before task registration, not merely
-   checking that `run.task` ended up set (which would pass either way).
+1. Run creation registers `execute()` immediately after exposing the run through
+   `RunStore`, before uploaded-file persistence can suspend. The parametrized
+   cancellation test uses a genuinely asynchronous artifact store and proves
+   both root and follow-up routes retain a cancellable task, finish once as
+   `cancelled`, and never enter paid pipeline work.
 2. Server shutdown (app.py's lifespan shutdown loop) routes through the SAME
    `RunStore.request_cancel` as a user's `POST /runs/:id/cancel` — deliberately:
    an in-flight run at process exit is honestly finalized as `cancelled` and
@@ -162,31 +152,31 @@ def _make_followup(store: RunStore) -> RunState:
 
 
 async def _simulate_create_run(store: RunStore, input_files: list, make_run=_make_root) -> RunState:
-    """Mirrors app.py's create_run / follow_up_run ordering exactly (both routes
-    share the identical shape — app.py:361-368 and :429-433): create the run
-    (visible to request_cancel from this point on), await persist_inputs, THEN
-    assign run.task. If persist_inputs ever actually suspends, a cancel can
-    land in the gap between the first two steps and the third."""
+    """Mirror both routes: expose run, then register execute() without awaiting."""
     run = make_run(store)
-    await run_driver.persist_inputs(run, input_files)
     run.task = asyncio.ensure_future(run_driver.execute(run, input_files))
     return run
 
 
 @pytest.mark.parametrize("make_run", [_make_root, _make_followup], ids=["create_run", "follow_up_run"])
-def test_cancel_can_race_task_registration_if_persist_inputs_suspends(
-    store, hermetic_execute, monkeypatch, make_run
+def test_cancel_during_async_input_persistence_stops_registered_task(
+    store, monkeypatch, make_run
 ):
-    """With a realistically-async artifact store, a cancel arriving while
-    persist_inputs is in flight wins the "no live task" branch, reports
-    "cancelled", and persists it — then the still-running create path assigns
-    the orphaned task anyway, which delivers and OVERWRITES the persisted
-    "cancelled" row with "delivered". Proves app.py:365-368's (and the
-    identical :429-433 in follow_up_run) "same tick, a cancel can never race a
-    not-yet-tracked task" comment is an accident of LocalArtifactStore.put's
-    implementation, not a structural guarantee — parametrized over both
-    routes since they share the exact same ordering."""
-    hermetic_execute(_fake_flow())
+    """A suspending artifact backend cannot reopen the registration race.
+
+    Cancellation sees the already-registered execute() task, interrupts input
+    persistence before pipeline work, and produces one durable cancelled result.
+    """
+    pipeline_called = False
+
+    async def fake_pipeline(*a, **k):
+        nonlocal pipeline_called
+        pipeline_called = True
+        return _fake_flow()
+
+    monkeypatch.setattr(run_driver.pipeline, "run", fake_pipeline)
+    monkeypatch.setattr(run_driver, "build_model_overrides", lambda *a, **k: {})
+    monkeypatch.setattr(run_driver.auth, "fetch_wiki", lambda *a, **k: [])
     reached = asyncio.Event()
     release = asyncio.Event()
     monkeypatch.setattr(
@@ -195,80 +185,17 @@ def test_cancel_can_race_task_registration_if_persist_inputs_suspends(
     input_file = SimpleNamespace(name="f.txt", data=b"hi", as_dict=lambda: {"name": "f.txt"})
 
     async def go():
-        create_fut = asyncio.ensure_future(_simulate_create_run(store, [input_file], make_run))
+        run = await _simulate_create_run(store, [input_file], make_run)
         await asyncio.wait_for(reached.wait(), timeout=2)
 
-        # the run is registered and visible to request_cancel, but its task
-        # handle is still None — exactly the window under test
-        rid = next(iter(store._runs))
-        assert store._runs[rid].task is None, (
-            "run.task already assigned — the race window this test targets isn't open; "
-            "the fixture no longer matches app.py's ordering"
-        )
-
-        outcome = store.request_cancel("u1", rid)
-        assert outcome == "cancelled", "expected the no-live-task direct-finalize path"
-        assert rid not in store._runs, "request_cancel's persist() should have evicted the run"
-
-        persisted_after_cancel = store.get("u1", rid)
-        assert persisted_after_cancel.status == "cancelled"
-
-        # release persist_inputs; create_run finishes registering the (now
-        # orphaned) task, whose pipeline still "delivers"
-        release.set()
-        run = await create_fut
-        await run.task
-
-        return rid
-
-    rid = asyncio.run(asyncio.wait_for(go(), timeout=5))
-
-    # the SAME run id now silently reads back as delivered — the cancel the
-    # caller was told succeeded was overwritten without any signal
-    resurrected = store.get("u1", rid)
-    assert resurrected.status == "delivered", (
-        "expected the orphaned task's delivery to have overwritten the cancelled row — "
-        "if this now reads 'cancelled', the race no longer reproduces and this test "
-        "should be re-examined, not loosened"
-    )
-
-
-@pytest.mark.parametrize("make_run", [_make_root, _make_followup], ids=["create_run", "follow_up_run"])
-def test_no_cancel_race_today_with_the_real_artifact_store(store, hermetic_execute, make_run):
-    """Companion to the test above: pins that TODAY's actual LocalArtifactStore
-    (synchronous write_bytes under an async def) never suspends, so
-    persist_inputs never yields, so run.task really is assigned in the same
-    scheduler tick as run creation — the safety net both routes rely on, made
-    explicit so a future change to LocalArtifactStore is the trigger to
-    revisit this, not a silent regression.
-
-    Asserting `run.task is not None` after `_simulate_create_run` returns would
-    pass regardless of whether persist_inputs ever yielded (it's just checking
-    the return value of the function that assigns it) — that doesn't test the
-    "same tick" claim at all. The actual claim is that NOTHING else gets a
-    chance to run in the gap: schedule a probe via `call_soon` (fires the next
-    time the loop regains control, however briefly) BEFORE creating the run,
-    and assert it still hasn't run by the time task assignment completes."""
-    hermetic_execute(_fake_flow())
-    input_file = SimpleNamespace(name="f.txt", data=b"hi", as_dict=lambda: {"name": "f.txt"})
-
-    async def go():
-        order: list[str] = []
-        asyncio.get_running_loop().call_soon(lambda: order.append("probe"))
-
-        run = await _simulate_create_run(store, [input_file], make_run)
-        order.append("task_registered")
-
-        assert order == ["task_registered"], (
-            f"expected no interleaving before task registration, got {order!r} — "
-            "persist_inputs yielded to the loop, so the create->task-registration "
-            "gap is open even with today's real LocalArtifactStore"
-        )
+        assert run.task is not None and not run.task.done()
+        assert store.request_cancel("u1", run.id) == "cancelling"
         await run.task
         return run.id
 
     rid = asyncio.run(asyncio.wait_for(go(), timeout=5))
-    assert store.get("u1", rid).status == "delivered"
+    assert pipeline_called is False
+    assert store.get("u1", rid).status == "cancelled"
 
 
 def test_shutdown_drain_finalizes_inflight_run_as_cancelled(store, monkeypatch):
@@ -390,6 +317,79 @@ def test_tokens_used_readable_after_cancel_unwinds_usage_scope(store, hermetic_e
     )
 
 
+def test_terminal_status_publishes_after_exactly_one_successful_persist(
+    store, hermetic_execute, monkeypatch
+):
+    """Delivered becomes public only after one durable final write."""
+    hermetic_execute(_fake_flow())
+    run = store.create("u1", "brief")
+    original_persist = store.persist
+    calls = 0
+
+    def counting_persist(candidate):
+        nonlocal calls
+        calls += 1
+        assert not any(
+            event.get("type") == "status" and event.get("status") in {"delivered", "failed"}
+            for event in candidate.events
+        ), "terminal status became public before persistence"
+        original_persist(candidate)
+
+    monkeypatch.setattr(store, "persist", counting_persist)
+    asyncio.run(run_driver.execute(run, []))
+
+    terminal = [
+        event for event in run.events
+        if event.get("type") == "status" and event.get("status") in {"delivered", "failed"}
+    ]
+    assert calls == 1
+    assert terminal == [{"type": "status", "status": "delivered"}]
+    assert store.get("u1", run.id).status == "delivered"
+
+
+def test_final_persist_failure_reports_failed_once_and_retains_live_run(
+    store, hermetic_execute, monkeypatch
+):
+    """A final-write fault cannot publish delivered or discard recoverable state."""
+    hermetic_execute(_fake_flow())
+    run = store.create("u1", "brief")
+    calls = 0
+
+    def fail_persist(candidate):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("secret database detail")
+
+    monkeypatch.setattr(store, "persist", fail_persist)
+
+    async def go():
+        frames: list[str] = []
+
+        async def consume():
+            async for frame in sse.sse_stream(run):
+                frames.append(frame)
+
+        consumer = asyncio.create_task(consume())
+        await asyncio.sleep(0)
+        await run_driver.execute(run, [])
+        await consumer
+        return frames
+
+    frames = asyncio.run(asyncio.wait_for(go(), timeout=5))
+    terminal_frames = [
+        frame for frame in frames
+        if '"type": "status"' in frame
+        and ('"status": "delivered"' in frame or '"status": "failed"' in frame)
+    ]
+
+    assert calls == 1
+    assert len(terminal_frames) == 1 and '"status": "failed"' in terminal_frames[0]
+    assert run.status == "failed"
+    assert store._runs[run.id] is run, "failed final write must retain live recovery state"
+    assert "secret database detail" not in str(run.log)
+    assert any("final persistence failed (RuntimeError)" in entry["title"] for entry in run.log)
+
+
 # ── (4) subscriber queues never leak across connect/disconnect cycles ───────
 
 
@@ -418,6 +418,34 @@ def test_sse_subscriber_queue_removed_on_every_disconnect_cycle():
             assert run.subscribers == [], "subscriber queue leaked after disconnect"
 
     asyncio.run(asyncio.wait_for(go(), timeout=5))
+
+
+def test_sse_replay_boundary_does_not_duplicate_event():
+    """An event appearing while replay snapshot is built must not also arrive
+    through live queue. Snapshot + subscriber registration are synchronous, so
+    ordering them snapshot-first creates an atomic handoff without miss or dup."""
+    run = RunState(id="run_boundary", user_id="u1", title="t", brief="b")
+    first = {"type": "status", "status": "queued"}
+    boundary = {"type": "status", "status": "working"}
+
+    class _EmitDuringSnapshot(list):
+        def __iter__(self):
+            if boundary not in self:
+                run.emit(boundary)
+            return super().__iter__()
+
+    run.events = _EmitDuringSnapshot([first])
+
+    async def go():
+        stream = sse.sse_stream(run)
+        frames = [await anext(stream), await anext(stream)]
+        run.finish()
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+        return frames
+
+    frames = asyncio.run(asyncio.wait_for(go(), timeout=5))
+    assert sum('"status": "working"' in frame for frame in frames) == 1
 
 
 # ── (5) reconnect-after-persist replays nothing, closes cleanly ─────────────

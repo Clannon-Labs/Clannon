@@ -237,6 +237,14 @@ def test_api_access_control_bola_idor(db):
         lambda: anon.get(f"/runs/{a_run_id}/thread"),
     )
 
+    # GET /runs/{run_id}/audit
+    # Route authorizes through the run ownership row before querying audit records.
+    _check(
+        "GET /runs/{run_id}/audit",
+        lambda: bob.get(f"/runs/{a_run_id}/audit"),
+        lambda: anon.get(f"/runs/{a_run_id}/audit"),
+    )
+
     # GET /runs/{run_id}/stream
     # STORE.get(b_id, a_run_id) -> None -> 404 before StreamingResponse is created
     _check(
@@ -251,6 +259,18 @@ def test_api_access_control_bola_idor(db):
         "GET /runs/{run_id}/artifacts/{name}",
         lambda: bob.get(f"/runs/{a_run_id}/artifacts/alice_report.md"),
         lambda: anon.get(f"/runs/{a_run_id}/artifacts/alice_report.md"),
+    )
+
+    # PATCH /projects/{project_id}
+    # auth.project_rename scopes its update by both id and authenticated user.
+    _check(
+        "PATCH /projects/{project_id}",
+        lambda: bob.patch(
+            f"/projects/{a_project_id}", json={"name": "Bob takeover"}
+        ),
+        lambda: anon.patch(
+            f"/projects/{a_project_id}", json={"name": "Anon takeover"}
+        ),
     )
 
     # DELETE /projects/{project_id}
