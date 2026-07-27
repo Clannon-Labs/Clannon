@@ -8,7 +8,7 @@
 #   ./scripts/crew.sh stop <role>
 #   ./scripts/crew.sh run <role> --brief <file> [--claude|--codex]
 #
-# Roles: backend frontend memory orchestration security api
+# Roles: backend frontend memory orchestration security api release
 #
 # TWO WAYS AN AGENT RUNS — they do not overlap:
 #   start/attach  interactive session in tmux. For the OWNER to drive an agent.
@@ -32,7 +32,7 @@
 set -uo pipefail   # no -e: a failure on one role must not abort a multi-role loop
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ROLES="backend frontend memory orchestration security api"
+ROLES="backend frontend memory orchestration security api release"
 
 die() { echo "crew: $*" >&2; exit 2; }
 
@@ -44,6 +44,7 @@ dir_for() {
     orchestration) echo "$ROOT/backend/core/orchestrator" ;;
     security)      echo "$ROOT/backend/security" ;;
     api)           echo "$ROOT/backend/api" ;;
+    release)       echo "$ROOT/release" ;;
     *)             return 1 ;;
   esac
 }
@@ -55,6 +56,8 @@ valid_role() { dir_for "$1" >/dev/null 2>&1; }
 # review of every specialist change — not the model tier.
 is_specialist() {
   case "$1" in memory|orchestration|security|api) return 0 ;; *) return 1 ;; esac
+  # NOTE: `release` is deliberately absent — it is a conversational role the
+  # owner drives directly, so it keeps the stronger default model.
 }
 
 # --- session liveness -------------------------------------------------------

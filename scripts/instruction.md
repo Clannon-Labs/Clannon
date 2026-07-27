@@ -16,7 +16,7 @@ Full design + reasoning: `docs/architecture/CREW_WORKFLOW.md`.
 ./scripts/crew.sh start backend
 ```
 
-Roles: `backend` `frontend` `memory` `orchestration` `security` `api`
+Roles: `backend` `frontend` `memory` `orchestration` `security` `api` `release`
 
 - Resumes that role's existing conversation if there is one; starts fresh
   otherwise.

@@ -253,6 +253,50 @@ dispatcher reads `.agents/provider-policy` — a one-line default with the reaso
 and a revisit condition written next to it, so a temporary budget decision
 cannot quietly become permanent policy.
 
+### 4.5 Subagents vs. headless workers vs. interactive roles
+
+Both Claude Code and Codex can spawn **built-in subagents** inside a session.
+That is a third option, and the honest question is why the other two exist.
+
+| | Built-in subagent | Headless worker (`run`) | Interactive role (`start`) |
+|---|---|---|---|
+| Lives in | the caller's session | its own process | its own tmux session |
+| Provider | **same as caller** | **either** (`--codex`) | either |
+| Token budget | the caller's | separate | separate |
+| Result lands | **in the caller's context** | in a file the caller chooses to read | on screen, for the owner |
+| Durable identity | none | role charter + handoff + comms | same |
+| Survives the turn | no | yes (can run for minutes) | yes (indefinitely) |
+| Driven by | the caller | the coordinator | **the owner** |
+
+**Use a subagent** for a fast, read-only question whose answer you want
+immediately in context — "where is this symbol defined", "which files reference
+X". It is the lowest-ceremony option and for lookups it is genuinely the best
+one. Don't build a file-passing dance around a question you could just ask.
+
+**Use a headless worker** for real implementation. Three concrete advantages a
+subagent cannot give:
+
+1. **A different provider and a separate budget.** Subagents run on the caller's
+   provider and spend the caller's tokens. A headless worker can be Codex, which
+   is the whole reason the coordinator can delegate implementation without
+   burning the Claude budget it needs for review and architecture.
+2. **Context cost is opt-in.** A subagent's report returns into the caller's
+   context whole. A worker's output sits in a file — the coordinator reads the
+   twenty lines that matter and leaves the rest on disk. On a long coordination
+   session this is the difference between finishing and compacting.
+3. **A durable role identity.** A worker inherits a charter, a tree it exclusively
+   owns, a handoff file, and a comms trail. A subagent has none of that — it
+   cannot be held to an ownership boundary across time, and there is no record
+   afterwards of what it was or what it touched.
+
+**Use an interactive role** when the *owner* wants to drive an agent
+conversationally — course-correcting mid-task, or working a long arc where the
+accumulated conversation is itself the value. The `release` role is exactly
+this case.
+
+The three are complements, not competitors: subagent = look something up;
+worker = get something built; interactive = talk to a specialist.
+
 ---
 
 ## 5. Provider strategy — Claude and Codex
