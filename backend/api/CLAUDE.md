@@ -65,7 +65,9 @@ you own `backend/tests/decision_audit.py`, `backend/tests/security_audit_trail.p
 `backend/tests/api_session_continuity.py`, `backend/tests/get_root.py`,
 `backend/tests/model_settings.py`, `backend/tests/health_lifecycle.py`,
 `backend/tests/projects.py`, `backend/tests/artifacts.py`,
-`backend/tests/memory_hydration_preview.py`, `backend/tests/roster_experts.py` —
+`backend/tests/memory_hydration_preview.py`, `backend/tests/roster_experts.py`,
+`backend/tests/run_cancel.py` (granted 2026-07-26 — a real Law 6 fake-green
+finding in it was squarely run-lifecycle territory) —
 every test file whose subject is `api/**` behavior, as of the 2026-07-26 handoff.
 `backend/tests/benchmarks/sse_contract_drift.py` + its fixture stay the backend
 agent's (it's a cross-repo contract-drift gate, not pure API-internal). A NEW test
