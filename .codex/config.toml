@@ -1,0 +1,13 @@
+# Project-local Codex defaults.
+#
+# MUST match the posture scripts/crew.sh launches with, or a bare `codex` run in
+# this repo behaves differently from a dispatched worker. workspace-write was the
+# previous value and it actively broke things: it denied .git/index.lock creation
+# and writes under .agents/, so a specialist could not commit its own work or
+# update its own handoff (it had to write a fallback report instead).
+#
+# Full access is deliberate here — this repo's agents run unattended, same
+# reasoning as Claude's --dangerously-skip-permissions. See
+# docs/architecture/CREW_WORKFLOW.md.
+sandbox_mode = "danger-full-access"
+approval_policy = "never"

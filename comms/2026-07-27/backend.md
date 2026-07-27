@@ -50,3 +50,6 @@ strictly alone.
 
 ## dispatched workers
 - `17:59` **api** worker via **codex** — brief-api-cb4.md — exit 0, 172s — output: `.agents/runs/20260727-175706-api.out`
+- `20:01` **orchestration** worker via **codex** — brief-loopguard.md — exit 0, 30s — output: `.agents/runs/20260727-200124-orchestration.out`
+- `20:03` **backend** worker via **codex** — brief-loopguard.md — exit 0, 27s — output: `.agents/runs/20260727-200243-backend.out`
+- `20:08` **backend** worker via **codex** — brief-loopguard.md — exit 0, 227s — output: `.agents/runs/20260727-200423-backend.out`
