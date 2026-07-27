@@ -1,0 +1,146 @@
+# ROADMAP — what we're building, and who's on what
+
+**Read this first when you need to know "what should I work on?"** It is the
+single entry point; the detailed plans it points at stay authoritative for their
+own areas.
+
+Last reconciled: **2026-07-27**, just after `v0.3.0`.
+
+> **Standing rule:** if you finish your lane and nothing here is assigned to you,
+> **that is a valid state.** Write your handoff and stop. Do not invent work
+> (`docs/architecture/CREW_WORKFLOW.md` §2.2).
+
+---
+
+## 0. Where the detail lives
+
+| Source | Covers | Trust it? |
+|---|---|---|
+| **this file** | cross-role priorities, the Rust track, who owns what | current |
+| `docs/benchmarks/V1_GAP_ANALYSIS.md` | per-benchmark honest verdicts | **verdict table is STALE** — see §2 |
+| `docs/benchmarks/mission/` | the V1 Premium-Parity phase plan | partially stale; backend-only |
+| `docs/architecture/RUST_MIGRATION_STRATEGY.md` | how any Rust work happens | current, canonical |
+| `docs/architecture/CREW_WORKFLOW.md` | how agents coordinate | current, canonical |
+| `LAW/README.md` | the seven laws | current, canonical |
+
+## 1. The two tracks
+
+We are running **two tracks at once**, deliberately:
+
+**Track A — finish V1 (Python).** The product still has to work. V1 is not done
+and has never faced a real user. This track keeps shipping in Python.
+
+**Track B — Rust, by addition only.** New infrastructure is written in Rust;
+existing working Python is not rewritten for its own sake. See §3.
+
+Track A does not pause for Track B. If they ever conflict, **Track A wins** —
+shipping a working product beats architectural progress.
+
+## 2. Track A — V1 capability
+
+**Shipped since v0.2.0** (the gap-analysis table has NOT been updated to reflect
+these — do not trust its stars):
+
+- **CB5 — security validation**: the earn-the-seal filter verdict now flows
+  end-to-end to the UI. Residual: `detect` is PARTIAL (one adversarial payload).
+- **CB4 — institutional decision memory**: durable mirror + `GET /runs/:id/decisions`,
+  covering every terminal outcome including cancelled/crashed.
+- **CB6 — multi-agent consistency**: `reports/INTEGRATION_CONTRACT.md` exists;
+  the SSE contract-drift benchmark is green and enforcing.
+- **CB2 — large repo understanding**: symbol tier, AST search, dep-graph
+  traversal, archive ingestion, cross-call workspace persistence.
+
+**Open, in rough priority order:**
+
+1. **CB3 / EB3 — real media ingestion.** Mechanism proven, actual multi-modal
+   ingestion absent. Owner: memory (extractor) + orchestration (experts).
+2. **CB1 / EB1 — temporal truth.** Needs `valid_at` typing. Owner: memory.
+3. **Batch architecture beyond the engineering tier.** Parked pending design —
+   **needs owner greenlight before anyone starts.**
+4. **Budget enforcement go-live.** Code is built but ships `enforcement_enabled=False`
+   and `pricing.yaml` holds **placeholder prices**. **Needs the owner to set real
+   per-model prices** — the loader is fail-closed, so an un-priced model blocks
+   rather than leaks. Owner: backend.
+
+**Known limitations carried into v0.3.0** (documented, not hidden): concurrent
+`code.engineer` calls in one mission race on the shared workspace snapshot;
+CB4 records on the crash path have empty participants; one dev-only Dependabot
+residual.
+
+## 3. Track B — Rust
+
+**The rule, in two halves. Both matter:**
+
+### 3a. New code → prefer Rust
+
+**Anything genuinely new and infrastructural should be written in Rust**, unless
+it is AI/ML work or a good Python framework already exists for it. This is the
+half that applies most often, because most work is new work.
+
+Rust by default for: gateway/HTTP, auth, sessions, rate limiting, memory engine
+internals, search/indexing/ranking, crypto, storage/chunking, schedulers and
+queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
+
+**Stays Python:** anything touching the model providers, agent/reasoning loops,
+embeddings, vision/speech, training/eval — the ML ecosystem is genuinely better
+there and that is not close.
+
+**Stays TypeScript:** the whole frontend. Not up for discussion right now.
+
+If you are about to add a new infrastructural component in Python, **stop and
+propose it** — the default is Rust and the burden is on the Python choice.
+
+### 3b. Existing code → port only by addition
+
+Governed by `docs/architecture/RUST_MIGRATION_STRATEGY.md`: write the Rust 1:1
+alongside the Python, keep Python live, cut over at the port boundary only when
+proven, keep Python as a time-boxed fallback, then delete it.
+
+**Never a big-bang rewrite.** Declining a rewrite must mean "wouldn't improve
+it," never "too risky to try" (LAW 6).
+
+**Hard prerequisite before ANY port:** the component's tests must be able to
+validate either language — driven through the port, not through Python
+internals. Today's pytest imports Python modules directly and cannot validate a
+Rust implementation, so this is real work, not a formality.
+
+**Sequencing:** small / off / boundary-clean first. `foundation/` **last**
+(209 in-process importers = FFI on the hottest path for the whole migration).
+
+**Agreed pilot: the Redis budget broker** (`core/budget/`) — port ratified,
+~485 lines, off in production, zero ML, already has a process boundary.
+
+**Status: not started.** Blocked on a design discussion the owner asked for —
+FFI vs. separate service, how a port is served across the boundary, dev loop and
+deploy with two toolchains, and making that component's tests language-independent.
+**Nobody starts Rust code until that discussion happens.**
+
+## 4. Lanes by role
+
+| Role | Current lane |
+|---|---|
+| **backend** (coordinator) | Track B design discussion; foundation/config seams; review + integrate + push; dispatch workers |
+| **memory** | CB3/EB3 media ingestion; CB1/EB1 temporal typing |
+| **orchestration** | media experts for CB3; batch tier is **parked** pending owner greenlight |
+| **security** | CB5 detect residual; standing invariant review of budget/batch designs |
+| **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
+| **frontend** | its own backlog; `HANDOFF.md` in `frontend/` |
+| **release** | post-v0.3.0 housekeeping; next release when there is scope |
+
+## 5. Needs the owner, not us
+
+Do not start these; they are decisions, not tasks:
+
+1. **Rust design discussion** — gates all of Track B.
+2. **Batch architecture greenlight** — gates the batch tier.
+3. **Real per-model prices** in `config/backend/pricing.yaml` — gates budget go-live.
+4. **Whether V1 ships to real users before more capability work.** Nobody has
+   used this yet, and that is the largest unknown in the whole plan.
+
+## 6. Stale things worth fixing
+
+- `docs/benchmarks/V1_GAP_ANALYSIS.md`'s verdict table predates CB2/CB4/CB5/CB6
+  landing. Its **priority stars are misleading**. Needs a re-run and honest
+  re-verdict pass.
+- `docs/benchmarks/mission/README.md`'s phase-status table is empty and its
+  phases predate the release role, the frontend lane, and Track B entirely.

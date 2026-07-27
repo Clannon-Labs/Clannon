@@ -39,9 +39,28 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the seven self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
-## 🦀 RUST MIGRATION — parallel implementation, never big-bang (owner-set, 2026-07-27)
+## 🦀 RUST — new code prefers Rust; ports happen only by addition (owner-set, 2026-07-27)
 
-Any port to Rust follows **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical):
+**Two halves. The first applies far more often, because most work is new work.**
+
+### New code → prefer Rust
+Anything genuinely NEW and infrastructural is written in **Rust**, unless it is AI/ML
+work or a good Python framework already exists for it. Gateway/HTTP, auth, sessions,
+rate limiting, memory-engine internals, search/indexing/ranking, crypto, storage,
+schedulers/queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
+
+**Stays Python:** model providers, agent/reasoning loops, embeddings, vision/speech,
+training/eval — the ML ecosystem is genuinely better there.
+**Stays TypeScript:** the whole frontend.
+
+About to add a new infrastructural component in Python? **Stop and propose it.** The
+default is Rust; the burden is on the Python choice.
+
+**Nothing is Rust yet, and nobody starts until the owner's design discussion happens**
+(FFI vs. service boundary, dev loop + deploy with two toolchains). See `docs/ROADMAP.md` §3.
+
+### Existing code → port only by addition
+Any port follows **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical):
 
 1. Write the Rust **1:1 alongside** the Python. Python stays the live path.
 2. Both exist at once; the Rust is inert until it earns the swap.

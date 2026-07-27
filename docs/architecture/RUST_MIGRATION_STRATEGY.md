@@ -6,7 +6,26 @@ exercise the property that law requires us to keep.
 
 ---
 
-## The rule
+## The rule, part 1 — NEW code prefers Rust
+
+**Anything genuinely new and infrastructural is written in Rust**, unless it is
+AI/ML work or a good Python framework already exists for it. This half applies
+far more often than the porting half below, because most work is new work.
+
+**Rust by default:** gateway/HTTP, auth, sessions, rate limiting, memory-engine
+internals, search/indexing/ranking, crypto, storage/chunking, schedulers and
+queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
+
+**Stays Python:** model providers, agent/reasoning loops, embeddings,
+vision/speech, training/eval. The ML ecosystem is genuinely better there and it
+is not close.
+
+**Stays TypeScript:** the whole frontend.
+
+Adding a new infrastructural component in Python? **Stop and propose it.** The
+default is Rust and the burden of argument is on the Python choice.
+
+## The rule, part 2 — EXISTING code ports only by addition
 
 **Parallel implementation with deferred cutover. Never a big-bang rewrite.**
 

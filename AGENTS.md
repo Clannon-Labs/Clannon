@@ -19,7 +19,18 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
-Rust migration — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):
+Roadmap — `docs/ROADMAP.md`. Read when asking "what should I work on?".
+Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent work.
+
+Rust — TWO halves, first applies most often:
+- NEW infrastructural code → prefer RUST. Gateway/auth/sessions/rate-limiting/memory
+  internals/search/crypto/storage/schedulers/file-parsing/sandbox/telemetry/db layer.
+- Stays Python: providers, reasoning loops, embeddings, vision/speech, training.
+  Stays TypeScript: frontend.
+- Adding new infra in Python? STOP, propose it. Default is Rust, burden on Python.
+- Nothing is Rust yet. Nobody starts until owner's design discussion.
+
+Rust ports of EXISTING code — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):
 - Parallel implementation, NEVER big-bang. Write Rust 1:1 alongside Python.
 - Python stays live until Rust proven ready. Then swap at the port boundary.
 - Keep Python as fallback after cutover — time-boxed, then delete. Git history is
