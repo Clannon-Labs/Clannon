@@ -22,13 +22,15 @@ Boundaries: code/commits/PRs written normal.
 Roadmap — `docs/ROADMAP.md`. Read when asking "what should I work on?".
 Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent work.
 
-Rust — TWO halves, first applies most often:
-- NEW infrastructural code → prefer RUST. Gateway/auth/sessions/rate-limiting/memory
-  internals/search/crypto/storage/schedulers/file-parsing/sandbox/telemetry/db layer.
-- Stays Python: providers, reasoning loops, embeddings, vision/speech, training.
-  Stays TypeScript: frontend.
-- Adding new infra in Python? STOP, propose it. Default is Rust, burden on Python.
-- Nothing is Rust yet. Nobody starts until owner's design discussion.
+Rust — V1 ships in Python, Rust is an experiment:
+- NEW work → Python. Including new infra. V1 unfinished, no second toolchain tax yet.
+- Modularity non-negotiable anyway (LAW 6): one door per dependency, ports for
+  subsystems, so ANY part could be swapped. Being able to != doing it.
+- Rust only on already-built working components, 1:1 alongside live Python.
+  Parallel implementation NEEDS an existing impl to validate against — that's why
+  new code is the wrong target.
+- Nothing is Rust yet. Nobody starts before owner's design discussion.
+- New component genuinely needs Rust? Propose it with a specific argument, not default.
 
 Rust ports of EXISTING code — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):
 - Parallel implementation, NEVER big-bang. Write Rust 1:1 alongside Python.
@@ -38,6 +40,14 @@ Rust ports of EXISTING code — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (
 - Prerequisite: component's tests must validate EITHER language (through the port,
   not Python internals) BEFORE porting. Today's pytest cannot — fix that first.
 - `foundation/` ports LAST (209 in-process importers). Pilot: Redis budget broker.
+
+Keep status current — `docs/ROADMAP.md` is the entry point, read at session start:
+- Finish something that moves the needle? Update status in the SAME commit as the work.
+- Benchmark advanced → V1_GAP_ANALYSIS.md verdict + mission PHASE_*.md STATUS/checkboxes.
+  Phase fully done → move file to docs/benchmarks/reached/ with outcome inside.
+- Changed what's next? → ROADMAP §2/§4/§5. Made a doc wrong? Fix it or list in §6.
+- Verdicts honest or worthless. PARTIAL/NOT-YET truthfully. Can't verify → don't change.
+- Coordinator owns the cross-cutting picture; specialists report their own work.
 
 Owner's thinking — `drafts/owner_thoughts/`:
 - Owner talks about what they think/prefer/are considering → read that folder first.

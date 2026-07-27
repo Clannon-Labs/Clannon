@@ -39,45 +39,52 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the seven self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
-## 🦀 RUST — new code prefers Rust; ports happen only by addition (owner-set, 2026-07-27)
+## 🦀 RUST — V1 ships in Python; Rust is an experiment on code that already works
 
-**Two halves. The first applies far more often, because most work is new work.**
+**New work is written in Python.** Including new infrastructure. V1 is not done and
+has never faced a user; a second toolchain per new component is a tax we don't pay yet.
 
-### New code → prefer Rust
-Anything genuinely NEW and infrastructural is written in **Rust**, unless it is AI/ML
-work or a good Python framework already exists for it. Gateway/HTTP, auth, sessions,
-rate limiting, memory-engine internals, search/indexing/ranking, crypto, storage,
-schedulers/queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
+**Modularity is non-negotiable regardless (LAW 6).** Every dependency behind one door,
+every subsystem behind a `foundation/contracts/` port — so any part *could* be swapped
+for another language. The point is being **able** to, not doing it.
 
-**Stays Python:** model providers, agent/reasoning loops, embeddings, vision/speech,
-training/eval — the ML ecosystem is genuinely better there.
-**Stays TypeScript:** the whole frontend.
+**Rust experiments target already-built, working components only** — written 1:1
+alongside the Python, which stays live. Parallel implementation *requires* an existing
+implementation to validate against, which is exactly why new code is the wrong target.
+Process: **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical).
 
-About to add a new infrastructural component in Python? **Stop and propose it.** The
-default is Rust; the burden is on the Python choice.
+**Nothing is Rust yet.** Nobody starts before the owner's design discussion. Agreed
+first experiment: the Redis budget broker. `foundation/` is LAST (209 in-process
+importers). Revisit "new code in Rust" after V1 ships.
 
-**Nothing is Rust yet, and nobody starts until the owner's design discussion happens**
-(FFI vs. service boundary, dev loop + deploy with two toolchains). See `docs/ROADMAP.md` §3.
+If a new component genuinely needs Rust-level guarantees Python can't give, that's a
+**proposal with a specific argument** — never a default.
 
-### Existing code → port only by addition
-Any port follows **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical):
+## 📍 KEEP STATUS CURRENT — you own the roadmap's accuracy (standing rule, 2026-07-27)
 
-1. Write the Rust **1:1 alongside** the Python. Python stays the live path.
-2. Both exist at once; the Rust is inert until it earns the swap.
-3. Cut over **only when proven ready**, at the `foundation/contracts/` port boundary.
-4. Keep the Python as fallback afterwards — **time-boxed**, then deleted (git history
-   is the real "just in case"; permanent dead parallel paths violate LAW 1).
+**`docs/ROADMAP.md` is the single "what should I work on?" entry point.** Read it at
+session start. It points at the detailed plans; it also records which of them are stale.
 
-**Never a big-bang rewrite.** Nothing is ported just because it could be — declining a
-rewrite must mean "wouldn't improve it," never "too risky to try" (LAW 6).
+**When you finish anything that changes where we stand, update the status in the SAME
+commit as the work.** Not later, not in a sweep — a status doc that lags the code is
+worse than none, because agents follow it and work on things already done.
 
-**Hard prerequisite:** a component's tests must be able to validate EITHER language —
-driven through the port, not through Python internals — *before* it is ported. Our
-pytest suite imports Python modules directly, so today it cannot validate a Rust
-implementation. Without that, the parallel strategy has no safety net.
+Specifically, before you commit:
+- Did this close or advance a benchmark? → update its verdict in
+  `docs/benchmarks/V1_GAP_ANALYSIS.md` **and** the mission phase file's `STATUS:`
+  line + checkboxes (`docs/benchmarks/mission/PHASE_*.md`). A finished phase moves to
+  `docs/benchmarks/reached/` with its outcome recorded inside.
+- Did this change what anyone should work on next? → update `docs/ROADMAP.md`
+  (§2 open work, §4 lanes, §5 owner-gated).
+- Did this make a doc wrong? → fix it or list it in ROADMAP §6 as known-stale. Never
+  leave it silently wrong.
 
-Sequencing: small/off/boundary-clean first. `foundation/` **last** (209 in-process
-importers = FFI on the hottest path). Agreed pilot: the Redis budget broker.
+**Verdicts are honest or they are worthless.** Report PARTIAL/NOT-YET truthfully
+(LAW 7); never mark something done because the work "should" have finished it. If you
+cannot verify a claim, say so and leave the status unchanged.
+
+This is the coordinator's job specifically — specialists report their own work, but
+keeping the cross-cutting picture true is yours.
 
 ## 💭 OWNER'S THINKING — `drafts/owner_thoughts/` (standing rule, 2026-07-27)
 

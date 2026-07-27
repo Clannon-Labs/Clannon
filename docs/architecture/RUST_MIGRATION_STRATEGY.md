@@ -6,48 +6,51 @@ exercise the property that law requires us to keep.
 
 ---
 
-## The rule, part 1 — NEW code prefers Rust
+## The rule — corrected 2026-07-27 (second pass)
 
-**Anything genuinely new and infrastructural is written in Rust**, unless it is
-AI/ML work or a good Python framework already exists for it. This half applies
-far more often than the porting half below, because most work is new work.
+**V1 ships in Python. Rust is an experiment run alongside code that already
+works. New code stays Python for now.**
 
-**Rust by default:** gateway/HTTP, auth, sessions, rate limiting, memory-engine
-internals, search/indexing/ranking, crypto, storage/chunking, schedulers and
-queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
+An earlier version of this doc said "new infrastructural code prefers Rust."
+**That was wrong, and it contradicted the rest of this document.** Recorded here
+rather than quietly deleted, because the reasoning matters:
 
-**Stays Python:** model providers, agent/reasoning loops, embeddings,
-vision/speech, training/eval. The ML ecosystem is genuinely better there and it
-is not close.
+> Parallel implementation with deferred cutover **requires an existing
+> implementation to run alongside and validate against.** New code has no Python
+> counterpart, no reference behaviour, and no test suite proving what "correct"
+> means. Writing it in Rust is therefore a *different* strategy — greenfield, no
+> safety net — smuggled in under the same heading. The doc was holding two
+> incompatible strategies at once.
 
-**Stays TypeScript:** the whole frontend.
+There is a second reason, which is about learning: porting an already-built
+component means you are learning Rust against known-correct behaviour you can
+diff against. Writing something new in Rust means learning the language *and*
+designing unproven behaviour simultaneously, with nothing to check yourself
+against. The first is how you get good at Rust in this codebase; the second is
+how you get a subtly wrong service nobody notices.
 
-Adding a new infrastructural component in Python? **Stop and propose it.** The
-default is Rust and the burden of argument is on the Python choice.
+### What this means concretely
 
-## The rule, part 2 — EXISTING code ports only by addition
+1. **New work is written in Python.** Including new infrastructure. V1 is not
+   done and has never faced a user; a second toolchain per new component is a
+   tax we do not need to pay yet.
+2. **Modularity is non-negotiable regardless** — LAW 6. Every dependency behind
+   one door, every subsystem behind a `foundation/contracts/` port, so *any*
+   part could be swapped for another language or framework if we chose to. The
+   point is that we are always **able** to, not that we always **do**.
+3. **Rust experiments target already-built, working, well-understood
+   components** — written 1:1 alongside the Python, which stays live. That is
+   the process below, and it is the only Rust that happens for now.
+4. **Revisit "new code in Rust" after V1 ships.** It may well be right then. It
+   is not right while the product is unfinished.
+
+If a new component genuinely demands Rust-level performance or safety
+guarantees that Python cannot give, that is a proposal with a specific
+argument — not a default.
+
+## The process for a Rust experiment on existing code
 
 **Parallel implementation with deferred cutover. Never a big-bang rewrite.**
-
-For any part we decide to move to Rust:
-
-1. **Write the Rust 1:1 alongside the Python.** A mechanical port, minimal
-   behavioural change. The Python keeps running and stays the live path.
-2. **Both exist simultaneously.** The Rust implementation is inert — built,
-   tested, but not serving traffic — until it earns the swap.
-3. **Cut over only when the Rust is proven ready**, against the same behaviour
-   the Python already guarantees. Detach Python, attach Rust, at the port
-   boundary.
-4. **Keep the Python after cutover** as the fallback, until the Rust has held in
-   production long enough to trust (see "How long is 'just in case'" below).
-
-The seam that makes this possible already exists: `foundation/contracts/` ports
-(`MemoryPort`, `GraphPort`, `BudgetPort`, `ArtifactStore`). Consumer and
-implementer never import each other, so swapping an implementation is a local
-change — which is exactly what LAW 6 requires us to maintain.
-
-**Nothing gets rewritten just because it could be.** Declining a rewrite must
-mean "we didn't think Rust would make it better," never "too risky to try."
 
 ## Why not big-bang — and the honest counter-example
 
