@@ -97,10 +97,14 @@ async def run_agent(
     limits = kwargs.get("usage_limits")
     request_limit = getattr(limits, "request_limit", None)
     if request_limit is not None:
-        requested_model = kwargs.get("model") or agent.model
-        # One wrapper instance spans SDK-internal tool rounds AND our outer
-        # transient retries. It blocks before request N+1 reaches provider.
-        kwargs["model"] = _RequestGuardModel(requested_model, request_limit)
+        # getattr, not agent.model: a real pydantic_ai Agent always has .model, but
+        # test doubles standing in for one may not, and the guard must not turn a
+        # missing attribute into a ModelUnavailableError for them.
+        requested_model = kwargs.get("model") or getattr(agent, "model", None)
+        if requested_model is not None:
+            # One wrapper instance spans SDK-internal tool rounds AND our outer
+            # transient retries. It blocks before request N+1 reaches provider.
+            kwargs["model"] = _RequestGuardModel(requested_model, request_limit)
     # A FallbackModel that exhausts its chain already tried EVERY provider this round.
     # Re-running the whole chain on the full retry budget multiplies latency by the chain
     # length (N providers per attempt) for little gain — if every provider is rate-limited
