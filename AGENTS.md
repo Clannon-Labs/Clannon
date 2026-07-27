@@ -19,6 +19,15 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
+Rust migration — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):
+- Parallel implementation, NEVER big-bang. Write Rust 1:1 alongside Python.
+- Python stays live until Rust proven ready. Then swap at the port boundary.
+- Keep Python as fallback after cutover — time-boxed, then delete. Git history is
+  the real fallback; permanent parallel dead paths violate LAW 1.
+- Prerequisite: component's tests must validate EITHER language (through the port,
+  not Python internals) BEFORE porting. Today's pytest cannot — fix that first.
+- `foundation/` ports LAST (209 in-process importers). Pilot: Redis budget broker.
+
 Owner's thinking — `drafts/owner_thoughts/`:
 - Owner talks about what they think/prefer/are considering → read that folder first.
 - `active/` = live thinking (read all), `references/` = depth, `archive/` = settled.

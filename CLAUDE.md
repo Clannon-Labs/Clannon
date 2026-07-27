@@ -39,6 +39,27 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the seven self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
+## 🦀 RUST MIGRATION — parallel implementation, never big-bang (owner-set, 2026-07-27)
+
+Any port to Rust follows **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical):
+
+1. Write the Rust **1:1 alongside** the Python. Python stays the live path.
+2. Both exist at once; the Rust is inert until it earns the swap.
+3. Cut over **only when proven ready**, at the `foundation/contracts/` port boundary.
+4. Keep the Python as fallback afterwards — **time-boxed**, then deleted (git history
+   is the real "just in case"; permanent dead parallel paths violate LAW 1).
+
+**Never a big-bang rewrite.** Nothing is ported just because it could be — declining a
+rewrite must mean "wouldn't improve it," never "too risky to try" (LAW 6).
+
+**Hard prerequisite:** a component's tests must be able to validate EITHER language —
+driven through the port, not through Python internals — *before* it is ported. Our
+pytest suite imports Python modules directly, so today it cannot validate a Rust
+implementation. Without that, the parallel strategy has no safety net.
+
+Sequencing: small/off/boundary-clean first. `foundation/` **last** (209 in-process
+importers = FFI on the hottest path). Agreed pilot: the Redis budget broker.
+
 ## 💭 OWNER'S THINKING — `drafts/owner_thoughts/` (standing rule, 2026-07-27)
 
 **Whenever the owner talks about what they think, believe, prefer, or are
