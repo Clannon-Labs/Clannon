@@ -168,16 +168,23 @@ launch_provider() {
   cd "$ROLE_DIR" || return 1
   case "$provider" in
     claude)
-      local -a cmd=(claude --permission-mode dontAsk --name "clannon-$SIDE")
+      # Full bypass, matching clannon-standup.sh's bare-launch posture everywhere
+      # else in the crew (owner-deliberate: the crew runs fully unattended).
+      # --permission-mode dontAsk is NOT equivalent — it still denies whole tool
+      # categories (found in production: tmux control was silently refused).
+      local -a cmd=(claude --dangerously-skip-permissions --name "clannon-$SIDE")
       case "$SIDE" in memory|orchestration|security|api) cmd+=(--model claude-sonnet-5) ;; esac
       # Resume latest role-local conversation whenever one exists.
       cmd+=(--continue "$prompt")
       "${cmd[@]}"
       ;;
     codex)
-      # Workspace-write + never-ask: unattended without bypassing sandbox.
+      # Full access, matching the Claude side's bypass posture. workspace-write
+      # sandboxing rejected .git/index.lock creation and .agents/ writes in
+      # production, blocking commits and shared-checkpoint updates — the same
+      # class of silent capability denial as Claude's dontAsk mode above.
       codex resume --last -C "$ROLE_DIR" --add-dir "$ROOT" \
-        --sandbox workspace-write --ask-for-approval never "$prompt"
+        --sandbox danger-full-access --ask-for-approval never "$prompt"
       ;;
   esac
 }
@@ -187,14 +194,14 @@ launch_fresh_provider() {
   cd "$ROLE_DIR" || return 1
   case "$provider" in
     claude)
-      local -a cmd=(claude --permission-mode dontAsk --name "clannon-$SIDE")
+      local -a cmd=(claude --dangerously-skip-permissions --name "clannon-$SIDE")
       case "$SIDE" in memory|orchestration|security|api) cmd+=(--model claude-sonnet-5) ;; esac
       cmd+=("$prompt")
       "${cmd[@]}"
       ;;
     codex)
       codex -C "$ROLE_DIR" --add-dir "$ROOT" \
-        --sandbox workspace-write --ask-for-approval never "$prompt"
+        --sandbox danger-full-access --ask-for-approval never "$prompt"
       ;;
   esac
 }
