@@ -26,11 +26,17 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
    exposed-for-user fields mutable, everything else refused server-side. `api/` = scrutinize hardest.
 5. **PRODUCTION-GRADE by default** — fail-closed, least-privilege, bounded, no secrets in
    code/logs/responses, degrade honestly (never fake success), typed errors never swallowed.
-6. **PROVE IT — tests first-class, verification honest.** Every behavior proven by a test (incl.
+6. **REPLACEABILITY — every dependency behind ONE swappable door.** A framework/library/architecture
+   is imported in exactly one module, reached elsewhere through a `foundation/contracts/` port, so it
+   can be swapped — to another library, architecture, or **language** — by editing one folder. And a
+   boundary must **own its guarantees**: if an invariant (spend ceiling, loop cap, fail-closed gate) is
+   enforced only by the dependency, we outsourced a promise, not isolated a dependency. Declining a
+   rewrite must mean "wouldn't improve it," never "too risky to try."
+7. **PROVE IT — tests first-class, verification honest.** Every behavior proven by a test (incl.
    the failure path); **suite green before every commit + verify green before every push**; tests
    and benchmarks NEVER fake a pass (report PARTIAL/NOT-YET truthfully).
 
-Before every commit, run the six self-checks in `LAW/README.md`. If an answer is "no," fix it or
+Before every commit, run the seven self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
 ## 💭 OWNER'S THINKING — `drafts/owner_thoughts/` (standing rule, 2026-07-27)

@@ -207,7 +207,62 @@ honestly or fake an OK?*
 
 ---
 
-## LAW 6 — PROVE IT · tests are first-class, and verification is honest  *(extension — flag if you'd scope it differently)*
+## LAW 6 — REPLACEABILITY · every dependency lives in exactly one swappable place  *(owner instruction, 2026-07-27)*
+
+**Any framework, library, or architectural choice must be replaceable by editing ONE folder, without
+looking outside it.** If we ever decline to rewrite something, that must be because we judged the
+rewrite wouldn't improve it — **never because we couldn't do it without risking a break.**
+
+This is the owner's bar, in their words:
+
+> "if I am importing any framework or library or using any concept in any part, I should be able to
+> swap that part out of the codebase and replace with new, without even having to look outside that
+> part."
+
+> "if we didn't rewrite it, it should be because we didn't think it would make it better, not that
+> we couldn't do it without risking breaking anything."
+
+### The enforceable rules
+
+1. **One door per dependency.** A third-party framework is imported in exactly ONE module, and that
+   module's `CLAUDE.md` says so as a NEVER-line. The worked example already in the tree:
+   `core/llm/` — *"the ONLY module in the repo that may import `pydantic_ai`."* Callers pass neutral
+   types and get neutral types back; no SDK object escapes the door.
+2. **Ports, not imports, across a boundary.** A subsystem another layer depends on is reached
+   through a contract in `foundation/contracts/` (`MemoryPort`, `GraphPort`, `BudgetPort`,
+   `ArtifactStore`). Consumer and implementer must not import each other. This is what makes a
+   swap — to another library, another architecture, or **another language** — a local change.
+3. **A boundary must own its guarantees.** *(Added from a live incident — see below.)* If an
+   invariant we care about is enforced only by the thing on the far side of a port, we have not
+   isolated a dependency; we have outsourced a promise. Every bound the system relies on
+   (spend ceilings, loop caps, timeouts, fail-closed gates) needs enforcement **we** own. A
+   third-party limiter is defence in depth, never the guarantee.
+4. **Language-agnostic by construction.** A port must be swappable for an implementation in another
+   language (Rust, C) without callers changing. In practice: keep port surfaces narrow and their
+   types plain; do not let language-specific richness leak into a contract.
+
+### Why rule 3 exists — this actually happened
+
+`requirements.txt` declared a bare `pydantic-ai`. CI resolved 2.18.0 against the proven 2.4.0, and
+the orchestrator loop ran **64 model calls against a bound of 22**. That bound is the runaway-loop
+money guard — and `usage_limits_for_layer` merely constructed a `UsageLimits(request_limit=N)` and
+handed it to the library. We never counted requests ourselves.
+
+The swap *boundary* held perfectly: pydantic-ai is confined to one module and could be replaced from
+there. The **guarantee** did not. A dependency upgrade silently removed a spend ceiling, and only a
+test caught it. Rule 1 alone would have called this architecture compliant. It wasn't.
+
+### Pre-commit self-check for this law
+
+- Is every third-party import for this dependency inside its ONE owning module?
+- Could I swap this library/architecture out by editing only that folder — honestly, without
+  grepping the rest of the tree?
+- Does any invariant here depend on third-party code to be enforced? If yes, do we enforce it
+  ourselves too?
+- If someone reimplemented this behind the same port in another language, would any caller need to
+  change?
+
+## LAW 7 — PROVE IT · tests are first-class, and verification is honest  *(extension — flag if you'd scope it differently)*
 
 **Principle.** Every behavior is **proven by a test**, not asserted by hope. The full suite is
 **green before every commit**. Tests — and benchmarks — are **honest**: they never fake a pass,
@@ -243,7 +298,9 @@ green real — did I run it? Am I reporting the honest verdict, or a comfortable
 3. **Speed/spine** — no wasted work, bounded, Flow-only transport, one pipeline driver? (L3)
 4. **Security/config** — backend governs, business config central+private, `api/` trusts nothing? (L4)
 5. **Production-grade** — fail-closed, least-privilege, no secret leak, degrades honestly? (L5)
-6. **Proven** — tests for it (incl. failure path), suite green, honestly reported? (L6)
+6. **Replaceable** — dependency behind ONE door, swappable from one folder, and do we own our own
+   guarantees rather than trusting the library's? (L6)
+7. **Proven** — tests for it (incl. failure path), suite green, honestly reported? (L7)
 
 If any answer is "no," you fix it or you flag it to the owner. You do not land it and hope.
 
