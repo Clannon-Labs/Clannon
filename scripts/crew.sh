@@ -321,13 +321,22 @@ EOF
   local rc=0 started ended
   started="$(date +%s)"
   echo $$ > "$lock"
+  # Release the lock even on SIGTERM/SIGINT — a killed dispatcher used to leave a
+  # stale lock behind (the liveness check self-heals, but the file lingered).
+  trap 'rm -f "$lock"' EXIT INT TERM
   case "$provider" in
     claude)
-      ( cd "$dir" && claude -p "$full_brief" --dangerously-skip-permissions ) >"$out" 2>"$log" || rc=$?
+      # </dev/null is REQUIRED, not tidiness: both CLIs read stdin in addition to
+      # the prompt argument. With an inherited pipe that never reaches EOF (exactly
+      # what happens when this script is backgrounded — the normal mode for a long
+      # task) the provider blocks forever having done nothing. A short foreground
+      # test hides it, because there stdin EOFs immediately.
+      ( cd "$dir" && claude -p "$full_brief" --dangerously-skip-permissions ) \
+        </dev/null >"$out" 2>"$log" || rc=$?
       ;;
     codex)
       codex exec "$full_brief" -C "$dir" --skip-git-repo-check \
-        --sandbox danger-full-access -o "$out" >"$log" 2>&1 || rc=$?
+        --sandbox danger-full-access -o "$out" </dev/null >"$log" 2>&1 || rc=$?
       ;;
   esac
   ended="$(date +%s)"
