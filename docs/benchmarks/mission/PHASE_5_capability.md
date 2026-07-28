@@ -14,15 +14,16 @@ building ANY new capability, verify the layer beneath it is stable/correct/hones
 (not just "tests pass"). Shaky foundation ⇒ STOP, fix or flag first; absorb big
 foundation fixes into the plan as prerequisites, never silently.
 
-- [ ] **CB5**: close the detect residual and widen the c5 battery. Structured
-      classify/explain output and earned-seal surfacing have landed.
+- [x] **CB5 PASS**: deterministic rules detect all 8 adversarial benchmark
+      classes; all 5 benign controls stay clean. Structured classify/explain,
+      prevention, audit, and earned-seal surfacing all proven.
 - [ ] **CB1** (+EB1, also a batch-architecture prerequisite):
       fact|assumption + `valid_at` typing landed. Add retrieval explanation,
       complete provenance, and explicit supersession linkage; extend c1 + e1
       harnesses to PASS.
 - [x] **CB4 audit mirror** (+CB6/EB2): durable structured decision records and
       owner-scoped endpoint landed. Benchmark remains PARTIAL: structured
-      tradeoffs/history and complete crash-path participants remain open.
+      tradeoffs/history and ADR participant provenance remain open.
 - [x] **CB6**: Integration Contract + enforcing contract-drift test.
 - [ ] **CB2/CB3/EB3** — Kuzu graph, CB2 symbol/AST/dependency/archive tiers
       landed. CB2 explanation and real media ingestion remain open.

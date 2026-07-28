@@ -179,10 +179,10 @@ Mirror derivation runs from `finally` for every published terminal status:
 `delivered`, `blocked`, `failed` (including an exception), and `cancelled`
 (`backend/api/run_driver.py:379-422`, `backend/api/run_driver.py:461-516`).
 Only derivable `tool_call` and `answer` entries produce records, and mirror
-writes remain best-effort. Crash/cancellation-derived records can carry
-incomplete `participants`: without a returned `Flow`, derivation uses a minimal
-context plus the live decision log, which lacks returned-flow expert/tool
-context (`backend/api/run_driver.py:493-505`). This remains an open CB4 gap.
+writes remain best-effort. API execution retains authoritative pipeline context
+from `prepare()`, so cancellation/exception records preserve expert/tool
+participants already recorded before interruption
+(`backend/api/run_driver.py:281-321`, `backend/api/run_driver.py:493-505`).
 Frontend must not interpret an empty array as proof no decision occurred.
 
 ## 4. REPORT and streaming contract

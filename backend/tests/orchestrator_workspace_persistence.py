@@ -20,7 +20,7 @@ from types import SimpleNamespace as NS
 
 from foundation import InputFile, ThreatLevel, VrakshaContext
 from core.artifacts import LocalArtifactStore
-from registry.capabilities.handler.experts import ExpertHandler
+from registry.capabilities.handler.experts import ExpertHandler, _WORKSPACE_TRANSACTIONS
 from registry.capabilities.handler.support import ExpertEnv, SkillBook
 
 
@@ -53,6 +53,149 @@ def _ctx(mission_id: str = "m1") -> VrakshaContext:
     ctx = VrakshaContext.new("s")
     ctx.mission_id = mission_id
     return ctx
+
+
+async def _transactional_update(
+    handler,
+    ctx,
+    expert_key,
+    filename,
+    entered,
+    release,
+):
+    """Exercise the restore → expert mutation → snapshot transaction from `_run_one`."""
+    ws = _FakeWorkspace()
+    env = _env(ws)
+    async with handler._workspace_transaction(env, ctx, expert_key):
+        await handler._seed_inputs(env, ctx, expert_key)
+        entered.set()
+        await release.wait()
+        ws.files[filename] = filename.encode()
+        await handler._snapshot_mission_workspace(expert_key, env, ctx)
+    return ws.files
+
+
+def test_same_workspace_key_serializes_the_production_lifecycle(tmp_path, monkeypatch):
+    """A later call restores the first call's committed update before adding its own."""
+    _clean(monkeypatch)
+
+    async def prove():
+        handler = ExpertHandler(artifact_store=LocalArtifactStore(base_dir=tmp_path))
+        first_entered = asyncio.Event()
+        second_entered = asyncio.Event()
+        release_first = asyncio.Event()
+        release_second = asyncio.Event()
+
+        first = asyncio.create_task(_transactional_update(
+            handler, _ctx(), "code.engineer", "first.py",
+            first_entered, release_first,
+        ))
+        await first_entered.wait()
+        second = asyncio.create_task(_transactional_update(
+            handler, _ctx(), "code.engineer", "second.py",
+            second_entered, release_second,
+        ))
+
+        release_first.set()
+        await first
+        await asyncio.wait_for(second_entered.wait(), timeout=1)
+        release_second.set()
+        assert await second == {
+            "first.py": b"first.py",
+            "second.py": b"second.py",
+        }
+
+        restored = _FakeWorkspace()
+        await handler._restore_mission_workspace(restored, _ctx(), "code.engineer")
+        assert restored.files == {
+            "first.py": b"first.py",
+            "second.py": b"second.py",
+        }
+
+    asyncio.run(prove())
+
+
+def test_different_workspace_keys_are_not_globally_serialized(tmp_path, monkeypatch):
+    """Mission and expert are both part of the lock key."""
+    _clean(monkeypatch)
+
+    async def prove_pair(left_ctx, left_expert, right_ctx, right_expert):
+        handler = ExpertHandler(artifact_store=LocalArtifactStore(base_dir=tmp_path))
+        left_entered = asyncio.Event()
+        right_entered = asyncio.Event()
+        release = asyncio.Event()
+        left = asyncio.create_task(_transactional_update(
+            handler, left_ctx, left_expert, "left.py", left_entered, release,
+        ))
+        await left_entered.wait()
+        right = asyncio.create_task(_transactional_update(
+            handler, right_ctx, right_expert, "right.py", right_entered, release,
+        ))
+
+        # This event is set only from inside the transaction while the first key
+        # is still held. A global lock therefore cannot satisfy the assertion.
+        await asyncio.wait_for(right_entered.wait(), timeout=1)
+        release.set()
+        await asyncio.gather(left, right)
+
+    async def prove():
+        await prove_pair(_ctx("mission-a"), "code.engineer",
+                         _ctx("mission-b"), "code.engineer")
+        await prove_pair(_ctx("mission-c"), "code.engineer",
+                         _ctx("mission-c"), "some.other.expert")
+
+    asyncio.run(prove())
+
+
+def test_cancelled_and_failed_transactions_release_the_key(tmp_path):
+    async def prove():
+        handler = ExpertHandler(artifact_store=LocalArtifactStore(base_dir=tmp_path))
+        ctx = _ctx()
+        env = _env(_FakeWorkspace())
+
+        entered = asyncio.Event()
+        never_release = asyncio.Event()
+
+        async def cancelled_call():
+            async with handler._workspace_transaction(env, ctx, "code.engineer"):
+                entered.set()
+                await never_release.wait()
+
+        task = asyncio.create_task(cancelled_call())
+        await entered.wait()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        try:
+            async with handler._workspace_transaction(env, ctx, "code.engineer"):
+                raise RuntimeError("controlled expert failure")
+        except RuntimeError:
+            pass
+
+        later_entered = asyncio.Event()
+        async with handler._workspace_transaction(env, ctx, "code.engineer"):
+            later_entered.set()
+        assert later_entered.is_set()
+
+    asyncio.run(prove())
+
+
+def test_workspace_transaction_registry_drops_idle_keys(tmp_path):
+    async def prove():
+        handler = ExpertHandler(artifact_store=LocalArtifactStore(base_dir=tmp_path))
+        assert _WORKSPACE_TRANSACTIONS._locks == {}
+        for index in range(50):
+            ctx = _ctx(f"mission-{index}")
+            async with handler._workspace_transaction(
+                _env(_FakeWorkspace()), ctx, f"expert-{index}",
+            ):
+                pass
+        assert _WORKSPACE_TRANSACTIONS._locks == {}
+
+    asyncio.run(prove())
 
 
 def test_snapshot_is_a_noop_outside_a_mission(tmp_path):

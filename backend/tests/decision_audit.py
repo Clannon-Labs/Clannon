@@ -20,9 +20,17 @@ import asyncio
 import sqlite3
 
 import pytest
+from fastapi import HTTPException
 
 import core.pipeline
-from foundation import Flow, BlockReason, ThreatLevel, Origin
+from foundation import (
+    Flow,
+    BlockReason,
+    ExpertCallRecord,
+    Origin,
+    ThreatLevel,
+    ToolCallRecord,
+)
 from core.orchestrator.schemas import DecisionLogEntry, DecisionRecord
 
 from api import decision_audit as da_mod
@@ -110,6 +118,37 @@ def test_records_are_user_scoped(_db):
     )
     assert len(da_mod.get_for_run("u_owner", "run_xyz")) == 1
     assert da_mod.get_for_run("u_other", "run_xyz") == []
+
+
+def test_decision_endpoint_foreign_run_matches_unknown_run(monkeypatch):
+    """Run ownership is checked before decision rows; foreign and unknown IDs
+    expose the same 404 and never query another tenant's audit records."""
+    from api import app as app_mod
+
+    owner = auth_mod.User(id="u_owner", name="Owner", email="owner@example.com", plan="free")
+    other = auth_mod.User(id="u_other", name="Other", email="other@example.com", plan="free")
+    run = _run(owner.id, "run_private", "sess_private")
+    queried: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        run_driver.STORE,
+        "get",
+        lambda user_id, run_id: run if (user_id, run_id) == (owner.id, run.id) else None,
+    )
+    monkeypatch.setattr(
+        da_mod,
+        "get_for_run",
+        lambda user_id, run_id: queried.append((user_id, run_id)) or [],
+    )
+
+    errors = []
+    for run_id in (run.id, "run_unknown"):
+        with pytest.raises(HTTPException) as exc_info:
+            app_mod.run_decisions(run_id, other)
+        errors.append((exc_info.value.status_code, exc_info.value.detail))
+
+    assert errors == [(404, "Run not found."), (404, "Run not found.")]
+    assert queried == []
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +281,59 @@ def test_execute_interrupted_run_still_writes_decision_records(
     records = da_mod.get_for_run(user_id, run_id)
     assert len(records) == 1
     assert records[0]["decision"] == "called web.search"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "pipeline_error"),
+    [
+        ("cancelled", asyncio.CancelledError()),
+        ("failed", RuntimeError("pipeline crashed")),
+    ],
+)
+def test_execute_interrupted_run_preserves_authoritative_answer_participants(
+    monkeypatch, tmp_path, outcome, pipeline_error,
+):
+    """Cancellation/crash keeps participants already recorded on pipeline Flow."""
+    db_file = str(tmp_path / f"participants_{outcome}.db")
+    monkeypatch.setattr(auth_mod, "_db", lambda: _make_db(db_file))
+
+    user_id, run_id, session_id = f"u_{outcome}", f"run_{outcome}", f"sess_{outcome}"
+    run = _run(user_id, run_id, session_id)
+    if outcome == "cancelled":
+        run.cancel_requested = True
+
+    async def _stub_pipeline(*args, **kwargs):
+        flow = Flow.new(
+            args[0],
+            session_id=kwargs["session_id"],
+            user_id=kwargs["user_id"],
+            trace_id=kwargs["trace_id"],
+        )
+        flow.ctx.decision_log = kwargs["decision_log"]
+        kwargs["prepare"](flow)
+        flow.ctx.tool_calls.append(
+            ToolCallRecord(tool_name="web.search", arguments={}, success=True)
+        )
+        flow.ctx.expert_calls.append(
+            ExpertCallRecord(expert_name="web.research", arguments={}, success=True)
+        )
+        flow.ctx.decision_log.append(
+            DecisionLogEntry(kind="answer", message="answer ready", turn=1)
+        )
+        raise pipeline_error
+
+    monkeypatch.setattr(core.pipeline, "run", _stub_pipeline)
+    monkeypatch.setattr(STORE, "session_turns", lambda uid, sid: [])
+    monkeypatch.setattr(STORE, "persist", lambda run: None)
+    monkeypatch.setattr(auth_mod, "fetch_wiki", lambda uid, pid: [])
+    monkeypatch.setattr(auth_mod, "model_prefs_get", lambda uid: {})
+
+    asyncio.run(run_driver.execute(run))
+
+    assert run.status == outcome
+    records = da_mod.get_for_run(user_id, run_id)
+    assert len(records) == 1
+    assert records[0]["participants"] == ["web.research", "web.search"]
 
 
 def test_execute_writes_zero_records_for_pure_narration(monkeypatch, tmp_path):

@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,6 +35,41 @@ from .workspace_archive import (
     validate_archive_members as _validate_archive_members,
     write_members as _write_members,
 )
+
+
+class _WorkspaceTransactions:
+    """Mission workspace locks shared by every handler/scoped-handler instance."""
+
+    def __init__(self) -> None:
+        self._locks: dict[tuple[str, str, str], tuple[asyncio.Lock, int]] = {}
+
+    @asynccontextmanager
+    async def hold(self, key: tuple[str, str, str]):
+        lock, users = self._locks.get(key, (asyncio.Lock(), 0))
+        self._locks[key] = (lock, users + 1)
+        try:
+            await lock.acquire()
+        except BaseException:
+            self._drop_user(key, lock)
+            raise
+        try:
+            yield
+        finally:
+            lock.release()
+            self._drop_user(key, lock)
+
+    def _drop_user(self, key: tuple[str, str, str], lock: asyncio.Lock) -> None:
+        current = self._locks.get(key)
+        if current is None or current[0] is not lock:
+            return
+        users = current[1] - 1
+        if users:
+            self._locks[key] = (lock, users)
+        else:
+            del self._locks[key]
+
+
+_WORKSPACE_TRANSACTIONS = _WorkspaceTransactions()
 
 
 class ExpertHandler:
@@ -98,59 +134,75 @@ class ExpertHandler:
                 return self._fail(request, ctx, started, f"bad arguments: {exc}")
 
             env = self._build_env(spec, ctx)
-            try:
-                # seed any uploaded input files into this expert's workspace before
-                # it runs (no-op unless it has a workspace and the run carried files).
-                # Bounded like the run itself: an archive can mean up to archive_max_
-                # entries sequential malware-scan round trips, with nothing else to
-                # stop a slow/unreachable scanner from hanging this call indefinitely.
+            async with self._workspace_transaction(env, ctx, spec.key):
                 try:
-                    await asyncio.wait_for(self._seed_inputs(env, ctx, spec.key), timeout=settings.EXPERTS.timeout_s)
-                except asyncio.TimeoutError:
-                    self._record_seed_fault(env, ctx)
-                except Exception as exc:  # noqa: BLE001 — a seed fault must degrade this
-                    self._record_seed_fault(env, ctx, reason=f"input seeding failed: {exc}")
-                try:
-                    output = await asyncio.wait_for(
-                        spec.impl().run(args, env), timeout=settings.EXPERTS.timeout_s
-                    )
-                except asyncio.TimeoutError:
-                    return self._fail(request, ctx, started, "expert timed out")
-                except Exception as exc:
-                    return self._fail(request, ctx, started, f"expert error: {exc}")
+                    # seed any uploaded input files into this expert's workspace before
+                    # it runs (no-op unless it has a workspace and the run carried files).
+                    # Bounded like the run itself: an archive can mean up to archive_max_
+                    # entries sequential malware-scan round trips, with nothing else to
+                    # stop a slow/unreachable scanner from hanging this call indefinitely.
+                    try:
+                        await asyncio.wait_for(
+                            self._seed_inputs(env, ctx, spec.key),
+                            timeout=settings.EXPERTS.timeout_s,
+                        )
+                    except asyncio.TimeoutError:
+                        self._record_seed_fault(env, ctx)
+                    except Exception as exc:  # noqa: BLE001 — a seed fault must degrade this
+                        self._record_seed_fault(env, ctx, reason=f"input seeding failed: {exc}")
+                    try:
+                        output = await asyncio.wait_for(
+                            spec.impl().run(args, env), timeout=settings.EXPERTS.timeout_s
+                        )
+                    except asyncio.TimeoutError:
+                        return self._fail(request, ctx, started, "expert timed out")
+                    except Exception as exc:
+                        return self._fail(request, ctx, started, f"expert error: {exc}")
 
-                ref = uuid4().hex[:8]
-                # capture designated output artifacts out of the workspace BEFORE it
-                # is torn down (the finally below closes it)
-                artifacts = await self._capture_artifacts(output, env, ctx)
-                await self._index_code_symbols(env, ctx)
-                ctx.expert_findings.append(
-                    ExpertFindings(
-                        expert=spec.key, ref=ref, full_content=output.full_content,
-                        citations=list(output.citations),
-                        metadata={"confidence": output.confidence, "artifacts": artifacts},
+                    ref = uuid4().hex[:8]
+                    # capture designated output artifacts out of the workspace BEFORE it
+                    # is torn down (the finally below closes it)
+                    artifacts = await self._capture_artifacts(output, env, ctx)
+                    await self._index_code_symbols(env, ctx)
+                    ctx.expert_findings.append(
+                        ExpertFindings(
+                            expert=spec.key, ref=ref, full_content=output.full_content,
+                            citations=list(output.citations),
+                            metadata={"confidence": output.confidence, "artifacts": artifacts},
+                        )
                     )
-                )
-                ctx.expert_calls.append(
-                    ExpertCallRecord(
-                        expert_name=spec.key,
-                        arguments=dict(request.arguments),
-                        result={"finding_ref": ref, "mark": _mark(output)},
-                        success=True,
-                        duration_ms=round((time.monotonic() - started) * 1000, 2),
+                    ctx.expert_calls.append(
+                        ExpertCallRecord(
+                            expert_name=spec.key,
+                            arguments=dict(request.arguments),
+                            result={"finding_ref": ref, "mark": _mark(output)},
+                            success=True,
+                            duration_ms=round((time.monotonic() - started) * 1000, 2),
+                        )
                     )
-                )
-                return ExpertSummary(
-                    expert=spec.key, summary=output.summary,
-                    confidence=output.confidence, finding_ref=ref,
-                )
-            finally:
-                # cross-call persistence (mission-scoped, see _snapshot_mission_workspace):
-                # snapshot BEFORE the sandbox dies, success or fail — a failed run's
-                # partial state is still worth resuming from on the mission's next call
-                if env.workspace is not None:
-                    await self._snapshot_mission_workspace(spec.key, env, ctx)
-                    await env.workspace.close()
+                    return ExpertSummary(
+                        expert=spec.key, summary=output.summary,
+                        confidence=output.confidence, finding_ref=ref,
+                    )
+                finally:
+                    # Cross-call persistence: snapshot BEFORE the sandbox dies,
+                    # success or fail. Keep close in its own finally so a snapshot
+                    # cancellation/fault cannot leak the workspace or keyed lock.
+                    if env.workspace is not None:
+                        try:
+                            await self._snapshot_mission_workspace(spec.key, env, ctx)
+                        finally:
+                            await env.workspace.close()
+
+    @asynccontextmanager
+    async def _workspace_transaction(self, env, ctx: VrakshaContext, expert_key: str):
+        """Serialize restore → run → snapshot for one user's mission/expert only."""
+        if env.workspace is None or not ctx.mission_id:
+            yield
+            return
+        key = (ctx.user_id, ctx.mission_id, expert_key)
+        async with _WORKSPACE_TRANSACTIONS.hold(key):
+            yield
 
     def _build_env(self, spec, ctx: VrakshaContext) -> ExpertEnv:
         """Pack the expert's run materials; the agent itself is assembled in think()."""
@@ -327,9 +379,8 @@ class ExpertHandler:
         ordinary one-shot chat turn. Best-effort: an oversized workspace skips its
         snapshot (never truncates one — a half-written zip would corrupt the NEXT
         restore), a store fault is recorded but never fails the run that just
-        finished. Known v1 gap, not solved here: two concurrent calls to the same
-        `(mission_id, expert_key)` race on this write, last one wins — see the
-        ratified design's §6."""
+        finished. `_run_one` holds the matching mission workspace transaction
+        across restore, expert execution, and this snapshot."""
         if not ctx.mission_id:
             return
         data = await _snapshot_workspace(env.workspace)
@@ -462,5 +513,4 @@ def _mark(output) -> dict:
         "has_citations": bool(output.citations),
         "length": len(output.full_content or ""),
     }
-
 

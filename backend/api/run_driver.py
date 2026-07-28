@@ -281,9 +281,16 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
     from the store) so the orchestrator can read any file from any turn, then seeded into
     a file-capable expert's workspace. The brief itself still crosses the full pipeline."""
     session_files: list = []
+    ctx = None
 
     def _prepare(flow: Flow[Any]) -> None:
         """Seed the context the API owns, before any stage runs."""
+        nonlocal ctx
+        # Keep pipeline-owned execution state even when pipeline.run() is
+        # interrupted before it can return the Flow. Terminal audit derivation
+        # must use authoritative expert/tool records, not reconstruct them from
+        # the live presentation log.
+        ctx = flow.ctx
         # replay this session's earlier turns as real chat history — the orchestrator
         # continues the conversation instead of re-reading a summary blob. A long session's
         # oldest turns are condensed (not dropped); the full untrimmed transcript rides
@@ -311,7 +318,6 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             run.on_experts_settled(flow.ctx.expert_calls)
 
     run_usage = None   # bound by usage_scope below; read in the except handlers too
-    ctx = None
     decision_log = DecisionLogSink(run.on_log_entry)
     try:
         # Runs become cancellable before this I/O starts: routes register this execute()

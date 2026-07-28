@@ -76,3 +76,9 @@ is clean, so the green reproduces from committed state.
 ## dispatched workers
 - `09:15` **backend** worker via **codex** — brief-staleness2.md — exit 0, 283s — output: `.agents/runs/20260728-091033-backend.out`
 - `09:41` **api** worker via **codex** — brief-contract-audit.md — exit 0, 91s — output: `.agents/runs/20260728-094010-api.out`
+- `11:32` **security** worker via **codex** — 2026-07-28_cb5-detect-residual.md — exit 0, 97s — output: `.agents/runs/20260728-113024-security.out`
+- `11:32` **orchestration** worker via **codex** — 2026-07-28_workspace-concurrency-race.md — exit 0, 144s — output: `.agents/runs/20260728-113024-orchestration.out`
+- `11:35` **api** worker via **codex** — 2026-07-28_terminal-participants-auth-sweep.md — exit 0, 283s — output: `.agents/runs/20260728-113024-api.out`
+- `11:36` **backend** worker via **codex** — 2026-07-28_cb5-deterministic-verifier.md — exit 0, 222s — output: `.agents/runs/20260728-113242-backend.out`
+- `11:39` **orchestration** worker via **codex** — 2026-07-28_workspace-race-repair.md — exit 0, 366s — output: `.agents/runs/20260728-113324-orchestration.out`
+- `11:44` **orchestration** worker via **codex** — 2026-07-28_workspace-transaction-proof.md — exit 0, 129s — output: `.agents/runs/20260728-114203-orchestration.out`

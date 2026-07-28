@@ -104,6 +104,74 @@ INJECTION_RULES = [
         category="prompt_injection",
         weight=3,
     ),
+    InjectionRule(
+        name="encoded_instruction_execution",
+        pattern=re.compile(
+            r"\b(decode|decrypt|unpack|deobfuscate)\b.{0,80}"
+            r"\b(do|execute|follow|obey|run)\b.{0,40}"
+            r"(?:[A-Za-z0-9+/]{20,}={0,2})\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="prompt_injection",
+        weight=4,
+    ),
+    InjectionRule(
+        name="claimed_authorization_bypass",
+        pattern=re.compile(
+            r"\b(approved|authorized|pre[- ]?authorized|trusted|verified)\b.{0,100}"
+            r"\b(skip|bypass|disable|omit)\b.{0,40}"
+            r"\b(checks?|verification|safety|security|policy|guardrails?)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="prompt_injection",
+        weight=4,
+    ),
+    InjectionRule(
+        name="sensitive_data_export",
+        pattern=re.compile(
+            r"\b(output|reveal|show|dump|export|send|print)\b.{0,100}"
+            r"\b(api keys?|access tokens?|passwords?|credentials?|session cookies?|"
+            r"system prompts?|developer messages?)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="credential_theft",
+        weight=5,
+    ),
+    InjectionRule(
+        name="hidden_markup_instruction",
+        pattern=re.compile(
+            r"<!--.{0,500}"
+            r"\b(assistant|model|system|agent)\b.{0,100}"
+            r"\b(ignore|disregard|override|gather|export|send|execute|follow)\b"
+            r".{0,500}-->",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="prompt_injection",
+        weight=4,
+    ),
+    InjectionRule(
+        name="persistent_authority_poisoning",
+        pattern=re.compile(
+            r"\b(store|save|remember|persist|retain)\b.{0,80}"
+            r"\b(permanently|future sessions?|from now on|always)\b.{0,160}"
+            r"\b(skip|bypass|override|pre[- ]?authorized|must|trusted)\b.{0,80}"
+            r"\b(safety|security|checks?|policy|instructions?|requests?)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="memory_poisoning",
+        weight=5,
+    ),
+    InjectionRule(
+        name="retrieved_authority_instruction",
+        pattern=re.compile(
+            r"\b(recalled|retrieved|loaded|remembered)\b.{0,40}"
+            r"\b(note|memory|record|instruction)\b.{0,100}"
+            r"\b(system directive|outranks?|higher priority|must obey|must follow)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        category="memory_poisoning",
+        weight=5,
+    ),
 ]
 
 

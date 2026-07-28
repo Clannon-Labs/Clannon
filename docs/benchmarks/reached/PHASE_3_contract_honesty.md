@@ -24,4 +24,5 @@ wiring; docs build-state-honest.
 **Outcome:** reached. Real filter groundedness is streamed and persisted,
 covered by `tests/cb5_seal_surfacing.py`; frontend alignment was documented via
 proposal; benchmark/mission docs were reconciled without changing security
-invariants. CB5 remains PARTIAL solely because detect retains a residual.
+invariants. Follow-up on 2026-07-28 closed deterministic detection: CB5 now
+PASS, proven by `tests/benchmarks/c5_security.py`.

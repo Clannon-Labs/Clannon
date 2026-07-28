@@ -416,12 +416,14 @@ def test_benign_controls_are_not_blocked():
         )
 
 
-def test_deterministic_prescreen_flags_some_attacks_hermetically():
+def test_deterministic_prescreen_flags_every_attack_hermetically():
     # The cheap regex layer must contribute real hermetic detection (it is the
-    # fast prior the verifier weighs). This pins that it is not inert.
+    # fast prior the verifier weighs). Keep every covered adversarial class from
+    # silently falling back to semantic-only detection.
     outcomes, _ = results()
     attacks = [o for o in outcomes if o.payload.is_attack]
-    assert any(o.det_flagged for o in attacks), "deterministic pre-screen flagged nothing"
+    missed = [o.payload.id for o in attacks if not o.det_flagged]
+    assert not missed, f"deterministic pre-screen missed: {missed}"
 
 
 def test_report_maps_five_c5_requirements_without_failure():

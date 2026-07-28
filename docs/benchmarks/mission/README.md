@@ -31,7 +31,7 @@ authoritative, resumable plan.
 | 2 — Latency | `mission/PHASE_2_latency.md` | not started (needs running stack) |
 | 3 — Contract & honesty | `reached/PHASE_3_contract_honesty.md` | ✅ reached — earned seal + honest docs |
 | 4 — Integration Contract | `reached/PHASE_4_integration_contract.md` | ✅ reached — contract + drift enforcement |
-| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | in progress — CB6 passed; other gaps remain |
+| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | in progress — CB5 + CB6 passed; other gaps remain |
 | 6 — Verify | `mission/PHASE_6_verify.md` | ongoing (per commit) |
 | F — Foundation hardening | `mission/PHASE_F_foundation_hardening.md` | in progress |
 
@@ -48,8 +48,8 @@ authoritative, resumable plan.
 
 ## Priority order (from the gap analysis)
 
-CB6, CB4 audit mirror, memory persisted-only surfacing, and earned-seal
+CB5, CB6, CB4 audit mirror, memory persisted-only surfacing, and earned-seal
 visibility are complete. Remaining benchmark work: CB3/EB3 real media
 ingestion; CB1/EB1 explanation/provenance/temporal linkage; CB2 architectural
-explanation; CB4 structured tradeoffs/history + complete participants; CB5
-detect residual. Cross-role ordering and owner gates live in `docs/ROADMAP.md`.
+explanation; CB4 structured tradeoffs/history + ADR participant provenance.
+Cross-role ordering and owner gates live in `docs/ROADMAP.md`.

@@ -44,17 +44,18 @@ shipping a working product beats architectural progress.
 - **CB6 — multi-agent consistency → PASS.** The only Critical benchmark that
   passes. `reports/INTEGRATION_CONTRACT.md` exists; the SSE contract-drift
   benchmark is green and enforcing.
-- **CB5 — security validation**: the earn-the-seal filter verdict now flows
-  end-to-end to the UI. Stays PARTIAL — `detect` residual (one adversarial
-  payload).
+- **CB5 — security validation → PASS.** Earned-seal state flows end-to-end;
+  deterministic verifier detects all 8 adversarial benchmark classes while all
+  5 benign controls remain clean. Real pipeline proves detect, classify,
+  explain, prevent, and audit.
 - **CB4 — institutional decision memory**: durable mirror + `GET /runs/:id/decisions`,
   covering every terminal outcome including cancelled/crashed. Stays PARTIAL —
-  tradeoffs are flat prose, crash-path participants incomplete.
+  tradeoffs are flat prose and benchmark ADR participant provenance is absent.
 - **CB2 — large repo understanding**: symbol tier, AST search, dep-graph
   traversal, archive ingestion, cross-call workspace persistence. Stays
   PARTIAL — architectural explanation is NOT-YET.
 
-Outreach gate = all 6 Critical PASS + ≥1 Exceptional. Today: **1 PASS, 5
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional. Today: **2 PASS, 4
 PARTIAL.**
 
 **Open, in rough priority order:**
@@ -66,17 +67,18 @@ PARTIAL.**
    explanation (the "why this memory"), complete provenance (author/RFC linkage),
    and explicit supersession linkage so current-vs-historical is a relationship,
    not prose. Owner: memory.
-3. **Batch architecture beyond the engineering tier.** Parked pending design —
-   **needs owner greenlight before anyone starts.**
+3. **Harden existing foundations, then build batch architecture.** Owner
+   greenlit Redis-budget and batch foundations on 2026-07-28. Build is no
+   longer decision-gated, but remains stability-first and propose-first: prove
+   Redis money safety, then Mission Engine, bounded cross-batch memory slice,
+   and one batch end-to-end.
 4. **Budget enforcement go-live.** Code is built but ships `enforcement_enabled=False`
    and `pricing.yaml` holds **placeholder prices**. **Needs the owner to set real
    per-model prices** — the loader is fail-closed, so an un-priced model blocks
    rather than leaks. Owner: backend.
 
-**Known limitations carried into v0.3.0** (documented, not hidden): concurrent
-`code.engineer` calls in one mission race on the shared workspace snapshot;
-CB4 records on the crash path have empty participants; one dev-only Dependabot
-residual.
+**Known limitations carried into v0.3.0** (documented, not hidden): one dev-only
+Dependabot residual.
 
 ## 3. Track B — Rust
 
@@ -129,10 +131,10 @@ deploy with two toolchains, and making that component's tests language-independe
 
 | Role | Current lane |
 |---|---|
-| **backend** (coordinator) | Track B design discussion; foundation/config seams; review + integrate + push; dispatch workers |
+| **backend** (coordinator) | existing-system hardening; Redis-budget design/review; foundation/config seams; review + integrate + push; dispatch workers |
 | **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + provenance + supersession linkage (`valid_at` typing is DONE) |
-| **orchestration** | media experts for CB3; batch tier is **parked** pending owner greenlight |
-| **security** | CB5 detect residual; standing invariant review of budget/batch designs |
+| **orchestration** | workspace-race hardening; then Mission Engine + batch orchestrator, propose-first |
+| **security** | standing invariant review of budget/batch designs; widen adversarial regression coverage when new classes appear |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
 | **frontend** | its own backlog; `HANDOFF.md` in `frontend/` |
 | **release** | post-v0.3.0 housekeeping; next release when there is scope |
@@ -142,11 +144,10 @@ deploy with two toolchains, and making that component's tests language-independe
 Do not start these; they are decisions, not tasks:
 
 1. **Rust design discussion** — gates all of Track B.
-2. **Batch architecture greenlight** — gates the batch tier.
-3. **Real per-model prices** in `config/backend/pricing.yaml` — gates budget go-live.
-4. **Whether V1 ships to real users before more capability work.** Nobody has
+2. **Real per-model prices** in `config/backend/pricing.yaml` — gates budget go-live.
+3. **Whether V1 ships to real users before more capability work.** Nobody has
    used this yet, and that is the largest unknown in the whole plan.
-5. **Archive upload cap — ratify or correct.** The 2026-07-06 ruling was a
+4. **Archive upload cap — ratify or correct.** The 2026-07-06 ruling was a
    distinct higher cap for archive/zip uploads; what shipped instead reuses the
    shared 50 MiB `max_input_size_bytes` as the per-member cap plus two bomb
    guards. Flagged rather than silently reconciled.
@@ -159,10 +160,15 @@ to the other in the same commit.
 
 Nothing currently known-stale.
 
-Fixed 2026-07-28: `reports/INTEGRATION_CONTRACT.md`'s terminal-path section (it
-claimed exception/cancellation bypasses audit derivation; `run_driver.py`'s
-`finally` covers every terminal status, and the real limitation is incomplete
-`participants` on the crash path, now documented).
+Fixed 2026-07-28: terminal decision-audit coverage. `run_driver.py`'s `finally`
+covers every terminal status and now retains authoritative pipeline context
+during cancellation/exception, so recorded expert/tool participants survive
+those paths. Focused lifecycle/auth proof: 44 passed.
+
+Fixed 2026-07-28: concurrent same-user/mission/expert workspace calls now hold a
+shared keyed transaction across restore → expert run → snapshot. Different
+mission/expert keys stay concurrent; cancellation/exception releases locks;
+idle keys are removed. Focused orchestration proof: 16 passed.
 
 Fixed 2026-07-28: `V1_GAP_ANALYSIS.md` verdicts + priority stars, and the
 `mission/` phase statuses, are reconciled against what actually shipped. Keep

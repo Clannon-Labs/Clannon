@@ -17,15 +17,15 @@
 | CB1 | Persistent cross-session memory | **PARTIAL (strong)** | open | low (explanation + temporal linkage) | no |
 | CB2 | Large repository understanding | **PARTIAL** (symbol/AST/dependency/archive tiers built; architectural explanation absent) | open | medium (explanation synthesis) | no — built |
 | CB3 | Unified multi-modal representation | **PARTIAL** (string-survival + graph-convergence mechanism proven; real media ingestion absent) | — | medium (media extractor) | no — built |
-| CB4 | Institutional decision memory | **PARTIAL** | open | medium (structured tradeoffs/history + complete participants) | no |
-| CB5 | Security validation | **PARTIAL (near-pass)** | open | low (detect residual) | no |
+| CB4 | Institutional decision memory | **PARTIAL** | open | medium (structured tradeoffs/history + ADR participant provenance) | no |
+| CB5 | Security validation | **PASS** | complete | — | no |
 | CB6 | Multi-agent architectural consistency | **PASS** | complete | — | no |
 | EB1 | Knowledge evolution (temporal truth) | **PARTIAL** | rides CB1 | low | no |
 | EB2 | Autonomous project continuity | **PARTIAL** | rides CB1+CB4 | medium | no |
 | EB3 | Cross-media knowledge synthesis | **PARTIAL** (entity-mediated link proven; direct edge is a schema gap, semantics absent) | — | medium | no — built |
 
-Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **1 Critical
-PASS, 5 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **2 Critical
+PASS, 4 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
 CB2/CB3/EB3 blocked on (ratified 2026-07-06, built + benchmark-proven through
 2026-07-25 — `tests/benchmarks/c2_repo_intelligence.py`,
 `c3_knowledge_web_convergence.py`, `eb3_cross_media_synthesis.py`) moved all
@@ -109,28 +109,28 @@ fresh session.
 **BUILT since original diagnosis:** durable `DecisionRecord` audit mirror plus
 owner-scoped `GET /runs/:id/decisions`, including terminal delivered, blocked,
 failed, and cancelled paths (`api/run_driver.py`, `api/decision_audit.py`;
-`tests/decision_audit.py`, `tests/decision_record.py`).
+`tests/decision_audit.py`, `tests/decision_record.py`). Authoritative pipeline
+context is retained before stage execution, so cancellation/exception records
+preserve expert/tool participants; foreign and unknown run IDs return the same
+non-disclosing 404 before decision rows are queried.
 **PARTIAL:** tradeoffs (alternatives+risks) and historical context still ride as
 flat prose rather than discrete, queryable records
-(`tests/benchmarks/c4_decision_memory.py`). Crash/cancellation derivation uses
-the live log but lacks returned-flow expert/tool context, so some records have
-incomplete `participants`. The benchmark's ADR path also still marks
-participants NOT-YET.
-**Path (no graph):** structure tradeoffs and historical links; preserve complete
-participant context on every terminal path; extend the CB4 harness.
+(`tests/benchmarks/c4_decision_memory.py`). The benchmark's ADR-ingestion path
+still marks participants NOT-YET because source ADRs lack proposer/author
+metadata.
+**Path (no graph):** structure tradeoffs and historical links; add ADR
+participant provenance; extend the CB4 harness.
 
-### CB5 — Security Validation — PARTIAL (near-pass)
+### CB5 — Security Validation — PASS (updated 2026-07-28)
 **BUILT:** real intake→sanitizer→verifier gates. `tests/benchmarks/c5_security.py`
 runs an adversarial battery (injection, jailbreak, malicious markdown, memory
 poisoning, encoded exfil, tool abuse) through the **real** stages and asserts
 every attack is **blocked + halted + audited** (`c5_security.py:391-392`).
-detect/prevent/audit are strong; sole-broker + `user_id` scoping close the
-poisoning/retrieval surface.
-**PARTIAL:** **detect** remains PARTIAL: one adversarial payload evades the
-deterministic screen, and live semantic detection remains separately certified
-rather than hermetically proven (`tests/benchmarks/c5_security.py`). Structured
-classification/explanation and earned-seal surfacing have landed.
-**Path (no graph):** close the detect residual and widen the proving battery.
+sole-broker + `user_id` scoping close the poisoning/retrieval surface.
+**PASS:** bounded compound attack-class rules flag all 8 adversarial cases
+hermetically while all 5 benign controls remain clean. Real benchmark reports
+PASS for detect, classify, explain, prevent, and audit. Focused proof: 20 tests
+passed plus direct benchmark `OVERALL: PASS`.
 
 ### CB6 — Multi-Agent Architectural Consistency — PASS (updated 2026-07-28)
 **BUILT:** pull-based proposal workflow, `reports/INTEGRATION_CONTRACT.md`, and
@@ -163,8 +163,7 @@ that ongoing obligation does not reduce current benchmark verdict.
 
 ## Remaining work
 
-CB6 is complete. CB4's durable mirror and CB5's earned-seal surfacing are also
-complete sub-work; neither should be advertised as next work.
+CB5 and CB6 are complete. CB4's durable mirror is also complete sub-work.
 
 Open benchmark gaps:
 
@@ -174,10 +173,7 @@ Open benchmark gaps:
    supersession/temporal linkage.
 3. **CB2:** architectural explanation over landed symbol/AST/dependency/archive
    capabilities.
-4. **CB4 / EB2:** structured tradeoffs/history and complete crash-path
-   participants.
-5. **CB5:** deterministic-detect residual.
-
+4. **CB4 / EB2:** structured tradeoffs/history and ADR participant provenance.
 `docs/ROADMAP.md` remains canonical for cross-role ordering and owner gates.
 
 ---
