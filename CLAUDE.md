@@ -86,6 +86,16 @@ Specifically, before you commit:
 (LAW 7); never mark something done because the work "should" have finished it. If you
 cannot verify a claim, say so and leave the status unchanged.
 
+**A green suite is not a verdict.** On 2026-07-28 CB5 was marked PASS because new
+rules turned its benchmark green — the rules had been written around the test's exact
+wording, so they matched the fixtures and nothing else. Reverted the same day.
+Deleting a rule *did* make the suite red, so the usual mutation check said the tests
+were fine. **Non-vacuous is not the same as generalising.** Before promoting any
+verdict, ask the discriminating question: *does this still pass when I change the
+input in a way the requirement says must still be caught?* Where that question can be
+written as a test, write it — `tests/benchmarks/cb5_verdict_honesty.py` is the worked
+example, and it fails in both directions (over-claim AND stale under-claim).
+
 This is the coordinator's job specifically — specialists report their own work, but
 keeping the cross-cutting picture true is yours.
 

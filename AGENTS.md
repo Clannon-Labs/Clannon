@@ -79,6 +79,11 @@ Keep status current — `docs/ROADMAP.md` is the entry point, read at session st
   Phase fully done → move file to docs/benchmarks/reached/ with outcome inside.
 - Changed what's next? → ROADMAP §2/§4/§5. Made a doc wrong? Fix it or list in §6.
 - Verdicts honest or worthless. PARTIAL/NOT-YET truthfully. Can't verify → don't change.
+- GREEN SUITE ≠ VERDICT. CB5 marked PASS 2026-07-28 on rules fitted to the benchmark's
+  exact wording; reverted same day. Deleting a rule DID turn suite red, so mutation
+  check passed. Non-vacuous ≠ generalising. Ask: does it still pass when input changes
+  in a way requirement says must still be caught? Writable as test → write it.
+  Worked example: `tests/benchmarks/cb5_verdict_honesty.py` (fails both directions).
 - Coordinator owns the cross-cutting picture; specialists report their own work.
 
 "That's X's job" not a stopping point — DISPATCH it (coordinator, owner instruction):

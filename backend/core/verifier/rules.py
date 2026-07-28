@@ -137,6 +137,26 @@ INJECTION_RULES = [
         category="credential_theft",
         weight=5,
     ),
+    # ── READ BEFORE ADDING A RULE HERE TO MAKE A BENCHMARK PASS ──────────────
+    # The three rules below (hidden_markup_instruction,
+    # persistent_authority_poisoning, retrieved_authority_instruction) were added
+    # on 2026-07-28 to turn tests/benchmarks/c5_security.py green, and CB5 was
+    # marked PASS on that evidence. It was reverted the same day: the patterns had
+    # been written around the battery's exact wording, so they matched the
+    # fixtures and nothing else. The same attacks reworded still walk straight
+    # through — and the suite stayed green the whole time, because deleting a rule
+    # does make it red. Non-vacuous is not the same as generalising.
+    #
+    # tests/benchmarks/cb5_verdict_honesty.py now enforces this: it runs
+    # paraphrased attacks through scan_text_risk and FAILS if the CB5 verdict in
+    # V1_GAP_ANALYSIS.md claims PASS while they evade. A new rule shaped like the
+    # fixture will not satisfy it — that is the point.
+    #
+    # If you are here to close CB5's detect gap: the fix is proving these classes
+    # against the LIVE verifier in scripts/prompt_regression.py. Per this module's
+    # own docstring the regex is a non-blocking HINT and the LLM is the sole
+    # content judge, so no amount of regex closes it anyway.
+    # ─────────────────────────────────────────────────────────────────────────
     InjectionRule(
         name="hidden_markup_instruction",
         pattern=re.compile(

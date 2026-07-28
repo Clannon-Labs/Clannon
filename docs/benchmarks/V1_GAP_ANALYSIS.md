@@ -156,6 +156,7 @@ non-blocking hint (`rules.py`'s own docstring — the LLM is "the sole content
 judge for text"), and the layer that actually blocks is either unhermetic
 (live LLM) or, in this harness, an answer-key oracle. Structured
 classification/explanation and earned-seal surfacing have landed.
+**Guarded executably since 2026-07-28:** `tests/benchmarks/cb5_verdict_honesty.py` runs paraphrased versions of these attacks through the live pre-screen and FAILS the suite if this row claims PASS while they evade. It fails the other way too — if every paraphrase starts being caught while this still reads PARTIAL, the verdict is stale and the test says so. Adding another rule fitted to the battery's wording will not satisfy it.
 **Path (no graph):** either prove the LLM live against these 3 payload
 classes (extend `scripts/prompt_regression.py`), or accept detect stays
 PARTIAL and stop advertising hermetic proof it doesn't have.
