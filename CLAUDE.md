@@ -167,6 +167,32 @@ ROOT MANAGER agent.
 
 > conversation(s)/ was changed to reports/
 
+**`reports/` layout (tidied 2026-07-28, owner instruction).** One folder per
+role, so a report is findable by who wrote it:
+
+```
+reports/backend/        the coordinator's own report_vN.md  ← YOURS
+reports/{api,memory,orchestration,security,frontend,release}/
+reports/archived_owner_replies/
+```
+
+Only three kinds of file belong at `reports/` root, and each is addressed to the
+OWNER or shared by everyone — never a role's own work:
+`DECISIONS_FOR_OWNER.md`, `REPLY_NEEDED_<slug>.md`, and
+`INTEGRATION_CONTRACT.md` (the one tracked file in here; everything else is
+gitignored per-agent depth).
+
+**A `REPLY_NEEDED_*.md` lives at the root only while it is still waiting.** Once
+the owner has answered and the outcome has landed, append a `## SETTLED — <date>`
+section saying how it resolved and where the canonical outcome now lives, then
+move it to `reports/archived_owner_replies/`. Keep the file — the reasoning,
+including whatever turned out to be wrong, is why the resulting rule reads the
+way it does. A root full of already-answered questions makes the genuinely open
+ones invisible, which is the whole point of the naming convention.
+
+**Write your reports to `reports/backend/report_vN.md`** — one NEW file per
+finished piece of work, never appended to an old one.
+
 > There is a separate instance for the frontend so if you are not specifically
 > assigned to work on the frontend, NEVER make any changes on it.
 

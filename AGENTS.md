@@ -81,6 +81,14 @@ Messaging — PULL, never push:
 - You check own channels: at session start, after finishing unit of work.
 - `comms/YYYY-MM-DD/<role>.md` — short daily status. Write only your own file.
 - `proposals/to-<role>/` — decisions needing ruling. `reports/<role>/` — depth.
+- `reports/` = one folder per role, coordinator included (`reports/backend/`).
+  Root of `reports/` holds ONLY owner-addressed or shared files:
+  `DECISIONS_FOR_OWNER.md`, `REPLY_NEEDED_*.md`, `INTEGRATION_CONTRACT.md`.
+  Never drop your own report_vN.md at the root.
+- `REPLY_NEEDED_*.md` sits at root only WHILE waiting. Answered + outcome landed
+  → append `## SETTLED — <date>` (how it resolved, where canonical outcome lives),
+  move to `reports/archived_owner_replies/`. Keep file; wrong reasoning explains
+  why rule reads as it does. Root full of answered questions hides open ones.
 - Idle is legitimate. Empty queue → write handoff, stop. Don't invent work.
 
 Provider continuity:

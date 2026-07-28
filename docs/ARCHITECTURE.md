@@ -339,7 +339,7 @@ orchestrator never receives raw expert output. Hard constraint.
 >   never write); and every read is constructed in one place (`core/memory/store.py`), so
 >   the access point is already singular and auditable.
 > - `[BUILT]` — experts are stateless, context is pushed (2026-07-03, Option D of
->   `conversation/report_v4.md`): the turn's hydrated memory is snapshot into
+>   `reports/backend/report_v4.md`): the turn's hydrated memory is snapshot into
 >   `ExpertEnv.hydration` (`registry/capabilities/handler/experts.py::_build_env`) and
 >   folded into the expert's task as labelled reference data
 >   (`handler/support.py::_memory_note`, applied in `think()`); the
@@ -507,7 +507,7 @@ replay-based; no compaction store).
 silently settled here): (1) **resolved → sole-broker, `[BUILT]` 2026-07-03** (§7.3):
 experts receive Manager-hydrated context pushed into their task and hold no
 `memory.*` grant; the orchestrator brokers sub-task recall (Option D of
-`conversation/report_v4.md`); (2) whether a second entity-embedding space is added
+`reports/backend/report_v4.md`); (2) whether a second entity-embedding space is added
 alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job type.
 
 ---
@@ -532,7 +532,7 @@ alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job ty
   notes 0002's CI gate is still unbuilt.
 
 **Factual corrections applied to `architecture/**` and `decisions/**`** (proven-false
-statements fixed; see the changelog in `conversation/report_v2.md` for exact lines):
+statements fixed; see the changelog in `reports/backend/report_v2.md` for exact lines):
 embeddings runtime ("via Ollama" → fastembed local ONNX); verifier model ("Gemini" →
 `anthropic:claude-haiku-4-5`); entropy routing tagged `[PROPOSED]` everywhere it was
 shown as built; MemoryPort corrected to three methods; the Memory Manager corrected

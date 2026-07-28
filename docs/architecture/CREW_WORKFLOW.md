@@ -158,6 +158,29 @@ gets recorded in `comms/` or promoted into `docs/`.
 Unchanged. One new file per finished piece of work. Gitignored, local, high
 churn by design.
 
+**`<role>/` means every role, coordinator included** (tidied 2026-07-28 on the
+owner's instruction). The backend agent used to drop its `report_vN.md` at the
+root of `reports/` while every specialist filed under its own folder, which made
+the root a mixed pile of eighteen coordinator reports and the owner's files. The
+coordinator's now live in `reports/backend/`.
+
+The root of `reports/` is reserved for files that are **addressed to the owner or
+shared by everyone**, not one role's working depth:
+
+| File | What it is |
+|---|---|
+| `DECISIONS_FOR_OWNER.md` | the living decision docket |
+| `REPLY_NEEDED_<slug>.md` | a single decision needing the owner's answer — **while it is still open** |
+| `INTEGRATION_CONTRACT.md` | the shared backend↔frontend contract — the one **tracked** file here |
+
+Once the owner answers a `REPLY_NEEDED_*` and the outcome lands, append a
+`## SETTLED — <date>` section (how it resolved, where the canonical outcome now
+lives) and move it to `reports/archived_owner_replies/`. The file is kept, not
+deleted: the reasoning that led to a rule — including the part that turned out
+wrong — is why the rule reads the way it does. Leaving answered questions at the
+root defeats the naming convention, which exists so the owner can see at a glance
+what still wants them.
+
 **Rule:** a `comms/` entry must be actionable on its own. A report link is
 convenience, not a dependency — a fresh clone that has no `reports/` must still
 be able to act on what `comms/` says.
