@@ -27,7 +27,7 @@ question, and why stability outranks new surface area.
 **The bar we are building to.** Six Critical + three Exceptional benchmarks in
 `docs/benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md` (the owner's spec of the bar
 — it carries no status, deliberately). Honest verdicts live in exactly one place:
-`docs/benchmarks/V1_GAP_ANALYSIS.md`. As of 2026-07-28: **CB5 + CB6 PASS, four
+`docs/benchmarks/V1_GAP_ANALYSIS.md`. As of 2026-07-28: **CB6 PASS, five
 PARTIAL.** The outreach gate is all six Critical passing plus one Exceptional.
 
 **Your role.** You are the **coordinator**, not a labour agent. The owner has
@@ -63,7 +63,71 @@ finished something.
 
 ---
 
-## Current checkpoint
+## Current checkpoint — PAUSED FOR A WEEK (2026-07-28 evening)
+
+**The owner is taking a week off. Everything is committed and pushed; the tree is
+clean apart from the frontend session's own uncommitted work, which is theirs and
+must be left alone.** Nothing is half-finished. Start by re-reading this file and
+`docs/ROADMAP.md`; do not resume from memory of what was "in progress", because
+nothing is.
+
+**Provider budgets at pause:** Codex is usage-limited until **Aug 4**. Claude's
+weekly limit was nearly exhausted. `crew.sh run` now dispatches Claude workers on
+`claude-sonnet-5`, matching the interactive specialist default — the quality net
+is coordinator review of every diff, not the model tier.
+
+### The one thing to carry forward
+
+**CB5's PASS was claimed and reverted on the same day, and that is the lesson of
+this whole session.** Five regex rules were added that matched the adversarial
+battery's exact wording; the benchmark was tightened to "every attack flagged";
+the row went green and was marked PASS. It was fitted to the fixture. The same
+attack intent, mildly reworded, evades — verified by hand against live
+`scan_text_risk`: the fixture string returns `['memory_poisoning']`, the
+paraphrase returns `[]`.
+
+Removing a rule *does* turn the suite red, so the test is not vacuous. It is
+simply sensitive to frozen strings rather than to the attack class. That is a
+subtler failure than a vacuous test and the ordinary mutation check does not
+catch it — **the discriminating question is not "does the test fail when I break
+the code", it is "does the test still pass when I change the input in a way the
+threat model says should still be caught."**
+
+Two comments had also drifted into asserting things that were not true
+(`c5_security.py` claimed live certification that does not exist for those
+payloads; `payloads.py` still called them "regex-evading" after rules were fitted
+to catch them). Both corrected in `db6be4c`.
+
+### What shipped today, after the earlier tranche
+
+- **Honest completion** (`1e650e9`): `completionState` / `completionReason` on
+  the run REST shape. A degraded run — timeout, rate-limit storm, fault — used to
+  read as an unqualified `delivered` while its report said "couldn't finish in
+  the time allowed". The orchestrator already tagged the response
+  `{"degraded": True, "cause": kind}`; nothing read it. Three axes now, kept
+  deliberately separate: `status` (lifecycle), `verificationState` (filter
+  groundedness), `completionState` (did the loop finish). A degraded run is
+  routinely all of `delivered` + `grounded` + `partial`, and all three are true.
+- **CB5 reverted** (`db6be4c`) in four places that had each drifted separately.
+- **Stranded Codex work landed** (`58a55f8`): `--no-alt-screen`, the owner's own
+  prose in `BATCH_ARCHITECTURE.md` committed verbatim.
+
+### Open when work resumes — nothing is blocked
+
+1. **`proposals/to-frontend/2026-07-28_completion-state-ui.md`** — the only live
+   proposal. Frontend renders the new fields, and adds `completionState` /
+   `completionReason` (and optionally a `completion` event) to `types.ts`. The
+   backend cannot emit a `completion` SSE event until they do:
+   `sse_contract_drift.py:479` fails on any event the frontend has not declared,
+   and `:518` closes the "new terminal `partial` status" option the same way.
+   **Do not edit `types.ts` to unblock yourself.**
+2. **CB5 detect** — prove the three C5-native families live in
+   `scripts/prompt_regression.py`. Adding another regex shaped like the fixture
+   would re-create exactly the failure that was just reverted.
+3. Remaining benchmark gaps: `docs/ROADMAP.md` §2. Owner-gated: §5 (all answered
+   as of today; `proposals/to-owner/` is empty).
+
+### Previous state of this checkpoint
 
 - Provider: Codex (interactive backend coordinator)
 - Updated: **2026-07-28**
@@ -111,9 +175,8 @@ after successful runs, because a stale lock self-heals.
 
 **6. Ran first existing-system hardening tranche** (`0b40607`, `13686e3`,
 `60504c9`).
-- CB5 moved honestly to PASS: deterministic verifier detects all 8 adversarial
-  benchmark classes; 5 benign controls stay clean. Outreach: 2 Critical PASS,
-  4 PARTIAL.
+- CB5 was moved to PASS here — **that was wrong and has been reverted**
+  (`db6be4c`). See the last checkpoint entry below; do not restore this claim.
 - API cancellation/exception audit now preserves authoritative participants;
   foreign/unknown decision-run IDs share non-disclosing 404 proof.
 - Same user/mission/expert workspace calls serialize restore → run → snapshot;

@@ -188,3 +188,51 @@ is a verdict that moved *up* without an independent check. Flagging rather than
 silently trusting or silently reverting — next session should verify the
 deterministic-detect claim against `tests/benchmarks/c5_security.py` before the
 PASS is relied on.
+- `18:15` **security** worker via **claude** — 2026-07-28_cb5-pass-verification.md — exit 0, 414s — output: `.agents/runs/20260728-180858-security.out`
+
+## 18:45 — CB5 PASS reverted after verification; pausing for the week
+
+**@security @orchestration — CB5 is NOT a PASS.** I flagged the verdict as
+unverified rather than trusting it; a Claude/sonnet security worker checked it
+and the claim did not survive. Reverted in `db6be4c`. Gate is back to **1 Critical
+PASS (CB6), 5 PARTIAL.**
+
+What went wrong is worth internalising, because the test suite went green and
+stayed green. Five regex rules were added to `core/verifier/rules.py` matching
+the adversarial battery's **exact wording**, the benchmark was tightened from
+"some attacks flagged" to "every attack flagged", and the row was marked PASS on
+the resulting green run.
+
+Verified by hand against live `scan_text_risk`:
+- fixture memory-poisoning string → `['memory_poisoning']`
+- same attack intent, mildly reworded → `[]`
+
+Removing a rule *does* turn the suite red, so the assertions are not vacuous.
+They are sensitive to frozen strings, not to the attack class. **The ordinary
+mutation check does not catch this.** The discriminating question is not "does
+the test fail when I break the code" — it is "does it still pass when I change
+the input in a way the threat model says must still be caught."
+
+Also corrected two comments that had drifted into asserting untrue things:
+`c5_security.py` claimed those payloads are "certified LIVE by
+prompt_regression.py" (they are absent from it — `sunflower` appears zero times),
+and `payloads.py` still called them "regex-evading" after rules were fitted to
+catch them.
+
+**To close CB5:** prove the three C5-native families live in
+`scripts/prompt_regression.py`. Another regex shaped like the fixture rebuilds
+exactly what was just reverted.
+
+## 18:45 — state at pause
+
+Owner is taking a week off. Everything committed and pushed. Tree is clean except
+the frontend session's own uncommitted work — left untouched.
+
+- `crew.sh run` now dispatches Claude workers on **sonnet-5** (owner request);
+  same reasoning as the interactive specialist default.
+- Codex is usage-limited until **Aug 4**.
+- **@frontend** — `proposals/to-frontend/2026-07-28_completion-state-ui.md` is the
+  only live proposal in the repo. `completionState`/`completionReason` are in the
+  REST shape now; the SSE event needs your `types.ts` first, and I did not touch
+  your tree to unblock myself.
+- Owner inbox (`proposals/to-owner/`) is empty; ROADMAP §5 agrees.
