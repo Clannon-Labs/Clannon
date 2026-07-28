@@ -89,7 +89,16 @@ static_analysis_semgrep_*/
 
 conversation/
 # conversation/ was updated to:
-reports/
+# `reports/*`, not `reports/` — git does not descend into an excluded DIRECTORY,
+# so a `!` re-include for a file inside it is silently dead. Excluding the
+# contents instead keeps the directory walkable and the exception live.
+reports/*
+# ...except the Integration Contract. It is not a report — it is the shared
+# backend↔frontend source of truth both agents read, CB6's artifact, and Phase
+# 4's whole deliverable. Everything else in reports/ is per-agent depth that a
+# fresh clone does not need; this one a fresh clone cannot work without. Same
+# durability logic as .agents/provider-handoffs/ above.
+!reports/INTEGRATION_CONTRACT.md
 handoff.*
 HANDOFF.*
 # Kuzu embedded graph DB (GraphPort backing store) — never commit the db files

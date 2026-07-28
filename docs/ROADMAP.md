@@ -61,7 +61,11 @@ PARTIAL.**
 
 1. **CB3 / EB3 — real media ingestion.** Mechanism proven, actual multi-modal
    ingestion absent. Owner: memory (extractor) + orchestration (experts).
-2. **CB1 / EB1 — temporal truth.** Needs `valid_at` typing. Owner: memory.
+2. **CB1 / EB1 — temporal truth.** `fact|assumption` + `valid_at` typing has
+   **landed**; the harness marks that discriminator PASS. What remains: retrieval
+   explanation (the "why this memory"), complete provenance (author/RFC linkage),
+   and explicit supersession linkage so current-vs-historical is a relationship,
+   not prose. Owner: memory.
 3. **Batch architecture beyond the engineering tier.** Parked pending design —
    **needs owner greenlight before anyone starts.**
 4. **Budget enforcement go-live.** Code is built but ships `enforcement_enabled=False`
@@ -126,7 +130,7 @@ deploy with two toolchains, and making that component's tests language-independe
 | Role | Current lane |
 |---|---|
 | **backend** (coordinator) | Track B design discussion; foundation/config seams; review + integrate + push; dispatch workers |
-| **memory** | CB3/EB3 media ingestion; CB1/EB1 temporal typing |
+| **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + provenance + supersession linkage (`valid_at` typing is DONE) |
 | **orchestration** | media experts for CB3; batch tier is **parked** pending owner greenlight |
 | **security** | CB5 detect residual; standing invariant review of budget/batch designs |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
