@@ -110,6 +110,13 @@ export default function WorkspacePage() {
   const isFirstRun = runs?.length === 0;
   const workspaceReady = Boolean(user) && runs !== undefined;
   const showFirstRunGuide = workspaceReady && isFirstRun && !brief.trim();
+  // "Welcome back"/"Look who's back"/"The archive missed you" are all false
+  // on a genuinely first visit — there's nothing to come back to yet. Gate on
+  // !workspaceReady too: `runs` starts undefined while the query is in
+  // flight, so `isFirstRun` is briefly false for everyone, and without this
+  // a first-timer would flash "Welcome back" for the loading window before
+  // it flips. A first run only happens once, so it doesn't need the pool.
+  const displayGreet = !workspaceReady || isFirstRun ? "Welcome" : greet;
 
   return (
     /* the new-chat screen — laid out like a run (and the demo): a centered
@@ -126,7 +133,7 @@ export default function WorkspacePage() {
           <h1 className="display flex items-center justify-center gap-2.5 text-center text-[2.15rem] leading-[1.1] sm:text-[2.6rem]">
             <Mark className="size-7 shrink-0 text-primary sm:size-8" aria-hidden />
             <span>
-              {greet}
+              {displayGreet}
               {firstName && (
                 <>
                   {", "}

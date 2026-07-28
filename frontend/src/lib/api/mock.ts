@@ -30,6 +30,13 @@ import {
 } from "./mock-data";
 
 const SESSION_KEY = "clannon.mock.session";
+// Whether the current session is a freshly-signed-up account that must stay
+// genuinely empty (see MockClient constructor). Without this, a page reload
+// re-runs the class field initializers below and silently re-seeds a demo
+// stranger's "Meridian Skincare" project/data onto what the user was just
+// promised was a blank account — the empty-signup fix only held until the
+// next navigation. Persisted so it survives exactly the reload that broke it.
+const EMPTY_ACCOUNT_KEY = "clannon.mock.emptyAccount";
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -43,6 +50,22 @@ const sleep = (ms: number, signal?: AbortSignal) =>
       { once: true },
     );
   });
+
+/** A genuinely empty 14-day usage window for a freshly-signed-up account —
+ *  no fabricated history, matching MockClient's empty-account state. */
+function emptyUsage(): UsageSummary {
+  const today = new Date();
+  return {
+    periodStart: today.toISOString().slice(0, 10),
+    periodEnd: new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10),
+    budget: planById("free").tokenBudget,
+    used: 0,
+    byDay: Array.from({ length: 14 }, (_, i) => ({
+      date: new Date(today.getTime() - (13 - i) * 86_400_000).toISOString().slice(0, 10),
+      tokens: 0,
+    })),
+  };
+}
 
 let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${++counter}`;
@@ -65,13 +88,50 @@ function modalityOf(file: File): string {
  * difference — which is exactly the point.
  */
 export class MockClient implements ClannonClient {
-  private projects: Project[] = structuredClone(SEED_PROJECTS);
-  private runs = new Map<string, Run>(SEED_RUNS.map((r) => [r.id, structuredClone(r)]));
-  private memory: MemoryEntry[] = structuredClone(SEED_MEMORY);
-  private usage: UsageSummary = buildSeedUsage();
+  private projects: Project[];
+  private runs: Map<string, Run>;
+  private memory: MemoryEntry[];
+  private usage: UsageSummary;
   private models: LayerModelConfig[] = structuredClone(SEED_MODEL_CONFIG);
   /** Run ids the user asked to stop — the live stream notices and unwinds. */
   private cancelRequested = new Set<string>();
+
+  constructor() {
+    // A brand-new instance is constructed on every full page load (this is a
+    // client-side singleton, not a server) — so whether to seed demo depth
+    // has to be decided from persisted state, not just field defaults.
+    const empty =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(EMPTY_ACCOUNT_KEY) === "1";
+    this.projects = [];
+    this.runs = new Map();
+    this.memory = [];
+    this.usage = emptyUsage();
+    if (empty) this.clearToEmptyAccount();
+    else this.seedDemoData();
+  }
+
+  /** Returning-user story: full seeded depth. Used on construction for a
+   *  browser with no empty-account flag, and again in login()/
+   *  loginWithProvider() — flipping the persisted flag alone only takes
+   *  effect on the *next* load; the already-constructed instance needs its
+   *  data populated too, or a login right after a signup stays empty. */
+  private seedDemoData() {
+    this.projects = structuredClone(SEED_PROJECTS);
+    this.runs = new Map(SEED_RUNS.map((r) => [r.id, structuredClone(r)]));
+    this.memory = structuredClone(SEED_MEMORY);
+    this.usage = buildSeedUsage();
+  }
+
+  /** First-user story: nothing yet. Mirrors seedDemoData() for the empty case
+   *  so signup() (and a reload with the flag already set) reach the same
+   *  truthful-empty state through one path. */
+  private clearToEmptyAccount() {
+    this.projects = [];
+    this.runs.clear();
+    this.memory = [];
+    this.usage = emptyUsage();
+  }
 
   /* ---------- remote config (mock echoes the local defaults) ---------- */
 
@@ -97,6 +157,12 @@ export class MockClient implements ClannonClient {
       email,
       plan: "pro",
     };
+    // logging in (as opposed to signing up) is always the returning-user
+    // story — reseed THIS instance (not just the flag for next load: the
+    // instance already under our feet may have been constructed empty, from
+    // an earlier signup's persisted flag) and clear the flag for future loads.
+    this.seedDemoData();
+    this.setEmptyAccount(false);
     this.persistSession(user);
     return user;
   }
@@ -109,24 +175,12 @@ export class MockClient implements ClannonClient {
     const user: User = { id: "u_demo", name, email, plan: "free" };
     // Signup must exercise a truthful first-user state. Seeded agency data is
     // useful for returning-user screenshots, but showing it to a new account
-    // makes onboarding untestable and reads like a privacy breach.
-    this.projects = [];
-    this.runs.clear();
-    this.memory = [];
+    // makes onboarding untestable and reads like a privacy breach. Persisted
+    // (not just cleared in memory) so it survives the next page load too —
+    // see EMPTY_ACCOUNT_KEY and the constructor above.
+    this.clearToEmptyAccount();
     this.cancelRequested.clear();
-    const today = new Date();
-    const periodStart = today.toISOString().slice(0, 10);
-    const periodEnd = new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
-    this.usage = {
-      periodStart,
-      periodEnd,
-      budget: planById("free").tokenBudget,
-      used: 0,
-      byDay: Array.from({ length: 14 }, (_, i) => ({
-        date: new Date(today.getTime() - (13 - i) * 86_400_000).toISOString().slice(0, 10),
-        tokens: 0,
-      })),
-    };
+    this.setEmptyAccount(true);
     this.persistSession(user);
     return user;
   }
@@ -134,6 +188,8 @@ export class MockClient implements ClannonClient {
   async loginWithProvider(provider: OAuthProvider): Promise<User> {
     // simulate the redirect round-trip
     await sleep(900);
+    this.seedDemoData();
+    this.setEmptyAccount(false);
     const user: User = {
       id: "u_demo",
       name: `${provider} user`,
@@ -163,6 +219,12 @@ export class MockClient implements ClannonClient {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     }
+  }
+
+  private setEmptyAccount(empty: boolean) {
+    if (typeof window === "undefined") return;
+    if (empty) window.localStorage.setItem(EMPTY_ACCOUNT_KEY, "1");
+    else window.localStorage.removeItem(EMPTY_ACCOUNT_KEY);
   }
 
   /* ---------- projects (clients / bodies of work) ---------- */
@@ -480,6 +542,13 @@ export class MockClient implements ClannonClient {
       yield { type: "report_delta", text: chunk };
     }
     run.report = assembled;
+    // Every normal delivery here really did pass the simulated output filter
+    // (the decision log above always logs "verdict=pass") — declaring it
+    // grounded is honest, not decorative, and without it the VERIFIED seal
+    // (a real trust signal, INTEGRATION_CONTRACT.md §5) never once appears
+    // in the mock experience, which undersells "claims checked" on every
+    // ordinary run.
+    run.verificationState = "grounded";
     // QA/e2e-only: the backend's real terminal contract has three independent
     // axes (status / verificationState / completionState — INTEGRATION_
     // CONTRACT.md §"three axes"), and the common degraded case is delivered +
@@ -488,7 +557,6 @@ export class MockClient implements ClannonClient {
     // completion-status UI without this. Keyed off brief text, like the
     // landing demo's curated titles, never surfaced as a suggestion.
     if (run.brief.toLowerCase().includes("force a partial timeout for e2e")) {
-      run.verificationState = "grounded";
       run.completionState = "partial";
       run.completionReason = "timeout";
     }
