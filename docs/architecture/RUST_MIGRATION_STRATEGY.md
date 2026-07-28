@@ -1,8 +1,9 @@
 # Rust migration strategy — how we port, and what we refuse to do
 
-**Status: CANONICAL.** Owner-set, 2026-07-27. Any Rust work in this repo follows
-this. Related: `LAW/README.md` LAW 6 (replaceability) — this doc is *how* we
-exercise the property that law requires us to keep.
+**Status: CANONICAL.** Owner-set 2026-07-27; process boundary settled
+2026-07-28. Any Rust work in this repo follows this. Related:
+`LAW/README.md` LAW 6 (replaceability) — this doc is *how* we exercise the
+property that law requires us to keep.
 
 ---
 
@@ -145,8 +146,37 @@ Current agreed pilot: the Redis budget broker (`core/budget/`) — port ratified
 ~485 lines, `enforcement_enabled=False` so nothing live is at risk, zero ML, and
 it already has a process boundary via Redis.
 
+## Cross-language boundary — settled 2026-07-28
+
+Default for a stateful or long-running Rust subsystem: **separate supervised
+process with a versioned schema**. Start with HTTP/JSON when inspectability and
+portable tooling matter; a Unix socket may carry the same protocol when both
+processes are always colocated. Adopt gRPC only when measured volume, streaming,
+or generated cross-language contracts justify its operational cost.
+
+Use FFI/PyO3 only for a bounded function-like operation: bounded input, bounded
+output, no lifecycle ownership, no complicated persistent state, and profiling
+showing service serialization/call overhead matters. Native code shares
+Python's crash and memory boundary, so FFI is not the default for a subsystem.
+
+TypeScript continues to call the Python API over HTTP/WebSocket. Rust stays
+behind Python-owned application contracts unless a specific architecture
+proposal proves another route necessary.
+
+Language choice follows ownership, failure boundary, testability, and measured
+benefit — not “everything non-ML goes to Rust” or “everything slow goes to
+Rust.” Broad category rules would recreate a rewrite mandate under another
+name.
+
 ## Before any port starts
 
-A design discussion, per the owner: FFI vs. separate service, how a port is
-served across the boundary, the dev loop and deploy story with two toolchains,
-and how the component's tests become language-independent first.
+Track B is deferred while Python V1 advances. Starting a specific port requires:
+
+1. a proposal naming concrete safety/performance/operability benefit;
+2. language-independent conformance tests through the port/API;
+3. versioned request/response and failure/degradation behavior;
+4. dev, build, deploy, supervision, rollback, and observability story for both
+   toolchains.
+
+The boundary question is settled; these component-specific proofs are
+engineering gates, not another general owner discussion.

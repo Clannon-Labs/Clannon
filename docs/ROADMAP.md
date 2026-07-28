@@ -4,7 +4,7 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-07-27**, just after `v0.3.0`.
+Last reconciled: **2026-07-28**, after owner proposal sweep.
 
 > **Standing rule:** if you finish your lane and nothing here is assigned to you,
 > **that is a valid state.** Write your handoff and stop. Do not invent work
@@ -28,11 +28,14 @@ Last reconciled: **2026-07-27**, just after `v0.3.0`.
 We are running **two tracks at once**, deliberately:
 
 **Track A — finish V1 (Python).** The product still has to work. V1 is not done
-and has never faced a real user. This track keeps shipping in Python.
+and has no real-user feedback yet. Owner is arranging a small friends/family
+cohort in parallel; engineering keeps closing capability gaps and does not wait
+on that outreach.
 
 **Track B — Rust, by addition only.** An experiment run alongside components
 that already work; nothing is rewritten for its own sake, and new work stays
-Python. See §3. **Nothing has started** — it is owner-gated.
+Python. See §3. **Nothing has started** — owner deferred it while Python V1
+advances.
 
 Track A does not pause for Track B. If they ever conflict, **Track A wins** —
 shipping a working product beats architectural progress.
@@ -72,10 +75,13 @@ PARTIAL.**
    longer decision-gated, but remains stability-first and propose-first: prove
    Redis money safety, then Mission Engine, bounded cross-batch memory slice,
    and one batch end-to-end.
-4. **Budget enforcement go-live.** Code is built but ships `enforcement_enabled=False`
-   and `pricing.yaml` holds **placeholder prices**. **Needs the owner to set real
-   per-model prices** — the loader is fail-closed, so an un-priced model blocks
-   rather than leaks. Owner: backend.
+4. **Budget enforcement go-live.** Code is built but ships
+   `enforcement_enabled=False`. Owner supplied provider-pricing references;
+   backend must verify them against official current prices, represent
+   tier/modality differences honestly, measure conservative infrastructure
+   cost, seed production budgets, prove recovery/concurrency, and obtain
+   security review. Loader stays fail-closed. Create a fresh owner go-live
+   proposal only when those engineering gates are green. Owner: backend.
 
 **Known limitations carried into v0.3.0** (documented, not hidden): one dev-only
 Dependabot residual.
@@ -122,10 +128,12 @@ Rust implementation, so this is real work, not a formality.
 **Agreed pilot: the Redis budget broker** (`core/budget/`) — port ratified,
 ~485 lines, off in production, zero ML, already has a process boundary.
 
-**Status: not started.** Blocked on a design discussion the owner asked for —
-FFI vs. separate service, how a port is served across the boundary, dev loop and
-deploy with two toolchains, and making that component's tests language-independent.
-**Nobody starts Rust code until that discussion happens.**
+**Status: deferred, not started.** Owner settled the general boundary on
+2026-07-28: stateful/system components use a separate supervised process with a
+versioned API; FFI is only for bounded pure computation where profiling
+justifies it. Component-specific conformance, failure, dev, and deploy design
+remains required. Python V1 advances first; Rust starts only from a specific
+benefit-backed proposal.
 
 ## 4. Lanes by role
 
@@ -141,20 +149,19 @@ deploy with two toolchains, and making that component's tests language-independe
 
 ## 5. Needs the owner, not us
 
-Do not start these; they are decisions, not tasks:
+**No actionable owner decision is open.** `proposals/to-owner/` is empty after
+the 2026-07-28 rulings:
 
-1. **Rust design discussion** — gates all of Track B.
-2. **Real per-model prices** in `config/backend/pricing.yaml` — gates budget go-live.
-3. **Whether V1 ships to real users before more capability work.** Nobody has
-   used this yet, and that is the largest unknown in the whole plan.
-4. **Archive upload cap — ratify or correct.** The 2026-07-06 ruling was a
-   distinct higher cap for archive/zip uploads; what shipped instead reuses the
-   shared 50 MiB `max_input_size_bytes` as the per-member cap plus two bomb
-   guards. Flagged rather than silently reconciled.
+- shared 50 MiB upload/archive cap plus bomb guards ratified;
+- Python capability work continues while owner recruits a small real-user
+  cohort in parallel;
+- Rust Track B deferred; separate-process/FFI boundary settled;
+- official model-price verification and infrastructure measurement assigned to
+  engineering. Final budget-enforcement go-live remains owner authority, but no
+  proposal is created until engineering gates are green.
 
-Decision-ready files: `proposals/to-owner/`, one proposal per item. **This list
-and that inbox must agree** — add/remove owner gates in both during same work
-unit.
+This section and `proposals/to-owner/` must agree. New owner proposal means
+owner can act now; future gates stay in their engineering plan until ready.
 
 ## 6. Stale things worth fixing
 
@@ -177,3 +184,14 @@ Fixed 2026-07-28: `V1_GAP_ANALYSIS.md` verdicts + priority stars, and the
 `mission/` phase statuses, are reconciled against what actually shipped. Keep
 them that way in the same commit as the work (`CLAUDE.md` § keep status
 current).
+
+Fixed 2026-07-28: ClamAV refusal, reset, timeout, and broken-pipe transport
+failures now normalize to a safe fail-closed `SanitizationError`; programmer
+errors remain visible. Hermetic adapter-boundary regressions live in the normal
+backend suite.
+
+Fixed 2026-07-28: live-Qdrant full-suite order dependence. Two memory tests
+leaked module globals: concurrency retained a fake client/collection state, and
+the supersession fault test retained an open breaker. Both now restore exact
+prior state through pytest teardown. Full isolated live-Qdrant suite:
+1518 passed, 1 existing ClamAV skip.

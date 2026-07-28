@@ -98,6 +98,16 @@ class ClamScanner:
                 timeout=self.timeout_s,
             )
             response = client.instream(io.BytesIO(payload))
+        except (clamd.ConnectionError, OSError) as exc:
+            # clamd wraps connect/read failures in its own ConnectionError, but
+            # lets send-side socket failures (reset, timeout, broken pipe)
+            # escape as OSError subclasses. Normalize both transport paths at
+            # this dependency boundary without exposing endpoint details.
+            raise SanitizationError(
+                "ClamAV scanner was unavailable during the security scan",
+                modality="all",
+                worker="clamav",
+            ) from exc
         except clamd.ClamdError as exc:
             raise SanitizationError(
                 f"ClamAV scan failed: {exc}",

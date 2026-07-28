@@ -206,6 +206,7 @@ non-graph wins above (CB5/CB1/CB4 advance the same way regardless).
   restarts *are* CB1/EB2. Fact/assumption + `valid_at` typing landed; explicit
   supersession linkage and explanation remain foundational gaps.
 
-**Sequencing:** batch work remains owner-gated and propose-first. Current
+**Sequencing:** owner greenlit batch foundations on 2026-07-28. Work remains
+stability-first and propose-first, but is no longer owner-gated. Current
 cross-role ordering lives in `docs/ROADMAP.md`; do not revive this diagnosis's
 old CB5 → CB1 → CB4 sequence.

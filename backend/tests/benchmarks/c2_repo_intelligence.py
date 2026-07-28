@@ -10,7 +10,7 @@ Benchmark scenario (docs/benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md,
 Critical Benchmark 2 / docs/benchmarks/V1_GAP_ANALYSIS.md §CB2): the full
 benchmark (five graph types: file/dependency/architectural/decision/ownership,
 docs/decisions/proposed/0008-repository-intelligence.md) blocks on the
-graph-web/batch architecture (owner-gated, parked). This harness is the
+graph-web/batch architecture (greenlit, not yet built). This harness is the
 ratified THIN SLICE (proposals/archive/to-backend/
 2026-07-05_cb2-thin-slice-benchmark-spec.md): the code-only static import/
 dependency graph, already built and unit-tested (GraphPort/GraphManager/

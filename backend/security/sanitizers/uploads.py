@@ -111,7 +111,7 @@ def _archive_bomb_precheck(data: bytes) -> str | None:
     total_uncompressed = sum(info.file_size for info in infos)
     ratio_cap = settings.SECURITY.archive_max_uncompressed_ratio
     # Ratio against the archive's OWN compressed byte length (not a fixed byte total) —
-    # self-adjusts to whatever the separate archive-upload size cap ends up being,
+    # self-adjusts within the shared intake/upload size cap,
     # and IS the standard zip-bomb heuristic (a legitimate repo rarely compresses
     # better than single-digit ratios; 42.zip-style bombs hit the thousands).
     if total_uncompressed > ratio_cap * max(len(data), 1):

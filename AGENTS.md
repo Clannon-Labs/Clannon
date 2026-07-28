@@ -59,7 +59,9 @@ Rust — V1 ships in Python, Rust is an experiment:
 - Rust only on already-built working components, 1:1 alongside live Python.
   Parallel implementation NEEDS an existing impl to validate against — that's why
   new code is the wrong target.
-- Nothing is Rust yet. Nobody starts before owner's design discussion.
+- Nothing is Rust yet. Owner settled boundary: separate process + versioned API
+  for stateful systems; FFI only for bounded pure computation when measured.
+  Track B is deferred while Python V1 advances.
 - New component genuinely needs Rust? Propose it with a specific argument, not default.
 
 Rust ports of EXISTING code — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):

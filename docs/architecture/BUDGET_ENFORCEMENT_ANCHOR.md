@@ -78,10 +78,16 @@ mirroring `usage_scope`), read by the anchor → `rate = settings.PRICING.price_
    the live-mission_id case (scope reflects a mission_id set AFTER entry); the loud-skip case;
    the refund-on-failure path.
 6. Then: route the built code to security for the enforcement-on gate review; coordinate the
-   mission_id-source wiring + go-live prices (owner) before flipping `enforcement_enabled=true`.
+   mission_id-source wiring, exact provider accounting, deployment-cost calibration, and
+   production seeding before asking owner for final go-live.
 
 ## Gates before enforcement-on (NOT for the build, for enabling)
-- Real per-model prices + infra values set (owner decision — `pricing.yaml` is PLACEHOLDER).
+- Exact per-request pricing handles actual fallback model/provider, prompt tiers,
+  modality, cache categories, effective dates, and charged provider tools; every
+  enabled route is covered fail-closed.
+- Infrastructure values are measured against chosen deployment and calibrated
+  conservatively; `pricing.yaml` and current infra rates remain placeholders.
 - Budgets actually seeded in prod (the billing/reset trigger, Stripe deferred).
 - The mission_id-source ContextVar wired at mission-start (orchestration coordination).
 - Security's review of the built code.
+- Owner's final go-live approval after evidence above is green.

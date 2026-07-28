@@ -349,7 +349,7 @@ $(printf "    %s\n" "${owned[@]}")
 - If you discover a decision that requires the backend coordinator's ruling,
   write a proposal under:
     $proposal_inbox
-  Use `From: $worker_identity` and `To: backend-coordinator`. This proposal
+  Use 'From: $worker_identity' and 'To: backend-coordinator'. This proposal
   route is the only exception to the owned-path edit list above. Do not put
   coordinator-to-worker task briefs in a proposal inbox.
 - Verify your work (run the relevant tests) and say exactly what you ran and

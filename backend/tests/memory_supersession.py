@@ -119,6 +119,9 @@ def test_mark_superseded_false_on_client_fault(monkeypatch):
         def retrieve(self, *a, **k):
             raise RuntimeError("connection reset")
 
+    # The deliberate client fault trips the module breaker; register its current
+    # value so pytest restores the exact prior state during fixture teardown.
+    monkeypatch.setattr(store, "_down_until", store._down_until)
     monkeypatch.setattr(store, "_qdrant", lambda: _FaultyClient())
     assert store.mark_superseded(MemoryStore.SEMANTIC, "u1", "old-id", "new-id") is False
 

@@ -27,21 +27,23 @@ question, and why stability outranks new surface area.
 **The bar we are building to.** Six Critical + three Exceptional benchmarks in
 `docs/benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md` (the owner's spec of the bar
 — it carries no status, deliberately). Honest verdicts live in exactly one place:
-`docs/benchmarks/V1_GAP_ANALYSIS.md`. As of 2026-07-28: **CB6 PASS, five
+`docs/benchmarks/V1_GAP_ANALYSIS.md`. As of 2026-07-28: **CB5 + CB6 PASS, four
 PARTIAL.** The outreach gate is all six Critical passing plus one Exceptional.
 
 **Your role.** You are the **coordinator**, not a labour agent. The owner has
 been explicit: *"you are a DICTATOR, not a labor!"* Your context is the scarce
 resource. You own `foundation/`, `core/pipeline.py`, `delivery/`, `config/`,
 `scripts/`, `docs/`, and final integration + merge authority. You are the **sole
-pusher** — specialists commit, you push.
+committer and pusher** — specialists produce scoped diffs; you review, test,
+commit, and push.
 
 **How work actually gets done.** Five specialists own disjoint trees
 (memory, orchestration, security, api, frontend) and coordinate hub-and-spoke
 through you, never with each other. You delegate through **headless workers**
-(`./scripts/crew.sh run <role> --brief <file> --dir <paths>`), review the diff,
-run the suite, and commit. Finding work outside your tree is the START of a task,
-not the end of it — file the proposal AND dispatch AND push it. See the
+(`./scripts/crew.sh run <role> --brief <file> --dir <paths>`); workers never
+commit or push. You review the diff, run the suite, commit, and push. Finding
+work outside your tree is the START of a task, not the end of it — file the
+proposal AND dispatch AND push it. See the
 "THAT'S X'S JOB" section in `CLAUDE.md`.
 
 **Messaging is PULL, never push.** Nothing injects into a running session. You
@@ -65,9 +67,9 @@ finished something.
 
 - Provider: Codex (interactive backend coordinator)
 - Updated: **2026-07-28**
-- HEAD: `60504c9`, everything pushed, suite green (1498 passed, 13 skipped —
-  qdrant + ClamAV are service-dependent and unavailable on this box; that is
-  normal, not a failure).
+- Current integration tip includes the proposal-freshness sweep, ClamAV
+  transport hardening, and live-Qdrant test-isolation repair. Full
+  service-absent and live-Qdrant suites are recorded below.
 
 ### What this session did
 
@@ -129,12 +131,55 @@ after successful runs, because a stale lock self-heals.
   earlier owner archives live in `proposals/archive/to-owner/`.
 - Three full suites passed during integration; latest: 1498 passed, 13 skipped.
 
+**7. Swept every proposal inbox and executed genuine work.**
+- Owner inbox was checked first with four unresolved decisions and no padding.
+  Owner answered all four during the sweep; questions/replies are archived and
+  ROADMAP §5 now truthfully says no actionable owner decision remains.
+- Seven implemented specialist proposals and four settled owner work briefs
+  were moved under `proposals/archive/`; archived headers now say `done`.
+- API worker proved a real isolated PNG journey: real Anthropic + Gemini calls,
+  53-second delivered run, SSE, media/docs experts, artifact, usage, audit,
+  decisions, thread, CORS, and restart continuity.
+- A healthy isolated backend remains available at `http://localhost:8000` for
+  the context-holding frontend session's desktop + 390px browser pass. Frontend
+  task is `proposals/to-frontend/2026-07-28_real-backend-browser-pass.md`; pull
+  rules forbid injecting into its already-running interactive session.
+- Live journey exposed ClamAV reset leakage. Security worker normalized socket
+  refusal/reset/timeout/broken-pipe into fail-closed `SanitizationError`;
+  regression lives in normal `backend/tests/`.
+- A live-Qdrant full suite exposed test pollution, not product failure:
+  `memory_store_concurrency.py` left `_SlowFakeClient` in module state. Memory
+  workers reproduced exact predecessor failure and repaired globals with
+  teardown-aware `monkeypatch`. A second exact failure proved
+  `memory_supersession.py` leaked its deliberate fault's circuit-breaker
+  deadline; it now restores the prior value too. Full isolated live-Qdrant
+  suite: 1518 passed, 1 existing ClamAV skip.
+- `crew.sh` worker-header examples used Markdown backticks inside an unquoted
+  heredoc, executing `From:`/`To:` as shell commands. Literal quoting fixed it;
+  a real security dispatch proved full worker identity survived.
+- Owner ratified shared archive cap, parallel small-cohort feedback while
+  engineering continues, and Python-first deferred Rust with a service-first /
+  bounded-FFI boundary. One stale security comment was corrected; 35 focused
+  tests passed.
+- Provider-pricing audit rejected blind reference-copy. Current settlement
+  loses cache/audio/per-request provider detail, charges fallback use against
+  configured primary, cannot model tiers/effective dates/tools, and has 26
+  routed IDs absent from pricing. `enforcement_enabled` stays false. This is
+  engineering work in ROADMAP §2; owner gets a fresh go-live proposal only
+  after evidence is green.
+- Final clean service-absent suite: 1506 passed, 13 expected dependency skips,
+  2 warnings. Isolated live-Qdrant suite: 1518 passed, 1 expected ClamAV skip.
+
 ### What is open, and who owns it
 
-- **Owner-gated (do NOT start these):** four proposals in
-  `proposals/to-owner/` — Rust design discussion, real model+infra
-  prices/final budget go-live, whether V1 ships to users, and archive-cap
-  divergence. Batch is greenlit and no longer on docket.
+- **Owner-gated:** none actionable; `proposals/to-owner/` contains only its
+  README. Final budget-enforcement go-live remains owner authority, but
+  engineering gates are not green enough to ask yet.
+- **Frontend action:** existing non-headless frontend session owns
+  `proposals/to-frontend/2026-07-28_real-backend-browser-pass.md`. Backend is
+  healthy and waiting; session must pull it at its next natural boundary.
+- **Proposal inventory:** frontend browser pass above is the only live
+  non-archive proposal. Owner and backend-specialist inboxes are empty.
 - **Benchmark work** is per-specialist and listed in `docs/ROADMAP.md` §2/§4.
 - **Known stale:** `docs/RESUME.md` config snapshot; current truth is
   `docs/config/CONFIG_INVENTORY.md`.
@@ -156,13 +201,21 @@ after successful runs, because a stale lock self-heals.
   `.codex/config.toml` sandbox.
 - **Never sweep another agent's files.** Always `git commit -- <explicit paths>`.
   The tree is shared and frontend/release files are routinely dirty.
+- **Unquoted heredocs execute backticks.** Worker prompt prose is still shell
+  input while `full_brief` is constructed. Use literal quotes, then prove the
+  rendered prompt through a real dispatch.
+- **Service-dependent suites change collection.** A live Qdrant turns 12 skips
+  into integration tests. Run it on a test-owned port/data set and watch for
+  leaked module globals; do not dismiss order-only failures as infrastructure.
 
 ## Change note
 
-Updated 2026-07-28 after first hardening tranche. Previous checkpoint below
-describes status-reconciliation and crew-workflow work that remains valid
-history; current checkpoint supersedes its CB5/crash-participant/batch-gate
-claims.
+Updated 2026-07-28 after proposal-freshness/execution sweep. Current checkpoint
+adds owner archive normalization, real frontend-backend readiness, ClamAV
+transport hardening, worker-prompt quoting, and two proven live-Qdrant test
+isolation repairs.
+Previous checkpoint remains history; current one supersedes its HEAD/suite/open
+inbox details.
 
 Rewritten 2026-07-28 to add the MENTAL MODEL section at the top, on the owner's
 instruction: Claude's weekly usage limit is nearly exhausted, so the backend role

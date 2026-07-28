@@ -36,8 +36,8 @@ def test_concurrent_cold_start_constructs_qdrant_client_exactly_once(monkeypatch
     exactly ONCE, not once per caller — otherwise every colliding caller
     leaks a redundant client (and its connection pool), exactly what the
     batch layer's concurrent readers would multiply on every cold start."""
-    store._client = None
-    store._down_until = 0.0
+    monkeypatch.setattr(store, "_client", None)
+    monkeypatch.setattr(store, "_down_until", 0.0)
     construct_count = {"n": 0}
     count_lock = threading.Lock()
 
@@ -72,7 +72,7 @@ def test_concurrent_cold_start_ensures_collection_exactly_once(monkeypatch):
     """Widen _ensure()'s check-then-act window and prove the same _lock
     serializes it: N concurrent first-callers for a not-yet-provisioned
     collection must call create_collection exactly ONCE, not once per caller."""
-    store._ensured = set()
+    monkeypatch.setattr(store, "_ensured", set())
     create_count = {"n": 0}
     count_lock = threading.Lock()
 

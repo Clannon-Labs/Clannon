@@ -53,8 +53,11 @@ alongside the Python, which stays live. Parallel implementation *requires* an ex
 implementation to validate against, which is exactly why new code is the wrong target.
 Process: **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical).
 
-**Nothing is Rust yet.** Nobody starts before the owner's design discussion. Agreed
-first experiment: the Redis budget broker. `foundation/` is LAST (209 in-process
+**Nothing is Rust yet.** Owner settled the boundary discussion on 2026-07-28:
+stateful/system components default to a separate supervised process with a
+versioned API; FFI is reserved for bounded pure computation where profiling
+justifies it. Track B is deferred while Python V1 advances. First candidate
+remains the Redis budget broker. `foundation/` is LAST (209 in-process
 importers). Revisit "new code in Rust" after V1 ships.
 
 If a new component genuinely needs Rust-level guarantees Python can't give, that's a
@@ -227,9 +230,8 @@ of any session that continues this work. Phase files live in
 `docs/benchmarks/mission/`; a phase moved to `docs/benchmarks/reached/` is done
 (outcome recorded inside).
 
-**Two owner briefs feed it** (raw text local + gitignored, kept as source in
-`proposals/owner-briefs-settled/` — moved OUT of the active inbox once settled;
-the committed docs below are canonical, so nothing is lost):
+**Two owner briefs feed it** (raw text local + gitignored, kept as settled
+source in `proposals/archive/to-owner/`; committed docs below are canonical):
 - `BACKEND_PARITY.md` → settled as the phase map + `V1_GAP_ANALYSIS.md`.
 - `BATCH_ARCHITECTURE.md` → settled as `docs/architecture/BATCH_ARCHITECTURE.md`
   (`[PROPOSED]` — a batch layer between orchestrator and experts; the structural

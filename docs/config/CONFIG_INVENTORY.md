@@ -20,8 +20,10 @@ the verification note below.
   `settings.{BUDGET,PRICING}`. Spend ceiling, history bounds, D10 usage window, memory token
   fallback, Redis/enforcement settings, and cost-estimation allowances have production
   consumers. `SPEND_CEILING_FRACTION` is derived from `BUDGET`, not independently valued.
-  Pricing entries and infra costs are still explicitly placeholders; that is a go-live owner
-  input, not missing loader wiring.
+  Pricing entries and infra costs are still explicitly placeholders. Official-rate audit on
+  2026-07-28 proved the current two-float schema/runtime usage is insufficient for prompt tiers,
+  modality, cache categories, effective dates, charged provider tools, and actual fallback
+  models. This is engineering work, not missing loader wiring or an owner rate guess.
 - **Memory:** `config/backend/memory.yaml` loads as `settings.MEMORY`; ranking, hydration,
   write-policy, embeddings retry, Qdrant timeout, graph hop ceiling, read/write timeouts,
   search top-K/relevance, and distillation retry consumers are repointed.
@@ -67,9 +69,10 @@ area ownership, behavior-preserving defaults, validation, and tests.
    authoritative config where one exists (for example client upload caps and brief minimum
    should consume the `/config` contract, not literal mirrors). Delete or wire dead declarations
    only when implementing their real feature; do not create speculative YAML keys.
-4. **Owner input genuinely remains:** replace placeholder per-model/infra prices, seed production
-   budgets, and authorize budget enforcement go-live. These determine real commercial/production
-   values. They do not block other config engineering.
+4. **Budget go-live engineering remains:** retain per-request provider/model and detailed usage;
+   represent tiers, modality, cache categories, effective dates, and charged tools; verify every
+   enabled route; measure deployment infra; seed production budgets; prove recovery/concurrency;
+   obtain security review. Owner authorizes final go-live only after evidence is green.
 5. **Not owner decisions:** D1–D12, the config layout, D5 relocation, D11 resilience placement,
    copy scope, and D12 self-registration have already been ruled. In particular, per-expert
    `model_role` and per-tool `timeout_s` stay in code under D12(b), and Qdrant collection names

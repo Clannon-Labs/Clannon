@@ -3,19 +3,18 @@
 # BACKEND-CONTROLLED. Rates are in MICRO-DOLLARS PER TOKEN (µ$/token; µ$ = USD × 1e6),
 # e.g. a model at $3.00 per 1M input tokens → 3.0 µ$/token input.
 #
-# ‼️ PLACEHOLDER PRICES — OWNER MUST VERIFY BEFORE THE BUDGET GOES LIVE (decision B3).
-# These are rough public-list-price guesses so the machinery is testable; a wrong number
-# here directly mis-sets our margin. Correct every rate against the provider's real
-# pricing, and ADD any model the roster routes to that is missing below. The loader is
-# FAIL-CLOSED: a model with no entry here cannot be charged (it BLOCKS the call rather
-# than spending un-priced), so a missing model is safe-but-broken, never a silent leak.
+# ‼️ PLACEHOLDER PRICES — NEVER ENABLE BUDGET ENFORCEMENT WITH THIS TABLE.
+# Official direct-provider rates were audited 2026-07-28, but cannot be copied safely:
+# production pricing has prompt-length tiers, modality rates, cache writes/reads,
+# effective dates, and provider tool charges. Runtime currently retains only aggregate
+# input/output tokens and may settle a fallback call against its configured primary.
+# Fix that accounting model first, then replace every rate and cover every enabled route.
+# The loader is FAIL-CLOSED: a model with no entry blocks when enforcement is active.
 # ─────────────────────────────────────────────────────────────────────────────
 
 models:
-  # ALL PRICES BELOW ARE PLACEHOLDER — owner sets the real per-token rates before go-live. The
-  # point of listing every model is completeness: every model model-catalog.yaml offers (or
-  # models.yaml could route to) MUST have an entry here, or the fail-closed budget BLOCKS it.
-  # Adding a new model = ONE line here (id + the two rates), nothing else.
+  # ALL PRICES BELOW ARE PLACEHOLDER. Current two-float rows exist only so
+  # enforcement-off machinery/tests can load; they are not commercially correct.
   #
   # Anthropic — Claude 5 family + 4.x
   claude-opus-5:      { input_micros_per_token: 15.00, output_micros_per_token: 75.00 } # PLACEHOLDER

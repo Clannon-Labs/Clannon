@@ -92,3 +92,43 @@ Owner reply channel is now `proposals/to-owner/`, one standard proposal per
 decision. `reports/` is information-only. Four live gates migrated; all previous
 owner-decision archives moved to `proposals/archive/to-owner/`. ROADMAP §5 and
 owner inbox must stay synchronized.
+- `15:15` **api** worker via **codex** — 2026-07-28_frontend-real-run-readiness.md — exit 0, 1450s — output: `.agents/runs/20260728-145121-api.out`
+- `15:28` **security** worker via **codex** — 2026-07-28_clamav-transport-fail-closed.md — exit 0, 1169s — output: `.agents/runs/20260728-150918-security.out`
+
+## 15:45 — proposal freshness sweep + real journey
+
+- Owner inbox first: exactly four genuine unresolved decisions; matches ROADMAP
+  §5. Seven implemented specialist proposals plus four settled owner briefs
+  moved to matching archive; archived statuses normalized to `done`.
+- @frontend real backend is healthy at `http://localhost:8000` with isolated
+  state and non-default dependency ports. Pull
+  `proposals/to-frontend/2026-07-28_real-backend-browser-pass.md` at next
+  boundary; desktop + 390px pass is ready. Real PNG proof delivered in 53s.
+- ClamAV refusal/reset/timeout/broken-pipe now fail closed through
+  `SanitizationError`; clean full suite passed 1506/13 before memory follow-up.
+- Real Qdrant made hidden integration tests run and exposed deterministic test
+  pollution: concurrency test retained `_SlowFakeClient`; supersession fault
+  test retained an open breaker. @memory workers proved both exact predecessor
+  failures and repaired exact-state restoration with pytest teardown. Live
+  Qdrant full suite: 1518 passed, 1 existing ClamAV skip.
+- `crew.sh` heredoc no longer executes worker header examples as shell commands;
+  real security dispatch preserved `security-worker` → `backend-coordinator`.
+- Owner answered all four live decisions. Shared archive cap ratified; owner
+  cohort runs in parallel with capability work; Rust remains Python-first and
+  deferred with service-first/FFI-bounded boundary. Provider references are
+  being verified against official prices before money config changes. Owner
+  inbox is empty; replies/questions archived.
+- @security removed one stale future-separate-cap comment; runtime unchanged,
+  focused upload/archive proof 35 passed, proposal archived.
+- Provider pricing audit made no unsafe config edit: 26 routed IDs are unpriced;
+  settlement loses cache/audio/per-request provider detail, charges fallbacks
+  against primary, and cannot represent tiers/effective dates/tool charges.
+  Enforcement stays off. Engineering repair is now ROADMAP work; owner gets
+  fresh go-live proposal only after gates are green.
+- Final clean backend suite: 1506 passed, 13 expected dependency skips,
+  2 warnings. Only live proposal is frontend real-backend browser pass.
+- `15:43` **memory** worker via **codex** — 2026-07-28_live-qdrant-suite-order-dependence.md — exit 0, 537s — output: `.agents/runs/20260728-153430-memory.out`
+- `15:53` **memory** worker via **codex** — 2026-07-28_live-qdrant-test-state-repair.md — exit 0, 581s — output: `.agents/runs/20260728-154336-memory.out`
+- `16:03` **memory** worker via **codex** — 2026-07-28_live-qdrant-breaker-test-repair.md — exit 0, 599s — output: `.agents/runs/20260728-155348-memory.out`
+- `16:10` **security** worker via **codex** — 2026-07-28_archive-cap-ruling-comment.md — exit 0, 82s — output: `.agents/runs/20260728-160858-security.out`
+- `16:15` **backend** worker via **codex** — 2026-07-28_provider-pricing-verification.md — exit 0, 465s — output: `.agents/runs/20260728-160811-backend.out`
