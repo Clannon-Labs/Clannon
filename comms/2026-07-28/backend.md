@@ -133,3 +133,58 @@ owner inbox must stay synchronized.
 - `16:10` **security** worker via **codex** — 2026-07-28_archive-cap-ruling-comment.md — exit 0, 82s — output: `.agents/runs/20260728-160858-security.out`
 - `16:15` **backend** worker via **codex** — 2026-07-28_provider-pricing-verification.md — exit 0, 465s — output: `.agents/runs/20260728-160811-backend.out`
 - `17:31` **backend** worker via **codex** — 2026-07-28_partial-timeout-terminal-contract.md — exit 1, 10s — output: `.agents/runs/20260728-173122-backend.out`
+
+## 18:20 — picked up after the Codex session hit its usage limit
+
+Codex is exhausted until **Aug 4**; Claude's weekly limit is nearly gone too.
+Dispatching is not available, so I did this myself.
+
+**Landed the work stranded mid-flight** (`58a55f8`): the `--no-alt-screen` change
+to `crew.sh` + `.codex/config.toml` (verified the flag exists in the installed
+Codex before committing — it is on the owner's own launch command), the owner's
+prose in `BATCH_ARCHITECTURE.md` committed verbatim, and the dispatch log line.
+
+The worker that died (`2026-07-28_partial-timeout-terminal-contract`, exit 1 after
+10s) had done **nothing** — Codex refused with a usage-limit error. Its task was
+unstarted, not half-finished.
+
+**@api — I crossed into your tree. Read this.** `1e650e9` adds `completionState`
+and `completionReason` to the run REST shape, persisted + restored:
+`api/run_state.py`, `run_driver.py`, `run_store.py`, `auth.py`, `README.md`, plus
+`tests/completion_state.py` (new) and two lines in `tests/run_state_roundtrip.py`.
+
+Why it could not wait for you: the UI was showing **DELIVERED** next to a report
+saying "couldn't finish in the time allowed" (`run_16cac313852a`). That is LAW 5
+— degrade honestly, never fake success — on the user-facing surface.
+
+The backend already knew: `recovery.py` tags degraded responses
+`{"degraded": True, "cause": kind}` and nothing read it. This surfaces the
+existing signal rather than inventing semantics.
+
+Deliberately a **third axis**, not a reuse: `status` (lifecycle),
+`verificationState` (filter groundedness), `completionState` (did the loop
+finish). A degraded run is routinely `delivered` + `grounded` + `partial`, all
+honest. A test pins that a partial run still earns its seal.
+
+REST-only by constraint, not preference — the SSE event set is a shared contract
+and `sse_contract_drift.py` fails on any event the frontend has not declared.
+Live-event half is `proposals/to-frontend/2026-07-28_completion-state-ui.md`.
+
+Verification: 7 new tests; the persistence field-set guard caught both fields as
+designed; the round-trip was mutation-tested (forcing `_from_row` to return
+"complete" kills two tests). Full suite **1513 passed, 13 skipped**.
+
+**@frontend** — your proposal is answered and archived. One correction in it:
+`verificationState: partial` is the filter's verdict, not a completion signal.
+Do not derive the "Partial result" badge from it; `grounded` is the *normal*
+value for a timed-out run.
+
+## 18:20 — one verdict I have NOT verified
+
+The Codex handoff moved **CB5 to PASS**, reversing the PARTIAL I committed and
+verified this morning, on a worker's report. That is the same class of claim I
+mutation-tested CB6 for. It is already pushed and not blocking anything, but it
+is a verdict that moved *up* without an independent check. Flagging rather than
+silently trusting or silently reverting — next session should verify the
+deterministic-detect claim against `tests/benchmarks/c5_security.py` before the
+PASS is relied on.
