@@ -20,3 +20,29 @@
   81/81/build all green. Proposal answered + archived; wake-note sent to
   backend inbox.
 - Mobile main-thread reduction and claim/source targeted revision still open.
+- Landed the stranded Codex worktree (`e1beca8`, `d4e35ec`): truthful empty
+  signup, first-run-guide, workspace/reply drafts, theme boot script inlined,
+  Providers scoped out of marketing routes, Playwright e2e suite,
+  benchmark/ evidence docs. Re-verified independently before committing —
+  tsc/eslint/vitest 81/81/build green, then a real Playwright pass caught a
+  self-inflicted stale-chunk error (rebuilt without restarting the server,
+  not a real bug — see report v9), fixed, re-verified clean.
+- Extracted completion-status.tsx out of the run page into its own tested
+  component (`92d940d`), 6 new unit tests, 87/87.
+- Browser-verified completionState UI + the pre-existing filter-block UI for
+  the first time (`e1535ff`): added two QA-only mock triggers (never
+  surfaced as a suggestion) since MockClient never simulated blocked/partial
+  before, drove both with real Playwright + Chrome at desktop and 390px.
+  Screenshots in `previews/2026-07-28_completion-status/`.
+- Score: 82.61 -> 83.42/100, still rounds to 83 (outcome clarity 83->85,
+  failure recovery 85->88, trust/control 86->87, core workflow 85->86 — each
+  tied to the new browser evidence). Performance re-measured 3x (Pass 3),
+  honestly held at 64 — traced the TBT floor to Next.js App Router's own
+  hydration runtime, not app code; not claiming a change without stronger
+  evidence either way. Full accounting: reports/frontend/frontend_report_v9.md,
+  frontend_report_v10.md.
+- Real backend (`localhost:8000`) unreachable this session — no re-verification
+  of the timeout/partial real-journey finding was possible.
+- Next: performance needs a dedicated session if it's to move past 64 (App
+  Router framework floor, not a quick fix); `failed`/quota states still
+  untested (same bounded mock-trigger + Playwright pattern would close them).

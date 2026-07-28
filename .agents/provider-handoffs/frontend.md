@@ -5,49 +5,52 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
-- Updated: 2026-07-28
-- Task: answer `proposals/to-frontend/2026-07-28_completion-state-ui.md` —
-  render backend's new `completionState`/`completionReason` REST fields
-- State: done, committed (`9dc4d84`), pushed to `origin/main`
-- What shipped: `CompletionState`/`CompletionReason` types + `Run` fields in
-  `src/lib/api/types.ts`; run page (`src/app/app/runs/[id]/page.tsx`) renders a
-  "Partial" pill next to the terminal status badge and a reason-coded banner
-  (timeout / rate_limit / error / unclassified) with a "Continue this run"
-  button that focuses the composer. Kept `completionState` a strictly separate
-  axis from `status`/`verificationState` per backend's correction — did not
-  derive the badge from `verificationState`.
-- Not shipped: `completion` SSE `RunEvent` variant — REST is enough since the
-  value only exists once a run is terminal, and `useLiveRun` already
-  refetches on stream close so badge/banner land the same tick as the terminal
-  status. Told backend (wake-note) to say if they want it live anyway.
-- Verification: `tsc --noEmit`, `eslint src`, `vitest run` (81/81, unchanged —
-  no new isolable unit; the banner follows the same untested-inline pattern as
-  the existing `isFailure`/`isCancelled` terminal blocks in that file), and
-  `next build` — all pass. No new mock.ts support (verificationState never got
-  mock support either; convention is real-backend-only for these fields).
-- Proposal: answered, archived to `proposals/archive/to-frontend/`. Wake-note
-  at `proposals/to-backend/2026-07-28_completion-state-ui-shipped.md`.
-- Worktree note: this session's commit touched only `types.ts` and the run
-  page (explicit `git add -- <paths>`, not `-A`) — a large set of *other*
-  frontend files were already modified in the working tree before this
-  session started (marketing/app pages, theme, package.json/lock, new
-  benchmark/e2e/playwright scaffolding, first-run-guide, browser-drafts —
-  apparently a prior Codex pass per the earlier checkpoint below) and were
-  deliberately left untouched/uncommitted. Whoever owns that WIP should
-  commit or continue it directly; it was not evaluated or verified here.
-- Next frontend value (per prior checkpoint, still open): mobile main-thread
-  reduction (mobile Lighthouse 63/57 vs 90 gate), claim/source targeted
-  revision, and whatever the untouched WIP above turns out to be.
+- Updated: 2026-07-28 (later in the day than the checkpoint below)
+- Task: land the stranded worktree from the prior checkpoint, then push the
+  paid-product benchmark genuinely past 83 (owner instruction, this session)
+- State: done through four commits, all pushed —
+  `e1beca8`/`d4e35ec` (landed the stranded worktree), `92d940d` (extracted +
+  tested `completion-status.tsx`), `e1535ff` (browser-verified both the
+  completion-status UI and the pre-existing filter-block UI for the first
+  time). Full accounting: `reports/frontend/frontend_report_v9.md`,
+  `frontend_report_v10.md`.
+- The stranded worktree (prior checkpoint's "STILL UNCOMMITTED") is landed:
+  re-verified independently first (tsc/eslint/vitest 81/81/build), then a
+  real Playwright pass caught a self-inflicted stale-chunk error (rebuilt
+  `next build` without restarting `next start` — not a product bug, hit it
+  twice this session, both times run to ground with a raw Playwright +
+  `console.log` script rather than assumed-away). Excluded
+  `.agents/provider-handoffs/release.md` and `comms/2026-07-27/release.md`
+  from every commit — release role's own files in the same shared tree.
+- Score: 82.61 -> 83.42/100, still rounds to 83. New evidence: added two
+  QA-only mock triggers (`src/lib/api/mock.ts`, keyed off brief text, never
+  surfaced as a suggestion) since `MockClient` never simulated a
+  `blocked`/`partial` terminal — closed that gap, drove both with real
+  Playwright + Chrome at desktop and 390px
+  (`previews/2026-07-28_completion-status/`). Outcome clarity 83->85,
+  failure recovery 85->88, trust/control 86->87, core workflow 85->86, each
+  tied to the new evidence. Performance re-measured 3x (Pass 3), honestly
+  held at 64 — traced the mobile TBT floor to Next.js App Router's own
+  hydration/RSC runtime (verified no react-query/motion in that chunk, and
+  every marketing component is already a server component) — a framework
+  floor, not an app bug, needs a dedicated session to attack further.
+- Real backend (`localhost:8000`) refused connection all session — no
+  re-verification of the real-journey timeout finding was possible; noted
+  honestly rather than reused as if still current.
+- Not done: `failed`/quota-exceeded states are still untested (same bounded
+  mock-trigger + Playwright pattern as this session would close them).
+  Mobile Lighthouse 90 gate remains far off and needs the framework-floor
+  work flagged above, not incremental app tuning.
 
 ## Change note
 
-Claude Code resumed cold (prior session's context was stale/reverted — CB5 had
-since been reverted and re-landed differently per git log, so acted on current
-repo state per explicit instruction rather than the stale summary). Checked
-inboxes fresh, found and answered the one pending proposal (completion-state
-UI), shipped it end-to-end (types, UI, verify, commit, push, respond, archive,
-wake backend). Did not touch the large pre-existing uncommitted diff from the
-previous (apparently Codex) session — flagged above instead of guessing at it.
+Landed the previous checkpoint's stranded 83/100 worktree (was "STILL
+UNCOMMITTED" for two checkpoints running) rather than leaving it stranded a
+third time, per owner instruction this session. Then answered "push toward
+85+ genuinely" by closing a real, named gap (completion-status UI had zero
+browser evidence) instead of inflating the number — landed at 83.42, said so
+plainly, and left performance/backend-timing honestly unmoved where the
+evidence didn't support a claim either way.
 
 ## Previous checkpoint
 
