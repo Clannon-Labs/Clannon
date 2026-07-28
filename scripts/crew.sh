@@ -384,7 +384,12 @@ EOF
       # what happens when this script is backgrounded — the normal mode for a long
       # task) the provider blocks forever having done nothing. A short foreground
       # test hides it, because there stdin EOFs immediately.
-      ( cd "$dir" && claude -p "$full_brief" --dangerously-skip-permissions ) \
+      # Sonnet for delegated implementation, same reasoning as the interactive
+      # specialist default (see is_specialist): a headless worker runs ONE scoped
+      # brief and its diff is reviewed before it lands, so the quality net is the
+      # coordinator's review, not the model tier. Opus budget stays with
+      # coordination and review, which is where it actually pays.
+      ( cd "$dir" && claude -p "$full_brief" --model claude-sonnet-5 --dangerously-skip-permissions ) \
         </dev/null >"$out" 2>"$log" || rc=$?
       ;;
     codex)

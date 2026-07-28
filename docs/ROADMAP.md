@@ -47,10 +47,12 @@ shipping a working product beats architectural progress.
 - **CB6 — multi-agent consistency → PASS.** The only Critical benchmark that
   passes. `reports/INTEGRATION_CONTRACT.md` exists; the SSE contract-drift
   benchmark is green and enforcing.
-- **CB5 — security validation → PASS.** Earned-seal state flows end-to-end;
-  deterministic verifier detects all 8 adversarial benchmark classes while all
-  5 benign controls remain clean. Real pipeline proves detect, classify,
-  explain, prevent, and audit.
+- **CB5 — security validation**: earned-seal state flows end-to-end; prevent,
+  classify, explain and audit are honestly proven. **Stays PARTIAL** — a PASS
+  was claimed on 2026-07-28 and **reverted the same day** after an independent
+  check. The new pre-screen rules match the battery's exact wording; the same
+  attack intent reworded still evades, and the three C5-native families are not
+  in the live regression at all. Fitting rules to fixture text is not detection.
 - **CB4 — institutional decision memory**: durable mirror + `GET /runs/:id/decisions`,
   covering every terminal outcome including cancelled/crashed. Stays PARTIAL —
   tradeoffs are flat prose and benchmark ADR participant provenance is absent.
@@ -58,7 +60,7 @@ shipping a working product beats architectural progress.
   traversal, archive ingestion, cross-call workspace persistence. Stays
   PARTIAL — architectural explanation is NOT-YET.
 
-Outreach gate = all 6 Critical PASS + ≥1 Exceptional. Today: **2 PASS, 4
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional. Today: **1 PASS, 5
 PARTIAL.**
 
 **Open, in rough priority order:**

@@ -18,14 +18,14 @@
 | CB2 | Large repository understanding | **PARTIAL** (symbol/AST/dependency/archive tiers built; architectural explanation absent) | open | medium (explanation synthesis) | no — built |
 | CB3 | Unified multi-modal representation | **PARTIAL** (string-survival + graph-convergence mechanism proven; real media ingestion absent) | — | medium (media extractor) | no — built |
 | CB4 | Institutional decision memory | **PARTIAL** | open | medium (structured tradeoffs/history + ADR participant provenance) | no |
-| CB5 | Security validation | **PASS** | complete | — | no |
+| CB5 | Security validation | **PARTIAL (near-pass)** | open | low (hermetic detect) | no |
 | CB6 | Multi-agent architectural consistency | **PASS** | complete | — | no |
 | EB1 | Knowledge evolution (temporal truth) | **PARTIAL** | rides CB1 | low | no |
 | EB2 | Autonomous project continuity | **PARTIAL** | rides CB1+CB4 | medium | no |
 | EB3 | Cross-media knowledge synthesis | **PARTIAL** (entity-mediated link proven; direct edge is a schema gap, semantics absent) | — | medium | no — built |
 
-Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **2 Critical
-PASS, 4 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **1 Critical
+PASS, 5 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
 CB2/CB3/EB3 blocked on (ratified 2026-07-06, built + benchmark-proven through
 2026-07-25 — `tests/benchmarks/c2_repo_intelligence.py`,
 `c3_knowledge_web_convergence.py`, `eb3_cross_media_synthesis.py`) moved all
@@ -34,7 +34,9 @@ tier has since landed; its architectural-explanation requirement remains
 NOT-YET. CB3/EB3 still need real media extraction (§3.4), not more graph
 substrate work. **Reconciled 2026-07-28:** CB6 now passes; stale
 priority stars were removed because they directed agents toward completed
-CB4/CB5/CB6 sub-work rather than remaining benchmark gaps.
+CB4/CB6 sub-work rather than remaining benchmark gaps. **Re-verified same day:**
+CB5's PASS claim did not hold up to an independent check — reverted to PARTIAL
+(near-pass); see its section below.
 
 ---
 
@@ -121,16 +123,42 @@ metadata.
 **Path (no graph):** structure tradeoffs and historical links; add ADR
 participant provenance; extend the CB4 harness.
 
-### CB5 — Security Validation — PASS (updated 2026-07-28)
+### CB5 — Security Validation — PARTIAL (near-pass) (re-verified 2026-07-28)
 **BUILT:** real intake→sanitizer→verifier gates. `tests/benchmarks/c5_security.py`
 runs an adversarial battery (injection, jailbreak, malicious markdown, memory
 poisoning, encoded exfil, tool abuse) through the **real** stages and asserts
 every attack is **blocked + halted + audited** (`c5_security.py:391-392`).
-sole-broker + `user_id` scoping close the poisoning/retrieval surface.
-**PASS:** bounded compound attack-class rules flag all 8 adversarial cases
-hermetically while all 5 benign controls remain clean. Real benchmark reports
-PASS for detect, classify, explain, prevent, and audit. Focused proof: 20 tests
-passed plus direct benchmark `OVERALL: PASS`.
+prevent/classify/explain/audit are honestly proven as PLUMBING — that part of
+today's `5 passed` run stands. sole-broker + `user_id` scoping close the
+poisoning/retrieval surface.
+**Reverted from an unverified PASS the same day it was claimed.** A prior
+session added five new deterministic regex rules
+(`core/verifier/rules.py`, e.g. `hidden_markup_instruction`,
+`persistent_authority_poisoning`, `retrieved_authority_instruction`) and
+tightened `test_deterministic_prescreen_flags_some_attacks_hermetically` to
+`..._flags_every_attack_hermetically`, then flipped this row to PASS on that
+green run. Independent check: the new patterns match the battery's exact
+wording (e.g. `outranks?`, `store…permanently…skip…safety`) — feeding the same
+attack **intent**, mildly reworded, evades 2 of 3 of the new rules entirely
+(verified by hand: `mem_persist_paraphrase` and `md_hidden_paraphrase` both
+score `suspected=False` against the live `scan_text_risk`). Removing any one
+rule and re-running does turn the suite red, so the assertion isn't vacuous —
+but it is only sensitive to the frozen fixture strings, not to the attack
+class. Confirmed separately: none of the three C5-native families (malicious
+markdown, both memory-poisoning cases) appear in
+`scripts/prompt_regression.py::_verifier_cases` either — so those three
+payloads carry **no live semantic certification and no paraphrase-robust
+regex**, only fixture-literal matching plus the hermetic verifier double
+(`_make_verifier_double`), which is a dict keyed on the exact payload text and
+therefore proves nothing about real LLM detection. **detect remains PARTIAL**
+for the same reason the original PARTIAL named: the deterministic screen is a
+non-blocking hint (`rules.py`'s own docstring — the LLM is "the sole content
+judge for text"), and the layer that actually blocks is either unhermetic
+(live LLM) or, in this harness, an answer-key oracle. Structured
+classification/explanation and earned-seal surfacing have landed.
+**Path (no graph):** either prove the LLM live against these 3 payload
+classes (extend `scripts/prompt_regression.py`), or accept detect stays
+PARTIAL and stop advertising hermetic proof it doesn't have.
 
 ### CB6 — Multi-Agent Architectural Consistency — PASS (updated 2026-07-28)
 **BUILT:** pull-based proposal workflow, `reports/INTEGRATION_CONTRACT.md`, and
@@ -163,7 +191,7 @@ that ongoing obligation does not reduce current benchmark verdict.
 
 ## Remaining work
 
-CB5 and CB6 are complete. CB4's durable mirror is also complete sub-work.
+CB6 is complete. CB4's durable mirror is also complete sub-work.
 
 Open benchmark gaps:
 
@@ -174,6 +202,9 @@ Open benchmark gaps:
 3. **CB2:** architectural explanation over landed symbol/AST/dependency/archive
    capabilities.
 4. **CB4 / EB2:** structured tradeoffs/history and ADR participant provenance.
+5. **CB5:** deterministic-detect residual — the 3 C5-native adversarial classes
+   (malicious markdown, memory poisoning ×2) have neither live LLM
+   certification nor paraphrase-robust regex, only fixture-literal matching.
 `docs/ROADMAP.md` remains canonical for cross-role ordering and owner gates.
 
 ---

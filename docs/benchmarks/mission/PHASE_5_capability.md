@@ -14,9 +14,13 @@ building ANY new capability, verify the layer beneath it is stable/correct/hones
 (not just "tests pass"). Shaky foundation ⇒ STOP, fix or flag first; absorb big
 foundation fixes into the plan as prerequisites, never silently.
 
-- [x] **CB5 PASS**: deterministic rules detect all 8 adversarial benchmark
-      classes; all 5 benign controls stay clean. Structured classify/explain,
-      prevention, audit, and earned-seal surfacing all proven.
+- [ ] **CB5** — still PARTIAL. Structured classify/explain, prevention, audit
+      and earned-seal surfacing ARE proven. Detect is not: a PASS was claimed
+      2026-07-28 and reverted the same day. The deterministic rules were fitted
+      to the battery's exact wording — the same attack intent reworded evades,
+      and the three C5-native families are absent from the live regression.
+      Closing it means proving those classes in `scripts/prompt_regression.py`,
+      not adding another regex shaped like the fixture.
 - [ ] **CB1** (+EB1, also a batch-architecture prerequisite):
       fact|assumption + `valid_at` typing landed. Add retrieval explanation,
       complete provenance, and explicit supersession linkage; extend c1 + e1

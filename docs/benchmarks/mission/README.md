@@ -31,7 +31,7 @@ authoritative, resumable plan.
 | 2 — Latency | `mission/PHASE_2_latency.md` | not started (needs running stack) |
 | 3 — Contract & honesty | `reached/PHASE_3_contract_honesty.md` | ✅ reached — earned seal + honest docs |
 | 4 — Integration Contract | `reached/PHASE_4_integration_contract.md` | ✅ reached — contract + drift enforcement |
-| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | in progress — CB5 + CB6 passed; other gaps remain |
+| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | in progress — CB6 passed; CB5 PASS was claimed and reverted; other gaps remain |
 | 6 — Verify | `mission/PHASE_6_verify.md` | ongoing (per commit) |
 | F — Foundation hardening | `mission/PHASE_F_foundation_hardening.md` | in progress |
 

@@ -22,10 +22,26 @@ patterns the existing tests use:
 Consequently this harness HERMETICALLY certifies the security PLUMBING — the
 deterministic pre-screen, the category -> audit-reason-code mapping, the fail-closed
 block, the structured (never prose) explanation, the pipeline halt, and the audit
-trail. The verifier LLM's semantic DETECTION accuracy on regex-evading payloads is
-certified LIVE by scripts/prompt_regression.py (14/14), not here; the report says
-so plainly. That residual is why detect is reported PARTIAL rather than PASS, which
-is the honest end-to-end read for C5.
+trail. The verifier LLM's semantic DETECTION accuracy is certified LIVE by
+scripts/prompt_regression.py (14/14), not here.
+
+BUT — and this is the residual, stated precisely because it was over-claimed once
+(2026-07-28: CB5 was flipped to PASS and reverted the same day) — that live
+certification does NOT cover three of THIS file's families. `mal:hidden-markup`,
+`mem:persist-false-override` and `mem:retrieved-instruction` appear nowhere in
+prompt_regression's `_verifier_cases`. They are matched here only by the
+deterministic pre-screen and by `_make_verifier_double`, which is a dict keyed on
+the exact payload text — an answer key, not a detection proof.
+
+The pre-screen rules that catch them were written against these exact strings, so
+they do not generalize: feeding the same attack INTENT in different words scores
+clean (verified by hand against live `scan_text_risk`). Removing a rule does turn
+this suite red, so the assertions are not vacuous — they are simply sensitive to
+the frozen fixture wording rather than to the attack class.
+
+That is why detect is PARTIAL, not PASS. Closing it means proving these three
+classes live in prompt_regression.py — not adding another regex fitted to the
+fixture.
 
 Run:
     pytest tests/benchmarks/c5_security.py -q                     # acceptance tests
