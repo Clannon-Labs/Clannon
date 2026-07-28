@@ -253,8 +253,9 @@ after successful runs, because a stale lock self-heals.
 - **Proposal inventory:** frontend browser pass above is the only live
   non-archive proposal. Owner and backend-specialist inboxes are empty.
 - **Benchmark work** is per-specialist and listed in `docs/ROADMAP.md` §2/§4.
-- **Known stale:** `docs/RESUME.md` config snapshot; current truth is
-  `docs/config/CONFIG_INVENTORY.md`.
+- **Known stale:** none. `docs/RESUME.md`'s config snapshot was the last one and
+  is fixed — it now points at `docs/config/CONFIG_INVENTORY.md` rather than
+  keeping a second copy, since the duplication was the defect.
 
 ### Traps this session actually hit — do not relearn them
 

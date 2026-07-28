@@ -167,10 +167,13 @@ owner can act now; future gates stay in their engineering plan until ready.
 
 ## 6. Stale things worth fixing
 
-`docs/RESUME.md` carries an older config snapshot that still names already
-completed repoint work as next. Current config truth is now
-`docs/config/CONFIG_INVENTORY.md` (verified 2026-07-28). Reconcile or retire the
-stale snapshot before anyone uses it for config work.
+Nothing currently known-stale.
+
+Fixed 2026-07-28: `docs/RESUME.md`'s duplicated config snapshot. It named the
+ORCHESTRATOR_*/EXPERT_*/TOOL_* constant removal as next work; those constants no
+longer exist. It now points at `docs/config/CONFIG_INVENTORY.md` instead of
+carrying a second copy of the status — the duplication was the actual defect, so
+re-syncing it would only have reset the clock on the same rot.
 
 Fixed 2026-07-28: terminal decision-audit coverage. `run_driver.py`'s `finally`
 covers every terminal status and now retains authoritative pipeline context

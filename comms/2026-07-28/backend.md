@@ -260,3 +260,49 @@ touching the `RunEvent` union, so the gate correctly never fired.
 Full suite **1513 passed, 13 skipped** re-run after the frontend commit, so the
 number is verified at the pause point rather than inherited. Working tree carries
 only the frontend and release sessions' own files — theirs, deliberately untouched.
+
+## 20:45 — the CB5 flip is now blocked by a test, not a note
+
+Owner asked why nothing stops the next agent adding a sixth fixture-shaped regex
+and flipping CB5 back to PASS. Fair — nothing did. Warnings sat in five docs but
+**not** in `core/verifier/rules.py`, which is the file you actually have open when
+tempted, and a note does not fail a build.
+
+`tests/benchmarks/cb5_verdict_honesty.py` now runs paraphrased versions of the
+C5-native attacks through the live pre-screen and checks the result against the
+verdict published in `V1_GAP_ANALYSIS.md`. Three of four paraphrases currently
+evade outright (mem_persist, mem_retrieved, jailbreak → no categories).
+
+It fails **both** ways on purpose:
+- row says PASS while paraphrases evade → the over-claim that happened
+- row says PARTIAL while all are caught → detect improved and the status is
+  stale, which is its own LAW 7 failure
+
+Proven by simulating the mistake: flipping the table row to PASS turns the suite
+red and names the three attacks that escaped. Restored after.
+
+A second test pins the paraphrases as paraphrases — the quiet way to kill this
+guard is to edit one until it resembles the fixture, at which point the fitted
+rules match and the protection vanishes unnoticed.
+
+The lesson is in `CLAUDE.md`/`AGENTS.md` beside the keep-status-current law:
+**a green suite is not a verdict, and non-vacuous is not the same as
+generalising.** Deleting one of those rules DID turn the suite red, so ordinary
+mutation testing certified tests that proved nothing about the attack class.
+
+## 20:45 — last backend item closed; ROADMAP §6 is empty
+
+`docs/RESUME.md` was carrying its own config snapshot that named the
+ORCHESTRATOR_*/EXPERT_*/TOOL_* constant removal as NEXT work. Those constants are
+gone from `foundation/vocab/constants.py` entirely — an agent trusting that file
+would have gone hunting for finished work.
+
+Fixed by deleting the duplicate rather than re-syncing it: it now points at
+`docs/config/CONFIG_INVENTORY.md`. The duplication WAS the defect, so refreshing
+it would only reset the clock on the same rot (LAW 1). Kept the one durable bit
+that is about *how* not *what*: repoint constants atomically and import-smoke
+after, because a botched multi-line import once broke `import core` tree-wide.
+
+Backend is done. Suite **1518 passed, 13 skipped**. ROADMAP §6 now genuinely
+reads "nothing currently known-stale", and this time it was verified against the
+tree rather than asserted.

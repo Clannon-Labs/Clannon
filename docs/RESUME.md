@@ -149,18 +149,19 @@ committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
   serialized (one at a time). Redis/fakeredis/lupa are now deps (`redis` runtime; `fakeredis`+`lupa`
   dev) — `uv pip install --python backend/.venv/bin/python -r backend/requirements.txt -r backend/requirements-dev.txt`.
 - **Two active tracks:**
-  1. **Central config/** (owner's control panel). D1–D12 all ruled. Typed loader `backend/settings.py`
-     is live; configs placed for budget/pricing/memory/orchestrator/experts/tools/llm/verifier/security/
-     **intake**. D1 foundation-constant moves largely done + single-sourced: MEMORY_*, LLM_*, SANITIZER_*/
-     FILTER_MAX_RETRIES, intake RATE_LIMIT_* + MAX_INPUT_SIZE all removed from `foundation/vocab/constants.py`.
-     Since resume: **D10** (usage window), **VERIFIER_*** removed, **archive bomb-guard floors**
-     (`settings.SECURITY.archive_*`) all DONE. **NEXT config:** the ORCHESTRATOR_*/EXPERT_*/TOOL_*
-     foundation-constant removal (production repointed, blocked only on repointing a few TEST refs —
-     `tests/{turn_wall_clock,model_settings,orchestrator_turn_budget,request_overload_throttles_cheap}.py`;
-     ⚠️ do these edits ATOMICALLY + import-smoke — a botched multi-line-import insert broke `import core`
-     tree-wide once this session); D11 `resilience.yaml` (touches memory's `store.py` — coordinate);
-     `models.yaml` → `config/models.yaml` (touches orchestration's registry loader — coordinate). Full
-     map: `docs/config/CONFIG_INVENTORY.md`.
+  1. **Central config/** (owner's control panel). D1–D12 all ruled; typed loader
+     `backend/settings.py` is live. **Status lives in ONE place — `docs/config/CONFIG_INVENTORY.md`.
+     Read it there, not here.**
+
+     This section used to carry its own snapshot and it rotted, as duplicated status always
+     does (LAW 1). It named the ORCHESTRATOR_*/EXPERT_*/TOOL_* foundation-constant removal as
+     "NEXT, blocked only on repointing a few TEST refs" — that work is finished; those
+     constants are gone from `foundation/vocab/constants.py` entirely (verified 2026-07-28).
+     An agent trusting this file would have gone looking for work that no longer exists.
+
+     One durable lesson worth keeping, because it is about HOW not WHAT: ⚠️ do
+     constant-repointing edits ATOMICALLY and import-smoke after — a botched multi-line-import
+     insert broke `import core` tree-wide once.
   2. **Batch + Redis budget** (PHASE_BATCH_REDIS, owner brief in `proposals/to-backend/`). Split: memory =
      Kuzu-graph + memory slices; orchestration = Mission Engine + batch orchestrator; backend = foundation
      seams + reviews/merges + the Redis budget core.
