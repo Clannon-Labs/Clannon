@@ -128,12 +128,27 @@ export interface Run extends RunSummary {
   blockStage?: "sanitize" | "verify" | "filter" | "security" | null;
   /** The output filter's verdict on this run. Not yet surfaced in the UI. */
   verificationState?: VerificationState | null;
+  /** Did the loop finish the work it planned, independent of `status` and
+   *  `verificationState`? A `delivered` run is routinely `complete: "grounded"`
+   *  and `completionState: "partial"` at once — it really was delivered, the
+   *  answer really is grounded, and it really didn't finish everything planned.
+   *  See INTEGRATION_CONTRACT.md — the three axes are never collapsed into one. */
+  completionState?: CompletionState;
+  /** Why the loop stopped short, when `completionState` is `"partial"`. `null`
+   *  when the cause wasn't classified, or the run is fully `"complete"`. */
+  completionReason?: CompletionReason;
 }
 
 /** The output filter's verdict on a run's delivered/blocked draft. `null` only
  *  when the filter never ran (an earlier gate blocked first). "not_applicable"
  *  is a non-research turn that never claimed anything checkable — not a failure. */
 export type VerificationState = "grounded" | "partial" | "ungrounded" | "not_applicable";
+
+/** Whether the loop finished everything it planned before stopping. */
+export type CompletionState = "complete" | "partial";
+
+/** Cause of a partial completion — why the loop stopped short. */
+export type CompletionReason = "timeout" | "rate_limit" | "error" | null;
 
 /** Events emitted on a live run stream (SSE `data:` payloads). */
 export type RunEvent =
