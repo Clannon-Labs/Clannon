@@ -58,6 +58,8 @@ PERSISTED = {
     "project_id",
     "sources",
     "verification_state",
+    "completion_state",
+    "completion_reason",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -118,6 +120,10 @@ def _fully_populated_run() -> RunState:
     run.sources = [{"id": "src_1", "title": "example.com — clannon",
                     "url": "https://example.com/clannon", "domain": "example.com"}]
     run.verification_state = "grounded"
+    # distinctive non-default: the default is "complete"/None, so a dropped column
+    # would still look right if we round-tripped the default.
+    run.completion_state = "partial"
+    run.completion_reason = "timeout"
     return run
 
 

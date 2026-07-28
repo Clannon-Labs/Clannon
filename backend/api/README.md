@@ -78,7 +78,30 @@ JSON keys are camelCase to match the frontend types in
 | `/projects/:id` | DELETE | — | `204` cascade: deletes the project AND its runs (+ their stored files) AND its wiki/memory scope. Owner-scoped + idempotent (same semantics as `DELETE /sessions/:id`). The learned cross-session memory (Qdrant tiers) is retained |
 | `/runs` | GET | `?projectId=<id>` (optional) | `RunSummary[]` — filtered to one project when `projectId` is given, all of the user's runs when omitted. Each `RunSummary`/`Run` carries an optional `projectId` |
 | `/runs` | POST | `multipart/form-data`: `brief` (text) + optional `files` (input files) + optional `models` (JSON object `role -> model`, per-session model choices) + optional `projectId` (the run is created in that project; an unknown/other-user project is a 422) | `{id}`, starts the pipeline in the background. Each uploaded file is malware-scanned at the boundary (ClamAV/YARA) and seeded into the expert workspace with its original bytes — clean files are NOT redacted; a malicious/unsupported/oversized file is a 422. File scope: text, PDF, image, audio, video; max 10. `models` overrides the user's workspace defaults for this run only (422 on an unknown/locked role or an unavailable model) |
-| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, **message**, report, sources, artifacts, inputs, feedbackRating, parentRunId, sessionId, blockStage). `message` = the orchestrator's conversational chat bubble (the agent talking to the user); `report`/`artifacts` = the deliverable. A turn may have `message` only (pure conversation), both, or `report` only. |
+| `/runs/:id` | GET | — | full `Run` (decisionLog, experts, **message**, report, sources, artifacts, inputs, feedbackRating, parentRunId, sessionId, blockStage, verificationState, **completionState**, **completionReason**). `message` = the orchestrator's conversational chat bubble (the agent talking to the user); `report`/`artifacts` = the deliverable. A turn may have `message` only (pure conversation), both, or `report` only. |
+
+**Three independent outcome axes — do not collapse them.** A run can be
+`delivered` + `grounded` + `partial` all at once, and that combination is
+honest, not contradictory:
+
+| Field | Question it answers | Values |
+|---|---|---|
+| `status` | how did the run's lifecycle end? | `delivered` · `blocked` · `failed` · `cancelled` |
+| `verificationState` | did the output filter find the draft grounded? | `grounded` · `partial` · `ungrounded` · `not_applicable` · `null` (filter never ran) |
+| `completionState` | did the reasoning loop actually finish the work? | `complete` · `partial` |
+
+`completionState: "partial"` means the orchestrator **degraded**: it hit a
+wall-clock timeout, a provider rate-limit storm, or a fault, and answered from
+what it had already gathered rather than handing back nothing
+(`core/orchestrator/utils/recovery.py`). That answer is real and it is delivered
+— which is exactly why `status` alone reads as unqualified success and misleads.
+`completionReason` says which: `timeout` · `rate_limit` · `error`.
+
+Set from the orchestrator's own degraded metadata, never inferred from report
+text. REST-only today: there is no `completion` SSE event yet, because the event
+set is a shared contract with the frontend's `RunEvent` union and adding one
+unilaterally breaks `tests/benchmarks/sse_contract_drift.py`. The live-event half
+is proposed to the frontend separately.
 | `/runs/:id/artifacts/:name` | GET | — | the bytes of one delivered artifact (`Content-Disposition: attachment`). 404 unless the run actually published a file by that name — the run's own artifact list is the auth boundary |
 | `/runs/:id/stream` | GET (SSE) | — | `data:` frames, each one JSON `RunEvent`: `status` / `log` / `expert` / `message_delta` / `message_done` / `report_delta` / `report_done` / `sources` / `verification` / `usage`. `message_delta` is the orchestrator's CONVERSATIONAL voice streamed live (it can talk *while experts run*) and is independent of `report_delta` (the deliverable) and `log` (structured ticks); `message_done` closes it. `sources` carries the grounded-search `Source[]` backing a delivered run and is emitted once, just before the report streams (empty when the run ran no grounded search). `verification` carries the output filter's earned-seal verdict (`grounded`/`partial`/`ungrounded`/`not_applicable`), emitted once per run right before the terminal status, only when the filter actually ran — **not yet in the frontend's `RunEvent` union** (flagged, optional UI wiring, see `proposals/`). Terminal `status` values: `delivered` / `blocked` / `failed` / `cancelled` — the stream closes after a terminal status. A reconnect WHILE the run is still live replays its buffered sequence (incl. the message stream) ending in the terminal status; a reconnect AFTER the process has finished persisting it (evicted from the in-memory store to SQLite — `events` is runtime-only, never written through) replays NOTHING and just closes — a client revisiting a past run must fetch `GET /runs/:id` for its content, not rely on the stream replaying it |
 | `/runs/:id/cancel` | POST | — | Cooperatively stop an in-flight run. `204` if already terminal (idempotent); normally `200 {status:"cancelling"}` and the authoritative `cancelled` arrives over SSE. The no-live-task edge finalizes directly and returns `cancelled`; if that final write fails it returns/emits `failed` and retains live recovery state rather than falsely claiming cancellation persisted. Ownership-scoped (404 if not caller's run). Cancel ≠ delete — successfully cancelled run stays in history with status `cancelled` (distinct from `failed`/`blocked`). Tokens spent up to stop are charged (usage-based) |

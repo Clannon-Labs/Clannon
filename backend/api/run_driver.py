@@ -333,6 +333,24 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 run.message = _final_msg
                 run.emit({"type": "message_delta", "text": _final_msg})
 
+            # Honest completion: the orchestrator degrades rather than failing when the
+            # loop cannot finish (wall-clock timeout, provider rate-limit storm, fault)
+            # — it answers from what it already gathered. That answer is real and it is
+            # delivered, so `status` stays `delivered`; but the run did NOT finish the
+            # work, and saying only "delivered" reads as success. Surface the
+            # orchestrator's OWN degraded metadata (core/orchestrator/utils/recovery.py
+            # sets `degraded`/`cause`) so the UI can say "partial result, timed out"
+            # without parsing the report prose for the reason string.
+            #
+            # Read after the pipeline returns, deliberately: the revision loop replaces
+            # ctx.orchestrator_response when a revision SUCCEEDS, which correctly clears
+            # the degraded marker — a run that recovered is not partial.
+            if _resp is not None:
+                _meta = getattr(_resp, "metadata", None) or {}
+                if _meta.get("degraded"):
+                    run.completion_state = "partial"
+                    run.completion_reason = _meta.get("cause")
+
             # CB5 earned seal: surface the output filter's real verdict once it ran,
             # on BOTH the pass and block path — a block is itself a verdict. Stays
             # unemitted if an earlier gate (sanitize/verify) blocked before the

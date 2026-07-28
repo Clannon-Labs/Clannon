@@ -64,7 +64,8 @@ def _db() -> sqlite3.Connection:
             parent_run_id TEXT, session_id TEXT, block_stage TEXT,
             artifacts_json TEXT NOT NULL DEFAULT '[]',
             inputs_json TEXT NOT NULL DEFAULT '[]', project_id TEXT,
-            sources_json TEXT NOT NULL DEFAULT '[]', verification_state TEXT
+            sources_json TEXT NOT NULL DEFAULT '[]', verification_state TEXT,
+            completion_state TEXT NOT NULL DEFAULT 'complete', completion_reason TEXT
         )"""
     )
     # self-healing migration: add columns missing on databases created before
@@ -83,6 +84,11 @@ def _db() -> sqlite3.Connection:
         ("project_id", "TEXT"),
         ("sources_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("verification_state", "TEXT"),
+        # rows written before honest-completion landed were all runs that reached a
+        # terminal status without a degraded marker, so `complete` is the truthful
+        # backfill — not merely the convenient default.
+        ("completion_state", "TEXT NOT NULL DEFAULT 'complete'"),
+        ("completion_reason", "TEXT"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")

@@ -116,6 +116,20 @@ class RunState:
     # is itself a verdict); None only if the filter never ran at all (e.g. an
     # earlier gate already blocked the turn).
     verification_state: Literal["grounded", "partial", "ungrounded", "not_applicable"] | None = None
+    # Did this run actually FINISH the work, or did it degrade and answer from
+    # whatever it had? A separate axis from both `status` and `verification_state`:
+    #   status              — the lifecycle outcome (delivered/blocked/failed/cancelled)
+    #   verification_state  — the output filter's groundedness verdict on the draft
+    #   completion_state    — whether the reasoning loop ran to completion
+    # A degraded run still DELIVERS a real, grounded answer, so `delivered` +
+    # `grounded` are both honest; without this third field the UI has no way to say
+    # "we ran out of time and this is partial" except by parsing the report prose,
+    # which is what it was reduced to doing (frontend proposal 2026-07-28).
+    # `partial` is set from the orchestrator's own degraded metadata — never guessed.
+    completion_state: Literal["complete", "partial"] = "complete"
+    # WHY it is partial, from the orchestrator's failure classification:
+    # "timeout" | "rate_limit" | "error". None whenever completion_state is complete.
+    completion_reason: str | None = None
     # the session this turn belongs to. Root turns own their session (= id);
     # follow-ups inherit the parent's, so the whole chat is one session.
     session_id: str = ""
@@ -244,4 +258,6 @@ class RunState:
             "sessionId": self.session_id or self.id,
             "blockStage": self.block_stage,
             "verificationState": self.verification_state,
+            "completionState": self.completion_state,
+            "completionReason": self.completion_reason,
         }
