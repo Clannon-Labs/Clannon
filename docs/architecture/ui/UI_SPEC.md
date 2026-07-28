@@ -238,7 +238,7 @@ memory/wiki, billing, and marketing/demo**. What remains is no longer "the mock"
 it's the depth pass: **Projects (§5) → Jobs (§10) → Connections (§11) →
 Notifications (§15) → richer Workspaces (§9) → settings/account depth (§12) →
 report polish (§6b)**. Jobs, Connections, and Notifications are backend-gated;
-coordinate via `conversation/proposal*.md`.
+coordinate via `proposals/to-frontend/`.
 
 States checklist still applies to every NEW screen: empty, loading, populated,
 error, locked (tier-gated), budget-exhausted.

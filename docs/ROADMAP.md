@@ -146,6 +146,14 @@ Do not start these; they are decisions, not tasks:
 3. **Real per-model prices** in `config/backend/pricing.yaml` — gates budget go-live.
 4. **Whether V1 ships to real users before more capability work.** Nobody has
    used this yet, and that is the largest unknown in the whole plan.
+5. **Archive upload cap — ratify or correct.** The 2026-07-06 ruling was a
+   distinct higher cap for archive/zip uploads; what shipped instead reuses the
+   shared 50 MiB `max_input_size_bytes` as the per-member cap plus two bomb
+   guards. Flagged rather than silently reconciled.
+
+Full write-up of each, decision-ready: `reports/DECISIONS_FOR_OWNER.md`. **This
+list and that file must agree** — if you add an owner-gated item to one, add it
+to the other in the same commit.
 
 ## 6. Stale things worth fixing
 

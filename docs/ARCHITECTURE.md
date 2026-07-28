@@ -489,7 +489,7 @@ fire post-filter / post-delivery only (§5.3) — a blocked draft never seeds me
 - Multi-tenancy hardening: the **Semgrep unscoped-query build-gate** (absent today —
   stop implying it exists), Postgres **RLS via `SET LOCAL`**, and **project-scoping of
   the learned memory tiers** (today the learned tiers are account-wide; only wiki is
-  project-scoped — see `conversation/proposal.md`).
+  project-scoped — see `proposals/archive/to-frontend/2026-06-18_orchestration-efficiency-pass.md`).
 - Background-job **queue + job-status store** (today: bare `asyncio` tasks, run-id only).
 
 **Phase C — Knowledge web.** Stand up Kuzu next to Qdrant behind a **GraphPort**; define
