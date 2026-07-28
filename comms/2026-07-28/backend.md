@@ -82,3 +82,5 @@ is clean, so the green reproduces from committed state.
 - `11:36` **backend** worker via **codex** — 2026-07-28_cb5-deterministic-verifier.md — exit 0, 222s — output: `.agents/runs/20260728-113242-backend.out`
 - `11:39` **orchestration** worker via **codex** — 2026-07-28_workspace-race-repair.md — exit 0, 366s — output: `.agents/runs/20260728-113324-orchestration.out`
 - `11:44` **orchestration** worker via **codex** — 2026-07-28_workspace-transaction-proof.md — exit 0, 129s — output: `.agents/runs/20260728-114203-orchestration.out`
+- `11:51` **orchestration** worker via **codex** — 2026-07-28_workspace-lock-extraction.md — exit 0, 87s — output: `.agents/runs/20260728-115027-orchestration.out`
+- `11:53` **api** worker via **codex** — 2026-07-28_run-driver-size.md — exit 0, 157s — output: `.agents/runs/20260728-115027-api.out`

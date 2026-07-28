@@ -20,7 +20,8 @@ from types import SimpleNamespace as NS
 
 from foundation import InputFile, ThreatLevel, VrakshaContext
 from core.artifacts import LocalArtifactStore
-from registry.capabilities.handler.experts import ExpertHandler, _WORKSPACE_TRANSACTIONS
+from registry.capabilities.handler.experts import ExpertHandler
+from registry.capabilities.handler.workspace_transactions import _WORKSPACE_TRANSACTIONS
 from registry.capabilities.handler.support import ExpertEnv, SkillBook
 
 
