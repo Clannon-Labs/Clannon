@@ -57,6 +57,42 @@ Performance dimension moves 58 -> 64. This is restrained: desktop evidence is
 excellent, but mobile performance target is unproven and field Core Web Vitals
 remain unavailable.
 
+## Pass 3 (2026-07-28) — honest non-result
+
+Landed two more changes on the same commit line before this pass: theme boot
+script inlined (dropped the `beforeInteractive /theme.js` request), and
+`Providers` (react-query/motion/toast) scoped out of the root layout into only
+`(auth)`/`app` layouts instead of wrapping every marketing page. Re-ran the
+same mobile-throttled Lighthouse methodology, three times, against a clean
+rebuild (killed and restarted `next start` between builds after one run was
+contaminated by a stale-chunk 404 from rebuilding without restarting — not a
+real bug, see `reports/frontend/frontend_report_v9.md`):
+
+| Metric | Pass 2 | Pass 3 (3 runs) |
+|---|---:|---:|
+| Performance score | 63 / 57 | 55 / 59 / 56 |
+| TBT | 2,298ms / 1,738ms | 1,590ms / 1,270ms / 1,790ms |
+| Main-thread work | 7.11s / 6.07s | 5.2s / 4.5s / 6.0s |
+| LCP | 3.38s / 4.17s | 4.7s / 4.3s / 4.3s |
+
+Traced the dominant cost with the `bootup-time` audit: one script chunk at
+~1.3–1.6s of scripting time. Verified by string search it contains neither
+`react-query` nor `motion/react` — it's Next.js's own Turbopack/RSC-hydration
+runtime, 41% unused on this route per `unused-javascript` (framework code for
+routes/features this page doesn't touch). Confirmed every marketing component
+is already a server component (no `"use client"` in `header.tsx`, `hero.tsx`,
+`pipeline.tsx`, `memory-section.tsx`, `pricing.tsx`, `hero-demo.tsx`) — there
+is no more app-level JS left to strip from the landing route. The remaining
+floor is App Router's own framework overhead.
+
+**Performance dimension stays 64.** Main-thread work looks lower on average;
+top-line score and TBT are noisy and land in the same band as Pass 2,
+sometimes worse. Not clearing the bar to honestly claim higher, not showing a
+regression either. Cutting it further would mean attacking framework-level
+behavior (ejecting App Router features, hand-rolling hydration boundaries) —
+a real proposal for a dedicated session, not a same-session addition on top of
+an unrelated feature ship.
+
 ## Command
 
 ```bash

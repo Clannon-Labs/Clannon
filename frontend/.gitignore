@@ -42,3 +42,7 @@ next-env.d.ts
 
 # screenshot previews for the owner (generated)
 /previews/
+
+# Playwright's own run artifacts (generated)
+/test-results/
+/playwright-report/

@@ -5,9 +5,12 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **83/100**  
+Current verified score: **83.42 -> 83/100** (rounds the same as Pass 2; real
+but small movement — see Pass 3 below)  
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
-`benchmark/REAL_JOURNEY.md`, and `reports/frontend/frontend_report_v8.md`
+`benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`, and
+`reports/frontend/frontend_report_v8.md`, `frontend_report_v9.md`,
+`frontend_report_v10.md`
 
 ## 1. Question
 
@@ -54,23 +57,47 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 
 | Dimension | Weight | Score | Weighted |
 |---|---:|---:|---:|
-| Outcome clarity | 15 | 83 | 12.45 |
+| Outcome clarity | 15 | 85 | 12.75 |
 | Time to first value | 12 | 78 | 9.36 |
-| Core workflow | 18 | 85 | 15.30 |
-| Trust and control | 12 | 86 | 10.32 |
+| Core workflow | 18 | 86 | 15.48 |
+| Trust and control | 12 | 87 | 10.44 |
 | Continuity and retention | 10 | 86 | 8.60 |
 | Performance and smoothness | 12 | 64 | 7.68 |
-| Failure recovery | 7 | 85 | 5.95 |
+| Failure recovery | 7 | 88 | 6.16 |
 | Accessibility | 5 | 95 | 4.75 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **82.61 -> 83** |
+| **Total** | **100** |  | **83.42 -> 83** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
 failure recovery 78 -> 85, accessibility 94 -> 95, mobile 87 -> 88, and
 visual craft 94 -> 95. Time to first value stays 78: real execution exceeded
 four minutes and eventually returned a partial timeout result.
+
+Pass 3 (2026-07-28, this session) shipped `completionState`/`completionReason`
+UI (badge + reason-coded banner + Continue affordance) and browser-verified it
+for the first time, alongside the pre-existing but never-exercised
+filter-block UI — both were dark territory: `MockClient` had never simulated
+a `blocked` or `partial` terminal before, so this required adding two
+QA-only mock triggers (`src/lib/api/mock.ts`, keyed off brief text, never
+surfaced as a suggestion) to reach them at all. Real desktop + 390px Chrome
+runs, screenshots in `previews/2026-07-28_completion-status/`. This directly
+answers a piece of the gate-95 checklist ("blocked, failed, and
+partial-verification states are tested") for two of those four states.
+
+Outcome clarity 83 -> 85 (both new states explain result/limits/next-action
+without jargon, proven in browser). Failure recovery 85 -> 88 (both states
+proven: preserve work + concrete recovery, no dead end). Trust and control
+86 -> 87 (status/control proven for two previously-dark states). Core
+workflow 85 -> 86 (recovering a stalled/blocked run back into an editable
+brief is part of the loop). Total moves 82.61 -> 83.42 — genuine, small,
+still rounds to 83. **Not** claiming 85 yet: performance (64, the single
+largest remaining lever) did not move — see `PERFORMANCE.md` Pass 3, which
+found the mobile TBT floor is Next.js App Router's own hydration/RSC runtime,
+not app code, and declined to claim a score change without stronger evidence.
+Time to first value (78) is backend-execution-bound and unreachable from this
+environment today (`localhost:8000` refused).
 
 ## 3. Hard gates
 

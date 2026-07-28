@@ -448,6 +448,17 @@ export class MockClient implements ClannonClient {
       }
     }
 
+    // QA/e2e-only: mock never simulated a held-back output before — every run
+    // delivered cleanly, leaving the filter-block UI (page.tsx blockMessage)
+    // dark territory with no browser proof. Same keyed-off-brief pattern as
+    // the partial-timeout case above.
+    if (run.brief.toLowerCase().includes("force a blocked output for e2e")) {
+      run.status = "blocked";
+      run.blockStage = "filter";
+      yield { type: "status", status: "blocked" };
+      return;
+    }
+
     // Output filter cleared — stream the report in word chunks. Event order
     // mirrors the real backend: deltas → report_done → status:delivered
     // (a DELIVERED badge over a still-streaming report is a contract breach).
@@ -469,6 +480,18 @@ export class MockClient implements ClannonClient {
       yield { type: "report_delta", text: chunk };
     }
     run.report = assembled;
+    // QA/e2e-only: the backend's real terminal contract has three independent
+    // axes (status / verificationState / completionState — INTEGRATION_
+    // CONTRACT.md §"three axes"), and the common degraded case is delivered +
+    // grounded + partial all at once. Nothing else in the mock ever reaches
+    // that combination, so there was no way to browser-exercise the
+    // completion-status UI without this. Keyed off brief text, like the
+    // landing demo's curated titles, never surfaced as a suggestion.
+    if (run.brief.toLowerCase().includes("force a partial timeout for e2e")) {
+      run.verificationState = "grounded";
+      run.completionState = "partial";
+      run.completionReason = "timeout";
+    }
     yield { type: "report_done" };
     yield { type: "status", status: "delivered" };
 
