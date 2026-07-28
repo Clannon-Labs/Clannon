@@ -98,11 +98,9 @@ open CB4 gap.
 `reports/backend/` now holds report_v1..v18, which had been sitting loose at the
 root.
 
-**4. Rewrote `DECISIONS_FOR_OWNER.md`** (`9a75de1`). New rule from the owner: **a
-decision file outside `reports/archived_owner_replies/` MEANS the owner must
-decide it.** If they need not act, it does not belong outside. The old docket
-mixed real decisions, tracking notes, and history — and omitted the three
-decisions that actually gate work.
+**4. Rewrote the old owner-decision docket** (`9a75de1`). This was later
+superseded: live owner decisions now use one file each under
+`proposals/to-owner/`; reports are information-only.
 
 **5. Fixed `crew.sh` leaking its lock.** The EXIT trap was single-quoted, so
 `$lock` expanded after the function returned and `local lock` was gone; under
@@ -126,12 +124,15 @@ after successful runs, because a stale lock self-heals.
   to `proposals/to-backend/from_workers/`; specialist workers use
   `<role>-worker` → `backend-coordinator` in `to-backend/`; dispatch briefs now
   live under `.agents/briefs/<role>/`.
+- Owner decision routing migrated: reports are information-only; four live
+  owner gates are individual standard proposals in `proposals/to-owner/`; all
+  earlier owner archives live in `proposals/archive/to-owner/`.
 - Three full suites passed during integration; latest: 1498 passed, 13 skipped.
 
 ### What is open, and who owns it
 
-- **Owner-gated (do NOT start these):** four items in
-  `reports/DECISIONS_FOR_OWNER.md` — Rust design discussion, real model+infra
+- **Owner-gated (do NOT start these):** four proposals in
+  `proposals/to-owner/` — Rust design discussion, real model+infra
   prices/final budget go-live, whether V1 ships to users, and archive-cap
   divergence. Batch is greenlit and no longer on docket.
 - **Benchmark work** is per-specialist and listed in `docs/ROADMAP.md` §2/§4.

@@ -10,7 +10,8 @@
 # state machine, no pipeline-level semaphore, no dead-letter writer exists yet. Placing an unused
 # constant in config doesn't make it tunable; it's speculative config-surface dressed as a control
 # panel (Law 1). They stay in foundation/vocab/constants.py, declared but inert, until something
-# actually reads them — see reports/DECISIONS_FOR_OWNER.md for the owner-facing note on this call.
+# actually reads them — settled reasoning lives in
+# proposals/archive/to-owner/2026-07-06_decisions-docket.md.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Seconds a circuit stays OPEN before moving to HALF_OPEN. Unit: seconds, > 0.

@@ -152,9 +152,9 @@ Do not start these; they are decisions, not tasks:
    shared 50 MiB `max_input_size_bytes` as the per-member cap plus two bomb
    guards. Flagged rather than silently reconciled.
 
-Full write-up of each, decision-ready: `reports/DECISIONS_FOR_OWNER.md`. **This
-list and that file must agree** — if you add an owner-gated item to one, add it
-to the other in the same commit.
+Decision-ready files: `proposals/to-owner/`, one proposal per item. **This list
+and that inbox must agree** — add/remove owner gates in both during same work
+unit.
 
 ## 6. Stale things worth fixing
 

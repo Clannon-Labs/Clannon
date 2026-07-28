@@ -153,6 +153,11 @@ flip `Status:` → move to `proposals/archive/<inbox>/`.
 Gitignored (working area). If a ruling has lasting consequence, the decision
 gets recorded in `comms/` or promoted into `docs/`.
 
+`proposals/to-owner/` is the sole owner-reply channel. One decision per file,
+same headers as every proposal, with an authority-level body: context, exact
+decision, options/consequences, recommendation, and unblock. Settled owner
+proposals move to `proposals/archive/to-owner/`.
+
 ### 3.3 `reports/<role>/report_vN.md` — depth
 
 Unchanged. One new file per finished piece of work. Gitignored, local, high
@@ -164,22 +169,15 @@ root of `reports/` while every specialist filed under its own folder, which made
 the root a mixed pile of eighteen coordinator reports and the owner's files. The
 coordinator's now live in `reports/backend/`.
 
-The root of `reports/` is reserved for files that are **addressed to the owner or
-shared by everyone**, not one role's working depth:
+The root of `reports/` is reserved for information shared by everyone, not one
+role's working depth:
 
 | File | What it is |
 |---|---|
-| `DECISIONS_FOR_OWNER.md` | the living decision docket |
-| `REPLY_NEEDED_<slug>.md` | a single decision needing the owner's answer — **while it is still open** |
 | `INTEGRATION_CONTRACT.md` | the shared backend↔frontend contract — the one **tracked** file here |
 
-Once the owner answers a `REPLY_NEEDED_*` and the outcome lands, append a
-`## SETTLED — <date>` section (how it resolved, where the canonical outcome now
-lives) and move it to `reports/archived_owner_replies/`. The file is kept, not
-deleted: the reasoning that led to a rule — including the part that turned out
-wrong — is why the rule reads the way it does. Leaving answered questions at the
-root defeats the naming convention, which exists so the owner can see at a glance
-what still wants them.
+Reports are information-only. Nothing under `reports/` requests action or
+implies a reply; owner decisions use `proposals/to-owner/`.
 
 **Rule:** a `comms/` entry must be actionable on its own. A report link is
 convenience, not a dependency — a fresh clone that has no `reports/` must still
@@ -190,6 +188,7 @@ be able to act on what `comms/` says.
 ```
 comms/ (tracked, short, durable)  →  docs/ (tracked, canonical)
 reports/ (local, deep, working)   ↗
+proposals/ (local decisions)      ↗
 ```
 
 Anything that turns out to be a lasting architectural fact gets written into

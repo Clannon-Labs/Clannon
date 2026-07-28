@@ -44,7 +44,7 @@ def test_run_driver_reads_the_budget_from_config():
 
 def test_enforcement_is_off_by_default():
     # The retry.py anchor must be inert until the owner flips this (real prices + seeding
-    # aren't in place yet — see reports/DECISIONS_FOR_OWNER.md).
+    # aren't in place yet — see proposals/to-owner/2026-07-28_budget-prices-and-go-live.md).
     assert settings.BUDGET.enforcement_enabled is False
 
 

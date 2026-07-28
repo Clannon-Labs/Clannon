@@ -49,7 +49,7 @@ memory_chars_per_token: 4
 
 # ── ENFORCEMENT ANCHOR (core/llm/retry.py, docs/architecture/BUDGET_ENFORCEMENT_ANCHOR.md) ──
 # OFF by default: prod isn't seeded yet and pricing.yaml is still PLACEHOLDER (owner gate, see
-# reports/DECISIONS_FOR_OWNER.md — "Budget go-live needs real prices"). While false, retry.py's
+# proposals/to-owner/2026-07-28_budget-prices-and-go-live.md). While false, retry.py's
 # reserve/reconcile is fully inert (zero behavior change, no Redis touched). Flip to true only
 # after: real per-model prices set, prod budgets seeded, and security's review of this anchor.
 enforcement_enabled: false

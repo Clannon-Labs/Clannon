@@ -173,25 +173,20 @@ role, so a report is findable by who wrote it:
 ```
 reports/backend/        the coordinator's own report_vN.md  ← YOURS
 reports/{api,memory,orchestration,security,frontend,release}/
-reports/archived_owner_replies/
 ```
 
-Only three kinds of file belong at `reports/` root, and each is addressed to the
-OWNER or shared by everyone — never a role's own work:
-`DECISIONS_FOR_OWNER.md`, `REPLY_NEEDED_<slug>.md`, and
-`INTEGRATION_CONTRACT.md` (the one tracked file in here; everything else is
-gitignored per-agent depth).
+Only shared information belongs at `reports/` root:
+`INTEGRATION_CONTRACT.md` is the tracked backend↔frontend contract. Reports are
+information-only; no report name or location implies a reply.
 
-**THE RULE (owner instruction, 2026-07-28) — a decision file outside
-`reports/archived_owner_replies/` MEANS "the owner must decide this."** That is
-its only meaning. If the owner does not have to act on it, it does not belong
-outside. This governs `DECISIONS_FOR_OWNER.md` and every `REPLY_NEEDED_*.md`.
+**Owner decisions live in `proposals/to-owner/`, one decision per proposal.**
+Use standard proposal headers (`From`, `To`, `Status`, `Priority`, `Summary`)
+and an authority-level body: context, exact decision, options/consequences,
+recommendation, and what the ruling unblocks.
 
-Concretely, before you leave anything in `reports/` root, ask: **can I resolve
-this myself — by doing the work, or by making a judgement call I'm allowed to
-make?** If yes, it is not an owner decision. Put it in `docs/ROADMAP.md` (open
-work), `comms/` (status), or your own report. Only a genuine "I am blocked on
-you" stays.
+Before writing one, ask: **can I resolve this myself — by doing work or making
+an allowed judgement?** If yes, use ROADMAP, comms, or your report. Only genuine
+"blocked on you" work enters `proposals/to-owner/`.
 
 Two failure modes, both of which had happened by 2026-07-28:
 - **Padding.** The docket carried tracking notes and resolved history under a
@@ -202,13 +197,10 @@ Two failure modes, both of which had happened by 2026-07-28:
   batch greenlight, whether V1 ships to users) were not in it at all. A docket
   that is missing the live items is worse than no docket.
 
-So: **keep it current the same way you keep status current.** When you settle
-something, append `## SETTLED — <date>` (how it resolved, where the canonical
-outcome now lives) and move it to `reports/archived_owner_replies/`. Keep the
-file — the reasoning, including whatever turned out to be wrong, is why the
-resulting rule reads the way it does. And when something new becomes owner-gated,
-add it the same day. Cross-check against `docs/ROADMAP.md` §5, which lists the
-owner-gated items; the two must agree.
+So: **keep owner proposals current like status.** When settled, append
+`## Response`, flip `Status`, move to `proposals/archive/to-owner/`, and record
+lasting outcome in canonical docs. New gate gets a proposal same day.
+Cross-check ROADMAP §5; both must agree.
 
 **Write your reports to `reports/backend/report_vN.md`** — one NEW file per
 finished piece of work, never appended to an old one.
@@ -219,23 +211,12 @@ finished piece of work, never appended to an old one.
 > Important: YOU must be careful to not let any merge conflicts happen or,
 > Overwrite the work of the frontend agent !!
 
-## OWNER REPLY CHANNEL (standing rule — owner instruction, 2026-07-06)
+## OWNER PROPOSAL CHANNEL
 
-**When you want a reply/decision from the owner about ANYTHING, do NOT ask in
-chat — write a report in `reports/` that is CLEARLY NAMED as needing a reply, and
-tell the owner in one line it's ready.** Make it decision-ready (what it is · the
-options · your recommendation). The owner drops their reply into
-`proposals/to-backend/`, and their answers arrive through your normal
-`proposals/to-backend/` inbox — handle them there exactly like any other pending
-proposal. Prefer this over `AskUserQuestion` for anything that isn't a trivial
-in-the-moment clarification.
-
-**Naming — this matters (owner instruction):** a reply-needed report must NOT be
-a `report_vN.md` (those are progress reports, no reply expected — naming a
-reply-needed file `report_vN.md` creates confusion). Use an unmistakable name:
-`reports/REPLY_NEEDED_<slug>.md`, or the living decision docket
-`reports/DECISIONS_FOR_OWNER.md`. The name alone must tell the owner "this one
-wants your answer."
+When owner ruling is required, write one proposal under
+`proposals/to-owner/`; never ask through reports. Tell owner inbox is ready in
+one line. Owner may reply inside proposal or through `proposals/to-backend/`;
+backend coordinator records outcome and archives proposal.
 
 ## ACTIVE MISSION (multi-session — check at session start)
 

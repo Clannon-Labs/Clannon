@@ -31,7 +31,7 @@ committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
    (how the crew works — canonical, supersedes older coordination docs), this
    file, `docs/benchmarks/mission/README.md` (the mission map),
    `.agents/provider-handoffs/backend.md` (live checkpoint), and
-   `reports/DECISIONS_FOR_OWNER.md` (pending owner calls).
+   `proposals/to-owner/` (pending owner calls).
 4. **Check your channels — you PULL, nothing notifies you.**
    `comms/<today>/` (short daily status from every role, tracked in git) and
    your proposal inbox (`proposals/to-backend/` + `backend/proposals/`).
@@ -198,7 +198,7 @@ committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
   `TokenBudget` (coordinate — orchestration consumes `TokenBudget` in `mission.py`); the config
   long-tail (ORCHESTRATOR_*/EXPERT_*/TOOL_* removal — test-ref repoints, edit atomically; D11;
   models.yaml→config/).
-- **Owner decisions pending** (`reports/DECISIONS_FOR_OWNER.md`): (1) OOM norm — my rec is the lightweight
+- **Owner decisions pending** (`proposals/to-owner/`): (1) OOM norm — my rec is the lightweight
   norm above (no action needed); (2) **budget go-live needs real per-model prices + infra values** —
   `pricing.yaml` + infra knobs are PLACEHOLDER; the loader is fail-closed so an un-priced model blocks
   rather than leaks (safe until set).
@@ -215,4 +215,4 @@ committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
 ## Ground truth locations
 Mission: `docs/benchmarks/mission/` + `docs/benchmarks/V1_GAP_ANALYSIS.md`. Architecture:
 `docs/architecture/**` (batch: `BATCH_ARCHITECTURE.md`). Laws: `LAW/README.md`. Config map:
-`docs/config/CONFIG_INVENTORY.md`. Owner decisions: `reports/DECISIONS_FOR_OWNER.md`.
+`docs/config/CONFIG_INVENTORY.md`. Owner decisions: `proposals/to-owner/`.

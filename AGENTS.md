@@ -110,21 +110,19 @@ Messaging — PULL, never push:
 - Nothing injects input into running session. Auto-wake + idle heartbeat DELETED.
 - You check own channels: at session start, after finishing unit of work.
 - `comms/YYYY-MM-DD/<role>.md` — short daily status. Write only your own file.
-- `proposals/to-<role>/` — decisions needing ruling. `reports/<role>/` — depth.
+- `proposals/to-<role>/` — decisions needing ruling. Owner decisions go to
+  `proposals/to-owner/`. `reports/<role>/` — information/depth; never a reply channel.
 - `reports/` = one folder per role, coordinator included (`reports/backend/`).
-  Root of `reports/` holds ONLY owner-addressed or shared files:
-  `DECISIONS_FOR_OWNER.md`, `REPLY_NEEDED_*.md`, `INTEGRATION_CONTRACT.md`.
+  Root of `reports/` holds ONLY shared files such as `INTEGRATION_CONTRACT.md`.
   Never drop your own report_vN.md at the root.
-- Decision file OUTSIDE `reports/archived_owner_replies/` MEANS "owner must decide
-  this" — only meaning. Owner needn't act → doesn't belong outside. Covers
-  `DECISIONS_FOR_OWNER.md` + every `REPLY_NEEDED_*.md`.
-- Test before leaving one at root: can I resolve this myself (do the work, or make
-  a judgement call I'm allowed)? Yes → not an owner decision. Goes to ROADMAP (open
-  work), comms/ (status), or your report. Only "blocked on you" stays.
-- Settled → append `## SETTLED — <date>` (how resolved, where canonical outcome
-  lives), move to `archived_owner_replies/`. Keep file; wrong reasoning explains
-  why rule reads as it does.
-- New owner-gated thing → add same day. Cross-check `docs/ROADMAP.md` §5; must agree.
+- Test before writing owner proposal: can I resolve this myself (do work or make
+  allowed judgement)? Yes → use ROADMAP, comms, or report. Only genuine
+  "blocked on you" enters `proposals/to-owner/`.
+- One owner decision per proposal. Standard headers; body gives context, exact
+  decision, options/consequences, recommendation, and unblock.
+- Settled → append `## Response`, update Status, move to
+  `proposals/archive/to-owner/`; lasting outcome also enters canonical docs.
+- New owner gate → add proposal same day. Cross-check ROADMAP §5; must agree.
 - Two failure modes seen 2026-07-28: PADDING (tracking + history under "NEEDS
   DECISION NOW", buries real items) and OMISSION (live gates missing entirely —
   worse than no docket).
@@ -138,6 +136,6 @@ Provider continuity:
 - Before compaction, planned exit, or context exhaustion: update current checkpoint;
   retain earlier checkpoint under `Previous checkpoint`; explain change reason.
 - Specialists never open owner approval prompts. Route decisions to backend through
-  proposals. Owner-only decisions go to clearly named `reports/REPLY_NEEDED_*.md`.
+  proposals. Backend coordinator owns `proposals/to-owner/`.
 
 Full design: `docs/architecture/CREW_WORKFLOW.md` (canonical).

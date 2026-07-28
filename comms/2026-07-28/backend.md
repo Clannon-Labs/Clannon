@@ -85,3 +85,10 @@ is clean, so the green reproduces from committed state.
 - `11:51` **orchestration** worker via **codex** — 2026-07-28_workspace-lock-extraction.md — exit 0, 87s — output: `.agents/runs/20260728-115027-orchestration.out`
 - `11:53` **api** worker via **codex** — 2026-07-28_run-driver-size.md — exit 0, 157s — output: `.agents/runs/20260728-115027-api.out`
 - `12:03` **backend** worker via **codex** — 2026-07-28_config-inventory-reconcile.md — exit 0, 243s — output: `.agents/runs/20260728-115919-backend.out`
+
+## 12:30 — owner decisions moved out of reports
+
+Owner reply channel is now `proposals/to-owner/`, one standard proposal per
+decision. `reports/` is information-only. Four live gates migrated; all previous
+owner-decision archives moved to `proposals/archive/to-owner/`. ROADMAP §5 and
+owner inbox must stay synchronized.

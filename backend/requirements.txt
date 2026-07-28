@@ -14,7 +14,8 @@ python-magic
 # ============================================================
 
 pydantic-ai==2.4.0           # core agent framework. PINNED (2026-07-27): 2.18.0 silently
-                             # broke the bounded-loop money guard — see reports/REPLY_NEEDED_rust-strategy.md
+                             # broke the bounded-loop money guard — see
+                             # proposals/archive/to-owner/REPLY_NEEDED_rust-strategy.md
                              # and the release-blocker ruling. Do not unpin without re-proving the bound.
 pydantic[email]              # strict schema validation + email type support
 jsonschema                   # secondary JSON validation before pydantic validation
