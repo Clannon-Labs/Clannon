@@ -1,30 +1,124 @@
-# Central `config/` — Phase 1 Discovery: Inventory + Proposed Layout
+# Central `config/` — verified inventory and historical discovery map
 
-**Status: D1–D12 RULED — Phase 3 well advanced.** Rulings in `reports/DECISIONS_FOR_OWNER.md`.
+**Authoritative status (verified 2026-07-28): D1–D12 are ruled; Phase 3 is substantially
+wired, with bounded work remaining.** The pending source brief
+`proposals/to-backend/CENTRAL_CONFIG.md` is settled mission context, not an approval gate.
+The historical discovery and ruling questions remain below because their reasoning is useful;
+their old `file:line` coordinates and future-tense status are not current instructions.
 
-> ⚠️ **The per-item lists below are partially STALE (last full sweep 2026-07-06).** Many are DONE
-> since: `VERIFIER_*`, `FILTER_MAX_RETRIES`, `SANITIZER_*`, intake `RATE_LIMIT_*` and
-> `MAX_INPUT_SIZE_BYTES` are all removed from `foundation/vocab/constants.py` and single-sourced in
-> `config/backend/*.yaml`; D10 (usage-metering window) + the D8 archive bomb-guard floors
-> (`settings.SECURITY.archive_*`) are placed. **For the authoritative "done vs. next" config state,
-> read `docs/RESUME.md`'s snapshot (kept current), NOT the per-item lists here** — this file stays
-> useful as the DISCOVERY map (where each tunable lives), but cross-check done-status against RESUME.
+## Authoritative current state
 
-The layout below is approved. Externalization proceeds one area per commit, behavior-preserving
-(each default equals today's value):
-- ✅ **budget** — `config/backend/budget.yaml` + the typed loader `backend/settings.py`
-  (`SPEND_CEILING_FRACTION=0.80` single-source per D2, + the api/ history-budget knobs).
-- ✅ **D6 — business.yaml retired.** `settings.TIERS`/`LIMITS`/`MODEL_CATALOG` now load
-  `config/backend/{tiers,limits,model-catalog}.yaml`; `api/config.py` unpacks them into
-  its flat contract (`PLANS`/`FEATURES`/`DEFAULT_PLAN`/`BRIEF_*`/`WIKI_UPLOAD_*`/
-  `SELECTABLE_MODELS`/`MEDIA_MODELS` — same names, same values). The old
-  `backend/config/` package (the premature `business.yaml` draft) is deleted — the 3
-  YAML files existed already (placed in an earlier pass) but were never wired into
-  `settings.py`, so `backend/config/business.yaml` was still the live source until now.
-- ⏳ next: `models.yaml` → `config/models.yaml` (touches orchestration's registry
-  loader, coordinate); the `foundation/` product-knob long tail beyond D1's first pass.
+Evidence used for this reconciliation: all files under `config/`; the complete typed loader
+`backend/settings.py`; production imports/references to every `settings.*` group; current
+`backend/foundation/vocab/constants.py`; the model-registry loader; targeted searches for every
+former all-caps group; and the worktree diff/status. Import/config-loader checks are recorded in
+the verification note below.
 
-_(Original Phase-1 discovery map + the D1–D6 decision text follow, kept for the record.)_
+### Fully wired and single-sourced
+
+- **Budget and pricing:** `config/backend/{budget,pricing}.yaml` load as
+  `settings.{BUDGET,PRICING}`. Spend ceiling, history bounds, D10 usage window, memory token
+  fallback, Redis/enforcement settings, and cost-estimation allowances have production
+  consumers. `SPEND_CEILING_FRACTION` is derived from `BUDGET`, not independently valued.
+  Pricing entries and infra costs are still explicitly placeholders; that is a go-live owner
+  input, not missing loader wiring.
+- **Memory:** `config/backend/memory.yaml` loads as `settings.MEMORY`; ranking, hydration,
+  write-policy, embeddings retry, Qdrant timeout, graph hop ceiling, read/write timeouts,
+  search top-K/relevance, and distillation retry consumers are repointed.
+- **Orchestrator, experts, and tools:** `config/backend/{orchestrator,experts,tools}.yaml`
+  load as `settings.{ORCHESTRATOR,EXPERTS,TOOLS}` and have production consumers. The former
+  `ORCHESTRATOR_*`, `EXPERT_*`, `TOOL_*`, `FETCH_MAX_RESPONSE_BYTES`, and whole-turn constants
+  no longer exist as values in `foundation/vocab/constants.py`. This supersedes the stale
+  `docs/RESUME.md` snapshot that calls their test-reference repoint the next task.
+- **LLM, verifier, intake, and security:** `config/backend/{llm,verifier,intake,security}.yaml`
+  load as `settings.{LLM,VERIFIER,INTAKE,SECURITY}`. Former retry, verifier, rate-limit,
+  sanitizer, raw-input, filter-retry/revision, sandbox, PII-floor, filter-grounding, archive,
+  and workspace-snapshot values are wired. Security-directional settings retain code-enforced
+  floors/ceilings, as ruled.
+- **Resilience (implemented scope):** `config/backend/resilience.yaml` loads as
+  `settings.RESILIENCE`; `core/memory/store.py` consumes `cb_recovery_timeout_s`. This closes
+  D11. The other resilience names in the historical survey have no runtime feature to tune
+  and must not be copied into YAML merely to make the inventory look complete.
+- **Product contract:** `config/backend/{tiers,limits,model-catalog}.yaml` load as
+  `settings.{TIERS,LIMITS,MODEL_CATALOG}`. `api/config.py` derives its client contract from
+  them, and API handlers enforce the central brief/upload limits. The obsolete
+  `backend/config/business.yaml` package is gone (D6).
+
+### Actionable remaining work
+
+Safe engineering work means the owner has already ruled the shape; it still requires normal
+area ownership, behavior-preserving defaults, validation, and tests.
+
+1. **Safe engineering — finish model centralization (D5).** The live registry still loads
+   `backend/models.yaml` via `backend/registry/config/models.py`; root `config/models.yaml`
+   does not exist. Move that source and loader path to `config/models.yaml`, and fold in the
+   still-hardcoded embedding choice (`backend/core/memory/embeddings.py`:
+   `nomic-ai/nomic-embed-text-v1.5`, 768 dimensions) and Whisper choice
+   (`backend/experts/media/preprocess.py`: env override with `"base"` fallback). Preserve
+   compatibility validation between embedding model and dimensions. This is settled work,
+   not a new approval request.
+2. **Safe engineering — continue already-ruled backend long tail.** Still-hardcoded,
+   genuinely tunable examples remain in memory distillation limits, expert/media processing,
+   tool behavior, API/ops/display bounds, user-facing copy, and security policy. Use the
+   historical map only to seed a fresh per-area search: many locations and some values moved.
+   D4 permits non-structural copy; model-facing prompt/tool-catalog text is behavioral and
+   must retain its explicit uncertain classification until reviewed.
+3. **Safe cleanup, not externalization.** Resolve duplicate live rules through their existing
+   authoritative config where one exists (for example client upload caps and brief minimum
+   should consume the `/config` contract, not literal mirrors). Delete or wire dead declarations
+   only when implementing their real feature; do not create speculative YAML keys.
+4. **Owner input genuinely remains:** replace placeholder per-model/infra prices, seed production
+   budgets, and authorize budget enforcement go-live. These determine real commercial/production
+   values. They do not block other config engineering.
+5. **Not owner decisions:** D1–D12, the config layout, D5 relocation, D11 resilience placement,
+   copy scope, and D12 self-registration have already been ruled. In particular, per-expert
+   `model_role` and per-tool `timeout_s` stay in code under D12(b), and Qdrant collection names
+   and distance metric stay in code under D9.
+6. **Still uncertain — do not decide by inventory edit:** historical `AMBIGUOUS` items such as
+   deployment paths, identity defaults, log policy, security-language/severity policy,
+   prompt-engineering copy, and data-format/algorithm compatibility constants need area-level
+   classification before any move. “A number exists” is not enough to make it config.
+
+### Hardcoded, duplicated, or intentionally code-owned now
+
+- `backend/foundation/vocab/constants.py` still defines `TEXTUAL_MIME_TYPES`, two planned/unwired
+  memory constants, unused circuit thresholds/backpressure/dead-letter declarations, and live
+  transport identity/length constants. `MAX_REASON_LENGTH` and `MAX_ERROR_LENGTH` are consumed
+  by `foundation/transport/flow.py`; they are foundation contract bounds, not unfinished D1
+  migration. The unused declarations are not config work until corresponding runtime behavior
+  exists.
+- The model registry location and D5 embedding/Whisper choices are the concrete centralization
+  gap. D12 model-role/tool-timeout attributes and D9 memory-store identity are intentional code
+  ownership, not duplication defects.
+- Backend runtime/UI truncations, auth/input limits, copy, prompt scaffolding, security rules,
+  and ops defaults remain in code in the areas catalogued below. Some are valid config candidates;
+  some are code identity or uncertain. Re-search before acting because historical line claims
+  are not stable.
+- Frontend production still contains literal mirrors including upload count/bytes/accept list and
+  `briefMinChars`. However, the frontend tree currently has broad uncommitted work, including
+  layouts and marketing/brand surfaces. Per mandate it was not edited, and the historical frontend
+  inventory is **unverifiable as a clean current-code sweep**. Treat every frontend path/value
+  below as a historical lead until the frontend owner reconciles it against that dirty work.
+
+### Path and line-claim validity
+
+- Historical paths omit the repository `backend/` prefix because the original backend sweep used
+  that directory as its working root. Read, for example, `core/memory/manager.py` below as
+  `backend/core/memory/manager.py`.
+- Most files still exist, but nearly all recorded line numbers have drifted. Several symbols no
+  longer exist because they are now settings reads; `backend/config/business.yaml` is deleted;
+  the model source is still `backend/models.yaml`, not the proposed `config/models.yaml`.
+- Therefore, only paths and symbols in this authoritative section are current anchors. Every
+  historical `file:line` below is discovery provenance, not a verified navigation target.
+
+### Verification note
+
+Verified on 2026-07-28 with loader import, YAML/schema coverage, former-constant grep, production
+`settings.*` consumer grep, model-loader/path grep, and frontend `git status`/diff checks. See the
+task handoff for exact commands and observed results.
+
+_(Historical Phase-1/3.5 discovery map and ruling text follow unchanged except for headings that
+mark their historical status.)_
 
 Method: two full sweeps (backend, excluding `foundation/`+`flow`; frontend, read-only) + backend-agent
 recon. Every value below is a hardcoded literal a human might reasonably want to tune. Program logic,
@@ -32,7 +126,7 @@ control flow, secrets (API keys), and enum/index constants are excluded.
 
 ---
 
-## ‼️ DECISIONS I NEED FROM YOU (these shape the layout — please rule before I build)
+## Historical ruling questions D1–D6 (settled; preserved for reasoning)
 
 **D1 — The `foundation/` boundary (the big one).** You excluded `foundation/`, but
 `foundation/vocab/constants.py` is where a large share of the product knobs your spec explicitly
@@ -225,15 +319,16 @@ the UI but **enforced backend-side**. No backend-authority value is ever moved t
 
 ---
 
-## Next
-**Awaiting your ruling on D1–D6.** On approval I proceed to Phase 3: build the typed loader, then
+## Historical next step (superseded by authoritative current state above)
+**At the time of this snapshot, D1–D6 were awaiting a ruling.** The planned next step was Phase 3:
+build the typed loader, then
 externalize ONE area per commit, each behavior-preserving (default == today's value) with the suite
 green, starting with the lowest-risk areas (tools, experts) and treating budget-ceiling / security /
-memory-scoping as explicit propose-first contract changes. Nothing moves until you say go.
+memory-scoping as explicit propose-first contract changes. Those rulings have since been made.
 
 ---
 
-## Phase 3.5 — LONG-TAIL discovery (still-hardcoded, beyond the first pass)
+## Historical Phase 3.5 long-tail discovery (partly wired; re-search before use)
 
 **Why this pass exists.** The owner's standing goal is *"one place to change literally anything
 non-code in the product."* The first pass mapped the obvious dials; this pass swept the WHOLE repo
@@ -402,7 +497,7 @@ Everything already in `CONFIG_INVENTORY.md`'s first pass or already in `config/*
 **defaults.yaml (COSMETIC):** `config/nav.config.ts:15-33` `MARKETING_NAV` + `APP_NAV` order/icons · `config/brand.config.ts:26-35` brand `icon "builtin"` / `wordmark null` / `alt "Clannon"`.
 **⚠ BACKEND-MIRROR (client caps the backend MUST also enforce — these are the important frontend finds):** `lib/uploads.ts:7` `MAX_FILES 10` (self-documented "MIRROR the backend"), `:8` `MAX_FILE_BYTES 50 MB` (mirrors backend `MAX_INPUT_SIZE_BYTES` above), `:10` `ACCEPTED_INPUT` extension allowlist · `config/app.config.ts:116` `briefMinChars 2` (already backend-authoritative via `/config`). *(`lib/api/mock.ts` has parallel caps but lives in the bundled mock simulator, not production — excluded.)*
 
-### Long-tail externalization plan
+### Historical long-tail externalization plan (superseded)
 
 **Recommended order — lowest-risk / behavior-preserving first, one area per commit** (each default == today's literal; suite green before every commit):
 
