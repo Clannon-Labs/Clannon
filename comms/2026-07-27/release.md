@@ -26,3 +26,20 @@
   backend dependency/runtime policy, not release config.
 - Filed HIGH proposal:
   `proposals/to-backend/2026-07-27_release-blocked-pydantic-ai-drift.md`.
+
+## v0.3.0 prepared
+
+- Backend resolved dependency drift and added Clannon-owned request guard.
+- Backend input reviewed against key commits across 307-commit range.
+- `CHANGELOG.md` and `RELEASE_v0.3.0.md` committed as `a45d8ef`, pushed.
+- Local verification: backend 1489 passed / 13 service-dependent skips;
+  frontend 75 tests, lint, production build passed.
+- Exact-head GitHub CI `30285253379`: green.
+- GitHub release created as unpublished draft targeting `a45d8ef`.
+- No v0.3.0 tag exists. Owner confirmation required before publication.
+
+## v0.3.0 published
+
+- Owner published at 2026-07-27T16:40:02Z.
+- Release and tag target `a45d8ef`.
+- Final URL: https://github.com/vraksha/Clannon/releases/tag/v0.3.0
