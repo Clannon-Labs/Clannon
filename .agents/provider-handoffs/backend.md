@@ -63,9 +63,9 @@ finished something.
 
 ## Current checkpoint
 
-- Provider: Claude Code (standalone, owner-driven session — not in tmux)
+- Provider: Codex (interactive backend coordinator)
 - Updated: **2026-07-28**
-- HEAD: `9a75de1`, everything pushed, suite green (1489 passed, 13 skipped —
+- HEAD: `60504c9`, everything pushed, suite green (1498 passed, 13 skipped —
   qdrant + ClamAV are service-dependent and unavailable on this box; that is
   normal, not a failure).
 
@@ -109,14 +109,30 @@ decisions that actually gate work.
 `set -u` it aborted and the trap never fired. Symptom was only a stray error line
 after successful runs, because a stale lock self-heals.
 
+**6. Ran first existing-system hardening tranche** (`0b40607`, `13686e3`,
+`60504c9`).
+- CB5 moved honestly to PASS: deterministic verifier detects all 8 adversarial
+  benchmark classes; 5 benign controls stay clean. Outreach: 2 Critical PASS,
+  4 PARTIAL.
+- API cancellation/exception audit now preserves authoritative participants;
+  foreign/unknown decision-run IDs share non-disclosing 404 proof.
+- Same user/mission/expert workspace calls serialize restore → run → snapshot;
+  unrelated keys stay concurrent; failure releases locks; idle locks disappear.
+- Law-2 cleanup split workspace transactions and API source projection:
+  production files now 481/41 and 498/39 lines.
+- Central-config inventory reconciled: D1–D12 settled, Phase 3 substantially
+  wired, D5 model centralization is next safe engineering work.
+- Three full suites passed during integration; latest: 1498 passed, 13 skipped.
+
 ### What is open, and who owns it
 
-- **Owner-gated (do NOT start these):** the five items in
-  `reports/DECISIONS_FOR_OWNER.md` — Rust design discussion, batch greenlight,
-  real per-model prices, whether V1 ships to users, and the archive-cap
-  divergence. Cross-checked against `docs/ROADMAP.md` §5; the two must agree.
+- **Owner-gated (do NOT start these):** four items in
+  `reports/DECISIONS_FOR_OWNER.md` — Rust design discussion, real model+infra
+  prices/final budget go-live, whether V1 ships to users, and archive-cap
+  divergence. Batch is greenlit and no longer on docket.
 - **Benchmark work** is per-specialist and listed in `docs/ROADMAP.md` §2/§4.
-- **Nothing is known-stale** in the docs as of this checkpoint (ROADMAP §6).
+- **Known stale:** `docs/RESUME.md` config snapshot; current truth is
+  `docs/config/CONFIG_INVENTORY.md`.
 
 ### Traps this session actually hit — do not relearn them
 
@@ -137,6 +153,11 @@ after successful runs, because a stale lock self-heals.
   The tree is shared and frontend/release files are routinely dirty.
 
 ## Change note
+
+Updated 2026-07-28 after first hardening tranche. Previous checkpoint below
+describes status-reconciliation and crew-workflow work that remains valid
+history; current checkpoint supersedes its CB5/crash-participant/batch-gate
+claims.
 
 Rewritten 2026-07-28 to add the MENTAL MODEL section at the top, on the owner's
 instruction: Claude's weekly usage limit is nearly exhausted, so the backend role
