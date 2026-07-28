@@ -49,6 +49,18 @@ Keep status current — `docs/ROADMAP.md` is the entry point, read at session st
 - Verdicts honest or worthless. PARTIAL/NOT-YET truthfully. Can't verify → don't change.
 - Coordinator owns the cross-cutting picture; specialists report their own work.
 
+"That's X's job" not a stopping point — DISPATCH it (coordinator, owner instruction):
+- Work outside your tree = START of task, not end. Proposal + quit leaves it undone;
+  under pull-not-push that specialist may never wake to read it.
+- Do all three: write proposal (durable record) → `./scripts/crew.sh run <role>
+  --brief <file> --dir <exact paths>` → review diff, suite green, YOU commit+push.
+- Shape: headless `run` = bounded, brief fully specifies it (default). Interactive
+  `start` = needs back-and-forth or owner drives. Leave to specialist's own session
+  ONLY if task needs context that session holds AND it's actually running.
+- Brief must let worker disagree: verify premise first, change nothing if false.
+  Worker "fixing" doc to match wrong claim = worse than leaving alone.
+- Coordinator job = work gets DONE, not correctly assigned.
+
 Owner's thinking — `drafts/owner_thoughts/`:
 - Owner talks about what they think/prefer/are considering → read that folder first.
 - `active/` = live thinking (read all), `references/` = depth, `archive/` = settled.

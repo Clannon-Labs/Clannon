@@ -149,9 +149,12 @@ Do not start these; they are decisions, not tasks:
 
 ## 6. Stale things worth fixing
 
-- `reports/INTEGRATION_CONTRACT.md` says exception/cancellation bypasses audit
-  derivation. `api/run_driver.py` now mirrors from `finally`, so the doc
-  understates what ships. Owner: api.
+Nothing currently known-stale.
+
+Fixed 2026-07-28: `reports/INTEGRATION_CONTRACT.md`'s terminal-path section (it
+claimed exception/cancellation bypasses audit derivation; `run_driver.py`'s
+`finally` covers every terminal status, and the real limitation is incomplete
+`participants` on the crash path, now documented).
 
 Fixed 2026-07-28: `V1_GAP_ANALYSIS.md` verdicts + priority stars, and the
 `mission/` phase statuses, are reconciled against what actually shipped. Keep

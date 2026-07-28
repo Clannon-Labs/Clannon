@@ -353,7 +353,12 @@ EOF
   echo $$ > "$lock"
   # Release the lock even on SIGTERM/SIGINT — a killed dispatcher used to leave a
   # stale lock behind (the liveness check self-heals, but the file lingered).
-  trap 'rm -f "$lock"' EXIT INT TERM
+  # DOUBLE quotes: $lock must expand NOW, while it is in scope. Single quotes
+  # defer expansion to trap-firing time, and the EXIT trap fires after this
+  # function has returned — so `local lock` is already gone and `set -u` aborts
+  # with "lock: unbound variable" after every otherwise-successful dispatch.
+  # The trap then never runs, which is the opposite of what it exists to do.
+  trap "rm -f '$lock'" EXIT INT TERM
   case "$provider" in
     claude)
       # </dev/null is REQUIRED, not tidiness: both CLIs read stdin in addition to

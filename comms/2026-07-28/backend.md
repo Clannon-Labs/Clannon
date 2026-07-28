@@ -75,3 +75,4 @@ is clean, so the green reproduces from committed state.
 
 ## dispatched workers
 - `09:15` **backend** worker via **codex** — brief-staleness2.md — exit 0, 283s — output: `.agents/runs/20260728-091033-backend.out`
+- `09:41` **api** worker via **codex** — brief-contract-audit.md — exit 0, 91s — output: `.agents/runs/20260728-094010-api.out`

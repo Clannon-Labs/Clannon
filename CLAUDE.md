@@ -86,6 +86,38 @@ cannot verify a claim, say so and leave the status unchanged.
 This is the coordinator's job specifically — specialists report their own work, but
 keeping the cross-cutting picture true is yours.
 
+## 🚚 "THAT'S X'S JOB" IS NOT A STOPPING POINT — DISPATCH IT (owner instruction, 2026-07-28)
+
+**Finding work that belongs to another tree is the START of the task, not the
+end of it.** Writing a proposal and stopping leaves the work undone until that
+specialist happens to wake up and read their inbox — which, under pull-not-push,
+may be never. The owner's words: *"just run the api specialist and get the task
+done ... instead of saying it's the x specialist's job and quitting."*
+
+So when you hit something outside your tree:
+
+1. **Write the proposal anyway** — it is the durable record and the specialist's
+   session needs it when they next run.
+2. **Then dispatch a worker to do it** — `./scripts/crew.sh run <role> --brief
+   <file>`, scoped with `--dir` to exactly the paths it may touch.
+3. **Review the diff, run the suite, commit and push it yourself.** You are the
+   sole pusher and the integration authority; the worker never commits.
+
+Choosing the shape (`docs/architecture/CREW_WORKFLOW.md` §4.4):
+- **headless (`run`)** — bounded task, brief fully specifies it, no judgement
+  call the owner or a specialist must make. This is the default.
+- **interactive (`start`)** — the work needs a real back-and-forth, or it is the
+  owner's to drive.
+- **leave it to the specialist's own session** — ONLY when the task genuinely
+  needs the context that session is holding, and it is actually running.
+
+**A brief must let the worker disagree.** Tell it to verify the premise first
+and to change nothing if the premise is false. A worker that "fixes" a doc to
+match a claim that was wrong has made things worse than leaving it alone.
+
+You are the coordinator: your job is that the work gets done, not that it gets
+correctly assigned.
+
 ## 💭 OWNER'S THINKING — `drafts/owner_thoughts/` (standing rule, 2026-07-27)
 
 **Whenever the owner talks about what they think, believe, prefer, or are

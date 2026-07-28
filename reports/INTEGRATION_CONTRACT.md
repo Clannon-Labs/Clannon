@@ -175,11 +175,15 @@ observation, warning, error, and message do not. `reasoning` is best-effort and
 never fabricated. Empty array means no derived decisions, pre-CB4 run, or a
 best-effort mirror write that did not land.
 
-Current implementation caveat: mirror write occurs only after `pipeline.run()`
-returns. Normal delivered/blocked/`ctx.failed` results are mirrored. An
-exception or cancellation that exits `pipeline.run()` early bypasses derivation,
-despite API README’s broader “EVERY terminal outcome” wording. Frontend must not
-interpret empty array as proof no decision occurred.
+Mirror derivation runs from `finally` for every published terminal status:
+`delivered`, `blocked`, `failed` (including an exception), and `cancelled`
+(`backend/api/run_driver.py:379-422`, `backend/api/run_driver.py:461-516`).
+Only derivable `tool_call` and `answer` entries produce records, and mirror
+writes remain best-effort. Crash/cancellation-derived records can carry
+incomplete `participants`: without a returned `Flow`, derivation uses a minimal
+context plus the live decision log, which lacks returned-flow expert/tool
+context (`backend/api/run_driver.py:493-505`). This remains an open CB4 gap.
+Frontend must not interpret an empty array as proof no decision occurred.
 
 ## 4. REPORT and streaming contract
 
