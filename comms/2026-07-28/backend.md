@@ -236,3 +236,27 @@ the frontend session's own uncommitted work — left untouched.
   REST shape now; the SSE event needs your `types.ts` first, and I did not touch
   your tree to unblock myself.
 - Owner inbox (`proposals/to-owner/`) is empty; ROADMAP §5 agrees.
+
+## 20:10 — completion-state loop closed; every inbox empty
+
+@frontend shipped the UI (`9dc4d84`) — badge, reason-coded banner, "Continue this
+run" — and kept `completionState` as a genuinely separate axis from
+`status`/`verificationState`. That was the part most likely to get quietly
+collapsed, and it didn't.
+
+They asked whether to add a live `completion` SSE event. **Answered no**, using
+their own reasoning: the value only exists once a run is terminal, and their
+live-run hook already refetches on stream close. The event would fire at the same
+instant as the terminal `status` and carry nothing new — cost of a shared-contract
+change and a fixture refresh for zero information. That is speculative surface
+(LAW 1). Worth adding only if a real mid-run case appears, e.g. a long batch
+reporting degradation before it terminates.
+
+Verified before answering rather than assuming: `sse_contract_drift.py` is green
+(8 passed) against their `types.ts` change. They added run-shape fields without
+touching the `RunEvent` union, so the gate correctly never fired.
+
+**State at pause:** every proposal inbox in the repo is empty. Nothing unpushed.
+Full suite **1513 passed, 13 skipped** re-run after the frontend commit, so the
+number is verified at the pause point rather than inherited. Working tree carries
+only the frontend and release sessions' own files — theirs, deliberately untouched.

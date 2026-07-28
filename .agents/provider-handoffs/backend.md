@@ -114,17 +114,26 @@ to catch them). Both corrected in `db6be4c`.
 
 ### Open when work resumes — nothing is blocked
 
-1. **`proposals/to-frontend/2026-07-28_completion-state-ui.md`** — the only live
-   proposal. Frontend renders the new fields, and adds `completionState` /
-   `completionReason` (and optionally a `completion` event) to `types.ts`. The
-   backend cannot emit a `completion` SSE event until they do:
-   `sse_contract_drift.py:479` fails on any event the frontend has not declared,
-   and `:518` closes the "new terminal `partial` status" option the same way.
-   **Do not edit `types.ts` to unblock yourself.**
-2. **CB5 detect** — prove the three C5-native families live in
+**Every proposal inbox in the repo is empty.** The completion-state loop closed
+before the pause: frontend shipped the UI (`9dc4d84`) — badge, reason-coded
+banner, "Continue this run" — holding `completionState` as a genuinely separate
+axis from `status`/`verificationState`, which was the part most likely to get
+quietly collapsed. They asked whether to add a live `completion` SSE event;
+**answered no.** The value only exists once a run is terminal and their live-run
+hook already refetches on stream close, so the event would fire at the same
+instant as the terminal `status` and carry nothing new — speculative surface
+(LAW 1). Add it only if a real mid-run case appears, e.g. a long batch reporting
+degradation before it terminates.
+
+Still true and worth keeping in mind: `sse_contract_drift.py:479` fails on any
+SSE event the frontend has not declared, and `:518` closes the "new terminal
+`partial` status" option the same way. **Do not edit `types.ts` to unblock
+yourself** — propose it and let frontend land it.
+
+1. **CB5 detect** — prove the three C5-native families live in
    `scripts/prompt_regression.py`. Adding another regex shaped like the fixture
    would re-create exactly the failure that was just reverted.
-3. Remaining benchmark gaps: `docs/ROADMAP.md` §2. Owner-gated: §5 (all answered
+2. Remaining benchmark gaps: `docs/ROADMAP.md` §2. Owner-gated: §5 (all answered
    as of today; `proposals/to-owner/` is empty).
 
 ### Previous state of this checkpoint
