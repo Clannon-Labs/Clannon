@@ -245,10 +245,10 @@ both.
 ```
 
 This is how the coordinator gets work done without doing it. Write a brief
-(§5.3), dispatch it into a role's tree, read the worker's final message back
-from `.agents/runs/<stamp>-<role>.out`, and — if the next step needs it — cite
-that output in the next worker's brief. **Chaining needs no machinery**: it is
-one file read and one file write. Do not build a job queue.
+(§5.3) under `.agents/briefs/<role>/`, dispatch it into a role's tree, then read
+the worker's final message from `.agents/runs/<stamp>-<role>.out`. If the next
+step needs it, cite that output in the next worker's brief. **Chaining needs no
+machinery**: it is one file read and one file write. Do not build a job queue.
 
 **Because `run` needs no tmux, the owner only ever has one session open: the
 coordinator's.**
@@ -270,6 +270,13 @@ Rules the dispatcher enforces structurally, so they cannot be forgotten:
   forget) records role, provider, brief, exit status, duration, and output path
   — full logs to gitignored `.agents/runs/`, one tracked line to
   `comms/<today>/backend.md`. That is how "who did what" stays answerable.
+- **Worker identity and proposal routing are explicit.** A backend-owned worker
+  is `backend-worker`; proposals it raises for the persistent coordinator go to
+  `proposals/to-backend/from_workers/`. A specialist worker is
+  `<role>-worker` (`api-worker`, `memory-worker`, etc.); its proposals go to
+  `proposals/to-backend/`. Every worker addresses `backend-coordinator`.
+  Coordinator-to-worker dispatch briefs live under `.agents/briefs/<role>/`,
+  never in proposal inboxes.
 
 **Provider choice.** Explicit `--claude` / `--codex` always wins. Otherwise the
 dispatcher reads `.agents/provider-policy` — a one-line default with the reason

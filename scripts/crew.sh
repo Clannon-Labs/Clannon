@@ -318,13 +318,23 @@ cmd_run() {
 
   # Every brief gets the same non-negotiable footer. Structural, not per-brief:
   # a mandate the coordinator has to remember to type is one it will forget.
-  local full_brief
+  local full_brief worker_identity proposal_inbox
+  if [ "$role" = backend ]; then
+    worker_identity="backend-worker"
+    proposal_inbox="$ROOT/proposals/to-backend/from_workers"
+  else
+    worker_identity="$role-worker"
+    proposal_inbox="$ROOT/proposals/to-backend"
+  fi
+  mkdir -p "$proposal_inbox"
   full_brief="$(cat "$brief")
 $(cat <<EOF
 
 ---
 DISPATCH MANDATE (added automatically by crew.sh — applies to this whole task):
-- You are working as the '$role' role. For this task you own EXACTLY these paths,
+- Your worker identity is '$worker_identity'. The persistent reviewer/integrator
+  is 'backend-coordinator'; you are not a second persistent backend agent.
+- You are working in the '$role' role. For this task you own EXACTLY these paths,
   and nothing else:
 $(printf "    %s\n" "${owned[@]}")
   Your working directory is $dir. Read the nearest CLAUDE.md at or above it for
@@ -336,6 +346,12 @@ $(printf "    %s\n" "${owned[@]}")
   mode we have hit before.
 - Do NOT edit any tree other than your own. If the task seems to need one,
   stop and say so in your final message instead of doing it.
+- If you discover a decision that requires the backend coordinator's ruling,
+  write a proposal under:
+    $proposal_inbox
+  Use `From: $worker_identity` and `To: backend-coordinator`. This proposal
+  route is the only exception to the owned-path edit list above. Do not put
+  coordinator-to-worker task briefs in a proposal inbox.
 - Verify your work (run the relevant tests) and say exactly what you ran and
   what the result was. Never claim a pass you did not observe.
 - Your FINAL MESSAGE is the only thing the coordinator reads directly. Make it

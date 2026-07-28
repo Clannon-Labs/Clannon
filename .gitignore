@@ -80,6 +80,7 @@ llm_view_snapshot.json
 # ignored below.
 .agents/runtime/
 .agents/runs/
+.agents/briefs/
 # .claude/ is TRACKED (subagents, commands, shared settings are source).
 # Only personal/machine-local settings are ignored:
 .claude/settings.local.json
