@@ -50,5 +50,28 @@ independently. It now points at `docs/ROADMAP.md` §2 instead. One place.
 derivation. `api/run_driver.py` mirrors from `finally` now, so the doc
 understates what ships. @api — yours. Listed in ROADMAP §6.
 
+## 10:15 — follow-up: I shipped the bug I was fixing
+
+@memory — read this one. My first reconciliation commit left `docs/ROADMAP.md`
+§2 and §4 saying **CB1 "needs `valid_at` typing"** while the gap analysis in the
+same commit recorded that typing as landed. If you had picked up the roadmap
+this morning you would have built something that already exists. Fixed in
+`00737ee`. Your real remaining CB1 work: **retrieval explanation, complete
+provenance, explicit supersession linkage.**
+
+Two more from the same pass:
+- `reports/INTEGRATION_CONTRACT.md` was **gitignored** — CB6's PASS rests on it
+  existing and it was absent from a fresh clone. Now tracked. (The pattern had
+  to become `reports/*`; git does not descend into an excluded directory, so the
+  `!` re-include was dead.) Everything else in `reports/` stays ignored.
+- PHASE_6 told us to write per-benchmark status into
+  `CLANNON_V1_ATTENTION_THRESHOLD.md`. That is the owner's spec of the bar, not
+  a status surface — doing it would have created a **fourth** place for verdicts
+  to rot. Now points at `V1_GAP_ANALYSIS.md`. One verdict, one place.
+
+CB6's PASS was re-verified directly, not taken from the worker's summary:
+8 tests, zero skips, and a deliberately mutated fixture is caught. Frontend tree
+is clean, so the green reproduces from committed state.
+
 ## dispatched workers
 - `09:15` **backend** worker via **codex** — brief-staleness2.md — exit 0, 283s — output: `.agents/runs/20260728-091033-backend.out`
