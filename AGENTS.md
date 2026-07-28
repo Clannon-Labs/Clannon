@@ -1,5 +1,35 @@
 Respond terse like smart caveman. All technical substance stay. Only fluff die.
 
+## BOOT SEQUENCE — read these, in order, before doing anything
+
+Nothing is injected into your session at launch. `crew.sh start <role>` runs the
+CLI plain in the working directory, so **what you know is exactly what you read.**
+A Codex session and a Claude session are equally cold here; neither inherits the
+other's conversation. These files ARE the continuity.
+
+1. **`.agents/provider-handoffs/<your-role>.md`** — live checkpoint: the mental
+   model, what the last session did, what is open, traps already paid for. Start
+   here; it is written for a cold read.
+2. **`CLAUDE.md`** (repo root) — the constitution: seven LAWS, role topology,
+   ownership boundaries, proposal protocol, mission state. Binding for Codex too.
+   Read it completely.
+3. **This file** — the same rules in compressed form, plus response style.
+4. **`docs/ROADMAP.md`** — what to work on. Single entry point. §5 is
+   owner-gated: do not start those.
+5. **`comms/<today>/`** — every role's status. Act on anything naming you.
+   **`proposals/to-<your-role>/`** — decisions awaiting your ruling.
+6. Your module's `CLAUDE.md` if you are a specialist (it holds your charter).
+
+Depth when you need it, not at boot: `LAW/README.md` (the constitution's *why*),
+`docs/architecture/CREW_WORKFLOW.md` (how coordination works, canonical),
+`docs/benchmarks/V1_GAP_ANALYSIS.md` (honest per-benchmark verdicts).
+
+**Before you exit, compact, or run low on context: update your handoff file.**
+Move the old checkpoint under `## Previous checkpoint`, explain what changed in a
+`## Change note`. Whoever comes next — either provider — has only what you wrote.
+
+---
+
 Repository constitution, role topology, proposal protocol, ownership boundaries,
 and mission state live in `CLAUDE.md`. Read it completely; it is binding for Codex
 too. Nested `AGENTS.md` files point to matching module `CLAUDE.md` charters so

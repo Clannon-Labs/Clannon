@@ -2,121 +2,170 @@
 
 Transfers live backend-coordinator work between Claude Code and Codex.
 
+**If you are a fresh Codex session: read this whole file, then the boot sequence
+at the top of `AGENTS.md`.** Nothing is injected into your session at launch —
+`crew.sh start backend --codex` runs plain `codex` in the repo root, so what you
+know is exactly what you read. This file is written for that.
+
+---
+
+## THE MENTAL MODEL — read this even if you skip the rest
+
+Durable framing. It does not change week to week, and it is what makes the
+detailed docs make sense.
+
+**What Clannon is.** A production monorepo: a Python backend (pipeline →
+orchestrator → experts/tools, with memory, security and an API/SSE surface) and a
+Next.js frontend. Not a prototype — it is built to production standards
+throughout, which is why `LAW/README.md` exists and outranks every other doc.
+
+**Where we are.** V1 is **not done and has never faced a real user.** That single
+fact decides most arguments. It is why new work stays in Python (no second
+toolchain tax on an unfinished product), why "ship it to users" is a live open
+question, and why stability outranks new surface area.
+
+**The bar we are building to.** Six Critical + three Exceptional benchmarks in
+`docs/benchmarks/CLANNON_V1_ATTENTION_THRESHOLD.md` (the owner's spec of the bar
+— it carries no status, deliberately). Honest verdicts live in exactly one place:
+`docs/benchmarks/V1_GAP_ANALYSIS.md`. As of 2026-07-28: **CB6 PASS, five
+PARTIAL.** The outreach gate is all six Critical passing plus one Exceptional.
+
+**Your role.** You are the **coordinator**, not a labour agent. The owner has
+been explicit: *"you are a DICTATOR, not a labor!"* Your context is the scarce
+resource. You own `foundation/`, `core/pipeline.py`, `delivery/`, `config/`,
+`scripts/`, `docs/`, and final integration + merge authority. You are the **sole
+pusher** — specialists commit, you push.
+
+**How work actually gets done.** Five specialists own disjoint trees
+(memory, orchestration, security, api, frontend) and coordinate hub-and-spoke
+through you, never with each other. You delegate through **headless workers**
+(`./scripts/crew.sh run <role> --brief <file> --dir <paths>`), review the diff,
+run the suite, and commit. Finding work outside your tree is the START of a task,
+not the end of it — file the proposal AND dispatch AND push it. See the
+"THAT'S X'S JOB" section in `CLAUDE.md`.
+
+**Messaging is PULL, never push.** Nothing injects into a running session. You
+check `comms/<today>/` and `proposals/to-backend/` yourself, at session start and
+after each unit of work. **Idle is a legitimate state** — the "never sit idle"
+policy is retired and was the most expensive bad instruction we ever followed.
+
+**You are expected to disagree.** Before acting on any instruction — the owner's
+included — confirm it actually helps. Say so BEFORE the work, never after as an
+excuse. The owner writes their thinking into `drafts/owner_thoughts/` expecting
+pushback.
+
+**Honesty is load-bearing.** PARTIAL means PARTIAL. A verdict you cannot
+substantiate stays unchanged. Tests never fake a pass. This is LAW 7 and it is
+the thing most worth protecting when you are tired or the work "should" have
+finished something.
+
+---
+
 ## Current checkpoint
 
-- Provider: Claude Code (running standalone, NOT in tmux — the owner started it
-  directly to do this rewrite)
-- Updated: 2026-07-27
-- Task: **DONE — full crew-workflow redesign**, on the owner's explicit
-  instruction (`proposals/to-backend/rethinking-decisions.md`) to rebuild from
-  scratch rather than bolt more fixes on. Canonical result:
-  **`docs/architecture/CREW_WORKFLOW.md`** — read that first, it supersedes every
-  older description of agent coordination.
+- Provider: Claude Code (standalone, owner-driven session — not in tmux)
+- Updated: **2026-07-28**
+- HEAD: `9a75de1`, everything pushed, suite green (1489 passed, 13 skipped —
+  qdrant + ClamAV are service-dependent and unavailable on this box; that is
+  normal, not a failure).
+
+### What this session did
+
+**1. Reconciled benchmark + phase status with reality** (`b3ed4fb`, `00737ee`).
+The status docs had drifted weeks behind the code, which is worse than having
+none — agents follow them and work on finished things.
+- **CB6 → PASS.** First Critical benchmark to pass. Verified directly, not on a
+  worker's report: 8 tests, zero skips, and a deliberately mutated fixture (a
+  bogus run_status) IS caught. Frontend tree clean, so the green reproduces from
+  committed state.
+- CB2/CB4/CB5 held at PARTIAL with named reasons. Only CB6 moved.
+- Phases 0/3/4 → `docs/benchmarks/reached/`; phases 1/5 → in progress.
+- Fixed a contradiction I had shipped myself: ROADMAP still told memory that CB1
+  "needs `valid_at` typing" while the gap analysis in the same commit recorded it
+  as landed.
+- `reports/INTEGRATION_CONTRACT.md` is now **tracked** (it was gitignored while
+  CB6's PASS depended on it existing). Note the mechanism: the pattern had to
+  become `reports/*`, because git does not descend into an excluded directory and
+  a `!` re-include inside one is silently dead.
+
+**2. Corrected the Integration Contract via a dispatched api worker** (`6d31c52`).
+It claimed exception/cancellation bypasses audit derivation; `run_driver.py:488`'s
+`finally` covers every terminal status. Documented the real limitation instead
+(incomplete `participants` on the crash path, `run_driver.py:498-505`) — still an
+open CB4 gap.
+
+**3. Tidied `reports/`** (`dbd8a31`). One folder per role, coordinator included —
+`reports/backend/` now holds report_v1..v18, which had been sitting loose at the
+root.
+
+**4. Rewrote `DECISIONS_FOR_OWNER.md`** (`9a75de1`). New rule from the owner: **a
+decision file outside `reports/archived_owner_replies/` MEANS the owner must
+decide it.** If they need not act, it does not belong outside. The old docket
+mixed real decisions, tracking notes, and history — and omitted the three
+decisions that actually gate work.
+
+**5. Fixed `crew.sh` leaking its lock.** The EXIT trap was single-quoted, so
+`$lock` expanded after the function returned and `local lock` was gone; under
+`set -u` it aborted and the trap never fired. Symptom was only a stray error line
+after successful runs, because a stale lock self-heals.
+
+### What is open, and who owns it
+
+- **Owner-gated (do NOT start these):** the five items in
+  `reports/DECISIONS_FOR_OWNER.md` — Rust design discussion, batch greenlight,
+  real per-model prices, whether V1 ships to users, and the archive-cap
+  divergence. Cross-checked against `docs/ROADMAP.md` §5; the two must agree.
+- **Benchmark work** is per-specialist and listed in `docs/ROADMAP.md` §2/§4.
+- **Nothing is known-stale** in the docs as of this checkpoint (ROADMAP §6).
+
+### Traps this session actually hit — do not relearn them
+
+- **A targeted test run is not a suite run.** A loop-guard change touching
+  `run_agent` broke CI because I verified with 7 files. Run the full suite before
+  every commit; it takes ~3.5 minutes and the OOM norm that once justified
+  skipping it no longer applies.
+- **Section-boundary replaces eat content between anchors.** One deleted four
+  numbered steps from `RUST_MIGRATION_STRATEGY.md` while leaving the heading.
+  Re-read the rendered file after any structural edit.
+- **A worker's summary is not verification.** Check its claims against source and
+  cite `file:line`. Two workers this week were correct; one was killed before
+  writing anything and its "conclusions" existed only in a log.
+- **Fixing a config does not fix a session already running under it.** The
+  release agent looked broken; its Codex session had simply booted under the old
+  `.codex/config.toml` sandbox.
+- **Never sweep another agent's files.** Always `git commit -- <explicit paths>`.
+  The tree is shared and frontend/release files are routinely dirty.
+
+## Change note
+
+Rewritten 2026-07-28 to add the MENTAL MODEL section at the top, on the owner's
+instruction: Claude's weekly usage limit is nearly exhausted, so the backend role
+will run on Codex, and a fresh Codex session must acquire the long-term picture
+from files alone. The previous checkpoint documented the crew-workflow rewrite;
+that work is done and canonical in `docs/architecture/CREW_WORKFLOW.md`.
+
+Two claims in the previous checkpoint are now **obsolete**: the CB4 decision-mirror
+gap (cancelled/crashed runs writing zero records) is FIXED, and the frontend's
+uncommitted WIP has been committed — the tree is clean there.
+
+## Previous checkpoint (2026-07-27)
+
+- Provider: Claude Code (standalone, not in tmux)
+- Task: **DONE — full crew-workflow redesign**, on the owner's instruction to
+  rebuild from scratch rather than bolt fixes on a weak base. Canonical result:
+  **`docs/architecture/CREW_WORKFLOW.md`**, which supersedes every older
+  description of agent coordination.
 - What changed:
   - **All push-based messaging deleted.** systemd wake path units + heartbeat
-    timers disabled, unenabled, and their unit files removed from
-    `~/.config/systemd/user/` AND `scripts/systemd/` (the standup script used to
-    silently reinstall them — that install block is gone with the script).
-  - **Deleted scripts:** `clannon-standup.sh`, `clannon-provider-supervisor.sh`,
-    `clannon-provider-status.sh`, `agent-session.sh`, `proposal-wake.sh`,
-    `clannon-heartbeat.sh`, `proposal-status.sh`. **Replaced by one:
-    `scripts/crew.sh`** (`start|status|attach|stop`). No send-keys anywhere in it.
-  - **New channel `comms/YYYY-MM-DD/<role>.md`** — tracked in git, one file per
-    role per day (sharded so concurrent appends can't clobber). Short status.
-    `proposals/` stays for rulings, `reports/` for depth. See `comms/README.md`.
-  - **No automatic provider failover.** Provider is chosen at launch
-    (`crew.sh start <role> --codex`). Rationale in CREW_WORKFLOW §5.4.
-  - **"Never sits idle" policy RETIRED** — it was the single most expensive bad
-    instruction; see CREW_WORKFLOW §0 and §2.2.
-  - **Challenge-the-owner mandate added** to root `CLAUDE.md` + `AGENTS.md`.
-- Next: the owner starts the crew when ready via `./scripts/crew.sh start backend`
-  (see `scripts/instruction.md`). **Do NOT restart the old way** — the old
-  commands no longer exist.
-- Open items inherited, none urgent:
-  - CB4 decision-mirror gap: cancelled/crashed runs write zero decision records
-    (the write only fires inside `execute()`'s main try block). Flagged in
-    `.agents/provider-handoffs/api.md`, not yet fixed or proposed by anyone.
-  - Frontend has uncommitted work in the tree (`next.config.ts`,
-    `verified-seal.tsx`, `hooks.ts`, plus two untracked files under
-    `frontend/src/`). **Not backend's — do not touch, stash, or clean.**
-- Verification: `crew.sh` syntax-checked and smoke-tested (`status`, dead-shell
-  detection, `stop`) with no live agents running. Nothing else in the repo was
-  touched by this pass — no backend/ or frontend/ source changes.
-
-## Change note
-
-Complete redesign, not an increment. The previous checkpoint's standing order —
-"tell the owner to restart all 6 crew sessions so the permission fix takes
-effect" — is **obsolete and must not be acted on**: the scripts it referred to
-are deleted, and the permission fix it described lives on in `crew.sh`'s launch
-flags. Superseded wholesale by CREW_WORKFLOW.md.
-
-## Previous checkpoint (2026-07-26 ~21:50)
-
-- Provider: Claude Code
-- Updated: 2026-07-26 ~21:50
-- Task: coordinator heartbeat loop — HEAD `7ad3d8d`, everything pushed, tree clean of
-  my changes (RELEASE_v0.2.0.md shows modified by someone else, not touched by me).
-- **Owner replied** (`proposals/archive/to-backend/2026-07-26_owner-reply-api-and-
-  provider-infra.md`): confirmed the dual-provider infra is theirs/trusted, told me to
-  inspect + approve, and overrode my DEFER on the API specialist — explicit steer
-  to delegate labor to the new Codex capacity instead of doing it myself as
-  coordinator. Acted on both:
-  - **Reviewed + committed the provider infra** (`dee152c`) after finding + fixing one
-    real defect: `CLAUDE.md` had an unrelated URL (hcb.hackclub.com/ysws-the-carnivals)
-    spliced into the middle of the word "answers" — isolated to that one spot (grepped
-    everything else, clean). Also scoped `.gitignore` so only `.agents/provider-
-    handoffs/` is tracked, not the ephemeral `.agents/runtime/` state.
-  - **Launched `clannon-api`** (4th specialist, owns `backend/api/**`), charter +
-    16-file test-ownership list in `backend/api/CLAUDE.md` (`7ad3d8d`), wired "api"
-    through every crew-listing script. First assignment: run-lifecycle invariant
-    audit. **Found a real bug on first use**: `clannon-provider-supervisor.sh` exits
-    entirely on a role's first-ever launch instead of falling back to fresh mode (its
-    own `fresh_next` retry logic should catch "no conversation found to continue" but
-    didn't fire) — worked around by launching plain `claude` directly; specialist is
-    up and working. Flagged to owner, not yet debugged — will hit every future new
-    role and every post-reboot resume.
-- **This session's own build work** (before the owner-reply detour): fixed a broken-
-  main gap (D11 config half-committed), shipped CB5 seal surfacing end-to-end, closed
-  D6 (retired dead `backend/config/business.yaml`), placed config for orchestration's
-  cross-call workspace persistence + CB2 code-symbol-tier (`EdgeLabel.CALLS`, they
-  shipped both — `efbbfa6`), found+fixed 3 more D1 long-tail items, reconciled the SSE
-  contract-drift benchmark (8/8), built the CB4 durable decision-memory audit mirror
-  (`55b2a47` — closes that V1_GAP_ANALYSIS item).
-- Next: resume the coordinator heartbeat loop; per the owner's steer, default to
-  ASSIGNING queued work to specialists (including the new `clannon-api`) rather than
-  building things myself when a specialist tree could reasonably own it. Consider
-  investigating the provider-supervisor fresh-fallback bug when there's a lull.
-- Files touched: see Git status; never assume dirty files belong to this provider.
-- Verification: all backend commits this session were suite-green (targeted, per the
-  established OOM-avoidance norm) before push; full list in `docs/RESUME.md`.
-
-## Change note
-
-Updated by Claude Code (backend/root coordinator) after the owner's reply landed
-mid-heartbeat-loop and changed the plan (API specialist launched instead of deferred;
-provider infra committed instead of left alone). Retaining the prior checkpoint below
-since it's the last state before that reply, useful context for why the ruling changed.
-
-## Previous checkpoint
-
-- Provider: Claude Code
-- Updated: 2026-07-26 ~17:50
-- Task: coordinator heartbeat loop — HEAD `fefd7b7`, everything pushed, tree clean of
-  my changes.
-- State: dual-provider supervisor installed (found mid-session, not authored by me);
-  no provider switch had occurred on my side.
-- Open, unresolved (NOW RESOLVED, see current checkpoint): a `Status: draft` proposal
-  recommending the API specialist, ruled DEFER pending owner verification; the
-  provider infra pile left uncommitted pending the same.
-- Verification: supervisor scripts passed Bash syntax, ShellCheck, and diff checks.
-
-## Checkpoint before that
-
-- Provider: not recorded
-- Updated: 2026-07-26
-- Task: read `.claude/contexts/HANDOFF.md`, `docs/RESUME.md`, inboxes, latest reports, Git state
-- State: dual-provider supervisor installed; no provider switch has occurred
-- Next: resume latest provider-native session and continue durable mission state
-- Files touched: see Git status; never assume dirty files belong to this provider
-- Verification: supervisor scripts passed Bash syntax, ShellCheck, and diff checks
+    timers disabled, unenabled, and removed from `~/.config/systemd/user/` AND
+    the repo (the standup script silently reinstalled them; it is gone too).
+  - **Seven scripts deleted, replaced by one: `scripts/crew.sh`**
+    (`start|status|attach|stop|run`). No send-keys anywhere in it.
+  - **New tracked channel `comms/YYYY-MM-DD/<role>.md`** — one file per role per
+    day, sharded so concurrent appends cannot clobber.
+  - **No automatic provider failover.** Provider chosen at launch.
+  - **"Never sits idle" RETIRED** — the most expensive bad instruction we ever
+    followed (busywork, git churn, agents trampling each other).
+  - **Challenge-the-owner mandate added** to `CLAUDE.md` + `AGENTS.md`.
+- Verification: `crew.sh` syntax-checked and smoke-tested with no live agents.
+  No backend/ or frontend/ source touched by that pass.
