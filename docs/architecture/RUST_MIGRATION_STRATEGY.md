@@ -52,6 +52,26 @@ argument — not a default.
 
 **Parallel implementation with deferred cutover. Never a big-bang rewrite.**
 
+For any part we decide to experiment with:
+
+1. **Write the Rust 1:1 alongside the Python.** A mechanical port, minimal
+   behavioural change. The Python keeps running and stays the live path.
+2. **Both exist simultaneously.** The Rust implementation is inert — built,
+   tested, but not serving traffic — until it earns the swap.
+3. **Cut over only when the Rust is proven ready**, against the same behaviour
+   the Python already guarantees. Detach Python, attach Rust, at the port
+   boundary.
+4. **Keep the Python after cutover** as the fallback, until the Rust has held in
+   production long enough to trust (see "How long is 'just in case'" below).
+
+The seam that makes this possible already exists: `foundation/contracts/` ports
+(`MemoryPort`, `GraphPort`, `BudgetPort`, `ArtifactStore`). Consumer and
+implementer never import each other, so swapping an implementation is a local
+change — which is exactly what LAW 6 requires us to maintain.
+
+**Nothing gets rewritten just because it could be.** Declining a rewrite must
+mean "we didn't think Rust would make it better," never "too risky to try."
+
 ## Why not big-bang — and the honest counter-example
 
 Bun rewrote its runtime from Zig to Rust and merged it on 2026-05-11: ~1.01M
