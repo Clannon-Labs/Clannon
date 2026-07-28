@@ -182,13 +182,33 @@ OWNER or shared by everyone — never a role's own work:
 `INTEGRATION_CONTRACT.md` (the one tracked file in here; everything else is
 gitignored per-agent depth).
 
-**A `REPLY_NEEDED_*.md` lives at the root only while it is still waiting.** Once
-the owner has answered and the outcome has landed, append a `## SETTLED — <date>`
-section saying how it resolved and where the canonical outcome now lives, then
-move it to `reports/archived_owner_replies/`. Keep the file — the reasoning,
-including whatever turned out to be wrong, is why the resulting rule reads the
-way it does. A root full of already-answered questions makes the genuinely open
-ones invisible, which is the whole point of the naming convention.
+**THE RULE (owner instruction, 2026-07-28) — a decision file outside
+`reports/archived_owner_replies/` MEANS "the owner must decide this."** That is
+its only meaning. If the owner does not have to act on it, it does not belong
+outside. This governs `DECISIONS_FOR_OWNER.md` and every `REPLY_NEEDED_*.md`.
+
+Concretely, before you leave anything in `reports/` root, ask: **can I resolve
+this myself — by doing the work, or by making a judgement call I'm allowed to
+make?** If yes, it is not an owner decision. Put it in `docs/ROADMAP.md` (open
+work), `comms/` (status), or your own report. Only a genuine "I am blocked on
+you" stays.
+
+Two failure modes, both of which had happened by 2026-07-28:
+- **Padding.** The docket carried tracking notes and resolved history under a
+  `NEEDS YOUR DECISION NOW` heading; two of its three "decisions" said in their
+  own text that no answer was required. Padding a decision file is not harmless
+  — it buries the real items and trains the owner to skim.
+- **Omission.** The decisions that actually gated work (the Rust discussion, the
+  batch greenlight, whether V1 ships to users) were not in it at all. A docket
+  that is missing the live items is worse than no docket.
+
+So: **keep it current the same way you keep status current.** When you settle
+something, append `## SETTLED — <date>` (how it resolved, where the canonical
+outcome now lives) and move it to `reports/archived_owner_replies/`. Keep the
+file — the reasoning, including whatever turned out to be wrong, is why the
+resulting rule reads the way it does. And when something new becomes owner-gated,
+add it the same day. Cross-check against `docs/ROADMAP.md` §5, which lists the
+owner-gated items; the two must agree.
 
 **Write your reports to `reports/backend/report_vN.md`** — one NEW file per
 finished piece of work, never appended to an old one.

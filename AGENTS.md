@@ -85,10 +85,19 @@ Messaging — PULL, never push:
   Root of `reports/` holds ONLY owner-addressed or shared files:
   `DECISIONS_FOR_OWNER.md`, `REPLY_NEEDED_*.md`, `INTEGRATION_CONTRACT.md`.
   Never drop your own report_vN.md at the root.
-- `REPLY_NEEDED_*.md` sits at root only WHILE waiting. Answered + outcome landed
-  → append `## SETTLED — <date>` (how it resolved, where canonical outcome lives),
-  move to `reports/archived_owner_replies/`. Keep file; wrong reasoning explains
-  why rule reads as it does. Root full of answered questions hides open ones.
+- Decision file OUTSIDE `reports/archived_owner_replies/` MEANS "owner must decide
+  this" — only meaning. Owner needn't act → doesn't belong outside. Covers
+  `DECISIONS_FOR_OWNER.md` + every `REPLY_NEEDED_*.md`.
+- Test before leaving one at root: can I resolve this myself (do the work, or make
+  a judgement call I'm allowed)? Yes → not an owner decision. Goes to ROADMAP (open
+  work), comms/ (status), or your report. Only "blocked on you" stays.
+- Settled → append `## SETTLED — <date>` (how resolved, where canonical outcome
+  lives), move to `archived_owner_replies/`. Keep file; wrong reasoning explains
+  why rule reads as it does.
+- New owner-gated thing → add same day. Cross-check `docs/ROADMAP.md` §5; must agree.
+- Two failure modes seen 2026-07-28: PADDING (tracking + history under "NEEDS
+  DECISION NOW", buries real items) and OMISSION (live gates missing entirely —
+  worse than no docket).
 - Idle is legitimate. Empty queue → write handoff, stop. Don't invent work.
 
 Provider continuity:
