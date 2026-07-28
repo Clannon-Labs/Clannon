@@ -6,8 +6,74 @@ Transfers live frontend work between Claude Code and Codex.
 
 - Provider: Claude Code
 - Updated: 2026-07-28 (later in the day than the checkpoint below)
+- Task: owner instruction to stop auditing from code/screenshots and
+  actually be the user — sign up cold, use the real product end to end via
+  real Chrome (chrome-devtools MCP, not the Playwright test browser), fix
+  what a first-time non-technical user would actually hit
+- State: done, pushed — `95eb6f0` (on top of everything in the prior
+  checkpoint below). Full accounting: `reports/frontend/frontend_report_v11.md`.
+- Two real bugs found by using the product, not reading it, both fixed in
+  `8ef1036`:
+  1. A fresh signup's "empty account" promise didn't survive a page reload.
+     `MockClient`'s class field initializers (`private projects =
+     structuredClone(SEED_PROJECTS)` etc.) re-seed on every full page load
+     since it's a client-side singleton reconstructed from scratch each
+     navigation — the earlier empty-signup fix only ever cleared the
+     current in-memory instance. Confirmed live: sign up, click into the
+     memory page, watch a stranger's "Meridian Skincare" project and
+     599k/6M usage appear. Fixed with a persisted `EMPTY_ACCOUNT_KEY` flag
+     the constructor checks, `login()`/`loginWithProvider()` explicitly
+     reseeding the live instance too (caught during testing: flipping the
+     flag alone doesn't help a login immediately after a signup, since
+     that instance is already constructed empty).
+  2. First-time signups were told "Welcome back" (no first-run branch in
+     the greeting pool). Fixed with plain "Welcome" — advisor review caught
+     a loading-state race in the first attempt (`isFirstRun` is false while
+     `runs` is still in flight, and the greeting renders outside the
+     loading gate) before it shipped; gated on `!workspaceReady` too.
+  3. Incidental: every normal mock delivery now sets `verificationState:
+     "grounded"`, not just the QA trigger — the VERIFIED seal was silently
+     absent from every ordinary run before this.
+- Checked and deliberately left alone: decision-log jargon (already
+  opt-in, auto-collapses ~2.2s after delivery); Settings/Usage/Billing under
+  the account menu, not main nav (matches Slack/Notion/ChatGPT convention);
+  Models settings page (already plain-language with good defaults).
+- Score: 83.42 -> 84.16/100. Outcome clarity 85->87, trust/control 87->89,
+  continuity 86->88 — each tied to one of the two bugs above with browser
+  evidence in `previews/2026-07-28_be-the-user-pass/`. **Stated the 90-gate
+  performance blocker explicitly at the top of `PAID_PRODUCT_BENCHMARK.md`**
+  (mobile Lighthouse floor is Next.js App Router's own hydration runtime,
+  proven in the prior checkpoint's Pass 3, not reachable by another UX
+  pass) so the next session doesn't re-derive it or chase the number past
+  what the evidence supports.
+- Verification: tsc/eslint/vitest 87/87/build green. Playwright regression
+  check (`first-value.spec.ts`, `landing.spec.ts`, `completion-status.spec.ts`)
+  5/6 green in one run; the 6th (blocked-run case) failed once under
+  back-to-back load, then passed both standalone and in isolation right
+  after — confirmed a pre-existing sequencing flake, not a regression, by
+  actually re-running it rather than assuming.
+- Not done: `failed`/quota-exceeded mock states still untested (same
+  bounded pattern would close them). Performance needs the dedicated
+  framework-level session already flagged in the prior checkpoint — nothing
+  new to add there.
+
+## Change note
+
+Owner said to stop reasoning about the product from code and screenshots and
+actually use it cold, as a non-technical first-timer would. That surfaced
+two real bugs no amount of code review had caught (data leaking into a
+fresh account across a reload; a first-timer told "welcome back") — the kind
+of thing that only shows up by clicking through, not by reading the diff
+that claimed to fix it the first time. Consulted advisor before committing
+and it caught a real defect in my own fix (a loading-state race) before it
+shipped, not after.
+
+## Previous checkpoint
+
+- Provider: Claude Code
+- Updated: 2026-07-28 (earlier the same day than the checkpoint above)
 - Task: land the stranded worktree from the prior checkpoint, then push the
-  paid-product benchmark genuinely past 83 (owner instruction, this session)
+  paid-product benchmark genuinely past 83 (owner instruction, that session)
 - State: done through four commits, all pushed —
   `e1beca8`/`d4e35ec` (landed the stranded worktree), `92d940d` (extracted +
   tested `completion-status.tsx`), `e1535ff` (browser-verified both the
@@ -18,11 +84,11 @@ Transfers live frontend work between Claude Code and Codex.
   re-verified independently first (tsc/eslint/vitest 81/81/build), then a
   real Playwright pass caught a self-inflicted stale-chunk error (rebuilt
   `next build` without restarting `next start` — not a product bug, hit it
-  twice this session, both times run to ground with a raw Playwright +
+  twice that session, both times run to ground with a raw Playwright +
   `console.log` script rather than assumed-away). Excluded
   `.agents/provider-handoffs/release.md` and `comms/2026-07-27/release.md`
   from every commit — release role's own files in the same shared tree.
-- Score: 82.61 -> 83.42/100, still rounds to 83. New evidence: added two
+- Score: 82.61 -> 83.42/100, still rounded to 83. New evidence: added two
   QA-only mock triggers (`src/lib/api/mock.ts`, keyed off brief text, never
   surfaced as a suggestion) since `MockClient` never simulated a
   `blocked`/`partial` terminal — closed that gap, drove both with real
@@ -37,20 +103,13 @@ Transfers live frontend work between Claude Code and Codex.
 - Real backend (`localhost:8000`) refused connection all session — no
   re-verification of the real-journey timeout finding was possible; noted
   honestly rather than reused as if still current.
-- Not done: `failed`/quota-exceeded states are still untested (same bounded
-  mock-trigger + Playwright pattern as this session would close them).
-  Mobile Lighthouse 90 gate remains far off and needs the framework-floor
-  work flagged above, not incremental app tuning.
-
-## Change note
-
-Landed the previous checkpoint's stranded 83/100 worktree (was "STILL
-UNCOMMITTED" for two checkpoints running) rather than leaving it stranded a
-third time, per owner instruction this session. Then answered "push toward
-85+ genuinely" by closing a real, named gap (completion-status UI had zero
-browser evidence) instead of inflating the number — landed at 83.42, said so
-plainly, and left performance/backend-timing honestly unmoved where the
-evidence didn't support a claim either way.
+- Change note: landed the previous checkpoint's stranded 83/100 worktree
+  (was "STILL UNCOMMITTED" for two checkpoints running) rather than leaving
+  it stranded a third time. Then answered "push toward 85+ genuinely" by
+  closing a real, named gap (completion-status UI had zero browser
+  evidence) instead of inflating the number — landed at 83.42, said so
+  plainly, and left performance/backend-timing honestly unmoved where the
+  evidence didn't support a claim either way.
 
 ## Previous checkpoint
 

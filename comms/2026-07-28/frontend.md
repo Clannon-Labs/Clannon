@@ -46,3 +46,27 @@
 - Next: performance needs a dedicated session if it's to move past 64 (App
   Router framework floor, not a quick fix); `failed`/quota states still
   untested (same bounded mock-trigger + Playwright pattern would close them).
+- Owner instruction: stop auditing from code, actually be the user. Signed up
+  cold via chrome-devtools MCP (real Chrome, not the Playwright harness),
+  used the real product end to end. Found two real bugs (`8ef1036`, pushed):
+  (1) fresh signup's "empty account" promise didn't survive a page reload —
+  MockClient's class fields re-seeded demo "Meridian Skincare" data on every
+  navigation, only the in-memory instance was ever actually cleared. Fixed
+  with a persisted empty-account flag + explicit reseed on login (a login
+  right after signup was staying empty — caught before shipping). (2)
+  first-time signups were told "Welcome back" — no first-run branch in the
+  greeting pool; advisor review caught a loading-state race in my first fix
+  before it shipped. Also: every normal delivered run now shows the VERIFIED
+  seal (was silently absent except on my QA test scenario).
+- Checked and left alone: decision-log jargon already auto-collapses and is
+  opt-in; Settings/Usage/Billing live under the account menu (matches
+  Slack/Notion/ChatGPT convention, not a gap); Models settings already
+  plain-language with good defaults.
+- Score: 83.42 -> 84.16/100 (outcome clarity 85->87, trust/control 87->89,
+  continuity 86->88 — each tied to one of the two bugs). Stated the 90-gate
+  performance blocker explicitly at the top of PAID_PRODUCT_BENCHMARK.md so
+  it isn't re-derived or chased past what Pass 3 already proved. Full
+  accounting: reports/frontend/frontend_report_v11.md.
+- Verification: tsc/eslint/vitest 87/87/build green; Playwright 5/6 in one
+  run, 6th confirmed a pre-existing sequencing flake (not a regression) by
+  isolated re-run before moving on.
