@@ -122,6 +122,10 @@ after successful runs, because a stale lock self-heals.
   production files now 481/41 and 498/39 lines.
 - Central-config inventory reconciled: D1–D12 settled, Phase 3 substantially
   wired, D5 model centralization is next safe engineering work.
+- Worker identities/routing corrected (`2f91e89`): backend-worker proposals go
+  to `proposals/to-backend/from_workers/`; specialist workers use
+  `<role>-worker` → `backend-coordinator` in `to-backend/`; dispatch briefs now
+  live under `.agents/briefs/<role>/`.
 - Three full suites passed during integration; latest: 1498 passed, 13 skipped.
 
 ### What is open, and who owns it
