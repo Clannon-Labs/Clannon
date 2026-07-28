@@ -1,9 +1,9 @@
-# Phase 4 — Integration Contract (live CB6)   STATUS: complete (frontend alignment proposed)
+# Phase 4 — Integration Contract (live CB6)   ✅ REACHED 2026-07-28
 
 **Goal:** create + maintain `reports/INTEGRATION_CONTRACT.md` — the single shared
 source of truth both agents read (reports/ is where both agents read/write; it is
-the shared, both-readable location). Frontend is now idle → a proposal + wake is
-allowed.
+the shared, both-readable location). Coordination uses pull-based proposals per
+`docs/architecture/CREW_WORKFLOW.md`; nothing injects into a running session.
 
 Contents required:
 - [x] Per-surface reconciliation table (from Phase 0).
@@ -19,3 +19,9 @@ Contents required:
       seal/memory surfaces always reflect PERSISTED reality.
 
 **Acceptance:** the file exists with all sections + a mirrored proposal note.
+
+**Outcome:** reached. `reports/INTEGRATION_CONTRACT.md` contains every required
+section; frontend proposal
+`proposals/archive/to-frontend/2026-07-26_integration-contract-v1.md` mirrors
+alignment; `tests/benchmarks/sse_contract_drift.py` is green and enforces
+shared-shape compatibility. CB6 verdict: PASS.

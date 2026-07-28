@@ -177,8 +177,9 @@ the committed docs below are canonical, so nothing is lost):
   frame for the graph-blocked benchmarks; propose-first + stability-first, nothing
   built).
 
-Priority order: CB5 → CB1(+EB1) → CB4(audit mirror) → CB6 → CB2/CB3/EB3 (batch
-architecture + graph, propose-first). **Standing rule — Prime Directive:**
+Priority order lives in **`docs/ROADMAP.md` §2** — not here, so it cannot rot in
+two places. (The old `CB5 → CB1 → CB4 → CB6` chain is retired: CB6 PASSES, and
+CB4's mirror + CB5's seal shipped.) **Standing rule — Prime Directive:**
 stability before new surface area (verify the layer beneath is stable/correct/
 honest before building on it; fix or flag a shaky foundation first). Always: suite
 green before every commit; backend only; propose-first for any contract/security/

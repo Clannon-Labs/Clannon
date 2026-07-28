@@ -4,7 +4,7 @@
 
 - [ ] Measure time-to-first-decision-entry + time-to-first-token (needs Qdrant +
       an LLM key; be honest — do NOT fabricate numbers).
-- [ ] Confirm the decision-log stream flushes incrementally (not one end burst) —
+- [x] Confirm the decision-log stream flushes incrementally (not one end burst) —
       structural trace of on_event live vs deferred (api/run_state.emit, sse.py).
 - [ ] Cheap deterministic gates precede expensive LLM calls without blocking
       stream start.

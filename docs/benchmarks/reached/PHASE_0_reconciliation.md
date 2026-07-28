@@ -1,4 +1,4 @@
-# Phase 0 — Contract Reconciliation   STATUS: complete
+# Phase 0 — Contract Reconciliation   ✅ REACHED 2026-07-28
 
 **Goal:** for each frontend signature surface, trace the real backend data path;
 produce the UI-need / API-provides / gap / resolution table (feeds Phase 4).
@@ -12,7 +12,7 @@ Done:
       the field/event but still renders `VerifiedSeal` on `reportDone` alone and
       discards the live verification event; frontend alignment remains open.
 
-To do:
+Completed:
 - [x] Decision-log/SSE entry schema table (kinds, ts, expert-spawn, tool, elapsed)
       — is each entry sufficient to animate; incremental vs bursty flush.
 - [x] Hydration contract: shape + timing GET /memory/hydration-preview returns.
@@ -20,3 +20,7 @@ To do:
 
 **Acceptance:** the per-surface reconciliation table is complete in
 INTEGRATION_CONTRACT.md with a resolution per gap.
+
+**Outcome:** reached. `reports/INTEGRATION_CONTRACT.md` contains hydration,
+ledger, report, verification, and durable-decision reconciliation with explicit
+gap resolutions. Phase 4 carries contract maintenance and drift enforcement.

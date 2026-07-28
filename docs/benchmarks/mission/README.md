@@ -26,13 +26,14 @@ authoritative, resumable plan.
 | Phase | File | Status |
 |---|---|---|
 | Diagnosis | `reached/PHASE_00_diagnosis.md` | ✅ reached — `V1_GAP_ANALYSIS.md` |
-| 0 — Reconciliation | `mission/PHASE_0_reconciliation.md` | in progress (frontend digest done) |
-| 1 — Reliability | `mission/PHASE_1_reliability.md` | not started (#52 already done) |
+| 0 — Reconciliation | `reached/PHASE_0_reconciliation.md` | ✅ reached — integration reconciliation complete |
+| 1 — Reliability | `mission/PHASE_1_reliability.md` | in progress — persisted-only surfacing done; audits open |
 | 2 — Latency | `mission/PHASE_2_latency.md` | not started (needs running stack) |
-| 3 — Contract & honesty | `mission/PHASE_3_contract_honesty.md` | not started |
-| 4 — Integration Contract | `mission/PHASE_4_integration_contract.md` | not started (frontend now idle) |
-| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | not started |
+| 3 — Contract & honesty | `reached/PHASE_3_contract_honesty.md` | ✅ reached — earned seal + honest docs |
+| 4 — Integration Contract | `reached/PHASE_4_integration_contract.md` | ✅ reached — contract + drift enforcement |
+| 5 — Capability (CB work) | `mission/PHASE_5_capability.md` | in progress — CB6 passed; other gaps remain |
 | 6 — Verify | `mission/PHASE_6_verify.md` | ongoing (per commit) |
+| F — Foundation hardening | `mission/PHASE_F_foundation_hardening.md` | in progress |
 
 ## Structural frame & standing rules
 
@@ -47,7 +48,8 @@ authoritative, resumable plan.
 
 ## Priority order (from the gap analysis)
 
-CB5 (near-pass) → CB1 (+EB1) → CB4 (audit mirror, +CB6/EB2) → CB6 (this pass) →
-CB2/CB3/EB3 (graph-web, propose-first, deferred). Immediate code wins:
-memory persisted-only surfacing (CB1 honesty), earn-the-seal filter verdict
-(CB5 visibility).
+CB6, CB4 audit mirror, memory persisted-only surfacing, and earned-seal
+visibility are complete. Remaining benchmark work: CB3/EB3 real media
+ingestion; CB1/EB1 explanation/provenance/temporal linkage; CB2 architectural
+explanation; CB4 structured tradeoffs/history + complete participants; CB5
+detect residual. Cross-role ordering and owner gates live in `docs/ROADMAP.md`.

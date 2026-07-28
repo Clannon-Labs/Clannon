@@ -5,7 +5,7 @@
 > `CLANNON_V1_ATTENTION_THRESHOLD.md` (6 Critical + 3 Exceptional benchmarks).
 > **Rule honored:** honest BUILT/PARTIAL/ABSENT per benchmark with `file:line`;
 > a truthful "ABSENT, here's the path" beats optimistic prose.
-> **Date:** 2026-07-04. **Verdicts trace real code paths + the existing
+> **Reconciled:** 2026-07-28. **Verdicts trace real code paths + the existing
 > `backend/tests/benchmarks/` harnesses**, not docstrings.
 
 ---
@@ -14,27 +14,27 @@
 
 | # | Benchmark | Verdict | Closest-to-pass? | Structural cost | Needs graph? |
 |---|---|---|---|---|---|
-| CB1 | Persistent cross-session memory | **PARTIAL (strong)** | ★ 2nd | low (additive typing) | no |
-| CB2 | Large repository understanding | **PARTIAL** (file-level + cross-batch proven; symbol tier absent) | — | medium (symbol tier) | no — built |
+| CB1 | Persistent cross-session memory | **PARTIAL (strong)** | open | low (explanation + temporal linkage) | no |
+| CB2 | Large repository understanding | **PARTIAL** (symbol/AST/dependency/archive tiers built; architectural explanation absent) | open | medium (explanation synthesis) | no — built |
 | CB3 | Unified multi-modal representation | **PARTIAL** (string-survival + graph-convergence mechanism proven; real media ingestion absent) | — | medium (media extractor) | no — built |
-| CB4 | Institutional decision memory | **PARTIAL** | ★ 3rd | medium (audit mirror) | no |
-| CB5 | Security validation | **PARTIAL (near-pass)** | ★ 1st | low | no |
-| CB6 | Multi-agent architectural consistency | **PARTIAL (mechanism live)** | ★ 4th | low | no |
+| CB4 | Institutional decision memory | **PARTIAL** | open | medium (structured tradeoffs/history + complete participants) | no |
+| CB5 | Security validation | **PARTIAL (near-pass)** | open | low (detect residual) | no |
+| CB6 | Multi-agent architectural consistency | **PASS** | complete | — | no |
 | EB1 | Knowledge evolution (temporal truth) | **PARTIAL** | rides CB1 | low | no |
 | EB2 | Autonomous project continuity | **PARTIAL** | rides CB1+CB4 | medium | no |
 | EB3 | Cross-media knowledge synthesis | **PARTIAL** (entity-mediated link proven; direct edge is a schema gap, semantics absent) | — | medium | no — built |
 
-Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **0 Critical
-PASS, 6 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional PASS. Today: **1 Critical
+PASS, 5 PARTIAL, 0 ABSENT.** **Updated 2026-07-25:** the Kuzu knowledge-web that
 CB2/CB3/EB3 blocked on (ratified 2026-07-06, built + benchmark-proven through
 2026-07-25 — `tests/benchmarks/c2_repo_intelligence.py`,
 `c3_knowledge_web_convergence.py`, `eb3_cross_media_synthesis.py`) moved all
-three from ABSENT to PARTIAL, "Needs graph?" from yes to built. Their remaining
-gaps are now CROSS-TREE dependencies (the code-symbol tier and the media
-extractor, §3.3/§3.4 of the ratified design), not a graph-substrate gap — see
-their detail sections below. The closest-to-pass ranking (★) and priority-order
-guidance predate this update and describe the four benchmarks that never
-depended on the graph.
+three from ABSENT to PARTIAL, "Needs graph?" from yes to built. CB2's symbol
+tier has since landed; its architectural-explanation requirement remains
+NOT-YET. CB3/EB3 still need real media extraction (§3.4), not more graph
+substrate work. **Reconciled 2026-07-28:** CB6 now passes; stale
+priority stars were removed because they directed agents toward completed
+CB4/CB5/CB6 sub-work rather than remaining benchmark gaps.
 
 ---
 
@@ -48,19 +48,17 @@ ordering (SEMANTIC>EPISODIC/PROCEDURAL, `_TIER_TRUST`), recency decay, relevance
 floor. `tests/benchmarks/c1_memory.py` + `c1_persistent_memory_demo.py` prove the
 Day-1-seed → **fresh-session, empty-transcript** Day-7 retrieval, tier survival,
 and off-topic distractor drop — the "second-session magic," no chat replay.
-**PARTIAL:** the harness itself marks **explain-reasoning** and
-**current-vs-historical** as PARTIAL (`c1_memory.py:355,392`). Provenance is
-mostly there (`MemoryItem` carries `store/trust/created_at`,
-`foundation/contracts/memory.py:27-36`), but there is **no fact-vs-assumption
-typing** and **no temporal-validity (`valid_at`)** on the write path, so the two
-weakest pass-requirements can't be met.
-**Path to PASS (no graph):** additive fields on `MemoryWriteProposal`/`MemoryItem`
-— `kind: fact|assumption`, `valid_at`, `superseded_by` — per the already-designed
-additive contract (`docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md §7.4`),
-plus surface the retrieval "why" (score+tier already computed). **Highest-leverage
-non-graph win; also unlocks EB1.**
+**PARTIAL:** fact-vs-assumption typing and `valid_at` have landed; the current
+harness marks that discriminator PASS. Explain-reasoning and
+current-vs-historical remain PARTIAL: score/tier provide a machine-readable
+retrieval basis, but no reasoning narrative exists, and supersession is not a
+linked temporal relationship. Provenance remains PARTIAL because author/RFC
+linkage is incomplete (`tests/benchmarks/c1_memory.py`).
+**Path to PASS (no graph):** add retrieval explanation, complete provenance,
+and link superseded knowledge so current and historical states are explicit.
+This also advances EB1.
 
-### CB2 — Large Repository Understanding — PARTIAL (updated 2026-07-25)
+### CB2 — Large Repository Understanding — PARTIAL (updated 2026-07-28)
 **BUILT:** the Kuzu knowledge-web substrate (ratified 2026-07-06, built through
 2026-07-25 — `GraphPort`/`GraphManager`/Kuzu behind the port; the "graph DB
 choice" half of ADR 0005 is resolved per its own status note). `tests/
@@ -72,15 +70,15 @@ claim: two synthetic TASK nodes (standing in for two different batches) each
 get their own graph node, both landing in ONE shared graph, each still
 traceable back to its origin task — the half of "CB2 (full)" that does not
 need the code-symbol tier.
-**PARTIAL:** symbol-granularity traversal (function/struct-level nodes, not
-just file-level) needs the code-symbol tier (§3.3 of the ratified knowledge-web
-design, `proposals/archive/to-backend/2026-07-06_knowledge-web-design-cb2-cb3-eb3.md`)
-— a **cross-tree dependency on orchestration's extractor**, not built here.
-Natural-language architectural explanations remain NOT-YET (LLM synthesis over
-graph results, not the graph substrate's job).
-**Path:** no further work needed in `core/memory/` to advance CB2 further — the
-graph door is ready and proven; the symbol tier is orchestration's build
-whenever they're ready to consume it.
+The code-symbol tier, AST-aware search, dependency-graph traversal, archive
+ingestion, and cross-call workspace persistence have since landed and carry
+their own focused tests (`tests/orchestrator_code_symbols.py`,
+`tests/orchestrator_archive_extraction.py`, and related workspace/graph tests).
+**PARTIAL:** `tests/benchmarks/c2_repo_intelligence.py` still marks
+`architectural_explanations` NOT-YET. Deterministic navigation and relationship
+results do not yet produce natural-language architectural explanations.
+**Path:** exercise the landed tiers in an explanation layer and extend the CB2
+acceptance harness. Do not count raw graph results as explanation.
 
 ### CB3 — Unified Multi-Modal Representation — PARTIAL (updated 2026-07-25)
 **BUILT:** intake→sanitizer→normalizer preprocesses every modality (`tests/
@@ -108,17 +106,18 @@ whenever that pipeline exists. No further work needed in `core/memory/` itself.
 **BUILT:** `tests/benchmarks/c4_decision_memory.py` ingests the repo's real ADRs
 through the write door and retrieves **decision + reasoning + participants** in a
 fresh session.
-**PARTIAL:** tradeoffs (alternatives+risks) and historical-context ride as **flat
-prose in one blob** (`c4_decision_memory.py:634-642`) — not discrete, queryable
-records; the debate can't be reconstructed as structured arguments. The **durable
-decision-log audit mirror is ABSENT**: `core/orchestrator/utils/decision_log.py`
-is in-memory only (streamed over SSE, never persisted) — confirmed no
-`audit_mirror`/decision-log persistence anywhere.
-**Path (no graph):** build the durable decision-log audit mirror — persist the
-in-run decision log as structured records (decision, reasoning, tradeoffs,
-participants, ts). Medium structural, **propose-first** (new persistence surface),
-self-contained. **High leverage: also serves CB6 traceability + the frontend's
-"what did the agent do" story + EB2.**
+**BUILT since original diagnosis:** durable `DecisionRecord` audit mirror plus
+owner-scoped `GET /runs/:id/decisions`, including terminal delivered, blocked,
+failed, and cancelled paths (`api/run_driver.py`, `api/decision_audit.py`;
+`tests/decision_audit.py`, `tests/decision_record.py`).
+**PARTIAL:** tradeoffs (alternatives+risks) and historical context still ride as
+flat prose rather than discrete, queryable records
+(`tests/benchmarks/c4_decision_memory.py`). Crash/cancellation derivation uses
+the live log but lacks returned-flow expert/tool context, so some records have
+incomplete `participants`. The benchmark's ADR path also still marks
+participants NOT-YET.
+**Path (no graph):** structure tradeoffs and historical links; preserve complete
+participant context on every terminal path; extend the CB4 harness.
 
 ### CB5 — Security Validation — PARTIAL (near-pass)
 **BUILT:** real intake→sanitizer→verifier gates. `tests/benchmarks/c5_security.py`
@@ -127,22 +126,21 @@ poisoning, encoded exfil, tool abuse) through the **real** stages and asserts
 every attack is **blocked + halted + audited** (`c5_security.py:391-392`).
 detect/prevent/audit are strong; sole-broker + `user_id` scoping close the
 poisoning/retrieval surface.
-**PARTIAL:** **detect** is PARTIAL (one residual payload, `c5_security.py:316`) and
-**classify/explain** are coarse — the verifier produces a structured reason but it
-isn't surfaced as a first-class classification.
-**Path (no graph, lowest cost):** widen battery coverage to close the detect
-residual + surface the verifier's classification/explanation as structured output.
-**Closest to a real PASS — do first.**
+**PARTIAL:** **detect** remains PARTIAL: one adversarial payload evades the
+deterministic screen, and live semantic detection remains separately certified
+rather than hermetically proven (`tests/benchmarks/c5_security.py`). Structured
+classification/explanation and earned-seal surfacing have landed.
+**Path (no graph):** close the detect residual and widen the proving battery.
 
-### CB6 — Multi-Agent Architectural Consistency — PARTIAL (mechanism live)
-**BUILT:** the cross-agent proposal protocol + auto-wake + this mission's
-`INTEGRATION_CONTRACT.md` are a live CB6 instance; `scripts/check_invariants.py`
-+ the `architecture-boundary` review agent enforce boundary/import consistency;
-`tests/benchmarks/sse_contract_drift.py` is a partial contract-drift guard.
-**PARTIAL:** no automated cross-agent shared-shape compatibility test beyond the
-SSE scan. **Path:** the Integration Contract (Phase 4) + a drift test that fails
-when a frontend-consumed backend shape changes without a contract update. **This
-pass makes CB6 real.**
+### CB6 — Multi-Agent Architectural Consistency — PASS (updated 2026-07-28)
+**BUILT:** pull-based proposal workflow, `reports/INTEGRATION_CONTRACT.md`, and
+`tests/benchmarks/sse_contract_drift.py`. The harness exercises real backend
+mappers, parses frontend TypeScript, compares event/payload/vocabulary shapes,
+and fails on material shared-contract drift. `scripts/check_invariants.py` and
+architecture-boundary review cover repository boundaries.
+**PASS:** shared integration contract exists and automated compatibility
+enforcement is green. Future batch seams remain subject to same no-drift rule;
+that ongoing obligation does not reduce current benchmark verdict.
 
 ### Exceptionals
 - **EB1 Knowledge Evolution — PARTIAL.** `e1_knowledge_evolution.py` probe exists;
@@ -163,29 +161,24 @@ pass makes CB6 real.**
 
 ---
 
-## Priority order (closest-to-pass × highest-leverage)
+## Remaining work
 
-1. **CB5** — near-pass, lowest cost: surface classify/explain + close the detect
-   residual. (Phase 1/3 + capability test.)
-2. **CB1** — strong PARTIAL: additive fact/assumption + temporal typing + surfaced
-   provenance. **Also unlocks EB1.** (Phase 5.)
-3. **CB4** — durable decision-log audit mirror. **Also serves CB6 + EB2 + the
-   frontend story.** Propose-first. (Phase 5.)
-4. **CB6** — Integration Contract + a real contract-drift test. **This pass.**
-5. **CB2 / CB3 / EB3 — updated 2026-07-25.** The Kuzu knowledge-web they
-   blocked on is built + benchmark-proven (see their detail sections above).
-   Remaining work is now a **cross-tree dependency**, not a memory-specialist
-   graph-substrate gap: CB2's symbol tier is orchestration's build (§3.3);
-   CB3/EB3's real media ingestion is the media pipeline's (§3.4); EB3's
-   direct-edge schema question is a backend/schema decision. No further
-   graph-substrate work advances these three further on its own.
+CB6 is complete. CB4's durable mirror and CB5's earned-seal surfacing are also
+complete sub-work; neither should be advertised as next work.
 
-**Immediate implementation work** (Phase 1/3, safe, self-contained, serves the
-top priorities): (a) memory **persisted-only** surfacing — the Manager returns
-what it actually persisted, so `run.memory_writes` never shows a phantom (CB1
-honesty); (b) **earn the seal** — expose the filter's real groundedness verdict
-(CB5 visibility). Both are additive/reductive, no security-invariant risk, and
-directly feed the frontend's honesty story.
+Open benchmark gaps:
+
+1. **CB3 / EB3:** real media extraction/ingestion; direct-edge semantics still
+   need a schema decision.
+2. **CB1 / EB1:** retrieval explanation, complete provenance, and explicit
+   supersession/temporal linkage.
+3. **CB2:** architectural explanation over landed symbol/AST/dependency/archive
+   capabilities.
+4. **CB4 / EB2:** structured tradeoffs/history and complete crash-path
+   participants.
+5. **CB5:** deterministic-detect residual.
+
+`docs/ROADMAP.md` remains canonical for cross-role ordering and owner gates.
 
 ---
 
@@ -196,30 +189,27 @@ owner-authored 2026-07-04) is largely *how* the graph-blocked benchmarks get bui
 and it reframes the priority tail — but changes **nothing** about the near-term
 non-graph wins above (CB5/CB1/CB4 advance the same way regardless).
 
-- **CB2 (PARTIAL, graph substrate built → full pass via an engineering batch).**
+- **CB2 (PARTIAL, navigation tiers built → explanation remains).**
   Instead of a bare Kuzu web, CB2 becomes a batch: engineering expert(s) + heavy
   deterministic tools (AST-aware search, dependency-graph traversal, precise
   patch-apply) that **navigate** a repo larger than any context window rather
-  than ingest it. The graph substrate now exists and is benchmark-proven for
-  dependency traversal (see CB2's detail section above); the *capability shape*
-  for the full pass is still an expert-drives-tools batch, not a raw graph
-  query. Still propose-first + big.
+  than ingest it. Those navigation tiers now exist. Full PASS still needs the
+  architectural explanation layer proven through the acceptance harness; raw
+  graph/tool results are insufficient. Still propose-first for structural work.
 - **CB3 / EB3 (PARTIAL, graph substrate built → media batch over the shared
   graph).** The knowledge-web dependency for shared entities/relationships is
   now satisfied (see both benchmarks' detail sections above); what remains is
   the media EXTRACTION pipeline (§3.4) itself — the batch layer supplies the
   coordinating media batch once that pipeline exists.
-- **CB6 (PARTIAL → strengthened).** Batches must stay contract-compatible with each
+- **CB6 (PASS, ongoing discipline).** Batches must stay contract-compatible with each
   other and the central orchestrator — the same Integration-Contract discipline,
   applied *internally between batches*. This makes CB6 a live, ongoing test of the
   batch layer, not just the frontend/backend seam.
 - **CB1 / EB2 (PARTIAL → prerequisite for the whole thing).** The persistence +
   compaction that let a weeks-long batch-coordinated mission survive session
-  restarts *are* CB1/EB2 — so advancing CB1 now (fact/assumption + temporal typing)
-  is also foundational for the batch architecture, not just its own benchmark.
+  restarts *are* CB1/EB2. Fact/assumption + `valid_at` typing landed; explicit
+  supersession linkage and explanation remain foundational gaps.
 
-**Sequencing:** the batch layer does not jump the queue. It is gated by (0) a
-stability audit of the foundations it sits on, (1) the Mission Engine (#5), and (2)
-the cross-batch memory contract — all propose-first. Near-term work stays: CB5 →
-CB1 → CB4, each of which also *feeds* the batch architecture when it is eventually
-built. See `docs/architecture/BATCH_ARCHITECTURE.md` §8 for the build sequence.
+**Sequencing:** batch work remains owner-gated and propose-first. Current
+cross-role ordering lives in `docs/ROADMAP.md`; do not revive this diagnosis's
+old CB5 → CB1 → CB4 sequence.

@@ -86,3 +86,4 @@ that blocks publishing. They need a restart before release.
 
 Generalizable: **fixing a config does not fix a session already running under
 it.** Worth remembering before assuming a specialist is broken.
+- `22:38` **backend** worker via **codex** — brief-staleness.md — exit 0, 121s — output: `.agents/runs/20260727-223654-backend.out`

@@ -1,4 +1,4 @@
-# Phase 5 — Capability Work (close V1 gaps)   STATUS: not started
+# Phase 5 — Capability Work (close V1 gaps)   STATUS: in progress
 
 **Goal:** advance benchmarks in priority order; every claimed PASS needs a
 committed runnable proof (else it stays PARTIAL).
@@ -14,18 +14,18 @@ building ANY new capability, verify the layer beneath it is stable/correct/hones
 (not just "tests pass"). Shaky foundation ⇒ STOP, fix or flag first; absorb big
 foundation fixes into the plan as prerequisites, never silently.
 
-- [ ] **CB5** (do first, near-pass): close the detect residual + surface the
-      verifier's classify/explain as structured output; widen the c5 battery.
-- [ ] **CB1** (+EB1, also a batch-architecture prerequisite): additive
-      fact|assumption + valid_at/superseded_by typing on MemoryWriteProposal/
-      MemoryItem (ROBUST_MEMORY §7.4 additive contract) + surfaced retrieval "why";
-      extend c1 + e1 harnesses to PASS.
-- [ ] **CB4** (+CB6/EB2): durable decision-log audit mirror — persist the in-run
-      decision log as structured records. **Propose-first** (new persistence
-      surface). Extend c4 harness.
-- [ ] **CB6**: batches (and the frontend seam) stay contract-compatible — the
-      Integration Contract + a real contract-drift test.
-- [ ] **CB2/CB3/EB3** — the Batch Architecture + Kuzu knowledge-web.
+- [ ] **CB5**: close the detect residual and widen the c5 battery. Structured
+      classify/explain output and earned-seal surfacing have landed.
+- [ ] **CB1** (+EB1, also a batch-architecture prerequisite):
+      fact|assumption + `valid_at` typing landed. Add retrieval explanation,
+      complete provenance, and explicit supersession linkage; extend c1 + e1
+      harnesses to PASS.
+- [x] **CB4 audit mirror** (+CB6/EB2): durable structured decision records and
+      owner-scoped endpoint landed. Benchmark remains PARTIAL: structured
+      tradeoffs/history and complete crash-path participants remain open.
+- [x] **CB6**: Integration Contract + enforcing contract-drift test.
+- [ ] **CB2/CB3/EB3** — Kuzu graph, CB2 symbol/AST/dependency/archive tiers
+      landed. CB2 explanation and real media ingestion remain open.
       **Propose-first — the spec exists (docs/architecture/BATCH_ARCHITECTURE.md,
       PROPOSED); do NOT build without proposing each sub-layer and passing the
       stability gate.** Build sequence in that doc §8.

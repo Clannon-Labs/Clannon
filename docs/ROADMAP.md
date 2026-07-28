@@ -17,8 +17,8 @@ Last reconciled: **2026-07-27**, just after `v0.3.0`.
 | Source | Covers | Trust it? |
 |---|---|---|
 | **this file** | cross-role priorities, the Rust track, who owns what | current |
-| `docs/benchmarks/V1_GAP_ANALYSIS.md` | per-benchmark honest verdicts | **verdict table is STALE** — see §2 |
-| `docs/benchmarks/mission/` | the V1 Premium-Parity phase plan | partially stale; backend-only |
+| `docs/benchmarks/V1_GAP_ANALYSIS.md` | per-benchmark honest verdicts | current — reconciled 2026-07-28 |
+| `docs/benchmarks/mission/` | the V1 Premium-Parity phase plan | current — reconciled 2026-07-28; backend-only |
 | `docs/architecture/RUST_MIGRATION_STRATEGY.md` | how any Rust work happens | current, canonical |
 | `docs/architecture/CREW_WORKFLOW.md` | how agents coordinate | current, canonical |
 | `LAW/README.md` | the seven laws | current, canonical |
@@ -30,25 +30,32 @@ We are running **two tracks at once**, deliberately:
 **Track A — finish V1 (Python).** The product still has to work. V1 is not done
 and has never faced a real user. This track keeps shipping in Python.
 
-**Track B — Rust, by addition only.** New infrastructure is written in Rust;
-existing working Python is not rewritten for its own sake. See §3.
+**Track B — Rust, by addition only.** An experiment run alongside components
+that already work; nothing is rewritten for its own sake, and new work stays
+Python. See §3. **Nothing has started** — it is owner-gated.
 
 Track A does not pause for Track B. If they ever conflict, **Track A wins** —
 shipping a working product beats architectural progress.
 
 ## 2. Track A — V1 capability
 
-**Shipped since v0.2.0** (the gap-analysis table has NOT been updated to reflect
-these — do not trust its stars):
+**Shipped since v0.2.0** (gap-analysis verdicts reconciled 2026-07-28):
 
+- **CB6 — multi-agent consistency → PASS.** The only Critical benchmark that
+  passes. `reports/INTEGRATION_CONTRACT.md` exists; the SSE contract-drift
+  benchmark is green and enforcing.
 - **CB5 — security validation**: the earn-the-seal filter verdict now flows
-  end-to-end to the UI. Residual: `detect` is PARTIAL (one adversarial payload).
+  end-to-end to the UI. Stays PARTIAL — `detect` residual (one adversarial
+  payload).
 - **CB4 — institutional decision memory**: durable mirror + `GET /runs/:id/decisions`,
-  covering every terminal outcome including cancelled/crashed.
-- **CB6 — multi-agent consistency**: `reports/INTEGRATION_CONTRACT.md` exists;
-  the SSE contract-drift benchmark is green and enforcing.
+  covering every terminal outcome including cancelled/crashed. Stays PARTIAL —
+  tradeoffs are flat prose, crash-path participants incomplete.
 - **CB2 — large repo understanding**: symbol tier, AST search, dep-graph
-  traversal, archive ingestion, cross-call workspace persistence.
+  traversal, archive ingestion, cross-call workspace persistence. Stays
+  PARTIAL — architectural explanation is NOT-YET.
+
+Outreach gate = all 6 Critical PASS + ≥1 Exceptional. Today: **1 PASS, 5
+PARTIAL.**
 
 **Open, in rough priority order:**
 
@@ -71,24 +78,23 @@ residual.
 
 **The rule, in two halves. Both matter:**
 
-### 3a. New code → prefer Rust
+### 3a. New code → Python
 
-**Anything genuinely new and infrastructural should be written in Rust**, unless
-it is AI/ML work or a good Python framework already exists for it. This is the
-half that applies most often, because most work is new work.
+**New work is written in Python. Including new infrastructure.** V1 is not done
+and has never faced a user; a second toolchain per new component is a tax we do
+not pay yet.
 
-Rust by default for: gateway/HTTP, auth, sessions, rate limiting, memory engine
-internals, search/indexing/ranking, crypto, storage/chunking, schedulers and
-queues, file parsing, sandboxing/execution, telemetry, sync, database layer.
-
-**Stays Python:** anything touching the model providers, agent/reasoning loops,
-embeddings, vision/speech, training/eval — the ML ecosystem is genuinely better
-there and that is not close.
+An earlier version of this section said the opposite ("new infrastructural code
+prefers Rust"). It was wrong and it contradicted §3b: **parallel implementation
+with deferred cutover requires an existing implementation to validate against.**
+New code has no Python counterpart and no reference behaviour, so writing it in
+Rust is a different strategy — greenfield, no safety net — not the one we chose.
 
 **Stays TypeScript:** the whole frontend. Not up for discussion right now.
 
-If you are about to add a new infrastructural component in Python, **stop and
-propose it** — the default is Rust and the burden is on the Python choice.
+If a new component genuinely needs Rust-level guarantees Python cannot give,
+that is a **proposal with a specific argument** — never a default. Revisit this
+after V1 ships.
 
 ### 3b. Existing code → port only by addition
 
@@ -139,8 +145,11 @@ Do not start these; they are decisions, not tasks:
 
 ## 6. Stale things worth fixing
 
-- `docs/benchmarks/V1_GAP_ANALYSIS.md`'s verdict table predates CB2/CB4/CB5/CB6
-  landing. Its **priority stars are misleading**. Needs a re-run and honest
-  re-verdict pass.
-- `docs/benchmarks/mission/README.md`'s phase-status table is empty and its
-  phases predate the release role, the frontend lane, and Track B entirely.
+- `reports/INTEGRATION_CONTRACT.md` says exception/cancellation bypasses audit
+  derivation. `api/run_driver.py` now mirrors from `finally`, so the doc
+  understates what ships. Owner: api.
+
+Fixed 2026-07-28: `V1_GAP_ANALYSIS.md` verdicts + priority stars, and the
+`mission/` phase statuses, are reconciled against what actually shipped. Keep
+them that way in the same commit as the work (`CLAUDE.md` § keep status
+current).
