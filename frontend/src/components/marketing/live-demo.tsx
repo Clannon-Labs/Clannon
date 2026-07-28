@@ -30,6 +30,7 @@ export function LiveDemo() {
               <Link
                 key={brief.label}
                 href="/demo"
+                prefetch={false}
                 className="group flex flex-col gap-3 rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary hover:bg-muted"
               >
                 <Icon className="size-5 text-primary/70 transition-colors group-hover:text-primary" aria-hidden />
@@ -44,7 +45,7 @@ export function LiveDemo() {
         </div>
 
         <div className="mt-8">
-          <ButtonLink href="/demo" size="lg">
+          <ButtonLink href="/demo" prefetch={false} size="lg">
             Open the live demo
             <ArrowRight className="size-4" aria-hidden />
           </ButtonLink>

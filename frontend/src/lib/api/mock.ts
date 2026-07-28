@@ -107,6 +107,26 @@ export class MockClient implements ClannonClient {
       throw new ApiError("Password must be at least 8 characters.", 422);
     }
     const user: User = { id: "u_demo", name, email, plan: "free" };
+    // Signup must exercise a truthful first-user state. Seeded agency data is
+    // useful for returning-user screenshots, but showing it to a new account
+    // makes onboarding untestable and reads like a privacy breach.
+    this.projects = [];
+    this.runs.clear();
+    this.memory = [];
+    this.cancelRequested.clear();
+    const today = new Date();
+    const periodStart = today.toISOString().slice(0, 10);
+    const periodEnd = new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
+    this.usage = {
+      periodStart,
+      periodEnd,
+      budget: planById("free").tokenBudget,
+      used: 0,
+      byDay: Array.from({ length: 14 }, (_, i) => ({
+        date: new Date(today.getTime() - (13 - i) * 86_400_000).toISOString().slice(0, 10),
+        tokens: 0,
+      })),
+    };
     this.persistSession(user);
     return user;
   }
@@ -584,10 +604,8 @@ export class MockClient implements ClannonClient {
     const used = runs.reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
 
     const days = 14;
-    // a plausible fortnight of activity so the chart reads as a real
-    // distribution, not two spikes over an empty axis — deterministic
-    // (no Math.random, which would reshuffle every render), with a couple of
-    // quiet days and a couple of peaks
+    // Returning demo accounts get a plausible history. A genuinely empty
+    // signup must stay empty; fabricated usage there breaks user trust.
     const BASELINE = [
       88_000, 0, 142_000, 205_000, 64_000, 0, 176_000,
       238_000, 121_000, 96_000, 31_000, 158_000, 297_000, 184_000,
@@ -599,7 +617,7 @@ export class MockClient implements ClannonClient {
       const fromRuns = runs
         .filter((r) => r.createdAt.slice(0, 10) === date)
         .reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
-      return { date, tokens: fromRuns + (BASELINE[i] ?? 0) };
+      return { date, tokens: fromRuns + (runs.length > 0 ? (BASELINE[i] ?? 0) : 0) };
     });
 
     return {

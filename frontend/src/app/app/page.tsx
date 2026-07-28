@@ -2,13 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useCreateRun, useMe } from "@/lib/api/hooks";
-import { useCurrentProjectId } from "@/components/app/project-provider";
+import { useCreateRun, useMe, useRuns } from "@/lib/api/hooks";
+import {
+  useCurrentProject,
+  useCurrentProjectId,
+} from "@/components/app/project-provider";
 import { ApiError } from "@/lib/api";
 import { Mark } from "@/components/brand/logo";
 import { Composer } from "@/components/app/composer";
+import { FirstRunGuide } from "@/components/app/first-run-guide";
 import { HydrationPanel } from "@/components/app/hydration-panel";
+import { Skeleton } from "@/components/ui/skeleton";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
+import {
+  workspaceDraftKey,
+} from "@/lib/browser-drafts";
+import {
+  saveBrowserTextDraft,
+  useBrowserTextDraft,
+} from "@/lib/use-browser-draft";
 import { cn } from "@/lib/utils";
 
 // Greetings that read fine in front of ", <name>" (and standalone, when there's
@@ -80,13 +92,24 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { data: user } = useMe();
   const projectId = useCurrentProjectId();
+  const currentProject = useCurrentProject();
+  const { data: runs } = useRuns(projectId);
   const createRun = useCreateRun();
-  const [brief, setBrief] = useState("");
+  const [briefProjectId, setBriefProjectId] = useState<string>();
   const [error, setError] = useState<string | null>(null);
+  const draftProjectId =
+    briefProjectId && (!projectId || projectId === briefProjectId)
+      ? briefProjectId
+      : projectId;
+  const draftKey = user?.id ? workspaceDraftKey(user.id, draftProjectId) : null;
+  const [brief, setBrief] = useBrowserTextDraft(draftKey);
   // pick a greeting once per load (re-rendering on every keystroke must not reshuffle it)
   const [greet] = useState(pickGreeting);
 
   const firstName = user?.name.split(" ")[0] ?? "";
+  const isFirstRun = runs?.length === 0;
+  const workspaceReady = Boolean(user) && runs !== undefined;
+  const showFirstRunGuide = workspaceReady && isFirstRun && !brief.trim();
 
   return (
     /* the new-chat screen — laid out like a run (and the demo): a centered
@@ -118,60 +141,89 @@ export default function WorkspacePage() {
           </p>
         </div>
 
-        {/* starter cards — clicking loads the full brief into the composer.
-            Compact rows on a phone, full cards on a wider screen. */}
-        <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
-          {EXAMPLE_BRIEFS.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => setBrief(example.brief)}
-              className="group flex items-center gap-3.5 rounded-2xl border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-muted sm:flex-col sm:items-start sm:gap-2.5 sm:rounded-xl"
-            >
-              <example.icon
-                className="size-5 shrink-0 text-primary/70 transition-colors group-hover:text-primary"
-                aria-hidden
-              />
-              <span className="flex min-w-0 flex-col">
-                <span className="text-sm font-medium leading-snug text-foreground sm:text-[13px]">
-                  {example.label}
-                </span>
-                <span className="mt-0.5 text-[12px] leading-snug text-muted-foreground sm:mt-0">
-                  {example.hint}
-                </span>
-              </span>
-            </button>
-          ))}
+        {!workspaceReady ? (
+          <div role="status" aria-label="Loading workspace" className="mt-10 grid gap-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+        ) : showFirstRunGuide ? (
+          <FirstRunGuide
+            currentProject={currentProject}
+            onUseBrief={(nextBrief, nextProjectId) => {
+              if (user?.id) {
+                const nextDraftKey = workspaceDraftKey(user.id, nextProjectId ?? projectId);
+                saveBrowserTextDraft(nextDraftKey, nextBrief);
+              }
+              setBriefProjectId(nextProjectId);
+            }}
+            onUseExample={() => {
+              setBriefProjectId(undefined);
+              setBrief(EXAMPLE_BRIEFS[0].brief);
+            }}
+          />
+        ) : (
+          <>
+            {/* starter cards — clicking loads the full brief into the composer.
+                Compact rows on a phone, full cards on a wider screen. */}
+            <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
+              {EXAMPLE_BRIEFS.map((example) => (
+                <button
+                  key={example.label}
+                  type="button"
+                  onClick={() => setBrief(example.brief)}
+                  className="group flex items-center gap-3.5 rounded-2xl border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-muted sm:flex-col sm:items-start sm:gap-2.5 sm:rounded-xl"
+                >
+                  <example.icon
+                    className="size-5 shrink-0 text-primary/70 transition-colors group-hover:text-primary"
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium leading-snug text-foreground sm:text-[13px]">
+                      {example.label}
+                    </span>
+                    <span className="mt-0.5 text-[12px] leading-snug text-muted-foreground sm:mt-0">
+                      {example.hint}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* the hydration moment — context surfaces before the brief is even sent */}
+            <HydrationPanel brief={brief} projectId={projectId} className="mt-8 sm:mt-12" />
+          </>
+        )}
+      </div>
+
+      {workspaceReady && !showFirstRunGuide && (
+        /* docked composer — same control set as the run reply, same place too */
+        <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+          <Composer
+            value={brief}
+            onChange={setBrief}
+            pending={createRun.isPending}
+            submitError={error}
+            rows={1}
+            placeholder="How can I help you today?"
+            onSubmit={(files, models) => {
+              setError(null);
+              createRun.mutate(
+                  { brief, files, models, projectId: briefProjectId ?? projectId },
+                {
+                  onSuccess: ({ id }) => {
+                    setBrief("");
+                    router.push(`/app/runs/${id}`);
+                  },
+                  onError: (err) =>
+                    setError(
+                      err instanceof ApiError ? err.message : "Could not start the run — try again.",
+                    ),
+                },
+              );
+            }}
+          />
         </div>
-
-        {/* the hydration moment — context surfaces before the brief is even sent */}
-        <HydrationPanel brief={brief} projectId={projectId} className="mt-8 sm:mt-12" />
-      </div>
-
-      {/* docked composer — same control set as the run reply, same place too */}
-      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
-        <Composer
-          value={brief}
-          onChange={setBrief}
-          pending={createRun.isPending}
-          submitError={error}
-          rows={1}
-          placeholder="How can I help you today?"
-          onSubmit={(files, models) => {
-            setError(null);
-            createRun.mutate(
-              { brief, files, models, projectId },
-              {
-                onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
-                onError: (err) =>
-                  setError(
-                    err instanceof ApiError ? err.message : "Could not start the run — try again.",
-                  ),
-              },
-            );
-          }}
-        />
-      </div>
+      )}
     </div>
   );
 }

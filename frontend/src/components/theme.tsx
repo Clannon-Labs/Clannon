@@ -50,6 +50,8 @@ function readResolved(): "light" | "dark" {
 }
 
 function applyClass() {
+  const theme = readTheme();
+  document.documentElement.dataset.theme = theme;
   document.documentElement.classList.toggle("dark", readResolved() === "dark");
 }
 

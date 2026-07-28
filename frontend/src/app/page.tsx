@@ -4,7 +4,6 @@ import { appConfig } from "@/config/app.config";
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingHero } from "@/components/marketing/hero";
 import { LiveDemo } from "@/components/marketing/live-demo";
-import { Reveal, Stagger, StaggerItem, Rule } from "@/components/motion";
 import { PipelineSection } from "@/components/marketing/pipeline";
 import { MemorySection } from "@/components/marketing/memory-section";
 import { PricingSection } from "@/components/marketing/pricing";
@@ -34,8 +33,7 @@ export default function LandingPage() {
     /* Theme follows the toggle (default: light — see public/theme.js). The
        hero and closing CTA are .stage surfaces and adapt to either theme. */
     <div className="bg-background text-foreground">
-      {/* fixed over the hero so the dark stage runs under the transparent state */}
-      <MarketingHeader overHero />
+      <MarketingHeader />
       <main id="main">
         <MarketingHero />
 
@@ -44,9 +42,9 @@ export default function LandingPage() {
           <h2 id="pillars-heading" className="sr-only">
             Why Clannon
           </h2>
-          <Stagger className="mx-auto grid max-w-6xl grid-cols-1 gap-px overflow-hidden border-y border-border bg-border sm:grid-cols-3">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-px overflow-hidden border-y border-border bg-border sm:grid-cols-3">
             {PILLARS.map((pillar, i) => (
-              <StaggerItem key={pillar.title} className="h-full bg-surface px-6 py-12 sm:px-8">
+              <article key={pillar.title} className="h-full bg-surface px-6 py-12 sm:px-8">
                 <div className="flex items-center justify-between">
                   <pillar.icon className="size-5 text-primary" aria-hidden />
                   <span className="tag-label text-faint">0{i + 1}</span>
@@ -55,9 +53,9 @@ export default function LandingPage() {
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                   {pillar.body}
                 </p>
-              </StaggerItem>
+              </article>
             ))}
-          </Stagger>
+          </div>
         </section>
 
         {appConfig.features.demo && <LiveDemo />}
@@ -68,8 +66,8 @@ export default function LandingPage() {
 
         {/* ---------- final CTA — the closing stage, the dark bookend to the hero ---------- */}
         <section className="stage dark relative isolate overflow-hidden px-5 py-28 text-foreground sm:py-36">
-          <Reveal className="mx-auto max-w-3xl text-center">
-            <Rule className="mx-auto mb-10 max-w-[6rem]" />
+          <div className="mx-auto max-w-3xl text-center">
+            <span aria-hidden className="mx-auto mb-10 block h-px max-w-[6rem] bg-border" />
             <h2 className="display mx-auto max-w-3xl text-balance text-[2.6rem] leading-[0.98] sm:text-[4.2rem]">
               The first run is good.
               <br />
@@ -81,16 +79,15 @@ export default function LandingPage() {
               yourself.
             </p>
             <div className="mt-9 flex justify-center">
-              <ButtonLink href="/signup" size="lg">
+              <ButtonLink href="/signup" prefetch={false} size="lg">
                 Start free
                 <ArrowRight className="size-4" aria-hidden />
               </ButtonLink>
             </div>
-          </Reveal>
+          </div>
         </section>
       </main>
       <MarketingFooter />
     </div>
   );
 }
-

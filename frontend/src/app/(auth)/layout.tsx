@@ -4,9 +4,11 @@ import { Mark, Wordmark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme";
 import { siteConfig } from "@/config/site.config";
 import { LEGAL_PAGES } from "@/components/legal/legal-doc";
+import { Providers } from "@/components/providers";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
+    <Providers>
     <div className="flex min-h-dvh">
       {/* brand panel — pinned to the viewport (h-dvh + sticky) so the ring and
           quote sit at the SAME y on login/signup/forgot, however tall the form
@@ -64,5 +66,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </nav>
       </main>
     </div>
+    </Providers>
   );
 }

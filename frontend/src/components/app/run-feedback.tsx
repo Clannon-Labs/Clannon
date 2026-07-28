@@ -3,11 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
-import { useSetRunFeedback, useCreateFollowUp } from "@/lib/api/hooks";
+import { useSetRunFeedback, useCreateFollowUp, useMe } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Composer } from "@/components/app/composer";
+import {
+  runReplyDraftKey,
+} from "@/lib/browser-drafts";
+import { useBrowserTextDraft } from "@/lib/use-browser-draft";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,40 +32,52 @@ export function RunComposer({
   className?: string;
 }) {
   const router = useRouter();
+  const { data: user } = useMe();
   const followUp = useCreateFollowUp(runId);
-  const [ask, setAsk] = useState("");
   const [followError, setFollowError] = useState<string | null>(null);
+  const draftKey = user?.id ? runReplyDraftKey(user.id, runId) : null;
+  const [ask, setAsk] = useBrowserTextDraft(draftKey);
 
   return (
-    <Composer
-      className={className}
-      value={ask}
-      onChange={setAsk}
-      pending={followUp.isPending}
-      submitError={followError}
-      busy={busy}
-      onStop={onStop}
-      placeholder={
-        busy
-          ? "Type your next message — it sends once this finishes…"
-          : "Reply to continue — dig deeper, narrow the scope, or attach a file…"
-      }
-      onSubmit={(files, models) => {
-        setFollowError(null);
-        followUp.mutate(
-          { brief: ask, files, models },
-          {
-            onSuccess: ({ id }) => router.push(`/app/runs/${id}`),
-            onError: (err) =>
-              setFollowError(
-                err instanceof ApiError
-                  ? err.message
-                  : "Could not start the follow-up — try again.",
-              ),
-          },
-        );
-      }}
-    />
+    <div className={className}>
+      <Composer
+        value={ask}
+        onChange={setAsk}
+        pending={followUp.isPending}
+        submitError={followError}
+        busy={busy}
+        onStop={onStop}
+        placeholder={
+          busy
+            ? "Write your next message — Send unlocks when this run finishes…"
+            : "Reply to continue — dig deeper, narrow the scope, or attach a file…"
+        }
+        onSubmit={(files, models) => {
+          setFollowError(null);
+          followUp.mutate(
+            { brief: ask, files, models },
+            {
+              onSuccess: ({ id }) => {
+                setAsk("");
+                router.push(`/app/runs/${id}`);
+              },
+              onError: (err) =>
+                setFollowError(
+                  err instanceof ApiError
+                    ? err.message
+                    : "Could not start the follow-up — try again.",
+                ),
+            },
+          );
+        }}
+      />
+      {busy && (
+        <p role="status" className="mt-2 px-2 text-[12px] leading-relaxed text-faint">
+          Safe to leave this page — work continues. Usage posts after delivery.
+          Your typed reply stays in this tab.
+        </p>
+      )}
+    </div>
   );
 }
 

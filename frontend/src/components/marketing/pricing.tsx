@@ -1,18 +1,11 @@
-"use client";
-
 import { Check } from "lucide-react";
-import { useEffectivePlans, useMe } from "@/lib/api/hooks";
 import { ButtonLink } from "@/components/ui/button";
 import { SectionHeading } from "@/components/marketing/section-heading";
-import { Stagger, StaggerItem } from "@/components/motion";
-import { workspaceUrl } from "@/config/app.config";
 import { formatTokens } from "@/lib/utils";
+import { getPublicPlans } from "@/lib/public-plans";
 
-export function PricingSection() {
-  // backend-defined plans when available, plans.ts otherwise
-  const PLANS = useEffectivePlans();
-  // signed-in visitors manage plans in the workspace, not via signup
-  const { data: user } = useMe();
+export async function PricingSection() {
+  const plans = await getPublicPlans();
   return (
     <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
       <SectionHeading
@@ -23,14 +16,14 @@ export function PricingSection() {
       </SectionHeading>
 
       {/* the rate card — one ledger, columns struck by hairlines, no floating cards */}
-      <Stagger className="mt-12 grid grid-cols-1 gap-px overflow-hidden border border-border bg-border md:grid-cols-2 xl:grid-cols-4">
-        {PLANS.map((plan) => {
+      <div className="mt-12 grid grid-cols-1 gap-px overflow-hidden border border-border bg-border md:grid-cols-2 xl:grid-cols-4">
+        {plans.map((plan) => {
           // signed in: your actual plan is the marked one; signed out: the free
           // tier is where everyone starts
-          const isCurrent = user ? plan.id === user.plan : plan.monthlyUsd === 0;
+          const isCurrent = plan.monthlyUsd === 0;
           const struck = isCurrent || plan.highlight;
           return (
-          <StaggerItem
+          <article
             key={plan.id}
             className="relative flex h-full flex-col bg-surface p-6"
           >
@@ -42,7 +35,7 @@ export function PricingSection() {
               <h3 className="tag-label text-muted-foreground">{plan.name}</h3>
               {isCurrent ? (
                 <span className="tag-label rounded-full bg-primary-soft px-2.5 py-1 text-primary">
-                  {user ? "Current" : "You're here"}
+                  You&apos;re here
                 </span>
               ) : plan.highlight ? (
                 <span className="tag-label rounded-full bg-memory-soft px-2.5 py-1 text-memory">
@@ -76,23 +69,18 @@ export function PricingSection() {
 
             <div className="mt-auto pt-6">
               <ButtonLink
-                href={user ? workspaceUrl("/app/settings?tab=billing") : "/signup"}
+                href="/signup"
+                prefetch={false}
                 variant={struck ? "primary" : "outline"}
                 className="w-full"
               >
-                {user
-                  ? plan.id === user.plan
-                    ? "Your current plan"
-                    : `Switch in the app`
-                  : plan.monthlyUsd === 0
-                    ? "Start free"
-                    : `Start with ${plan.name}`}
+                {plan.monthlyUsd === 0 ? "Start free" : `Start with ${plan.name}`}
               </ButtonLink>
             </div>
-          </StaggerItem>
+          </article>
           );
         })}
-      </Stagger>
+      </div>
 
       <p className="mt-8 text-center text-[13px] text-faint">
         Memory tiers unlock progressively — episodic memory is included on every

@@ -7,7 +7,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SectionHeading } from "@/components/marketing/section-heading";
-import { Stagger, StaggerItem } from "@/components/motion";
 
 interface Stage {
   icon: LucideIcon;
@@ -58,13 +57,11 @@ export function PipelineSection() {
         One brief in. Five stages. A report you can put your name on.
       </SectionHeading>
 
-      <Stagger
-        as="ol"
-        gap={0.05}
+      <ol
         className="mt-12 grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-5"
       >
         {STAGES.map((stage, i) => (
-          <StaggerItem as="li" key={stage.name} className="group relative h-full bg-surface p-6 transition-colors hover:bg-surface-raised">
+          <li key={stage.name} className="group relative h-full bg-surface p-6 transition-colors hover:bg-surface-raised">
             <div className="flex items-center justify-between">
               <stage.icon className="size-5 text-primary" aria-hidden />
               <span className="tag-label text-faint">0{i + 1}</span>
@@ -73,9 +70,9 @@ export function PipelineSection() {
             <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
               {stage.description}
             </p>
-          </StaggerItem>
+          </li>
         ))}
-      </Stagger>
+      </ol>
     </section>
   );
 }

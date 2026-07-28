@@ -164,6 +164,12 @@ warm paper/ink light theme, green-ink dark theme; amber is reserved
 for memory). Fonts: Fraunces / Schibsted Grotesk / Spline Sans Mono,
 self-hosted via `next/font`.
 
+Frontend quality is scored by `benchmark/PAID_PRODUCT_BENCHMARK.md`: whether product
+experience justifies a hundreds-per-month price through value, speed, trust,
+workflow completeness, recovery, and repeat use. Screenshot beauty scores are
+supporting evidence only. Current baseline and work order live in
+`reports/frontend/frontend_report_v5.md`.
+
 Theming: light/dark/system, toggleable from every shell (marketing
 header, auth pages, workspace sidebar and mobile bar). State lives in
 `localStorage["clannon.theme"]`; `public/theme.js` applies the class

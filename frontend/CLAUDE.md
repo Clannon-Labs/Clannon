@@ -3,7 +3,8 @@
 # Important directories
 - frontend/proposals — proposals from the OWNER to you
 - ../proposals — the cross-agent channel (you ↔ backend agent); format spec in ../proposals/README.md
-- ../conversation — where you write reports and read from
+- ../reports — where you write reports and read from
+- benchmark/ — where you put the details and progress about the benchmarks we use to evaluate frontend specifically, donot write in benchmarks inside docs, that's for the capability of the system, not frontend related
 
 > There is a separate instance for the backend so if you are not specifically
 > assigned to work on the backend, NEVER make any changes on it.
@@ -25,3 +26,25 @@ When YOUR work needs something from the backend (an endpoint, a contract
 change, new data in a response): write `../proposals/to-backend/
 YYYY-MM-DD_slug.md` and design around the gap until answered. Never edit
 backend code; never ask the owner to relay. Proposals are the ONLY channel.
+
+## Preview Evidence
+
+Every user-visible frontend improvement must include representative preview
+screenshots before handoff. Capture affected states and relevant desktop/mobile
+sizes after implementation; include before/after when comparison explains the
+change. Store previews under a dated, task-specific folder:
+`frontend/previews/YYYY-MM-DD_task-slug/`, with `before/` and `after/`
+subdirectories when comparison matters. Add `README.md` recording capture date,
+commit SHA or working-tree state, API mode/environment, routes/states, viewport
+sizes, and capture command. Inspect captures for regressions instead of treating
+screenshot creation as proof by itself. If work is genuinely nonvisual, record
+why screenshots add no evidence in the frontend report or handoff.
+
+## Execute Decided Work
+
+When the owner proposes an action and frontend evaluation concludes it should
+be done, do it in the same turn and report the completed result. Do not merely
+say it should be done, promise it for later, or wait for the owner to repeat the
+instruction. Stop only when execution needs new authority, risks irreversible
+harm, conflicts with binding rules, or is genuinely blocked; state that blocker
+plainly.

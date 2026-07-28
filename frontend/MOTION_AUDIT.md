@@ -66,4 +66,4 @@ gap the mission names.
 ## AFTER (built) — motion re-grade
 Hydration 6→9, Ledger 6.5→9, Payoff 7→9, Route 3→8.5, Controls 5→8.5.
 Set avg ~5.6 → ~8.8, signatures at 9. Storyboards + final timings/easings live
-in reports/frontend_report_v4.md; after-recordings in previews/motion/.
+in reports/frontend/frontend_report_v4.md; after-recordings in previews/motion/.

@@ -1,7 +1,4 @@
-"use client";
-
 import { type ReactNode } from "react";
-import { Reveal, Rule } from "@/components/motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,33 +26,24 @@ export function SectionHeading({
   return (
     <div className={cn(centered && "flex flex-col items-center text-center", className)}>
       <div className={cn("flex items-center gap-4", centered ? "w-full max-w-md" : "")}>
-        {centered && <Rule />}
+        {centered && <span aria-hidden className="h-px w-full bg-border" />}
         <p className={cn("tag-label shrink-0", accent === "memory" ? "text-memory" : "text-primary")}>
           {kicker}
         </p>
-        <Rule />
+        <span aria-hidden className="h-px w-full bg-border" />
       </div>
-      <Reveal delay={0.05}>
-        <h2
-          className={cn(
-            "display mt-6 text-balance text-[2.4rem] leading-[0.98] sm:text-[3.2rem]",
-            centered ? "max-w-2xl" : "max-w-3xl",
-          )}
-        >
-          {children}
-        </h2>
-      </Reveal>
+      <h2
+        className={cn(
+          "display mt-6 text-balance text-[2.4rem] leading-[0.98] sm:text-[3.2rem]",
+          centered ? "max-w-2xl" : "max-w-3xl",
+        )}
+      >
+        {children}
+      </h2>
       {intro && (
-        <Reveal delay={0.12}>
-          <p
-            className={cn(
-              "mt-5 text-[15px] leading-relaxed text-muted-foreground",
-              centered ? "max-w-xl" : "max-w-xl",
-            )}
-          >
-            {intro}
-          </p>
-        </Reveal>
+        <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+          {intro}
+        </p>
       )}
     </div>
   );

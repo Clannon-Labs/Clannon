@@ -1,6 +1,3 @@
-"use client";
-
-import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,7 +18,6 @@ const RINGS = [
 ];
 
 export function MemoryField({ className }: { className?: string }) {
-  const reduce = useReducedMotion();
   return (
     <svg viewBox="0 0 500 500" className={cn("size-full", className)} aria-hidden role="presentation">
       <defs>
@@ -56,15 +52,15 @@ export function MemoryField({ className }: { className?: string }) {
         ))}
       </g>
 
-      {/* the core's one quiet motion — a slow opacity heartbeat on the halo
-          (compositor-only; no layout, no filter, no jank) */}
-      <motion.circle
+      {/* Static on marketing boot: Motion runtime costs more than this ambient
+          heartbeat contributes to comprehension. Live product moments retain
+          their motion. */}
+      <circle
         cx="250"
         cy="250"
         r="120"
         fill="url(#mf-halo)"
-        animate={reduce ? undefined : { opacity: [0.7, 1, 0.7] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        opacity="0.82"
       />
       <circle cx="250" cy="250" r="6.5" fill="url(#mf-core)" />
     </svg>

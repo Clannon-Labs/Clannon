@@ -32,8 +32,8 @@ export function MarketingFooter() {
           </div>
           <div className="flex flex-col gap-1">
             <span className="tag-label mb-1.5 text-faint">Account</span>
-            <Link href="/login" className="py-1 text-muted-foreground hover:text-foreground">Sign in</Link>
-            <Link href="/signup" className="py-1 text-muted-foreground hover:text-foreground">Start free</Link>
+            <Link href="/login" prefetch={false} className="py-1 text-muted-foreground hover:text-foreground">Sign in</Link>
+            <Link href="/signup" prefetch={false} className="py-1 text-muted-foreground hover:text-foreground">Start free</Link>
           </div>
           <div className="flex flex-col gap-1">
             <span className="tag-label mb-1.5 text-faint">Legal</span>

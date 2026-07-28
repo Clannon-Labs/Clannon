@@ -1,63 +1,34 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Menu, X } from "lucide-react";
+import { Menu, Monitor, Moon, Sun, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme";
-import { useMe } from "@/lib/api/hooks";
 import { siteConfig } from "@/config/site.config";
 import { MARKETING_NAV as NAV } from "@/config/nav.config";
-import { workspaceUrl } from "@/config/app.config";
-import { useFocusTrap, useScrollLock } from "@/lib/focus";
-import { cn } from "@/lib/utils";
 
-export function MarketingHeader({ overHero = false }: { overHero?: boolean }) {
-  const [open, setOpen] = useState(false);
-  // already signed in? the whole site lets you slip straight into the workspace
-  const { data: user } = useMe();
-  // transparent (light-on-dark) over the hero, solid once scrolled past it —
-  // only meaningful when the page actually puts a dark hero under the header
-  const [scrolled, setScrolled] = useState(false);
-
-  // keep focus (and scroll) inside the open panel; the trap hands focus back
-  // to the toggle button on close
-  const panelRef = useRef<HTMLElement>(null);
-  useFocusTrap(open, panelRef);
-  useScrollLock(open);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // the transparent light-on-dark state exists ONLY over the landing hero —
-  // everywhere else the backdrop is cream, and light ink would ghost into it.
-  // When open on mobile, the panel needs a solid backdrop even at the top.
-  const solid = !overHero || scrolled || open;
-
+function ThemeButton() {
   return (
-    <header
-      className={cn(
-        "top-0 z-50 transition-colors duration-300",
-        // over the hero the header floats (fixed) so the dark stage runs
-        // underneath it; the hero compensates with its own top padding
-        overHero ? "fixed inset-x-0" : "sticky",
-        solid
-          ? "border-b border-border bg-background/85 backdrop-blur-md"
-          : "dark border-b border-transparent text-foreground",
-      )}
+    <button
+      type="button"
+      data-theme-toggle
+      aria-label="Change color theme"
+      title="Change theme"
+      className="flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
+      <Sun className="theme-icon theme-icon-light size-[18px]" aria-hidden />
+      <Moon className="theme-icon theme-icon-dark size-[18px]" aria-hidden />
+      <Monitor className="theme-icon theme-icon-system size-[18px]" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * Public navigation stays server-rendered. Native details handles mobile
+ * disclosure; one tiny delegated theme script in the root layout owns toggles.
+ * Landing no longer hydrates a full header merely to watch scroll position.
+ */
+export function MarketingHeader() {
+  return (
+    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" aria-label={`${siteConfig.name} home`} className="shrink-0">
           <Wordmark />
@@ -76,83 +47,58 @@ export function MarketingHeader({ overHero = false }: { overHero?: boolean }) {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <ThemeToggle />
-          {/* keyed so the anon→authed swap reads as a fade, not a flash */}
-          <span key={user ? "authed" : "anon"} className="flex animate-fade-in items-center gap-3">
-          {user ? (
-            <ButtonLink href={workspaceUrl()} size="sm">
-              Open workspace
-              <ArrowRight className="size-4" aria-hidden />
+          <ThemeButton />
+          <span className="flex items-center gap-3">
+            <Link
+              href="/login"
+              prefetch={false}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Sign in
+            </Link>
+            <ButtonLink href="/signup" prefetch={false} size="sm">
+              Start free
             </ButtonLink>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Sign in
-              </Link>
-              <ButtonLink href="/signup" size="sm">
-                Start free
-              </ButtonLink>
-            </>
-          )}
           </span>
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
-          <ThemeToggle />
-          <button
-            type="button"
-            className="flex size-11 cursor-pointer items-center justify-center rounded-md text-foreground"
-            aria-expanded={open}
-            aria-label={open ? "Close menu" : "Open menu"}
-            onClick={() => setOpen((o) => !o)}
-          >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <nav
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Mobile"
-          className="animate-fade-in border-t border-border bg-background px-5 py-4 md:hidden"
-        >
-          <div className="flex flex-col gap-1">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-3 text-[15px] text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
-            <div className="mt-3 flex items-center gap-3 border-t border-border pt-4">
-              {user ? (
-                <ButtonLink href={workspaceUrl()} className="flex-1">
-                  Open workspace
-                  <ArrowRight className="size-4" aria-hidden />
-                </ButtonLink>
-              ) : (
-                <>
-                  <ButtonLink href="/login" variant="outline" className="flex-1">
+          <ThemeButton />
+          <details data-mobile-menu className="group">
+            <summary
+              aria-label="Open menu"
+              className="flex size-11 cursor-pointer list-none items-center justify-center rounded-md text-foreground [&::-webkit-details-marker]:hidden"
+            >
+              <Menu className="size-5 group-open:hidden" aria-hidden />
+              <X className="hidden size-5 group-open:block" aria-hidden />
+            </summary>
+            <nav
+              aria-label="Mobile"
+              className="absolute inset-x-0 top-16 border-y border-border bg-background px-5 py-4 shadow-md"
+            >
+              <div className="mx-auto flex max-w-6xl flex-col gap-1">
+                {NAV.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-md px-3 py-3 text-[15px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                <div className="mt-3 flex items-center gap-3 border-t border-border pt-4">
+                  <ButtonLink href="/login" prefetch={false} variant="outline" className="flex-1">
                     Sign in
                   </ButtonLink>
-                  <ButtonLink href="/signup" className="flex-1">
+                  <ButtonLink href="/signup" prefetch={false} className="flex-1">
                     Start free
                   </ButtonLink>
-                </>
-              )}
-            </div>
-          </div>
-        </nav>
-      )}
+                </div>
+              </div>
+            </nav>
+          </details>
+        </div>
+      </div>
     </header>
   );
 }
