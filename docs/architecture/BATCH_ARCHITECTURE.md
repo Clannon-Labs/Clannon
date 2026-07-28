@@ -38,10 +38,22 @@ orchestrator's context exploding. The **batch** is the missing grouping layer.
 ## 3. Delegation logic `[PROPOSED]` (central orchestrator's new core decision)
 
 - **Trivial single-domain** ("write code to do X") → route directly to one batch
-  (or one expert in it). No cross-batch coordination.
+  (now it depends on that batch's orchestrator on whether it uses just one expert or multiple, central orchestrator doesn't care after it routes the work to a batch). No cross-batch coordination.
 - **Broad** ("build a SaaS that does X") → the central orchestrator decomposes into
   sub-tasks, identifies which batches are needed, sequences/parallelizes them, and
-  coordinates hand-offs. Coordinator of coordinators, not a micromanager.
+  coordinates hand-offs. Coordinator of coordinators, not a micromanager. 
+    > **Owner's description**:
+    >
+    > If you didn't think of it, this is also the real usecase for mission engine,
+    > mission engine is what makes breaking down larger goal into small sub tasks possible
+    > if the goal is really broad and big, we can make the mission engine non deterministic
+    > meaning llm calls of its own, and the central orchestrator just delegates the broad
+    > work to it and central orchestrator should need to know whether the task is broad or trivial
+    > and even if doesn't break goal into sub tasks and route to the batches (yes, broad task and works broken down into pieces by mission engine means the engine would feed the batches and let the orchestrator know)
+
+    > Why this way: The central orchestrator is the only user facing thing so it's context window is precious and since it already has an idea of what it did, like delegating task to mission engine,
+    > and what did the mission engine do, what batches were engaged etc etc, and if needed ,it also has the ability to know the things in deep from the mission engine or a separate helper whose only job is to get the context for central orchestrator, so this way, central orchestrator doesn't lose anything and preservs context window too, win win for us.
+
 - **Entropy-as-advisory at the batch tier**: compute domain-similarity signals
   across *batches* (not just experts), surface as evidence, let judgment decide
   routing — never a hard math gate (entropy-as-advisory — docs/ARCHITECTURE.md §7.2).
@@ -91,6 +103,13 @@ version. The mission's original intent + success criteria (the Mission Engine)
 remain the anchor it re-checks against after many compactions and restarts.
 **Anything that could break under a week+ mission (context loss, drift, a forgotten
 original ask) is a stability BUG, not a future improvement** (see §Prime Directive).
+
+  > **Owner's thoughts:**
+  >
+  > Relating memory to this: The mission engine also has it's own memory consisting of only what it did,
+  > and what feedback and response it got from orchestrator or batch orchestrators, so that we dont lose any context of why the goal was divided and composed like x instead of y,
+  > all without bloating the context window where matters, the central orchestrator doesn't know what mission engine knows internally, it just knows what that it (orchestrator) delegated task to it
+  > and what mission engine did in response and what happens afterwards and a short summary on the reasoning, so orchestrator can reason about why something was done, all while keeping context window lean
 
 ## 7. How batches change the V1 benchmark paths
 

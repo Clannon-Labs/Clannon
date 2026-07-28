@@ -132,3 +132,4 @@ owner inbox must stay synchronized.
 - `16:03` **memory** worker via **codex** — 2026-07-28_live-qdrant-breaker-test-repair.md — exit 0, 599s — output: `.agents/runs/20260728-155348-memory.out`
 - `16:10` **security** worker via **codex** — 2026-07-28_archive-cap-ruling-comment.md — exit 0, 82s — output: `.agents/runs/20260728-160858-security.out`
 - `16:15` **backend** worker via **codex** — 2026-07-28_provider-pricing-verification.md — exit 0, 465s — output: `.agents/runs/20260728-160811-backend.out`
+- `17:31` **backend** worker via **codex** — 2026-07-28_partial-timeout-terminal-contract.md — exit 1, 10s — output: `.agents/runs/20260728-173122-backend.out`

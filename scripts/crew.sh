@@ -127,7 +127,9 @@ launch_command() {   # role provider fresh dir -> the shell command the session 
       # and .agents/ writes, which blocked a specialist from committing its own
       # work and updating its own handoff. Same unattended posture as Claude's
       # --dangerously-skip-permissions.
-      cmd="codex --sandbox danger-full-access --ask-for-approval never"
+      # Inline mode matches Claude's terminal behavior: tmux owns scrollback,
+      # while Codex keeps Up/Down and Ctrl-R available for prompt history.
+      cmd="codex --no-alt-screen --sandbox danger-full-access --ask-for-approval never"
       ;;
   esac
   # Keep the session alive after the agent exits so its scrollback stays

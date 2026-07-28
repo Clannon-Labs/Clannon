@@ -11,3 +11,7 @@
 # docs/architecture/CREW_WORKFLOW.md.
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
+
+[tui]
+# Keep terminal/tmux scrollback while Codex owns prompt-history navigation.
+alternate_screen = "never"
