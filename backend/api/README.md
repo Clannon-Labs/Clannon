@@ -7,32 +7,23 @@ backend↔frontend contract — when you add or change an endpoint, update the
 table here.
 
 ```bash
-# from backend/ (with the venv activated) — the dir that holds api/, main.py,
-# models.yaml and .env.local; running from elsewhere can't resolve api.app or
-# the top-level core/foundation/security imports
-uvicorn api.app:app --port 8000 --reload
+# canonical local start, from repository root
+./dev.sh
 ```
 
-To reach the server from another device on the LAN (e.g. test the frontend on
-a phone), use the launcher. It frees the port if a previous run is still on it,
-detects this machine's LAN IP, wires `FRONTEND_ORIGIN` for CORS, and binds to
-all interfaces — no env vars to remember, safe to re-run:
+The launcher starts/reuses ClamAV and Qdrant, waits until both answer, then
+starts FastAPI and Next.js. It also replaces stale Clannon-owned listeners,
+sets the local embedding cache, and stops both application processes on
+`Ctrl-C`.
 
-```bash
-./dev.sh          # from backend/  (venv must exist at .venv/)
-```
+Local browser traffic has one visible origin:
 
-Equivalent by hand (`<LAN-IP>` = `hostname -I | awk '{print $1}'`):
+- `http://<LAN-IP>:3000` — Next.js.
+- `http://<LAN-IP>:3000/api/*` — Next.js reverse-proxies to FastAPI.
+- `http://127.0.0.1:8000` — private FastAPI listener; not opened to the LAN.
 
-```bash
-FRONTEND_ORIGIN=http://<LAN-IP>:3000 \
-  uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
-# if ufw is active, open the port once: sudo ufw allow 8000/tcp
-```
-
-`--host 0.0.0.0` is the part that matters — the default binds to `127.0.0.1`
-and is invisible off-box. `FRONTEND_ORIGIN` must exactly match the frontend's
-LAN origin or CORS rejects every request (see the table below).
+This shape keeps cookies, SSE, and normal requests same-origin in development.
+Do not run a second component `dev.sh`; root `dev.sh` is the only launcher.
 
 ## Environment
 
