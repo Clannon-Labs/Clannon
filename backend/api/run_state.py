@@ -139,10 +139,12 @@ class RunState:
     # per-session model choices for THIS run (role -> bare model id), layered over
     # the user's workspace defaults at execute time. Empty = use workspace defaults.
     session_models: dict[str, str] = field(default_factory=dict)
-    # ``None`` marks a normal linear session. Revised branches persist the exact
-    # owner-scoped run IDs inherited before their branch-local session; ``[]`` is
-    # therefore meaningful (a revision of a root turn).
+    # ``None`` marks a normal linear session, including every new revision.
+    # Legacy branch rows may retain exact owner-scoped inherited run IDs.
     lineage_prefix: list[str] | None = None
+    # Internal soft-delete marker. Superseded turns remain durable for usage,
+    # memory, and audit provenance but never enter public JSON or conversation reads.
+    superseded: bool = False
 
     def emit(self, event: dict) -> None:
         self.events.append(event)

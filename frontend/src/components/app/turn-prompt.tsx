@@ -117,10 +117,10 @@ export function TurnPrompt({
         />
         <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
           {laterTurnCount > 0
-            ? `This starts a new path. ${laterTurnCount} later ${
-                laterTurnCount === 1 ? "turn stays" : "turns stay"
-              } in history but won't enter the new conversation. Saved memory remains.`
-            : "This starts a new path from here. Saved memory remains available."}
+            ? `Submitting removes this turn and its response, then replaces them with your edit. ${laterTurnCount} later ${
+                laterTurnCount === 1 ? "turn" : "turns"
+              } will also be removed from this conversation. Saved memory remains available.`
+            : "Submitting removes this turn and its response, then replaces them with your edit. Saved memory remains available."}
         </p>
         {error && (
           <p role="alert" className="mt-2 text-[12px] leading-relaxed text-destructive">

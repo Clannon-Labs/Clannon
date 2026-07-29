@@ -141,15 +141,12 @@ def _make_root(store: RunStore) -> RunState:
     return store.create("u1", "test brief")
 
 
-# a synthetic parent, read-only from create_followup's point of view (it only
-# reads .id/.session_id/.project_id) — it never needs to exist in `store` itself
-_PARENT = RunState(
-    id="run_parent0", user_id="u1", title="parent", brief="parent brief", session_id="run_parent0"
-)
-
-
 def _make_followup(store: RunStore) -> RunState:
-    return store.create_followup("u1", "followup ask", _PARENT)
+    # Follow-up creation now re-authorizes the parent inside the store lock so a
+    # concurrent revision cannot attach a new turn to a superseded suffix.
+    parent = store.create("u1", "parent brief")
+    parent.status = "delivered"
+    return store.create_followup("u1", "followup ask", parent)
 
 
 async def _simulate_create_run(store: RunStore, input_files: list, make_run=_make_root) -> RunState:

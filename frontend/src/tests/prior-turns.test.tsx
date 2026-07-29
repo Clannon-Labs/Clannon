@@ -47,6 +47,13 @@ function makeTurn(overrides: Partial<Run> & Pick<Run, "id" | "brief" | "createdA
   };
 }
 
+async function settleMockRun(client: MockClient, id: string) {
+  await client.cancelRun(id);
+  for await (const event of client.streamRun(id, new AbortController().signal)) {
+    expect(event).toEqual({ type: "status", status: "cancelled" });
+  }
+}
+
 // ---- PriorTurns component tests ---------------------------------------------
 
 describe("PriorTurns", () => {
@@ -154,9 +161,8 @@ describe("PriorTurns", () => {
 
 // ---- MockClient.getRunThread contract tests ---------------------------------
 //
-// The cross-session thread ("second session is the magic") depends on
-// getRunThread returning the active lineage oldest-first. Linear sessions have
-// one lineage; revisions inherit only the prefix before the edited turn.
+// getRunThread returns the retained same-session lineage oldest-first.
+// Revisions replace one turn after deleting that turn and its descendants.
 
 describe("MockClient.getRunThread", () => {
   it("returns thread turns in ascending createdAt (oldest-first) order", async () => {
@@ -200,40 +206,62 @@ describe("MockClient.getRunThread", () => {
     await expect(client.getRunThread("nonexistent_run_id")).rejects.toMatchObject({ status: 404 });
   });
 
-  it("a revision keeps the prefix and excludes the replaced turn plus descendants", async () => {
+  it("a middle revision keeps its session, project, and prefix while deleting its suffix", async () => {
     const client = new MockClient();
-    const controller = new AbortController();
-    const settle = async (id: string) => {
-      await client.cancelRun(id);
-      for await (const event of client.streamRun(id, controller.signal)) {
-        expect(event).toEqual({ type: "status", status: "cancelled" });
-        // one cancellation event settles the mock run as terminal
-      }
-    };
 
-    const { id: rootId } = await client.createRun("Original root turn");
-    await settle(rootId);
+    const memoryBefore = await client.listMemory();
+    const { id: rootId } = await client.createRun(
+      "Original root turn",
+      [],
+      undefined,
+      "proj_meridian",
+    );
+    await settleMockRun(client, rootId);
     const { id: middleId } = await client.createFollowUp(rootId, "Original middle turn");
-    await settle(middleId);
+    await settleMockRun(client, middleId);
     const { id: descendantId } = await client.createFollowUp(middleId, "Later descendant turn");
-    await settle(descendantId);
+    await settleMockRun(client, descendantId);
+    const originalMiddle = await client.getRun(middleId);
 
     const { id: revisedId } = await client.reviseRun(middleId, "Corrected middle turn");
     const revisedThread = await client.getRunThread(revisedId);
+    const revised = await client.getRun(revisedId);
 
     expect(revisedThread.map((turn) => turn.brief)).toEqual([
       "Original root turn",
       "Corrected middle turn",
     ]);
-    expect(revisedThread.map((turn) => turn.id)).not.toContain(middleId);
-    expect(revisedThread.map((turn) => turn.id)).not.toContain(descendantId);
+    expect(revised.sessionId).toBe(originalMiddle.sessionId);
+    expect(revised.projectId).toBe("proj_meridian");
+    expect(revised.parentRunId).toBe(rootId);
+    await expect(client.getRun(middleId)).rejects.toMatchObject({ status: 404 });
+    await expect(client.getRunThread(descendantId)).rejects.toMatchObject({ status: 404 });
+    expect(await client.listMemory()).toEqual(memoryBefore);
+  }, 10_000);
 
-    // Original branch remains readable rather than being destructively erased.
-    const originalThread = await client.getRunThread(descendantId);
-    expect(originalThread.map((turn) => turn.brief)).toEqual([
+  it("a root revision removes the entire old conversation and leaves only its replacement", async () => {
+    const client = new MockClient();
+
+    const { id: rootId } = await client.createRun(
       "Original root turn",
-      "Original middle turn",
-      "Later descendant turn",
-    ]);
+      [],
+      undefined,
+      "proj_arch",
+    );
+    await settleMockRun(client, rootId);
+    const originalRoot = await client.getRun(rootId);
+    const { id: descendantId } = await client.createFollowUp(rootId, "Discarded follow-up");
+    await settleMockRun(client, descendantId);
+
+    const { id: revisedId } = await client.reviseRun(rootId, "Corrected root turn");
+    const revised = await client.getRun(revisedId);
+    const revisedThread = await client.getRunThread(revisedId);
+
+    expect(revisedThread.map((turn) => turn.brief)).toEqual(["Corrected root turn"]);
+    expect(revised.sessionId).toBe(originalRoot.sessionId);
+    expect(revised.projectId).toBe("proj_arch");
+    expect(revised.parentRunId).toBeNull();
+    await expect(client.getRun(rootId)).rejects.toMatchObject({ status: 404 });
+    await expect(client.getRun(descendantId)).rejects.toMatchObject({ status: 404 });
   });
 });

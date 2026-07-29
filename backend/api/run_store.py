@@ -2,8 +2,10 @@
 The run store: in-memory live cache + SQLite persistence.
 
 Live runs (which carry asyncio queues) stay in memory; finished runs are written
-through to SQLite so history survives a restart. `RunStore` owns the lifecycle —
-create / create_followup / set_feedback / persist — and the read paths that merge
+through to SQLite so history survives a restart. A queued revision is also written
+inside its supersession transaction so a crash cannot leave a half-truncated chat.
+`RunStore` owns the lifecycle —
+create / create_followup / create_revision / set_feedback / persist — and read paths that merge
 live and persisted rows (get / list_for / session_turns), including the row<->RunState
 mapping. The persistence SQL is encapsulated here, out of the route handlers and the
 pure run record. The module-level `STORE` is the single shared instance.
@@ -13,16 +15,15 @@ from __future__ import annotations
 
 import json
 import secrets
+import threading
 import time
+from collections.abc import Callable
+from functools import wraps
 from typing import Any
 
 from . import auth
-from .run_lineage import (
-    decode_prefix,
-    encode_prefix,
-    prefix_before,
-    resolve_effective_thread,
-)
+from .run_lineage import decode_prefix, resolve_effective_thread
+from .run_persistence import write_run
 from .run_state import RunState, TERMINAL_STATUSES
 
 # Uploaded input files are stored in the artifact store under a "<INPUT_NS><run_id>"
@@ -60,6 +61,16 @@ def _purge_run_files(run_ids: set[str]) -> None:
         pass
 
 
+def _synchronized(method):
+    """Serialize live-cache and SQLite transitions exposed through this store."""
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return locked
+
+
 class RunStore:
     """
     Live runs stay in memory (they carry asyncio queues); finished runs
@@ -68,7 +79,9 @@ class RunStore:
 
     def __init__(self) -> None:
         self._runs: dict[str, RunState] = {}
+        self._lock = threading.RLock()
 
+    @_synchronized
     def create(self, user_id: str, brief: str, project_id: str | None = None) -> RunState:
         rid = f"run_{secrets.token_hex(6)}"
         title = brief if len(brief) <= 64 else brief[:61].rstrip() + "…"
@@ -77,13 +90,25 @@ class RunStore:
         self._runs[rid] = run
         return run
 
-    def create_followup(self, user_id: str, ask: str, parent: RunState) -> RunState:
+    @_synchronized
+    def create_followup(
+        self,
+        user_id: str,
+        ask: str,
+        parent: RunState,
+        *,
+        session_models: dict[str, str] | None = None,
+        start: Callable[[RunState], Any] | None = None,
+    ) -> RunState | None:
         """A follow-up is the NEXT TURN of the parent's session: it inherits the
         parent's `session_id` so the whole conversation is one session. The prior
         turns are replayed to the orchestrator as real chat history (built in
         `execute` via `_build_conversation`) — NOT stuffed into the input — so
         only the user's new `ask` passes through sanitize/verify, and the
         orchestrator genuinely continues the conversation."""
+        parent = self.get(user_id, parent.id)
+        if parent is None:
+            return None
         if parent.lineage_prefix is not None:
             # Validate persisted prefix ownership before copying it to another row.
             self.effective_thread(user_id, parent)
@@ -99,12 +124,35 @@ class RunStore:
                 else None
             ),
         )
+        run.session_models = dict(session_models or {})
+        if start is not None:
+            run.task = start(run)
         self._runs[rid] = run
         return run
 
-    def create_revision(self, user_id: str, brief: str, target: RunState) -> RunState:
-        """Open a new branch at ``target`` without altering its original session."""
-        prefix = prefix_before(self, user_id, target)
+    @_synchronized
+    def create_revision(
+        self,
+        user_id: str,
+        brief: str,
+        target: RunState,
+        *,
+        session_models: dict[str, str] | None = None,
+        start: Callable[[RunState], Any] | None = None,
+    ) -> RunState | None:
+        """Atomically replace ``target`` and its effective suffix in one session."""
+        target = self.get(user_id, target.id)
+        if target is None or target.status not in TERMINAL_STATUSES:
+            return None
+        thread = self.effective_thread(user_id, target)
+        target_index = next(
+            (index for index, turn in enumerate(thread) if turn.id == target.id),
+            None,
+        )
+        if target_index is None:
+            return None
+        retained = thread[:target_index]
+        suffix = thread[target_index:]
         rid = f"run_{secrets.token_hex(6)}"
         title = brief if len(brief) <= 64 else brief[:61].rstrip() + "…"
         run = RunState(
@@ -112,14 +160,50 @@ class RunStore:
             user_id=user_id,
             title=title,
             brief=brief,
-            parent_run_id=prefix[-1] if prefix else None,
-            session_id=rid,
+            parent_run_id=retained[-1].id if retained else None,
+            session_id=target.session_id or target.id,
             project_id=target.project_id,
-            lineage_prefix=prefix,
+            lineage_prefix=(
+                list(target.lineage_prefix)
+                if target.lineage_prefix is not None
+                else None
+            ),
         )
+        run.session_models = dict(session_models or {})
+        if start is not None:
+            run.task = start(run)
+        suffix_ids = [turn.id for turn in suffix]
+        try:
+            with auth._db() as db:
+                db.executemany(
+                    "UPDATE runs SET superseded=1 WHERE user_id=? AND id=?",
+                    ((user_id, run_id) for run_id in suffix_ids),
+                )
+                for turn in suffix:
+                    if turn.id in self._runs:
+                        write_run(db, turn, superseded=True)
+                write_run(db, run)
+        except Exception:
+            if run.task is not None:
+                run.task.cancel()
+            raise
+
+        for turn in suffix:
+            live = self._runs.get(turn.id)
+            if live is None:
+                continue
+            live.superseded = True
+            if live.status not in TERMINAL_STATUSES:
+                live.cancel_requested = True
         self._runs[rid] = run
+        for turn in suffix:
+            live = self._runs.get(turn.id)
+            task = live.task if live is not None else None
+            if task is not None and not task.done():
+                task.cancel()
         return run
 
+    @_synchronized
     def set_feedback(
         self, user_id: str, rid: str, rating: str | None, comment: str | None
     ) -> bool:
@@ -127,7 +211,7 @@ class RunStore:
         run is still live in memory or already persisted to SQLite."""
         live = self._runs.get(rid)
         if live is not None:
-            if live.user_id != user_id:
+            if live.user_id != user_id or live.superseded:
                 return False
             live.feedback_rating = rating
             live.feedback_comment = comment
@@ -135,11 +219,12 @@ class RunStore:
         with auth._db() as db:
             cur = db.execute(
                 "UPDATE runs SET feedback_rating=?, feedback_comment=?, feedback_at=? "
-                "WHERE id=? AND user_id=?",
+                "WHERE id=? AND user_id=? AND superseded=0",
                 (rating, comment, time.time(), rid, user_id),
             )
             return cur.rowcount > 0
 
+    @_synchronized
     def forget_memory_write(self, user_id: str, entry_id: str) -> bool:
         """Drop one episodic memory entry (id ``"<run_id>_m<i>"``) from its run's memory_writes,
         so it stops showing in `/memory` and stops being re-listed — the user's "that's outdated"
@@ -174,6 +259,7 @@ class RunStore:
             )
         return True
 
+    @_synchronized
     def request_cancel(self, user_id: str, rid: str) -> str:
         """Cooperatively cancel a run, scoped to its owner. Idempotent.
 
@@ -227,6 +313,7 @@ class RunStore:
         run.finish()
         return "cancelled"
 
+    @_synchronized
     def delete_session(self, user_id: str, session_id: str) -> int:
         """Permanently delete every run in a session, scoped to its owner. Returns the
         count removed (0 = nothing to delete — an idempotent no-op).
@@ -262,28 +349,11 @@ class RunStore:
         _purge_run_files(run_ids)
         return removed
 
+    @_synchronized
     def persist(self, run: RunState) -> None:
         """Write-through on terminal state — one row per finished run."""
         with auth._db() as db:
-            db.execute(
-                "INSERT OR REPLACE INTO runs "
-                "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,message,memory_writes_json,"
-                "feedback_rating,feedback_comment,parent_run_id,session_id,lineage_prefix_json,block_stage,artifacts_json,inputs_json,project_id,sources_json,verification_state,"
-                "completion_state,completion_reason) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    run.id, run.user_id, run.title, run.brief, run.status,
-                    run.created_at, run.tokens_used, json.dumps(run.log),
-                    json.dumps(list(run.experts.values())), run.report, run.message,
-                    json.dumps(run.memory_writes),
-                    run.feedback_rating, run.feedback_comment, run.parent_run_id,
-                    run.session_id or run.id, encode_prefix(run.lineage_prefix),
-                    run.block_stage, json.dumps(run.artifacts),
-                    json.dumps(run.inputs), run.project_id, json.dumps(run.sources),
-                    run.verification_state,
-                    run.completion_state, run.completion_reason,
-                ),
-            )
+            write_run(db, run)
         # finished runs no longer need live queues in memory
         self._runs.pop(run.id, None)
 
@@ -318,27 +388,41 @@ class RunStore:
         # marking entirely, so "complete" is the honest reading, not a guess.
         run.completion_state = (("completion_state" in keys and row["completion_state"]) or "complete")
         run.completion_reason = row["completion_reason"] if "completion_reason" in keys else None
+        run.superseded = bool(row["superseded"]) if "superseded" in keys else False
         return run
 
+    @_synchronized
     def get(self, user_id: str, rid: str) -> RunState | None:
         run = self._runs.get(rid)
         if run is not None:
-            return run if run.user_id == user_id else None
+            return run if run.user_id == user_id and not run.superseded else None
         with auth._db() as db:
             row = db.execute(
-                "SELECT * FROM runs WHERE id=? AND user_id=?", (rid, user_id)
+                "SELECT * FROM runs WHERE id=? AND user_id=? AND superseded=0",
+                (rid, user_id),
             ).fetchone()
         return self._from_row(row) if row else None
 
-    def list_for(self, user_id: str, project_id: str | None = None) -> list[RunState]:
-        """A user's runs, newest first. Filtered to one project when `project_id` is given;
-        all of the user's runs when None (backward-compatible with un-scoped callers)."""
+    @_synchronized
+    def list_for(
+        self,
+        user_id: str,
+        project_id: str | None = None,
+        *,
+        include_superseded: bool = False,
+    ) -> list[RunState]:
+        """A user's runs, newest first. ``include_superseded`` is reserved for
+        internal accounting and persisted-memory views."""
         live = {
             r.id: r for r in self._runs.values()
-            if r.user_id == user_id and (project_id is None or r.project_id == project_id)
+            if r.user_id == user_id
+            and (include_superseded or not r.superseded)
+            and (project_id is None or r.project_id == project_id)
         }
         sql = "SELECT * FROM runs WHERE user_id=?"
         params: tuple = (user_id,)
+        if not include_superseded:
+            sql += " AND superseded=0"
         if project_id is not None:
             sql += " AND project_id=?"
             params += (project_id,)
@@ -348,6 +432,7 @@ class RunStore:
         merged.update(live)
         return sorted(merged.values(), key=lambda r: r.created_at, reverse=True)
 
+    @_synchronized
     def delete_project(self, user_id: str, project_id: str) -> int:
         """Cascade-delete a project: every run in it (live tasks cancelled, persisted rows
         removed, stored files purged) AND the project's wiki + the project row. Scoped to the
@@ -381,22 +466,27 @@ class RunStore:
         auth.project_delete_row(user_id, project_id)   # the project row + its wiki entries
         return removed
 
+    @_synchronized
     def session_turns(self, user_id: str, session_id: str) -> list[RunState]:
         """Every turn of one session, oldest first — the chat thread."""
         live = {
             r.id: r
             for r in self._runs.values()
-            if r.user_id == user_id and (r.session_id or r.id) == session_id
+            if r.user_id == user_id
+            and not r.superseded
+            and (r.session_id or r.id) == session_id
         }
         with auth._db() as db:
             rows = db.execute(
-                "SELECT * FROM runs WHERE user_id=? AND session_id=?",
+                "SELECT * FROM runs "
+                "WHERE user_id=? AND session_id=? AND superseded=0",
                 (user_id, session_id),
             ).fetchall()
         merged = {row["id"]: self._from_row(row) for row in rows if row["id"] not in live}
         merged.update(live)
         return sorted(merged.values(), key=lambda r: r.created_at)
 
+    @_synchronized
     def effective_thread(self, user_id: str, run: RunState) -> list[RunState]:
         """Resolve one run's owner-safe inherited prefix plus branch-local turns."""
         return resolve_effective_thread(self, user_id, run)

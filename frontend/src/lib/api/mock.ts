@@ -412,16 +412,39 @@ export class MockClient implements ClannonClient {
       throw new ApiError("Wait for this turn to finish or stop it before editing.", 409);
     }
 
-    // createRun gives the revision its own session: the original branch remains
-    // intact and auditable, while the sidebar treats this as a new path.
+    const sessionId = target.sessionId ?? target.id;
+    const parentRunId = target.parentRunId ?? null;
+    const projectId = target.projectId;
+    const reusedInputs = structuredClone(target.inputs);
+
+    // Find the target's whole suffix before creating its replacement. Waiting
+    // for createRun to succeed keeps the original conversation intact on error.
+    const removedIds = new Set([target.id]);
+    let foundDescendant = true;
+    while (foundDescendant) {
+      foundDescendant = false;
+      for (const run of this.runs.values()) {
+        if (
+          (run.sessionId ?? run.id) === sessionId &&
+          run.parentRunId &&
+          removedIds.has(run.parentRunId) &&
+          !removedIds.has(run.id)
+        ) {
+          removedIds.add(run.id);
+          foundDescendant = true;
+        }
+      }
+    }
+
     const { id: revisedId } = await this.createRun(brief, files, undefined, target.projectId);
     const revised = this.runs.get(revisedId);
     if (revised) {
-      // Skip the target itself. Following parentRunId now yields the retained
-      // prefix only; every descendant after the target is unreachable.
-      revised.parentRunId = target.parentRunId ?? null;
-      if (files.length === 0) revised.inputs = structuredClone(target.inputs);
+      revised.parentRunId = parentRunId;
+      revised.sessionId = sessionId;
+      revised.projectId = projectId;
+      if (files.length === 0) revised.inputs = reusedInputs;
     }
+    for (const removedId of removedIds) this.runs.delete(removedId);
     return { id: revisedId };
   }
 
@@ -439,16 +462,19 @@ export class MockClient implements ClannonClient {
     const anchor = this.runs.get(id);
     if (!anchor) throw new ApiError("Run not found.", 404);
 
-    // Follow the actual lineage rather than grouping by sessionId. Linear
-    // conversations produce the same result; revised branches can inherit an
-    // old prefix without accidentally pulling the replaced turn or descendants.
+    // Follow the remaining same-session lineage. An in-place revision deletes
+    // its old suffix first, so only the retained prefix and replacement remain.
     const lineage: Run[] = [];
     const seen = new Set<string>();
+    const sessionId = anchor.sessionId ?? anchor.id;
     let cursor: Run | undefined = anchor;
     while (cursor && !seen.has(cursor.id)) {
       seen.add(cursor.id);
       lineage.unshift(structuredClone(cursor));
-      cursor = cursor.parentRunId ? this.runs.get(cursor.parentRunId) : undefined;
+      const parent: Run | undefined = cursor.parentRunId
+        ? this.runs.get(cursor.parentRunId)
+        : undefined;
+      cursor = parent && (parent.sessionId ?? parent.id) === sessionId ? parent : undefined;
     }
     return lineage;
   }

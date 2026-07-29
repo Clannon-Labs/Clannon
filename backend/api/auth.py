@@ -65,7 +65,8 @@ def _db() -> sqlite3.Connection:
             artifacts_json TEXT NOT NULL DEFAULT '[]',
             inputs_json TEXT NOT NULL DEFAULT '[]', project_id TEXT,
             sources_json TEXT NOT NULL DEFAULT '[]', verification_state TEXT,
-            completion_state TEXT NOT NULL DEFAULT 'complete', completion_reason TEXT
+            completion_state TEXT NOT NULL DEFAULT 'complete', completion_reason TEXT,
+            superseded INTEGER NOT NULL DEFAULT 0
         )"""
     )
     # self-healing migration: add columns missing on databases created before
@@ -90,6 +91,7 @@ def _db() -> sqlite3.Connection:
         # backfill — not merely the convenient default.
         ("completion_state", "TEXT NOT NULL DEFAULT 'complete'"),
         ("completion_reason", "TEXT"),
+        ("superseded", "INTEGER NOT NULL DEFAULT 0"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")
@@ -352,6 +354,7 @@ def project_list(user_id: str) -> list[dict]:
             """SELECT p.*, MAX(r.created_at) AS last_activity
                FROM projects p
                LEFT JOIN runs r ON r.project_id = p.id AND r.user_id = p.user_id
+                   AND r.superseded = 0
                WHERE p.user_id = ?
                GROUP BY p.id
                ORDER BY (last_activity IS NULL), last_activity DESC, p.created_at DESC""",

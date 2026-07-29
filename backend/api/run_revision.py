@@ -22,7 +22,7 @@ async def revise_run(
     reuseInputs: bool = Form(default=True),
     user: auth.User = Depends(auth.current_user),
 ) -> dict:
-    """Run an edited prompt on a new branch containing only inherited prefix."""
+    """Replace one turn and its suffix inside the target's existing session."""
     target = _terminal_target(user.id, run_id)
     edited = brief.strip()
     if len(edited) < config.LIMITS["briefMinChars"]:
@@ -40,9 +40,16 @@ async def revise_run(
     # Scanning and blob reads yield. Re-authorize so concurrent deletion cannot
     # create a branch whose inherited rows vanished during preflight.
     target = _terminal_target(user.id, run_id)
-    run = runs.STORE.create_revision(user.id, edited, target)
-    run.session_models = session_models
-    run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
+    loop = asyncio.get_running_loop()
+    run = runs.STORE.create_revision(
+        user.id,
+        edited,
+        target,
+        session_models=session_models,
+        start=lambda revision: loop.create_task(runs.execute(revision, input_files)),
+    )
+    if run is None:
+        raise HTTPException(404, "Run not found.")
     return {"id": run.id}
 
 

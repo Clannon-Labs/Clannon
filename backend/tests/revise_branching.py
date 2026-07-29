@@ -1,4 +1,4 @@
-"""Safe revise-turn branching across HTTP, history, files, and persistence."""
+"""Safe in-place turn revision across HTTP, history, files, and persistence."""
 
 from __future__ import annotations
 
@@ -44,14 +44,8 @@ def env(tmp_path, monkeypatch):
     app_mod._auth_attempts.clear()
     client = TestClient(app_mod.app)
     owner = _signup(client, "owner@revise.io")
-    return SimpleNamespace(
-        client=client,
-        owner=owner,
-        store=store,
-        executions=executions,
-        tmp_path=tmp_path,
-        app_mod=app_mod,
-    )
+    return SimpleNamespace(client=client, owner=owner, store=store,
+                           executions=executions, tmp_path=tmp_path, app_mod=app_mod)
 
 
 def _signup(client: TestClient, email: str) -> dict:
@@ -98,11 +92,13 @@ def _revise(client: TestClient, target_id: str, **data):
     return client.post(f"/runs/{target_id}/revise", data=payload)
 
 
-def test_revise_root_cuts_all_ten_descendants_and_preserves_history(env):
+def test_revise_root_supersedes_all_ten_turns_in_the_same_session(env):
     turns = _seed_linear(env.store, env.owner["id"])
-    history_before = {
-        turn.id: (turn.status, turn.tokens_used, list(turn.log)) for turn in turns
-    }
+    turns[0].memory_writes = [
+        {"content": "saved fact survives", "ts": "2026-07-20T00:01:00+00:00"}
+    ]
+    env.store.persist(turns[0])
+    session_id = turns[0].session_id
 
     response = _revise(
         env.client,
@@ -113,19 +109,26 @@ def test_revise_root_cuts_all_ten_descendants_and_preserves_history(env):
     assert response.status_code == 201, response.text
     revised_id = response.json()["id"]
     revised = env.store.get(env.owner["id"], revised_id)
-    assert revised.lineage_prefix == []
-    assert revised.session_id == revised.id
+    assert revised.lineage_prefix is None
+    assert revised.session_id == session_id
+    assert revised.parent_run_id is None
     assert revised.session_models == {"orchestrator": "claude-opus-4-8"}
     assert revised.task is not None
     assert [run["id"] for run in env.client.get(f"/runs/{revised_id}/thread").json()] == [
         revised_id
     ]
-    assert [run["id"] for run in env.client.get(f"/runs/{turns[0].id}/thread").json()] == [
-        turn.id for turn in turns
+    assert env.client.get(f"/runs/{turns[0].id}").status_code == 404
+    assert env.client.get(f"/runs/{turns[0].id}/thread").status_code == 404
+    visible = env.client.get("/runs").json()
+    assert [run["id"] for run in visible] == [revised_id]
+    assert {run["sessionId"] for run in visible} == {session_id}
+    assert env.client.get("/usage").json()["used"] == sum(
+        turn.tokens_used for turn in turns
+    )
+    assert [item["content"] for item in env.client.get("/memory").json()] == [
+        "saved fact survives"
     ]
-    assert {
-        turn.id: (turn.status, turn.tokens_used, list(turn.log)) for turn in turns
-    } == history_before
+    assert len(env.store.list_for(env.owner["id"], include_superseded=True)) == 11
 
 
 def test_turn_five_prefix_drives_rest_history_recall_and_file_reseeding(env):
@@ -142,8 +145,9 @@ def test_turn_five_prefix_drives_rest_history_recall_and_file_reseeding(env):
     revised = env.store.get(env.owner["id"], response.json()["id"])
 
     expected_prefix = [turn.id for turn in turns[:4]]
-    assert revised.lineage_prefix == expected_prefix
+    assert revised.lineage_prefix is None
     assert revised.parent_run_id == turns[3].id
+    assert revised.session_id == turns[0].session_id
     assert revised.project_id == project["id"]
     assert [run["id"] for run in env.client.get(f"/runs/{revised.id}/thread").json()] == [
         *expected_prefix,
@@ -162,11 +166,17 @@ def test_turn_five_prefix_drives_rest_history_recall_and_file_reseeding(env):
     gathered = asyncio.run(run_driver._gather_session_files(revised, []))
     assert [item.name for item in gathered] == ["turn-2.txt"]
     assert [run["id"] for run in env.client.get(f"/runs/{turns[0].id}/thread").json()] == [
-        turn.id for turn in turns
+        *expected_prefix,
+        revised.id,
     ]
+    assert env.client.get(f"/runs/{turns[4].id}").status_code == 404
+    assert {run["id"] for run in env.client.get("/runs").json()} == {
+        *expected_prefix,
+        revised.id,
+    }
 
 
-def test_followup_on_revision_inherits_prefix_and_branch_session(env):
+def test_followup_on_revision_continues_the_truncated_session(env):
     turns = _seed_linear(env.store, env.owner["id"])
     revised_id = _revise(env.client, turns[4].id).json()["id"]
     revised = env.store.get(env.owner["id"], revised_id)
@@ -178,7 +188,7 @@ def test_followup_on_revision_inherits_prefix_and_branch_session(env):
 
     assert followup_response.status_code == 201, followup_response.text
     followup = env.store.get(env.owner["id"], followup_response.json()["id"])
-    assert followup.lineage_prefix == [turn.id for turn in turns[:4]]
+    assert followup.lineage_prefix is None
     assert followup.session_id == revised.session_id
     expected = [turn.id for turn in turns[:4]] + [revised.id, followup.id]
     assert [run["id"] for run in env.client.get(f"/runs/{revised.id}/thread").json()] == expected
@@ -207,6 +217,8 @@ def test_reuse_loads_authoritative_bytes_and_hides_integrity_metadata(env):
     target = _seed_linear(env.store, env.owner["id"], count=1)[0]
     _attach(target, "facts.txt", b"authoritative stored bytes")
     env.store.persist(target)
+    public_inputs = env.client.get(f"/runs/{target.id}").json()["inputs"]
+    assert "_sha256" not in public_inputs[0]
 
     response = env.client.post(
         f"/runs/{target.id}/revise",
@@ -219,8 +231,7 @@ def test_reuse_loads_authoritative_bytes_and_hides_integrity_metadata(env):
     assert [(item.name, item.data) for item in input_files] == [
         ("facts.txt", b"authoritative stored bytes")
     ]
-    public_inputs = env.client.get(f"/runs/{target.id}").json()["inputs"]
-    assert "_sha256" not in public_inputs[0]
+    assert env.client.get(f"/runs/{target.id}").status_code == 404
 
 
 def test_legacy_unhashed_target_input_reuses_namespace_bound_server_blob(env):
@@ -279,6 +290,37 @@ def test_unreusable_target_input_fails_before_run_creation(env, fault):
     assert len(env.executions) == execution_count
 
 
+def test_model_and_upload_preflights_leave_chat_unchanged(env, monkeypatch):
+    turns = _seed_linear(env.store, env.owner["id"], count=3)
+    before = [run.id for run in env.store.session_turns(env.owner["id"], turns[0].session_id)]
+
+    malformed_model = env.client.post(
+        f"/runs/{turns[1].id}/revise",
+        data={
+            "brief": "edited prompt",
+            "reuseInputs": "false",
+            "models": "not-json",
+        },
+    )
+
+    async def reject(_name, _data):
+        return None, "upload rejected"
+
+    monkeypatch.setattr("api.run_requests.upload_scan.scan_upload", reject)
+    rejected_upload = env.client.post(
+        f"/runs/{turns[1].id}/revise",
+        data={"brief": "edited prompt"},
+        files={"files": ("unsafe.txt", b"unsafe", "text/plain")},
+    )
+
+    assert malformed_model.status_code == 422
+    assert rejected_upload.status_code == 422
+    assert [run.id for run in env.store.session_turns(
+        env.owner["id"], turns[0].session_id
+    )] == before
+    assert env.client.get(f"/runs/{turns[1].id}").status_code == 200
+
+
 def test_metadata_cannot_redirect_reuse_to_another_run_blob(env):
     source, target = _seed_linear(env.store, env.owner["id"], count=2)
     _attach(source, "source.txt", b"do not inject")
@@ -296,9 +338,16 @@ def test_metadata_cannot_redirect_reuse_to_another_run_blob(env):
 
 
 def test_replacements_supersede_reuse_and_false_allows_no_current_inputs(env, monkeypatch):
-    target = _seed_linear(env.store, env.owner["id"], count=1)[0]
-    target.inputs = [{"name": "missing.txt", "modality": "text", "size": 2}]
-    env.store.persist(target)
+    replacement_target = _seed_linear(env.store, env.owner["id"], count=1)[0]
+    replacement_target.inputs = [
+        {"name": "missing.txt", "modality": "text", "size": 2}
+    ]
+    env.store.persist(replacement_target)
+    no_input_target = _seed_linear(env.store, env.owner["id"], count=1)[0]
+    no_input_target.inputs = [
+        {"name": "also-missing.txt", "modality": "text", "size": 2}
+    ]
+    env.store.persist(no_input_target)
     scanned = []
 
     async def admit(name, data):
@@ -307,12 +356,12 @@ def test_replacements_supersede_reuse_and_false_allows_no_current_inputs(env, mo
 
     monkeypatch.setattr("api.run_requests.upload_scan.scan_upload", admit)
     replacement = env.client.post(
-        f"/runs/{target.id}/revise",
+        f"/runs/{replacement_target.id}/revise",
         data={"brief": "replace it"},
         files={"files": ("replacement.txt", b"fresh bytes", "text/plain")},
     )
     no_inputs = env.client.post(
-        f"/runs/{target.id}/revise",
+        f"/runs/{no_input_target.id}/revise",
         data={"brief": "use no file", "reuseInputs": "false"},
     )
 
@@ -321,6 +370,53 @@ def test_replacements_supersede_reuse_and_false_allows_no_current_inputs(env, mo
     assert [item.data for item in env.executions[-2][1]] == [b"fresh bytes"]
     assert no_inputs.status_code == 201, no_inputs.text
     assert env.executions[-1][1] == []
+
+
+def test_live_descendant_is_cancelled_and_cannot_reappear(env):
+    class LiveTask:
+        cancelled = False
+
+        def done(self):
+            return False
+
+        def cancel(self):
+            self.cancelled = True
+
+    target = _seed_linear(env.store, env.owner["id"], count=1)[0]
+    descendant = env.store.create_followup(env.owner["id"], "live descendant", target)
+    descendant.status = "running"
+    descendant.task = LiveTask()
+
+    response = _revise(env.client, target.id)
+
+    assert response.status_code == 201, response.text
+    assert descendant.superseded is True
+    assert descendant.cancel_requested is True
+    assert descendant.task.cancelled is True
+    descendant.status = "cancelled"
+    env.store.persist(descendant)
+    assert env.store.get(env.owner["id"], descendant.id) is None
+    assert descendant.id not in {
+        run.id for run in env.store.list_for(env.owner["id"])
+    }
+    assert descendant.id in {
+        run.id
+        for run in env.store.list_for(env.owner["id"], include_superseded=True)
+    }
+
+
+def test_revised_task_is_registered_before_atomic_truncation_returns(env):
+    turns = _seed_linear(env.store, env.owner["id"], count=3)
+
+    response = _revise(env.client, turns[1].id)
+
+    revised = env.store.get(env.owner["id"], response.json()["id"])
+    assert revised.task is not None
+    assert env.store.get(env.owner["id"], turns[1].id) is None
+    assert [run.id for run in env.store.session_turns(env.owner["id"], revised.session_id)] == [
+        turns[0].id,
+        revised.id,
+    ]
 
 
 def test_missing_or_foreign_stored_prefix_fails_closed(env):
@@ -384,12 +480,8 @@ def test_revised_execution_keeps_project_scoped_wiki_hydration(env, monkeypatch)
         return []
 
     async def fake_pipeline_run(brief, **kwargs):
-        flow = Flow.new(
-            brief,
-            session_id=kwargs["session_id"],
-            user_id=kwargs["user_id"],
-            trace_id=kwargs["trace_id"],
-        )
+        flow = Flow.new(brief, session_id=kwargs["session_id"],
+                        user_id=kwargs["user_id"], trace_id=kwargs["trace_id"])
         flow.ctx.decision_log = kwargs["decision_log"]
         kwargs["prepare"](flow)
         flow.ctx.orchestrator_response = SimpleNamespace(

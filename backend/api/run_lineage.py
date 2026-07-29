@@ -1,8 +1,9 @@
-"""Validation and resolution for persisted conversation branches.
+"""Validation and resolution for legacy persisted conversation branches.
 
-Linear sessions need no extra metadata. A revised branch stores the exact run IDs
-that precede its new session; every read resolves those IDs through the owner-scoped
-run store before combining them with branch-local turns.
+New revisions truncate their existing linear session and need no prefix metadata.
+Branches created before that correction may still carry exact inherited run IDs;
+every read resolves those IDs through the owner-scoped run store before combining
+them with branch-local turns.
 """
 
 from __future__ import annotations
@@ -75,15 +76,6 @@ def resolve_effective_thread(store: Any, user_id: str, run: Any) -> list[Any]:
             raise LineageError(_UNAVAILABLE)
         prefix.append(turn)
     return prefix + local
-
-
-def prefix_before(store: Any, user_id: str, target: Any) -> list[str]:
-    """Resolve a target and return exact effective run IDs strictly before it."""
-    thread = resolve_effective_thread(store, user_id, target)
-    for index, turn in enumerate(thread):
-        if turn.id == target.id:
-            return [prior.id for prior in thread[:index]]
-    raise LineageError(_UNAVAILABLE)
 
 
 def _validate_ids(prefix: Any) -> None:

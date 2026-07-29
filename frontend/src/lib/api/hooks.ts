@@ -26,10 +26,11 @@ export const queryKeys = {
   me: ["me"] as const,
   projects: ["projects"] as const,
   /** Base prefix — invalidating it sweeps every project-scoped run list AND
-   *  every run-by-id (React Query matches by key prefix). */
+   *  every run-by-id/thread (React Query matches by key prefix). */
   runs: ["runs"] as const,
   run: (id: string) => ["runs", id] as const,
   runList: (projectId?: string) => ["runs", "list", projectId ?? null] as const,
+  runThread: (id: string) => ["runs", id, "thread"] as const,
   memory: ["memory"] as const,
   memoryList: (projectId?: string) => ["memory", projectId ?? null] as const,
   usage: ["usage"] as const,
@@ -113,7 +114,7 @@ export function useRun(id: string) {
 /** Prior turns of this run's session (the conversation so far). */
 export function useRunThread(id: string) {
   return useQuery({
-    queryKey: ["runs", id, "thread"],
+    queryKey: queryKeys.runThread(id),
     queryFn: () => getClient().getRunThread(id),
   });
 }
@@ -168,13 +169,13 @@ export function useCreateFollowUp(parentId: string) {
       getClient().createFollowUp(parentId, vars.brief, vars.files, vars.models),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.runs });
-      qc.invalidateQueries({ queryKey: ["runs", parentId, "thread"] });
+      qc.invalidateQueries({ queryKey: queryKeys.runThread(parentId) });
     },
   });
 }
 
-/** Revise a sent prompt into a new conversation branch. The backend owns the
- *  transcript cut: turns after the target cannot leak into the new context. */
+/** Replace a sent prompt inside its current conversation. The backend owns the
+ *  destructive suffix cut: removed turns cannot remain readable or reach model context. */
 export function useReviseRun() {
   const qc = useQueryClient();
   return useMutation({
@@ -184,6 +185,8 @@ export function useReviseRun() {
       files?: File[];
       models?: Record<string, string>;
     }) => getClient().reviseRun(vars.id, vars.brief, vars.files, vars.models),
+    // This prefix covers sidebar lists, removed run details, and every cached
+    // thread that could still contain the deleted suffix.
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
   });
 }

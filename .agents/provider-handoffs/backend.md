@@ -63,7 +63,47 @@ finished something.
 
 ---
 
-## Current checkpoint — safe revise-turn branching (2026-07-29)
+## Current checkpoint — revise edits same chat in place (2026-07-29)
+
+Owner rejected initial non-destructive branch behavior. Correct behavior is now
+implemented and verified:
+
+- `POST /runs/{id}/revise` keeps target `sessionId` and `projectId`.
+- Target's old prompt/response and every later effective turn become
+  user-inaccessible (`404`) and disappear from `/runs`, `/thread`, model
+  conversation, recall transcript, and inherited-file reseeding.
+- Revised turn's parent is last retained turn, or null when root was edited.
+- No discarded-turn hint reaches model. Only separately persisted project/account
+  memory remains eligible.
+- Superseded rows remain internal solely for already-spent token accounting, saved
+  memory, and security/decision audit provenance. Marker never enters public JSON.
+- Live descendants cancel and persist hidden. Atomic registration/write failure
+  leaves original chat unchanged.
+- Frontend copy explicitly warns response and later turns will be removed from same
+  conversation. Mock and cache invalidation match backend.
+- Initial accidental branch rows are left as legacy compatibility data; no unsafe
+  mass migration guesses which original root they replaced.
+
+Proof:
+
+- backend full suite: `1571 passed, 1 existing RestrictedPython warning`;
+- backend focused API suite: `143 passed`;
+- frontend full suite: `93 passed`; correction-focused: `20 passed`;
+- frontend typecheck, lint, production build passed;
+- invariant checker: 7 PASS, one existing network-permission WARN.
+
+All three active proposals (API correction, frontend correction, owner critique)
+are completed and archived. Preserve unrelated owner changes in `CLAUDE.md`,
+`frontend/CLAUDE.md`, and untracked logo asset.
+
+## Change note
+
+Initial implementation followed frontend proposal's “new branch, keep original”
+wording too literally. Owner meant destructive conversation truncation. Soft
+supersession delivers that user/model behavior without erasing billed usage,
+saved memory, or security provenance.
+
+## Previous checkpoint — rejected safe revise-turn branching (2026-07-29)
 
 Frontend's high-priority proposal is implemented and verified:
 

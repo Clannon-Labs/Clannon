@@ -53,9 +53,13 @@ describe("TurnPrompt", () => {
     const editor = screen.getByRole("textbox", { name: "Edit sent prompt" });
     expect(editor).toHaveValue("Research the original market question.");
     expect(
-      screen.getByText(/9 later turns stay in history but won't enter the new conversation/),
+      screen.getByText(/9 later turns will also be removed from this conversation/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Saved memory remains/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/removes this turn and its response, then replaces them with your edit/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Saved memory remains available/)).toBeInTheDocument();
+    expect(screen.queryByText(/new path|new conversation|stay in history/i)).not.toBeInTheDocument();
 
     fireEvent.change(editor, { target: { value: "Research the corrected market question." } });
     fireEvent.click(screen.getByRole("button", { name: "Restart from here" }));

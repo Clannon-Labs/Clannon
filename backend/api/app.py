@@ -397,10 +397,16 @@ async def follow_up_run(
         raise HTTPException(422, "Say a little more to continue.")
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
-    run = runs.STORE.create_followup(user.id, ask, parent)
-    run.session_models = session_models
-    # Match root-run ordering: registration is atomic with exposing the run.
-    run.task = asyncio.get_running_loop().create_task(runs.execute(run, input_files))
+    loop = asyncio.get_running_loop()
+    run = runs.STORE.create_followup(
+        user.id,
+        ask,
+        parent,
+        session_models=session_models,
+        start=lambda followup: loop.create_task(runs.execute(followup, input_files)),
+    )
+    if run is None:
+        raise HTTPException(404, "Run not found.")
     return {"id": run.id}
 
 
@@ -525,7 +531,9 @@ def list_memory(
             "runId": run.id,
             "projectId": run.project_id,
         }
-        for run in runs.STORE.list_for(user.id, projectId)
+        for run in runs.STORE.list_for(
+            user.id, projectId, include_superseded=True
+        )
         for i, write in enumerate(run.memory_writes)
     ]
     return wiki + episodic
@@ -672,7 +680,7 @@ def usage(user: auth.User = Depends(auth.current_user)) -> dict:
     window = settings.BUDGET.usage_metering_window_days   # D10: trailing window from config
     start = today - timedelta(days=window - 1)
     by_day = {(start + timedelta(days=i)).isoformat(): 0 for i in range(window)}
-    for r in runs.STORE.list_for(user.id):
+    for r in runs.STORE.list_for(user.id, include_superseded=True):
         try:
             day = datetime.fromisoformat(r.created_at).astimezone(timezone.utc).date().isoformat()
         except (TypeError, ValueError):

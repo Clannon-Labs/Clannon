@@ -71,9 +71,9 @@ export const appConfig = {
     runFeedback: "/runs/:id/feedback",
     /** Continue a run: spawns the next turn in the same session. */
     runFollowUp: "/runs/:id/followup",
-    /** Revise a sent prompt: starts a new branch from before that turn. */
+    /** Revise a sent prompt in place: replaces that turn and removes its suffix. */
     runRevision: "/runs/:id/revise",
-    /** All turns in the run's active lineage, oldest first. */
+    /** All retained turns in the run's conversation, oldest first. */
     runThread: "/runs/:id/thread",
     /** Delete a whole conversation (a session and all its turns). */
     session: "/sessions/:id",

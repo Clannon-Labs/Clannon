@@ -61,6 +61,7 @@ PERSISTED = {
     "completion_state",
     "completion_reason",
     "lineage_prefix",
+    "superseded",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -126,6 +127,7 @@ def _fully_populated_run() -> RunState:
     run.completion_state = "partial"
     run.completion_reason = "timeout"
     run.lineage_prefix = ["run_prefix01", "run_prefix02"]
+    run.superseded = True
     return run
 
 
@@ -162,7 +164,7 @@ def test_runstate_survives_persist_and_from_row(store):
     original = _fully_populated_run()
     store.persist(original)
 
-    restored = store.get(original.user_id, original.id)
+    restored = store.list_for(original.user_id, include_superseded=True)[0]
     assert restored is not None, "persisted run did not come back from get()"
 
     for name in PERSISTED:
@@ -178,7 +180,7 @@ def test_full_json_is_stable_across_a_round_trip(store):
     before = original.full_json()
 
     store.persist(original)
-    restored = store.get(original.user_id, original.id)
+    restored = store.list_for(original.user_id, include_superseded=True)[0]
 
     assert restored.full_json() == before
 
@@ -189,12 +191,13 @@ def test_get_is_owner_scoped_after_persist(store):
     original = _fully_populated_run()
     store.persist(original)
 
-    assert store.get("someone_else", original.id) is None
-    assert store.get(original.user_id, original.id) is not None
+    assert store.list_for("someone_else", include_superseded=True) == []
+    assert store.get(original.user_id, original.id) is None
+    assert store.list_for(original.user_id, include_superseded=True)[0].id == original.id
 
 
-def test_existing_database_migrates_nullable_lineage_column(tmp_path, monkeypatch):
-    """Pre-branch SQLite files gain the new nullable prefix without data loss."""
+def test_existing_database_migrates_lineage_and_supersession_columns(tmp_path, monkeypatch):
+    """Old SQLite files gain revision metadata without hiding existing runs."""
     import sqlite3
 
     from api import auth, config
@@ -220,8 +223,10 @@ def test_existing_database_migrates_nullable_lineage_column(tmp_path, monkeypatc
     with auth._db() as db:
         columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
         row = db.execute(
-            "SELECT lineage_prefix_json FROM runs WHERE id='run_old'"
+            "SELECT lineage_prefix_json, superseded FROM runs WHERE id='run_old'"
         ).fetchone()
 
     assert "lineage_prefix_json" in columns
     assert row["lineage_prefix_json"] is None
+    assert "superseded" in columns
+    assert row["superseded"] == 0
