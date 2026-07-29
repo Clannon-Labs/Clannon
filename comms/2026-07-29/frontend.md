@@ -15,3 +15,15 @@ desktop + 390px browser proof green.
 `proposals/to-backend/2026-07-29_revise-turn-branch-contract.md`. Need
 `POST /runs/:id/revise` before real HTTP flow is complete. Frontend adapter is
 ready; no benchmark score increase claimed.
+
+## 22:40 — owner-selected logo system deployed
+
+Chose `Clannon_latest_logo.png` over purple C: more ownable symbol, complete
+lockup system, better fit with current monochrome/green product.
+
+Split source sheet without resampling into primary, symbol, and reversed/dark
+assets. Primary now owns wordmark surfaces; symbol owns UI marks and app icon;
+reversed lockup owns social card. Dark-mode inversion follows Clannon's explicit
+root theme class. TypeScript, zero-warning ESLint, Vitest 92/92, isolated
+production build, byte comparison, and desktop/mobile visual review green.
+Benchmark stays 84.16; identity improvement does not close a scored journey gap.

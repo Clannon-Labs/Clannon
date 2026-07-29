@@ -1,19 +1,15 @@
 /**
  * Brand mark — the ONE place to swap the product logo/icon.
  *
- * Generating several candidates? Drop them in `public/brand/` and change
- * `icon` (and optionally `wordmark`) below. Every surface that shows the
- * mark — marketing header, app sidebar, auth panel, loading states, the
- * footer — reads from here, so a single edit reskins the whole product.
+ * Brand assets live in `public/brand/`. Every surface that shows the mark —
+ * marketing header, app sidebar, auth panel, loading states, and footer —
+ * reads from here, so a single edit reskins the whole product.
  *
  * Coverage:
  *   - Every React surface (header, sidebar, auth, loading, footer) → swaps
  *     automatically from `icon` / `wordmark` below.
- *   - The social card (`src/app/opengraph-image.tsx`) draws the built-in
- *     geometry from here, so it tracks tweaks to the drawn mark.
- *   - The favicon (`src/app/icon.svg`) is a static file and is the one place
- *     that does NOT auto-follow: when you settle on a custom icon, replace
- *     `icon.svg` too (and the OG card if it should show the custom art).
+ *   - The social card uses the reversed lockup directly.
+ *   - The app icon is a static dark treatment of the symbol.
  */
 
 export type BrandIcon = "builtin" | (string & {});
@@ -21,18 +17,21 @@ export type BrandIcon = "builtin" | (string & {});
 export const brandConfig = {
   /**
    * "builtin"        → the hand-drawn ring mark (BUILTIN_MARK_RINGS below)
-   * "/brand/foo.svg" → your generated icon under public/ (svg or png)
+   * "/brand/foo.png" → a custom icon under public/
    */
-  icon: "builtin" as BrandIcon,
+  icon: "/brand/clannon-logo-symbol.png" as BrandIcon,
 
   /**
    * Optional single-asset wordmark (icon + name baked together). When null,
    * the Wordmark renders the icon next to the site name in the display face.
    */
-  wordmark: null as string | null,
+  wordmark: "/brand/clannon-logo-primary.png" as string | null,
 
   /** Alt text used when a custom raster icon is rendered. */
   alt: "Clannon",
+
+  /** Monochrome black artwork becomes white against the dark theme. */
+  invertOnDark: true,
 };
 
 /**

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element --
-   the mark swaps to a user-supplied brand asset (brand.config); next/image
-   is overkill for a tiny logo and would force loader config on every swap. */
+   brand.config can swap these public assets at runtime. Serving the original
+   PNG also avoids recompressing fine logo edges through the image optimizer. */
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site.config";
 import {
@@ -23,7 +23,13 @@ export function Mark({ className }: { className?: string }) {
         src={brandConfig.icon}
         alt=""
         aria-hidden="true"
-        className={cn("size-7 object-contain", className)}
+        width={305}
+        height={298}
+        className={cn(
+          "size-7 object-contain",
+          brandConfig.invertOnDark && "[html.dark_&]:invert",
+          className,
+        )}
       />
     );
   }
@@ -54,7 +60,13 @@ export function Wordmark({ className }: { className?: string }) {
       <img
         src={brandConfig.wordmark}
         alt={brandConfig.alt}
-        className={cn("h-7 w-auto object-contain", className)}
+        width={1027}
+        height={291}
+        className={cn(
+          "h-7 w-auto object-contain",
+          brandConfig.invertOnDark && "[html.dark_&]:invert",
+          className,
+        )}
       />
     );
   }

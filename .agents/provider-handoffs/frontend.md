@@ -6,6 +6,37 @@ Transfers live frontend work between Claude Code and Codex.
 
 - Provider: Codex
 - Updated: 2026-07-29
+- Task: choose between two owner-supplied logo candidates, split chosen sheet,
+  and deploy each variant where it fits
+- Choice: `Clannon_latest_logo.png`; stronger, more ownable system than generic
+  purple C, and monochrome treatment fits existing product palette
+- Built: pixel-preserving crops under `assets/brand/` — primary lockup
+  1027x291, symbol 305x298, reversed/dark 491x461. Sheet background alone made
+  transparent; no resampling. Exact copies live in `frontend/public/brand/`.
+- Placement: primary lockup drives every `Wordmark`; symbol drives every `Mark`
+  plus a dark app icon; reversed lockup drives generated Open Graph image.
+  Explicit root-theme inversion keeps monochrome assets readable in dark mode.
+- Verification: TypeScript, zero-warning ESLint, Vitest 92/92, isolated Next
+  production build, root/public asset byte comparison, desktop/light,
+  desktop/dark, mobile/dark, and 1200x630 social-card visual review. Evidence:
+  `frontend/previews/2026-07-29_logo-refresh/`.
+- Honest benchmark: remains 84.16. Brand replacement improves identity
+  consistency but does not close a scored product-journey gap.
+- Worktree: preserve unrelated backend/root/frontend launcher changes. The
+  unused `assets/Clannon Labs.png` candidate remains an untracked owner input;
+  chosen sheet is retained as `assets/brand/clannon-logo-source-sheet.png`.
+
+## Change note
+
+Owner supplied two logo directions. Latest sheet won on distinctiveness and
+fit. Crops preserve source pixels; frontend now uses one-door brand config,
+appropriate per-surface variants, and a legible dark treatment instead of
+forcing one raster into every context.
+
+## Previous checkpoint
+
+- Provider: Codex
+- Updated: 2026-07-29
 - Task: owner critique — sent prompts need stable Copy/Edit actions; editing an
   earlier turn must restart from its prefix and exclude later turns from context
 - State: frontend implementation complete, mock/browser-proven, committed and

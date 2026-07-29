@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="7" fill="#0c120d"/>
-  <g transform="translate(4 4) scale(0.75)">
-    <circle cx="16" cy="16" r="1.8" fill="#6fb583"/>
-    <circle cx="16" cy="16" r="5.5" stroke="#6fb583" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="26.5 8" transform="rotate(-40 16 16)"/>
-    <circle cx="16" cy="16" r="9.75" stroke="#6fb583" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="49 12.5" transform="rotate(75 16 16)"/>
-    <circle cx="16" cy="16" r="14" stroke="#6fb583" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="71 17" transform="rotate(195 16 16)"/>
-  </g>
-</svg>
