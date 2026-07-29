@@ -102,6 +102,7 @@ def _batch_registry() -> dict:
             domain="research",
             expert_keys=frozenset({"research.investigate"}),
             tool_keys=frozenset({"research.read"}),
+            system_prompt="test scoped batch prompt",
             grants=frozenset({PermissionLevel.READ}),
         ),
     }
@@ -131,7 +132,10 @@ def _offered_names(caps, model) -> list[str]:
     def spy(messages, info):
         offered.extend(t.name for t in info.function_tools)
         out = info.output_tools[0]
-        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "done", "confidence": 0.5})])
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name,
+            args={"answer_text": "done", "presentation": "chat", "confidence": 0.5},
+        )])
 
     asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
@@ -218,10 +222,14 @@ def test_spawn_batch_end_to_end_buffers_full_findings_and_returns_brief_summary(
         if calls["n"] == 2:
             out = info.output_tools[0]
             return ModelResponse(parts=[ToolCallPart(
-                tool_name=out.name, args={"answer_text": full_report, "confidence": 0.8})])
+                tool_name=out.name,
+                args={"answer_text": full_report, "presentation": "chat", "confidence": 0.8},
+            )])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "central final answer", "confidence": 0.9})])
+            tool_name=out.name,
+            args={"answer_text": "central final answer", "presentation": "chat", "confidence": 0.9},
+        )])
 
     result = asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
@@ -269,7 +277,10 @@ def test_spawn_batch_records_active_then_done_with_a_stable_batch_id():
                 tool_name=tool.name, args={"batch_key": "research", "task": "investigate the thing"})])
         out = info.output_tools[0]
         text = "batch answer" if calls["n"] == 2 else "central final answer"
-        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": text, "confidence": 0.6})])
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name,
+            args={"answer_text": text, "presentation": "chat", "confidence": 0.6},
+        )])
 
     asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
@@ -315,7 +326,10 @@ def test_cross_batch_awareness_folded_into_batch_task_prompt():
                         p.content for p in m.parts if isinstance(p, UserPromptPart) and isinstance(p.content, str)
                     )
         out = info.output_tools[0]
-        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "ok", "confidence": 0.6})])
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name,
+            args={"answer_text": "ok", "presentation": "chat", "confidence": 0.6},
+        )])
 
     asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
@@ -346,7 +360,9 @@ def test_spawn_batch_records_failed_status_when_the_batch_turn_raises():
             raise RuntimeError("batch model exploded")
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "central final answer", "confidence": 0.9})])
+            tool_name=out.name,
+            args={"answer_text": "central final answer", "presentation": "chat", "confidence": 0.9},
+        )])
 
     result = asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer, model=FunctionModel(spy),
@@ -411,7 +427,10 @@ def test_spawn_batch_mints_a_distinct_batch_id_per_invocation():
         async def one_call():
             def spy(messages, info):
                 out = info.output_tools[0]
-                return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "ok", "confidence": 0.5})])
+                return ModelResponse(parts=[ToolCallPart(
+                    tool_name=out.name,
+                    args={"answer_text": "ok", "presentation": "chat", "confidence": 0.5},
+                )])
             await handler.spawn_batch("research", "task", _ctx(mission_id="m1"), model=FunctionModel(spy))
 
         await one_call()

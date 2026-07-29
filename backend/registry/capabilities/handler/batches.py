@@ -12,16 +12,11 @@ never accepts a `batch_registry` — only `Capabilities.open()` does. So a
 batch's own scoped `Capabilities` always has `_batches=None` and never offers
 `spawn_batch` to its own model. A batch cannot spawn a batch.
 
-Batch membership (`batch_key` -> its expert/tool key set) is NOT built here —
-`BatchHandler` starts with an empty registry until backend places
-`config/backend/batches.yaml` (ratified, not yet built: no concrete batch has
-been proposed yet, per the design's §H decomposition discipline). It takes the
-registry as a plain `dict[str, BatchDefinition]` injected at construction —
-the mechanism is complete and tested today; it starts inert (no batch_key
-resolves to anything) until a real entry exists, at which point `spawn_batch`
-appears on the model's tool list automatically (see `support.
-build_orchestrator_tools`'s non-empty-registry gate) with no further code
-change here.
+Batch membership (`batch_key` -> its expert/tool key set) and the batch system
+prompt arrive together as `BatchDefinition`s from `registry.config.batches`.
+That loader resolves prompt content through PromptRegistry, including the
+trusted overlay. The concrete `engineering` batch is configured today; an empty
+injected registry still keeps `spawn_batch` off the model's tool list.
 """
 
 from __future__ import annotations
@@ -47,20 +42,15 @@ _AWARENESS_HEADLINE_MAX_CHARS = 200   # matches BatchAwarenessItem's "single-lin
 
 @dataclass(frozen=True, slots=True)
 class BatchDefinition:
-    """One batch's scope -- what `Capabilities.scoped_to()` is built from. The
-    plain-mapping shape `config/backend/batches.yaml` will eventually load into
-    (backend's seam); constructed directly here and in tests until then."""
+    """One batch's scope and registry-resolved prompt."""
     domain: str   # the batch's stable identity for cross-batch awareness (e.g. "engineering");
                   # distinct from the per-invocation batch_id spawn_batch mints (b1-item-3 design, §2/§3)
     expert_keys: frozenset[str]
     tool_keys: frozenset[str]
+    system_prompt: str
     grants: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
     allow_memory_write: bool = False   # ratified default-excludes-remember posture (design v2 §C)
     grants_graph: bool = False   # CB2 code-symbol tier opt-in (ratified 2026-07-26) — per-batch, not blanket
-    system_prompt: str = (
-        "You are a scoped batch orchestrator working one sub-task of a larger mission. "
-        "Use only the experts/tools you have been granted. Answer only the task given to you."
-    )
 
 
 def _with_awareness_context(task: str, awareness: CrossBatchAwareness) -> str:

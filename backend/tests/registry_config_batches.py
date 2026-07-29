@@ -13,6 +13,7 @@ import pytest
 
 from foundation import ConfigError
 from registry.config.batches import _load_batches
+from registry.config.prompts import PromptRegistry
 
 
 def _write(tmp_path, text: str):
@@ -97,6 +98,34 @@ engineering:
     definition = batches["engineering"]
     assert definition.domain == "engineering"
     assert definition.expert_keys == frozenset({"code.engineer"})
+
+
+def test_loader_injects_overlay_resolved_registry_prompt(tmp_path):
+    base = tmp_path / "prompts"
+    overlay = tmp_path / "prompts.secure"
+    (base / "batch_orchestrator").mkdir(parents=True)
+    (overlay / "batch_orchestrator").mkdir(parents=True)
+    (base / "registry.yaml").write_text(
+        "batch_orchestrator:\n"
+        "  version: 1\n"
+        "  file: batch_orchestrator/system.md\n"
+        "  locked: false\n",
+        encoding="utf-8",
+    )
+    (base / "batch_orchestrator" / "system.md").write_text("BASE BATCH", encoding="utf-8")
+    (overlay / "batch_orchestrator" / "system.md").write_text("OVERLAY BATCH", encoding="utf-8")
+    prompts = PromptRegistry.from_dir(base, overlay_dir=overlay)
+    path = _write(tmp_path, """
+engineering:
+  domain: engineering
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read]
+  grants: [read]
+""")
+
+    definition = _load_batches(path, prompt_registry=prompts)["engineering"]
+
+    assert definition.system_prompt == "OVERLAY BATCH"
 
 
 def test_empty_file_yields_no_batches(tmp_path):

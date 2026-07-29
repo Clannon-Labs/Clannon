@@ -71,7 +71,8 @@ def test_orchestrator_loop_is_bounded_at_cap():
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
             tool_name=out.name,
-            args={"answer_text": "forced by turn cap", "confidence": 0.3})])
+            args={"answer_text": "forced by turn cap", "presentation": "chat", "confidence": 0.3},
+        )])
 
     caps = _caps()
 

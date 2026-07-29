@@ -29,10 +29,15 @@ verifier:
   locked: true
 
 orchestrator:
-  version: 3
+  version: 5
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
   about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
+
+batch_orchestrator:
+  version: 1
+  file: batch_orchestrator/system.md
+  locked: false   # internal scoped behavior; overlay-aware, not a security boundary
 
 filter:
   version: 1
@@ -58,4 +63,3 @@ memory_contradiction:
   version: 1
   file: memory/contradiction.md
   locked: false   # §3.2 contradiction judge — behavior, not a security boundary
-

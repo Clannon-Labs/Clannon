@@ -180,7 +180,9 @@ def test_run_turn_offers_only_the_scoped_capability_set_to_the_model():
         offered_names.extend(t.name for t in info.function_tools)
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "done", "confidence": 0.5})])
+            tool_name=out.name,
+            args={"answer_text": "done", "presentation": "chat", "confidence": 0.5},
+        )])
 
     asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer,
@@ -207,7 +209,9 @@ def test_scoped_capabilities_can_opt_back_into_memory_write():
         offered_names.extend(t.name for t in info.function_tools)
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "done", "confidence": 0.5})])
+            tool_name=out.name,
+            args={"answer_text": "done", "presentation": "chat", "confidence": 0.5},
+        )])
 
     asyncio.run(caps.run_turn(
         system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer,

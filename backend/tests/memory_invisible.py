@@ -39,7 +39,7 @@ class _FakeCaps:
         if on_event:
             await on_event({"tool": "memory.search", "args": {"query": "x"}})
             await on_event({"tool": "search.web", "args": {"query": "y"}})
-        return output_type(answer_text="done", confidence=0.9)
+        return output_type(answer_text="done", presentation="chat", confidence=0.9)
 
 
 class _FakeLog:
@@ -73,7 +73,7 @@ class _RecallCaps:
     async def run_turn(self, *, output_type, on_event=None, on_message=None, **kw):
         if on_event:
             await on_event({"tool": "recall", "args": {"query": "the q3 budget"}})
-        return output_type(answer_text="done", confidence=0.9)
+        return output_type(answer_text="done", presentation="chat", confidence=0.9)
 
 
 def test_recall_event_lifts_query_to_meta_for_clean_rendering():

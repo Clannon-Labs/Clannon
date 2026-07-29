@@ -356,11 +356,13 @@ def test_engineering_batch_indexes_symbols_end_to_end_when_grants_graph_opts_in(
         if calls["n"] == 5:
             out = info.output_tools[0]
             return ModelResponse(parts=[ToolCallPart(
-                tool_name=out.name, args={"answer_text": "foo.py written", "confidence": 0.8},
+                tool_name=out.name,
+                args={"answer_text": "foo.py written", "presentation": "chat", "confidence": 0.8},
             )])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "done", "confidence": 0.9},
+            tool_name=out.name,
+            args={"answer_text": "done", "presentation": "chat", "confidence": 0.9},
         )])
 
     model = FunctionModel(spy)

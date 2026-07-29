@@ -14,8 +14,10 @@ import yaml
 
 from foundation import ConfigError, PermissionLevel, get_root
 from registry.capabilities.handler import BatchDefinition
+from registry.config.prompts import PromptRegistry, load_prompt_registry
 
 DEFAULT_BATCHES_PATH = get_root() / "batches.yaml"
+_BATCH_PROMPT_NAME = "batch_orchestrator"
 
 # Config can tighten a defense, never silently loosen one (D7/D8 discipline):
 # a batches.yaml edit alone must not be able to hand a batch egress or elevated
@@ -24,7 +26,23 @@ DEFAULT_BATCHES_PATH = get_root() / "batches.yaml"
 _FORBIDDEN_GRANTS = frozenset({PermissionLevel.NETWORK, PermissionLevel.ELEVATED})
 
 
-def _load_batches(path: str | Path) -> dict[str, BatchDefinition]:
+def _load_batches(
+    path: str | Path,
+    *,
+    prompt_registry: PromptRegistry | None = None,
+) -> dict[str, BatchDefinition]:
+    """Load batch definitions with the overlay-resolved registry prompt.
+
+    `prompt_registry` is injectable for hermetic tests. Production uses the
+    same cached PromptRegistry as every other LLM layer, so the trusted prompt
+    overlay applies to batches without a second resolution path.
+    """
+    prompts = prompt_registry or load_prompt_registry()
+    system_prompt = prompts.get(_BATCH_PROMPT_NAME).text
+    return _parse_batches(path, system_prompt=system_prompt)
+
+
+def _parse_batches(path: str | Path, *, system_prompt: str) -> dict[str, BatchDefinition]:
     config_path = Path(path)
     try:
         with config_path.open("r", encoding="utf-8") as file:
@@ -58,6 +76,7 @@ def _load_batches(path: str | Path) -> dict[str, BatchDefinition]:
                 domain=str(entry["domain"]),
                 expert_keys=frozenset(str(k) for k in entry.get("expert_keys", [])),
                 tool_keys=frozenset(str(k) for k in entry.get("tool_keys", [])),
+                system_prompt=system_prompt,
                 grants=grants,
                 grants_graph=bool(entry.get("grants_graph", False)),
             )
@@ -70,9 +89,12 @@ def load_batches(path: str | Path = DEFAULT_BATCHES_PATH) -> dict[str, BatchDefi
     """Convenience loader for wiring.py — cached so hot-path startup doesn't
     re-read batches.yaml on every request. Tests that change batch config at
     runtime should call cache_clear() on this function."""
-    return _cached_load_batches(str(Path(path)))
+    prompt = load_prompt_registry().get(_BATCH_PROMPT_NAME)
+    return _cached_load_batches(str(Path(path)), prompt.text)
 
 
 @lru_cache(maxsize=8)
-def _cached_load_batches(path: str) -> dict[str, BatchDefinition]:
-    return _load_batches(path)
+def _cached_load_batches(path: str, system_prompt: str) -> dict[str, BatchDefinition]:
+    # Prompt text is part of the cache key. An operator-selected overlay can
+    # therefore never inherit a BatchDefinition cached from baseline content.
+    return _parse_batches(path, system_prompt=system_prompt)

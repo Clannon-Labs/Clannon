@@ -143,7 +143,7 @@ benefit-backed proposal.
 |---|---|
 | **backend** (coordinator) | existing-system hardening; Redis-budget design/review; foundation/config seams; review + integrate + push; dispatch workers |
 | **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + provenance + supersession linkage (`valid_at` typing is DONE) |
-| **orchestration** | workspace-race hardening; then Mission Engine + batch orchestrator, propose-first |
+| **orchestration** | central/batch prompt contracts landed; continue Mission Engine + batch hardening, propose-first where owner-gated |
 | **security** | standing invariant review of budget/batch designs; widen adversarial regression coverage when new classes appear |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
 | **frontend** | its own backlog; `HANDOFF.md` in `frontend/` |

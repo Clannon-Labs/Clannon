@@ -34,6 +34,7 @@ from foundation import BatchLifecycleStatus, CrossBatchAwareness, VrakshaContext
 from registry.capabilities import discover
 from registry.capabilities.handler import Capabilities
 from registry.config.batches import load_batches
+from registry.config.prompts import get_prompt
 from core.orchestrator.schemas import OrchestratorAnswer
 
 
@@ -80,6 +81,7 @@ def test_engineering_batch_config_loads_and_activates_spawn_batch():
     definition = caps._batches._batch_registry["engineering"]
     assert definition.expert_keys == frozenset({"code.engineer"})
     assert definition.tool_keys == frozenset({"fs.read", "fs.write", "fs.patch", "code.run", "code.ast_search", "code.dep_graph"})
+    assert definition.system_prompt == get_prompt("batch_orchestrator").text
 
 
 def test_engineering_batch_end_to_end_spawns_runs_code_engineer_records_awareness():
@@ -125,12 +127,14 @@ def test_engineering_batch_end_to_end_spawns_runs_code_engineer_records_awarenes
             # the batch's own turn: final OrchestratorAnswer
             out = info.output_tools[0]
             return ModelResponse(parts=[ToolCallPart(
-                tool_name=out.name, args={"answer_text": "hello.txt written with 'hi'", "confidence": 0.8},
+                tool_name=out.name,
+                args={"answer_text": "hello.txt written with 'hi'", "presentation": "chat", "confidence": 0.8},
             )])
         # central orchestrator: final answer
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "done: hello.txt created", "confidence": 0.9},
+            tool_name=out.name,
+            args={"answer_text": "done: hello.txt created", "presentation": "chat", "confidence": 0.9},
         )])
 
     model = FunctionModel(spy)
@@ -187,7 +191,8 @@ def test_engineering_batch_records_failed_on_a_real_model_fault_and_central_stil
         # central orchestrator's own next turn, after spawn_batch reports failure
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "batch failed, reporting", "confidence": 0.2},
+            tool_name=out.name,
+            args={"answer_text": "batch failed, reporting", "presentation": "chat", "confidence": 0.2},
         )])
 
     model = FunctionModel(spy)
@@ -249,11 +254,13 @@ def test_engineering_batch_code_engineer_reads_a_slice_and_patches_it():
         if calls["n"] == 7:
             out = info.output_tools[0]
             return ModelResponse(parts=[ToolCallPart(
-                tool_name=out.name, args={"answer_text": "patched a.py", "confidence": 0.8},
+                tool_name=out.name,
+                args={"answer_text": "patched a.py", "presentation": "chat", "confidence": 0.8},
             )])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "done: a.py patched", "confidence": 0.9},
+            tool_name=out.name,
+            args={"answer_text": "done: a.py patched", "presentation": "chat", "confidence": 0.9},
         )])
 
     model = FunctionModel(spy)
