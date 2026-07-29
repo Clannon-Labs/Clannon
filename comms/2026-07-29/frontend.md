@@ -27,3 +27,14 @@ reversed lockup owns social card. Dark-mode inversion follows Clannon's explicit
 root theme class. TypeScript, zero-warning ESLint, Vitest 92/92, isolated
 production build, byte comparison, and desktop/mobile visual review green.
 Benchmark stays 84.16; identity improvement does not close a scored journey gap.
+
+## 22:50 — Dependabot OOM alert fixed
+
+Dependabot 21 traced to dev-only `eslint -> minimatch@3 -> brace-expansion`.
+Raised override floor from 1.1.16 to official 1.1.17 security backport and
+regenerated lockfile. Fresh `npm ci` resolves patched version; 1,500-group
+regression probe stays under 100,000-character budget. Production audit zero;
+TypeScript, ESLint, Vitest 92/92 green.
+
+GitHub advisory metadata still names only 5.0.8 as patched, so alert closure may
+lag even though upstream 1.1.17 explicitly backports GHSA-mh99-v99m-4gvg.

@@ -6,6 +6,32 @@ Transfers live frontend work between Claude Code and Codex.
 
 - Provider: Codex
 - Updated: 2026-07-29
+- Task: fix Dependabot alert 21, `brace-expansion` OOM DoS in frontend lockfile
+- State: fixed with official `brace-expansion@1.1.17` 1.x security backport;
+  override floor raised and lockfile regenerated. Dependency is dev-only under
+  `eslint -> minimatch@3`, not shipped application runtime.
+- Evidence: clean fresh `npm ci` resolves 1.1.17; exact regression probe with
+  1,500 chained brace groups and `maxLength: 100000` returns 99,000 total
+  characters instead of unbounded allocation. Production audit reports zero.
+- Verification: TypeScript, zero-warning ESLint, Vitest 92/92, `npm ls`, fresh
+  lock install, security regression probe.
+- Advisory caveat: GitHub/npm advisory metadata still lists only 5.0.8 as
+  patched and therefore may keep alert/audit red temporarily. Upstream tag
+  `v1.1.17` explicitly backports GHSA-mh99-v99m-4gvg and contains its bounds.
+- Honest benchmark: remains 84.16; dependency security maintenance, no scored
+  journey change.
+
+## Change note
+
+Dependabot finding was real but development-only. Avoided incompatible forced
+upgrade from CommonJS `brace-expansion@1` to changed v5 API. Used official v1
+backport released today, then proved both fresh-install resolution and actual
+memory bound rather than trusting version metadata alone.
+
+## Previous checkpoint
+
+- Provider: Codex
+- Updated: 2026-07-29
 - Task: choose between two owner-supplied logo candidates, split chosen sheet,
   and deploy each variant where it fits
 - Choice: `Clannon_latest_logo.png`; stronger, more ownable system than generic
