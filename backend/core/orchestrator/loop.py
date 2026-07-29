@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 
-import settings
 from foundation import (
     HydrationPackage,
     HydrationRequest,
@@ -85,46 +84,27 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     )
 
     await ports.log.emit(DecisionLogEntry(kind="answer", message=answer.answer_text))
-    message, deliverable = _split_message_and_deliverable(answer, ctx)
     return OrchestratorResponse(
-        text=deliverable,
-        message=message,
+        text=_resolve_response_text(answer, ctx),
+        presentation=answer.presentation,
+        message=ctx.assistant_message or "",
         confidence=answer.confidence,
         finding_refs=[f.ref for f in ctx.expert_findings],
     )
 
 
-def _resolve_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str:
-    """The response text: a referenced expert artifact (full report, never seen by
-    the orchestrator's model) when one is named, else the model's own answer."""
-    if answer.deliverable_ref:
+def _resolve_response_text(answer: OrchestratorAnswer, ctx: VrakshaContext) -> str:
+    """Return filter input selected only by explicit presentation intent.
+
+    Chat always keeps the model's `answer_text`, including when tool work produced
+    a separate file. Reports may replace it with a referenced full artifact that
+    never transited the orchestrator's context.
+    """
+    if answer.presentation == "report" and answer.deliverable_ref:
         for finding in ctx.expert_findings:
             if finding.ref == answer.deliverable_ref and finding.full_content:
                 return finding.full_content
     return answer.answer_text
-
-
-def _split_message_and_deliverable(answer: OrchestratorAnswer, ctx: VrakshaContext) -> tuple[str, str]:
-    """Split a turn into (conversational message, deliverable) — the two channels the UI renders
-    separately (the chat bubble vs the deliverable card). They must NOT bleed into each other: a
-    generated document never belongs in the chat, and chat commentary never belongs in the document.
-
-    - `message` = what the orchestrator streamed via `say()`: short conversational notes only.
-    - `deliverable` = the referenced expert artifact, or the model's own answer text.
-
-    When the orchestrator said a note (`say()`), that note is the chat and the answer/artifact is the
-    deliverable — a generated document never lands in the chat bubble. With NO `say()`, a SHORT
-    tool-free answer is a plain conversational reply (greeting, quick answer) and IS the chat bubble;
-    a LONGER one — or any answer backed by an artifact/findings — is a generated deliverable and is
-    routed to the deliverable channel, never dumped into the chat.
-    """
-    deliverable = _resolve_deliverable(answer, ctx)
-    message = ctx.assistant_message or ""
-    if message:
-        return message, deliverable          # said a note → chat; the answer/artifact is the deliverable
-    if not answer.deliverable_ref and not ctx.expert_findings and len(deliverable) <= settings.ORCHESTRATOR.chat_reply_max_chars:
-        return deliverable, ""               # a short, direct conversational reply IS the chat
-    return message, deliverable              # a document / artifact-backed answer → deliverable only
 
 
 async def _sync_mission_state(ports: Ports, ctx: VrakshaContext):

@@ -82,10 +82,9 @@ _NEEDS_REVIEWER_PATH = pathlib.Path(__file__).parent / "needs_reviewer_c6_split.
 class _FakeCaps:
     """Fake capability door.
 
-    Emits one tool-call event (search.web) and buffers one expert finding so the
-    response routes through the deliverable channel (not the short-reply chat
-    bubble path).  Returns a canned OrchestratorAnswer that references the finding.
-    No model, no network.
+    Emits one tool-call event (search.web), buffers one expert finding, and
+    returns an explicit report answer that references the finding. No model,
+    no network.
     """
 
     def __init__(self, ctx):
@@ -112,6 +111,7 @@ class _FakeCaps:
         )
         return OrchestratorAnswer(
             answer_text="Lean summary for the decision log.",
+            presentation="report",
             confidence=0.85,
             deliverable_ref="r1",
         )

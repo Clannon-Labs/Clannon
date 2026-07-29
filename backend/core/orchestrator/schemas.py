@@ -24,12 +24,23 @@ class OrchestratorAnswer(BaseModel):
     it has used whatever tools/experts it needed. The loop maps this to the
     cross-stage OrchestratorResponse (adding finding refs from ctx).
 
-    `deliverable_ref` lets a full expert artifact (e.g. a synthesized report) BE
-    the response without transiting the orchestrator's context: when set, the
-    loop swaps that finding's full content in as the response text and
-    `answer_text` serves as the lean summary for the decision log.
+    For `report` presentation, `deliverable_ref` lets a full expert artifact
+    (e.g. a synthesized report) BE the response without transiting the
+    orchestrator's context. For `chat`, the loop keeps `answer_text` as the
+    response even when a generated artifact is referenced.
     """
     answer_text: str
+    presentation: Literal["chat", "report"] = Field(
+        description=(
+            "How the filtered final answer should render. Use 'chat' for ordinary "
+            "conversation, including long or technical answers and answers produced "
+            "with tools, experts, or separate generated files. Use 'report' only when "
+            "the final answer itself should be an inline report sheet because the user "
+            "requested one or the task genuinely needs one. Never choose from answer "
+            "length, Markdown, technical depth, tool/expert use, deliverable_ref, "
+            "generated artifacts, or whether say() was called."
+        ),
+    )
     confidence: float = 0.0
     deliverable_ref: str = ""
 

@@ -38,23 +38,37 @@ class _FakeCaps:
         self.ctx.expert_findings.append(
             ExpertFindings(expert="web.research", ref="r1", full_content="full")
         )
-        return OrchestratorAnswer(answer_text="done", confidence=0.7)
+        return OrchestratorAnswer(
+            answer_text="done",
+            presentation="chat",
+            confidence=0.7,
+        )
 
 
 def _ports(ctx):
     return Ports(memory=MemoryManager(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
 
 
-def test_run_loop_maps_answer_logs_and_links_findings():
+def test_chat_with_findings_and_tool_work_stays_chat():
     ctx = VrakshaContext.new("s")
     resp = asyncio.run(loop_mod.run_loop(_norm(), _ports(ctx), ctx))
 
     assert isinstance(resp, OrchestratorResponse)
     assert resp.text == "done" and resp.confidence == 0.7
+    assert resp.presentation == "chat"
+    assert resp.message == ""
     assert resp.finding_refs == ["r1"]                      # linked from ctx.expert_findings
     kinds = [e.kind for e in ctx.decision_log]
     assert "tool_call" in kinds and "answer" in kinds
     assert "hydration" not in kinds                         # memory is INVISIBLE — no hydration notice
+
+
+def test_presentation_is_required_and_documents_routing_contract():
+    field = OrchestratorAnswer.model_fields["presentation"]
+
+    assert field.is_required()
+    assert "ordinary conversation" in (field.description or "")
+    assert "Never choose from answer length" in (field.description or "")
 
 
 class _SayingCaps:
@@ -68,7 +82,11 @@ class _SayingCaps:
     async def run_turn(self, *, system_prompt, user_prompt, output_type, on_message=None, **kw):
         if on_message is not None:
             await on_message(self.note)
-        return OrchestratorAnswer(answer_text="answer body", confidence=0.5)
+        return OrchestratorAnswer(
+            answer_text="answer body",
+            presentation="report",
+            confidence=0.5,
+        )
 
 
 def test_run_loop_resets_say_voice_across_revisions():
@@ -114,7 +132,10 @@ def test_run_turn_routes_a_tool_call_through_the_guard():
             called["done"] = True
             return ModelResponse(parts=[ToolCallPart(tool_name="math_calculator", args={"expression": "2+2"})])
         out = info.output_tools[0]
-        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": "4", "confidence": 0.9})])
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name,
+            args={"answer_text": "4", "presentation": "chat", "confidence": 0.9},
+        )])
 
     caps = _caps()
     ans = asyncio.run(caps.run_turn(
@@ -161,7 +182,9 @@ def test_run_turn_graceful_forced_answer_at_cap():
                 tool_name="remember", args={"content": "note"})])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
-            tool_name=out.name, args={"answer_text": "forced", "confidence": 0.4})])
+            tool_name=out.name,
+            args={"answer_text": "forced", "presentation": "chat", "confidence": 0.4},
+        )])
 
     caps = _caps()
     ans = asyncio.run(caps.run_turn(
@@ -179,27 +202,49 @@ def test_run_turn_graceful_forced_answer_at_cap():
 class _ReportCaps(_FakeCaps):
     """Returns an answer that points at a buffered artifact instead of restating it."""
 
-    def __init__(self, ctx, ref):
+    def __init__(self, ctx, ref, presentation="report"):
         super().__init__(ctx)
         self.ref = ref
+        self.presentation = presentation
 
     async def run_turn(self, *, system_prompt, user_prompt, output_type, on_event=None, **kw):
         self.ctx.expert_findings.append(
             ExpertFindings(expert="synthesis.writer", ref="w1", full_content="THE FULL REPORT")
         )
-        return OrchestratorAnswer(answer_text="lean summary", confidence=0.9, deliverable_ref=self.ref)
+        return OrchestratorAnswer(
+            answer_text="lean summary",
+            presentation=self.presentation,
+            confidence=0.9,
+            deliverable_ref=self.ref,
+        )
 
 
-def test_run_loop_delivers_referenced_artifact():
-    ctx = VrakshaContext.new("s")
-    ports = Ports(memory=MemoryManager(), caps=_ReportCaps(ctx, "w1"), log=CtxDecisionLog(ctx))
-    resp = asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
+def test_referenced_artifact_resolves_only_for_report_presentation():
+    report_ctx = VrakshaContext.new("s-report")
+    report_ports = Ports(
+        memory=MemoryManager(),
+        caps=_ReportCaps(report_ctx, "w1", presentation="report"),
+        log=CtxDecisionLog(report_ctx),
+    )
+    report_resp = asyncio.run(loop_mod.run_loop(_norm(), report_ports, report_ctx))
 
     # the full artifact ships without transiting the model's answer...
-    assert resp.text == "THE FULL REPORT"
+    assert report_resp.presentation == "report"
+    assert report_resp.text == "THE FULL REPORT"
     # ...while the decision log carries the lean summary
-    answers = [e.message for e in ctx.decision_log if e.kind == "answer"]
+    answers = [e.message for e in report_ctx.decision_log if e.kind == "answer"]
     assert answers == ["lean summary"]
+
+    # A separately generated file does not replace the filtered chat summary.
+    chat_ctx = VrakshaContext.new("s-chat-file")
+    chat_ports = Ports(
+        memory=MemoryManager(),
+        caps=_ReportCaps(chat_ctx, "w1", presentation="chat"),
+        log=CtxDecisionLog(chat_ctx),
+    )
+    chat_resp = asyncio.run(loop_mod.run_loop(_norm(), chat_ports, chat_ctx))
+    assert chat_resp.presentation == "chat"
+    assert chat_resp.text == "lean summary"
 
 
 def test_run_loop_dangling_deliverable_falls_back():
@@ -268,31 +313,88 @@ def test_build_orchestrator_tools_offers_the_full_roster_eagerly():
     assert {"remember", "recall", "search_web", "math_calculator", "web_fetch_url"} <= names
 
 
-# --- message/deliverable split: a document never bleeds into the chat bubble ----
+# --- explicit chat/report presentation routing ------------------------------
 
-def test_split_keeps_document_out_of_the_chat():
-    from types import SimpleNamespace
-    from core.orchestrator.loop import _split_message_and_deliverable
-    from core.orchestrator.schemas import OrchestratorAnswer
+class _AnswerCaps:
+    """Return one explicit answer, optionally with `say()` commentary."""
 
-    def ctx():
-        return SimpleNamespace(assistant_message="", expert_findings=[])
+    def __init__(self, answer, note=""):
+        self.answer = answer
+        self.note = note
 
-    # a SHORT tool-free direct answer (no say, no expert) is the CHAT bubble (W1 simple turn)
-    short = OrchestratorAnswer(answer_text="hi there!", confidence=0.9)
-    msg, deliv = _split_message_and_deliverable(short, ctx())
-    assert msg == "hi there!" and deliv == ""
+    async def run_turn(self, *, system_prompt, user_prompt, output_type, on_message=None, **kw):
+        if self.note and on_message is not None:
+            await on_message(self.note)
+        return self.answer
 
-    # a LONG directly-generated document does NOT land in the chat — it's the deliverable
-    doc = "# Brief\n" + "x" * 1000
-    long = OrchestratorAnswer(answer_text=doc, confidence=0.9)
-    msg, deliv = _split_message_and_deliverable(long, ctx())
-    assert deliv == doc and msg == ""
 
-    # when it said a note, the note is the chat and the document is the deliverable (not both)
-    said = SimpleNamespace(assistant_message="Drafted the brief — it's below.", expert_findings=[])
-    msg, deliv = _split_message_and_deliverable(OrchestratorAnswer(answer_text=doc, confidence=0.9), said)
-    assert msg == "Drafted the brief — it's below." and deliv == doc
+def _run_answer(answer, *, note=""):
+    ctx = VrakshaContext.new("s-routing")
+    ports = Ports(
+        memory=MemoryManager(),
+        caps=_AnswerCaps(answer, note),
+        log=CtxDecisionLog(ctx),
+    )
+    return asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
+
+
+def test_short_casual_answer_uses_explicit_chat_presentation():
+    resp = _run_answer(OrchestratorAnswer(
+        answer_text="Hi! I help coordinate your work.",
+        presentation="chat",
+    ))
+
+    assert resp.presentation == "chat"
+    assert resp.text == "Hi! I help coordinate your work."
+    assert resp.message == ""
+
+
+def test_long_technical_answer_stays_chat():
+    technical_answer = "Here is how the transaction boundary works. " + ("detail " * 300)
+    resp = _run_answer(OrchestratorAnswer(
+        answer_text=technical_answer,
+        presentation="chat",
+    ))
+
+    assert resp.presentation == "chat"
+    assert resp.text == technical_answer
+    assert resp.message == ""
+
+
+def test_explicit_inline_report_without_say():
+    report = "# Reliability report\n\nAll focused checks passed."
+    resp = _run_answer(OrchestratorAnswer(
+        answer_text=report,
+        presentation="report",
+    ))
+
+    assert resp.presentation == "report"
+    assert resp.text == report
+    assert resp.message == ""
+
+
+def test_report_preserves_say_as_commentary_only():
+    report = "# Reliability report\n\nAll focused checks passed."
+    resp = _run_answer(
+        OrchestratorAnswer(answer_text=report, presentation="report"),
+        note="Analysis finished. Report follows.",
+    )
+
+    assert resp.presentation == "report"
+    assert resp.text == report
+    assert resp.message == "Analysis finished. Report follows."
+
+
+def test_chat_with_accidental_say_does_not_become_report():
+    answer = "I am Clannon, your project workspace assistant."
+    resp = _run_answer(
+        OrchestratorAnswer(answer_text=answer, presentation="chat"),
+        note="Happy to explain.",
+    )
+
+    assert resp.presentation == "chat"
+    assert resp.text == answer
+    assert resp.message == "Happy to explain."
 
 
 # (file experts being eager-on-attach is now subsumed by the full-roster-eager behaviour above:

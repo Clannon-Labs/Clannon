@@ -2,19 +2,12 @@
 Run execution + live streaming driver.
 
 Calls core.pipeline's single stage-chain driver, observing status and decision-log
-events without modifying pipeline code. Event shapes mirror the frontend RunEvent
-union exactly.
+events without modifying pipeline code. Events mirror the frontend RunEvent union.
 
-This module owns:
-  - `build_model_overrides` — resolve per-run model overrides (workspace + session).
-  - `_build_conversation` — replay a session's earlier turns as chat history.
-  - `execute` — drive one run end-to-end, emit events, classify + persist.
+Owns per-run model overrides, session replay, and end-to-end API delivery.
 
-Output-filter recovery is NOT here: it's the single shared `recover_from_filter_block`
-in `core.pipeline`, run inside `pipeline.run` for both the CLI and the web path and
-narrated on the decision log this driver already streams.
-
-It reads/writes runs through the shared `STORE` and the `RunState` record.
+Output-filter recovery stays in `core.pipeline` so CLI and web share one path;
+this driver streams its narration and reads/writes the shared `RunState` via `STORE`.
 """
 
 from __future__ import annotations
@@ -41,13 +34,10 @@ from .run_store import STORE, INPUT_NS
 
 
 def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
-    """
-    Resolve the model overrides for a run, as role -> "provider:model".
+    """Resolve run model overrides as role -> "provider:model".
 
-    Two layers: the user's stored WORKSPACE defaults (per-role, persisted via
-    /settings/models), with the run's PER-SESSION choices (`session`, role -> bare
-    model id) layered on top — the session choice wins for that run. Only unlocked
-    roles are honored; locked security gates (verifier, filter) are never overridable.
+    Per-session choices override stored workspace defaults. Only unlocked roles
+    are honored; security gates (verifier and filter) are never overridable.
     """
     prefs = auth.model_prefs_get(user_id)
     merged = {**prefs, **(session or {})}   # the session choice overrides the workspace default
@@ -58,18 +48,14 @@ def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -
     }
 
 
-# The WHOLE session travels as chat history — the orchestrator should see everything
-# that happened. We only trim when a session grows genuinely huge, and then we drop the
-# OLDEST turns (keeping the recent ones whole), bounded by this character budget so the
-# context stays complete without growing without limit. Generous on purpose. Sourced from
-# the central control panel (config/backend/budget.yaml) so it's tunable without a code edit.
+# Keep the whole session until this generous central bound; beyond it, condense only
+# the oldest turns so recent context stays verbatim and growth remains bounded.
 _HISTORY_CHAR_BUDGET = settings.BUDGET.history_char_budget
 
 
 def _turn_assistant_content(turn: RunState) -> str:
-    """One prior turn's assistant side, as the model should re-read it: the
-    conversational message AND/OR the delivered report (with a provenance note), or an
-    honest marker if the turn produced nothing."""
+    """A prior assistant turn: message/report with provenance, or an honest
+    marker when nothing was delivered."""
     message = (turn.message or "").strip()
     report = (turn.report or "").strip()
     if report:
@@ -134,11 +120,8 @@ _VERBATIM_TURN_FLOOR = settings.BUDGET.verbatim_turn_floor
 
 def _build_conversation(run: RunState) -> list[dict]:
     """Replay this session's earlier turns as neutral chat history (oldest first). Recent
-    turns are kept VERBATIM (user brief + assistant message/report). When a session grows
-    past `_HISTORY_CHAR_BUDGET`, the oldest turns are NOT dropped — they are CONDENSED into a
-    recap folded onto the front of the kept history (so the model still knows they happened
-    and their gist), and their full text stays retrievable via the `recall` tool /
-    ctx.session_transcript (W8)."""
+    turns stay verbatim. Past `_HISTORY_CHAR_BUDGET`, oldest turns become a front-loaded
+    recap; `recall` can still retrieve their full text from ctx.session_transcript (W8)."""
     # one (chars, [user_msg, assistant_msg], turn_number, turn) block per turn, oldest first
     blocks: list[tuple[int, list[dict], int, RunState]] = []
     for n, turn in enumerate(_prior_turns(run), start=1):
@@ -162,31 +145,25 @@ def _build_conversation(run: RunState) -> list[dict]:
 
 
 def _build_transcript(run: RunState) -> list[dict]:
-    """The FULL, untrimmed transcript of this session's earlier turns (oldest first): one
-    {n, user, assistant} record per prior turn, verbatim. Feeds ctx.session_transcript so the
-    orchestrator's `recall` tool can return ANY earlier turn in full, even one the visible
-    history condensed (W8)."""
+    """Full prior-turn transcript feeding `recall`, including turns condensed from
+    visible history (W8)."""
     return [
         {"n": n, "user": _turn_user_content(turn), "assistant": _turn_assistant_content(turn)}
         for n, turn in enumerate(_prior_turns(run), start=1)
     ]
 
 
-# Bounds on re-seeding a whole session's uploaded files, so a long session can't seed
-# unbounded data into the workspace.
+# Bound whole-session file re-seeding so long sessions cannot grow the workspace forever.
 _MAX_SESSION_FILES = 30
 _MAX_SESSION_FILE_BYTES = 64 * 1024 * 1024
-# inputs are persisted under a namespace distinct from a run's OUTPUT artifacts, so the
-# two never collide and inputs are never served by the artifact download route.
+# Separate input namespace prevents collisions and output-route exposure.
 def _input_ns(run_id: str) -> str:
     return f"{INPUT_NS}{run_id}"
 
 
 async def persist_inputs(run: RunState, input_files: list) -> None:
-    """Persist a turn's uploaded files (already malware-scanned) so LATER turns in the
-    session can re-read them, and record their store refs on `run.inputs`. Best-effort:
-    a file that fails to store is still admitted for THIS turn (it rides `input_files`),
-    it just won't survive to a follow-up."""
+    """Persist scanned uploads for later turns and record refs on `run.inputs`.
+    Best-effort: a storage failure affects follow-ups, not the current in-memory turn."""
     store = LocalArtifactStore()
     entries: list[dict] = []
     for f in input_files:
@@ -200,10 +177,8 @@ async def persist_inputs(run: RunState, input_files: list) -> None:
 
 
 async def _gather_session_files(run: RunState, current: list | None) -> list:
-    """Every file uploaded across THIS session, so the orchestrator can read a file from
-    an earlier turn: the current turn's files (already in memory) plus prior turns'
-    persisted files, loaded from the store. Bounded by file count and total bytes; a
-    missing/unreadable prior file is skipped, never fatal."""
+    """Load current and prior session uploads for the orchestrator, bounded by count
+    and bytes. Missing or unreadable prior files are skipped."""
     files = list(current or [])
     seen = {getattr(f, "name", "") for f in files}
     total = sum(int(getattr(f, "size", 0) or 0) for f in files)
@@ -234,34 +209,25 @@ async def _gather_session_files(run: RunState, current: list | None) -> list:
 async def execute(run: RunState, input_files: list | None = None) -> None:
     """Drive the real pipeline for one run, emitting events as it goes.
 
-    `input_files` are this turn's uploaded, already-malware-scanned foundation.InputFile
-    objects. They are combined with the files uploaded EARLIER in the session (re-loaded
-    from the store) so the orchestrator can read any file from any turn, then seeded into
-    a file-capable expert's workspace. The brief itself still crosses the full pipeline."""
+    Current scanned `input_files` join stored prior-session files for expert workspace
+    seeding. The brief itself still crosses the full pipeline."""
     session_files: list = []
     ctx = None
 
     def _prepare(flow: Flow[Any]) -> None:
         """Seed the context the API owns, before any stage runs."""
         nonlocal ctx
-        # Keep pipeline-owned execution state even when pipeline.run() is
-        # interrupted before it can return the Flow. Terminal audit derivation
-        # must use authoritative expert/tool records, not reconstruct them from
-        # the live presentation log.
+        # Retain pipeline state through interruption so terminal audits use
+        # authoritative expert/tool records instead of the presentation log.
         ctx = flow.ctx
-        # replay this session's earlier turns as real chat history — the orchestrator
-        # continues the conversation instead of re-reading a summary blob. A long session's
-        # oldest turns are condensed (not dropped); the full untrimmed transcript rides
-        # alongside so the `recall` tool can pull any earlier turn back verbatim (W8).
+        # Replay real history; condensed oldest turns remain available through the
+        # full transcript used by `recall` (W8).
         flow.ctx.conversation = _build_conversation(run)
         flow.ctx.session_transcript = _build_transcript(run)
-        # the user's wiki — the highest-trust memory tier, loaded as text at hydration.
-        # Scoped to the run's project so a client's wiki doesn't bleed across projects;
-        # account-wide when the run has no project. (The learned Qdrant tiers are still
-        # account-scoped — project-scoping those is the memory workstream's.)
+        # Project-scope the highest-trust wiki to prevent client bleed; learned Qdrant
+        # tiers remain account-scoped pending the memory workstream.
         flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id, run.project_id)
-        # every file uploaded this SESSION (this turn + earlier turns), seeded into the
-        # expert workspace downstream so a file from an earlier message is still readable
+        # Seed all bounded session files so experts can read earlier uploads.
         flow.ctx.input_files = session_files
 
     def _on_stage(stage) -> None:

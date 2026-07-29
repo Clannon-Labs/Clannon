@@ -110,6 +110,19 @@ is proposed to the frontend separately.
 | `/settings/models` | GET / PUT | — / `{layer, model}` | `RoleModelConfig[]` / 204. One entry PER ROLE: 5 selectable (orchestrator, research, planner, code, media_expert) + verifier/filter read-only. Each entry carries `model` (the user's workspace default or the system default), `default`, `options`, `locked`, and `experts` (which experts the role drives). Defaults are derived from `models.yaml` (Claude for reasoning, Gemini for media). PUT sets the per-user WORKSPACE default for a role (403 locked, 422 model not in options). Per-SESSION overrides go on the run POST via `models`. |
 | `/billing/checkout` `/billing/portal` | POST | — | 501 until Stripe |
 
+### Terminal presentation
+
+The orchestrator's explicit `presentation` selects the terminal channel; sources
+and generated artifacts are delivered metadata and never influence that choice.
+
+- `chat`: accepted output-filter text is persisted on `Run.message` and emitted
+  through `message_delta`. It emits no `report_delta` or `report_done`.
+- `report`: accepted output-filter text retains the existing terminal order:
+  `sources` → `report_delta` × N → `report_done` → terminal `status`.
+- `say()` remains live conversational commentary. After substantial tool or
+  expert work, accepted final chat follows that commentary. A lone accidental
+  `say()` with no recorded tool/expert work remains the sole trivial response.
+
 ## How a run streams (the one non-obvious part)
 
 `runs.execute()` builds a `Flow` exactly like `main.py`, replaces

@@ -14,7 +14,7 @@ contracts live next door in contracts/memory.py.)
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(slots=True)
@@ -73,6 +73,11 @@ class OrchestratorResponse:
     the input to the output filter, not the final user-facing text.
     """
     text: str
+    # Post-filter presentation intent. `text` is filtered in BOTH modes; API
+    # delivery decides whether accepted text becomes open conversational chat
+    # or an inline report sheet. Default preserves legacy/test producers that
+    # predate explicit orchestrator intent; the live orchestrator always sets it.
+    presentation: Literal["chat", "report"] = "report"
     confidence: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
     finding_refs: list[str] = field(default_factory=list)   # -> ctx.expert_findings

@@ -146,7 +146,10 @@ def _caps(ctx, graph, budget) -> Capabilities:
 def _final_answer(text: str, confidence: float = 0.8):
     def make(info):
         out = info.output_tools[0]
-        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"answer_text": text, "confidence": confidence})])
+        return ModelResponse(parts=[ToolCallPart(
+            tool_name=out.name,
+            args={"answer_text": text, "presentation": "chat", "confidence": confidence},
+        )])
     return make
 
 
@@ -381,7 +384,11 @@ class _FakeCaps:
 
     async def run_turn(self, *, system_prompt, user_prompt, output_type, on_event=None, **kw):
         self.received_prompt = user_prompt
-        return OrchestratorAnswer(answer_text="done", confidence=0.7)
+        return OrchestratorAnswer(
+            answer_text="done",
+            presentation="chat",
+            confidence=0.7,
+        )
 
 
 def _fake_ports(ctx, graph):

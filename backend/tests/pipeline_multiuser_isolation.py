@@ -157,7 +157,9 @@ def _wire_doubles(monkeypatch, mem: _TrackingMemory) -> None:
         if on_message:
             await on_message(f"Synthesizing report. {tag}")
         return OrchestratorAnswer(
-            answer_text=f"Synthesis complete. {tag}", confidence=0.9
+            answer_text=f"Synthesis complete. {tag}",
+            presentation="report",
+            confidence=0.9,
         )
 
     monkeypatch.setattr(caps_mod.Capabilities, "run_turn", _fake_run_turn)
