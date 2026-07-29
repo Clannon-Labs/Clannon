@@ -8,8 +8,8 @@ Transfers live frontend work between Claude Code and Codex.
 - Updated: 2026-07-29
 - Task: owner critique — sent prompts need stable Copy/Edit actions; editing an
   earlier turn must restart from its prefix and exclude later turns from context
-- State: frontend implementation complete and mock/browser-proven; real HTTP
-  completion BLOCKED on backend proposal
+- State: frontend implementation complete, mock/browser-proven, committed and
+  pushed as `eb48dc9`; real HTTP completion BLOCKED on backend proposal
   `proposals/to-backend/2026-07-29_revise-turn-branch-contract.md`
 - Built: `TurnPrompt` (desktop hover/focus, mobile tap, inline prefilled edit,
   explicit context cut), Clipboard API + insecure-LAN fallback, revise client/
