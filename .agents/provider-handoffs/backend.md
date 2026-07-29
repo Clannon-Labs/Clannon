@@ -63,7 +63,48 @@ finished something.
 
 ---
 
-## Current checkpoint — revise edits same chat in place (2026-07-29)
+## Current checkpoint — private-alpha environment split (2026-07-29)
+
+Owner requested separate local and production environment files for backend and
+frontend. Frontend already had correct ignored `.env.local` / `.env.prod`; it
+was inspected but not changed.
+
+Backend now has:
+
+- ignored `.env.local`, with existing secrets preserved and explicit
+  development/lenient prompt profile appended;
+- ignored `.env.prod`, a Railway RAW Editor template with fail-closed production
+  mode, all three routed provider keys, exact `clannon.com` CORS/cookie contract,
+  persistent `/data` paths, private ClamAV/Qdrant placeholders, hardened prompt
+  overlay path, and code execution disabled;
+- `.dockerignore` excludes every `.env*` except `.env.example`, closing local
+  Docker-context secret leakage;
+- synchronized root/backend/API docs. Raw `*.up.railway.app` browser API advice
+  is removed; `api.clannon.com` is required by current SameSite=Lax topology.
+
+Production template parses with 27 keys. Strict config smoke reports all four
+checks OK with fake credentials and temporary writable storage. API specialist
+ran `tests/config_validation.py`: 15 passed. Frontend proposal
+`production-cookie-domain-contract` accepted and archived; actual DNS/browser
+acceptance remains a deploy-time checklist, not falsely claimed.
+
+Important deployment caveat: Railway mounts volumes as root while Docker image
+runs as uid 10001. `/data` ownership must be fixed before testers.
+`RAILWAY_RUN_UID=0` is documented only as temporary fallback. Upload
+`backend/prompts.secure` to `/data/prompts.secure`; `.env.prod` is not
+auto-loaded by Python.
+
+Preserve unrelated owner changes in `CLAUDE.md`, `frontend/CLAUDE.md`, and
+untracked `assets/Clannon Labs.png`.
+
+## Change note
+
+Environment files existed but production backend template was missing and
+deployment docs recommended a cross-site Railway origin incompatible with
+cookie auth. New split keeps secrets ignored, makes production assumptions
+explicit, and leaves browser proof for real deployment.
+
+## Previous checkpoint — revise edits same chat in place (2026-07-29)
 
 Owner rejected initial non-destructive branch behavior. Correct behavior is now
 implemented and verified:

@@ -1,6 +1,6 @@
 # secrets come from Railway env vars, never baked into the image
-.env
-.env.local
+.env*
+!.env.example
 
 # the hardened prompt overlay is provided at deploy time (R2 sync / mount /
 # unpacked env var), never committed or baked — see CLAUDE.md deployment notes

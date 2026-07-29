@@ -219,16 +219,36 @@ Components call the hook; they never know which backend they're on.
 and an `AsyncGenerator` client-side — copy `streamRun` in both `runs.py` and
 `http.ts` as the template.
 
-## Deployment (Railway + Vercel)
+## Deployment (Railway + `clannon.com`)
 
-1. Deploy this repo to Railway: start command
-   `uvicorn api.app:app --host 0.0.0.0 --port $PORT`, set `FRONTEND_ORIGIN`
-   to the Vercel URL, `SERVER_COOKIE_SECURE=1`, and the provider API keys.
-2. On Vercel, set the frontend env: `NEXT_PUBLIC_API_MODE=http`,
-   `NEXT_PUBLIC_API_BASE_URL=https://<railway-app>.up.railway.app`,
-   `NEXT_PUBLIC_SITE_URL=https://<your-domain>`.
-3. That's the whole wiring — no code changes on either side.
+1. Deploy `backend/` to Railway. Its Docker image starts
+   `uvicorn api.app:app` on Railway's `$PORT`.
+2. Copy the ignored `backend/.env.prod` template into Railway's
+   **Variables → RAW Editor**, replace every `REPLACE_*`, review the staged
+   variables, then deploy. The application auto-loads only `backend/.env` and
+   `backend/.env.local`; it does **not** auto-load `.env.prod`.
+3. Keep this exact production browser boundary:
+
+   ```env
+   FRONTEND_ORIGIN=https://clannon.com
+   SERVER_CORS_ORIGINS=https://clannon.com
+   SERVER_COOKIE_SECURE=1
+   SERVER_COOKIE_DOMAIN=.clannon.com
+   ```
+
+   Credentialed CORS must use the exact frontend origin, never `*`.
+4. Add `https://api.clannon.com` as Railway's custom API domain and point the
+   frontend API base URL there. Do not use the raw `*.up.railway.app` origin:
+   it is cross-site from `clannon.com`, so the current `SameSite=Lax` session
+   cookie will not reliably accompany authenticated fetch or SSE requests.
+5. Attach the persistent volume at `/data` before the first signup; the
+   production template places SQLite, graph memory, uploaded inputs, and
+   artifacts there. Run ClamAV and Qdrant as private Railway services only.
+
+Before inviting testers, verify `https://api.clannon.com/health`, signup/login
+from `https://clannon.com`, authenticated `/auth/me`, and an authenticated SSE
+run in a real browser. The stored session cookie must be Secure, HttpOnly, and
+domain-scoped to `.clannon.com`.
 
 Production replacements tracked: Supabase (swap `auth.py`), Postgres for the
-run store (today in-memory — runs vanish on restart), Stripe (`/billing/*`),
-Redis token metering (`/usage`).
+current SQLite store, Stripe (`/billing/*`), Redis token metering (`/usage`).

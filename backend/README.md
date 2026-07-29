@@ -51,10 +51,34 @@ run from `backend/`, but they do not replace the full-stack launcher.
 
 - Root Directory: `backend/`. Railway builds `Dockerfile` (the default `CMD` runs
   `uvicorn api.app:app` on `$PORT`).
-- Set provider keys + service URLs as Railway env vars (see `.env.example`); never
-  commit `.env.local`.
+- Copy `backend/.env.prod` into Railway's **Variables → RAW Editor**, replace every
+  `REPLACE_*`, review staged changes, then deploy. `.env.prod` is an upload
+  template; Python does not load that filename automatically.
+- Add `api.clannon.com` as the backend custom domain. Configure both DNS records
+  Railway provides and wait for HTTPS to become healthy. Do not point the
+  browser frontend at the raw `*.up.railway.app` origin: current Lax session
+  cookie topology requires frontend and API to remain same-site.
+- Attach a persistent volume at `/data` before first signup.
+  `SERVER_DB_PATH`, graph memory, and artifacts in `.env.prod` all use it.
+  Railway mounts volumes as root while this image runs as uid 10001; resolve
+  `/data` ownership before inviting testers. `RAILWAY_RUN_UID=0` is a temporary
+  compatibility fallback, not the preferred hardened end state.
+- Run ClamAV and Qdrant as private services in the same Railway environment.
+  Never expose either service publicly.
 - The hardened `prompts.secure/` overlay is provided at deploy time (not baked into
-  the image); set `VRAKSHA_REQUIRE_PROD_PROMPTS=1` so boot fails closed if a locked
-  prompt (verifier/filter) is still on its baseline.
+  the image). Upload it to `/data/prompts.secure`; production config fails closed
+  if a locked verifier/filter prompt falls back to its baseline.
+
+Before testers:
+
+1. `https://api.clannon.com/health` returns `{"status":"ok"}` over HTTPS.
+2. Sign up from `https://clannon.com`; browser stores one Secure, HttpOnly
+   `.clannon.com` cookie.
+3. Refresh, call `/auth/me`, start a run, reconnect its SSE stream, then restart
+   backend. Account, chat, memory, and artifacts must remain.
+4. Confirm ClamAV rejects its malware test fixture and Qdrant has no public
+   domain.
+5. Seal provider keys in Railway after import. Redeploy after any variable
+   change.
 
 The full HTTP contract is documented in [`api/README.md`](api/README.md).

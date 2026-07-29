@@ -22,6 +22,15 @@
   legacy blobs; missing/corrupt/redirected inputs fail 409 before run creation.
 - Revision proof: backend 1571 passed; frontend 93 passed (20 focused);
   typecheck/lint/build + invariant checker passed. Proposals archived.
+- Added ignored backend `.env.prod` Railway upload template; preserved local
+  secrets and explicit local profile in `.env.local`. Frontend env files checked
+  and left untouched.
+- Production cookie contract now uses `clannon.com` + `api.clannon.com`, exact
+  credentialed CORS, Secure shared-domain cookie. Raw Railway browser origin
+  removed from docs; frontend proposal accepted and archived.
+- Docker build context excludes every real `.env*`. Strict production config
+  smoke passed; API config tests 15 passed. `/data` volume ownership and real
+  DNS/browser proof remain mandatory deployment actions.
 - Preserve unrelated owner edits: root/frontend private-alpha notes and
   uncommitted assets.
 
@@ -33,3 +42,4 @@
 - `22:44` **api** worker via **codex** — 2026-07-29_revise-turn-branch-endpoint.md — exit 0, 1213s — output: `.agents/runs/20260729-222437-api.out`
 - `23:13` **frontend** worker via **codex** — 2026-07-29_revise-in-place-copy-and-mock.md — exit 0, 627s — output: `.agents/runs/20260729-230247-frontend.out`
 - `23:20` **api** worker via **codex** — 2026-07-29_revise-in-place-not-branch.md — exit 0, 1039s — output: `.agents/runs/20260729-230242-api.out`
+- `23:46` **api** worker via **codex** — 2026-07-29_sync-production-env-docs.md — exit 0, 173s — output: `.agents/runs/20260729-234332-api.out`

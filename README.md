@@ -211,6 +211,11 @@ Create local env files (inside `backend/`):
 cp .env.example .env.local
 ```
 
+`backend/.env.local` is local-only and loaded automatically. Production uses
+the separate ignored `backend/.env.prod` upload template: paste it into the
+hosting provider's environment-variable UI after replacing every `REPLACE_*`.
+The application does not auto-load `.env.prod`.
+
 Add model keys only for the providers you plan to use. Google Gemini is the
 default provider, so `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) is the one you need
 unless you change `models.yaml`. Keys go in `.env.local`, which `main.py` loads
