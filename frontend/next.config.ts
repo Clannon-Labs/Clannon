@@ -3,6 +3,7 @@ import os from "node:os";
 import type { NetworkInterfaceInfo } from "node:os";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const devBackendUrl = process.env.CLANNON_DEV_BACKEND_URL;
 const isDev = process.env.NODE_ENV === "development";
 
 // Every non-internal IPv4 address of this machine. Used for allowedDevOrigins
@@ -78,6 +79,19 @@ const nextConfig: NextConfig = {
   // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
   // new IP needs no edit. Ignored in production.
   allowedDevOrigins: lanHosts,
+  async rewrites() {
+    // Root ./dev.sh gives local development one browser-visible origin:
+    // Next owns :3000 and forwards /api/* to FastAPI's private :8000 listener.
+    // Production keeps using NEXT_PUBLIC_API_BASE_URL directly; this rewrite
+    // exists only when the launcher supplies its server-only target.
+    if (!isDev || !devBackendUrl) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${devBackendUrl}/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {

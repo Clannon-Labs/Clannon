@@ -104,12 +104,11 @@ There's also a web dashboard (FastAPI + Next.js) that wraps the same
 pipeline with a live-streamed decision log and a UI for browsing memory.
 
 But it's not shipped yet, and I will ship it if this project is successful : )
-<!-- 
+
 ```bash
-# from backend/
-.venv/bin/uvicorn api.app:app --port 8000
-cd ../frontend && npm install && npm run dev
-``` -->
+# from repository root; starts services, backend, and frontend
+./dev.sh
+```
 
 ## Memory
 

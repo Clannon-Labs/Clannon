@@ -27,17 +27,25 @@ models.yaml   model/provider routing
 ## Run locally
 
 ```bash
+# from backend/
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt   # runtime + test deps
 cp .env.example .env.local          # add provider keys
 
-# from the repo root: bring up the service deps
-docker compose up -d clamav qdrant
+# once per frontend checkout
+cd ../frontend && npm install
 
-uvicorn api.app:app --port 8000     # the API the frontend talks to
-python main.py "your brief"         # or the CLI
-pytest                              # the test suite (skips qdrant/clamav-only tests)
+# canonical full-stack launcher, from repo root
+cd ..
+./dev.sh
 ```
+
+The browser uses one origin, `http://<LAN-IP>:3000`; `/api/*` is proxied to
+FastAPI on private port 8000. The launcher starts/checks ClamAV and Qdrant and
+also pins the embedding cache to `backend/assets/fastembed_cache`.
+
+Backend-only commands such as `python main.py "your brief"` and `pytest` still
+run from `backend/`, but they do not replace the full-stack launcher.
 
 ## Deploy (Railway)
 

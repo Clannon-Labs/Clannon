@@ -190,8 +190,8 @@ see what is working today.
 ### The Developer Path
 
 The repo is split for deployment: **`backend/`** (the Python pipeline + FastAPI,
-deploys to Railway) and **`frontend/`** (Next.js, deploys to Vercel). All backend
-commands run from inside `backend/`.
+deploys to Railway) and **`frontend/`** (Next.js, deploys to Vercel). Local
+development has one canonical entry point: root `dev.sh`.
 
 Clone the repo, create a virtual environment, and install dependencies:
 
@@ -201,6 +201,8 @@ cd Clannon/backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt   # add -dev for the test suite
+cd ../frontend
+npm install
 ```
 
 Create local env files (inside `backend/`):
@@ -230,27 +232,31 @@ Model choices and layer routing live in:
 backend/models.yaml
 ```
 
-To run the web app against the bundled mock backend (from the repo root):
+Start the complete live stack from the repository root:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd ..
+./dev.sh
 ```
+
+Open the printed `http://<LAN-IP>:3000` URL. Browser API traffic uses the same
+origin at `/api/*`; Next.js proxies it to FastAPI's private
+`127.0.0.1:8000` listener. The launcher starts or reuses ClamAV and Qdrant,
+waits for both, then starts backend and frontend. Docker or Podman is required
+when those services are not already listening locally.
+
+`Ctrl-C` stops frontend and backend. Dependency containers remain running so
+the next start is fast. `frontend/npm run dev` remains available for isolated
+mock-frontend work; it is not the full product launcher.
 
 ### Security Services
 
-ClamAV runs as a daemon. With Docker Compose:
-
-```bash
-docker compose up -d clamav
-```
-
-Common local settings:
+Root `dev.sh` supplies local service settings:
 
 ```env
 CLAMAV_HOST=127.0.0.1
 CLAMAV_PORT=3310
+QDRANT_URL=http://127.0.0.1:6333
 AGENT_YARA_DIR=rules
 ```
 
@@ -279,13 +285,10 @@ cd backend && pytest
 The ClamAV EICAR test requires a running `clamd` daemon, and the memory tests
 need Qdrant; if either is unavailable those tests are skipped.
 
-To run the active pipeline end-to-end against real services (from `backend/`):
+To run the active product end-to-end against real services:
 
 ```bash
-docker compose up -d clamav qdrant     # from the repo root: start the deps
-cd backend
-python main.py "your text here"        # CLI: prints the resulting Flow summary
-uvicorn api.app:app --port 8000        # or the FastAPI server (the frontend's backend)
+./dev.sh
 ```
 
 ---

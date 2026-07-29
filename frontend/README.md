@@ -10,39 +10,31 @@ code refers to the engine itself.
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000 — runs against the bundled mock
 npm run build && npm start
 ```
 
-To open the app from another device on the LAN (e.g. a phone) against the real
-backend, use the launcher. It frees the port if a previous dev server is still
-on it, detects this machine's LAN IP, points the browser-side API at it, and
-binds to all interfaces — no env vars to remember, safe to re-run:
+Start the complete live development stack from repository root:
 
 ```bash
-./dev.sh          # from frontend/   (or: npm run lan)
-# then open http://<LAN-IP>:3000 on the other device (same Wi-Fi)
-# if ufw is active, open the port once: sudo ufw allow 3000/tcp
+cd ..
+./dev.sh
 ```
 
-Equivalent by hand — the API URL is the LAN IP, not localhost: the phone runs
-the fetch, so `localhost` would mean the phone (`<LAN-IP>` =
-`hostname -I | awk '{print $1}'`):
+Open the printed `http://<LAN-IP>:3000` URL locally or from another device on
+the LAN. API requests use that same origin under `/api/*`; Next.js proxies them
+to FastAPI on private port 8000. Root launcher also starts/checks ClamAV and
+Qdrant, so a run cannot silently begin with required services absent.
 
-```bash
-NEXT_PUBLIC_API_MODE=http \
-NEXT_PUBLIC_API_BASE_URL=http://<LAN-IP>:8000 \
-  npm run dev -- -H 0.0.0.0
-```
-
-Start the backend with `backend/dev.sh` (it wires the matching `FRONTEND_ORIGIN`).
-Two dev settings in `next.config.ts` make LAN dev work and are worth knowing:
+`npm run lan` is an alias for root launcher. `npm run dev` remains the
+frontend-only mock workflow. Dev settings in `next.config.ts`:
 
 - `upgrade-insecure-requests` in the CSP is gated to production. In dev it would
   force every `_next/static` asset to `https` over the LAN, and the page would
   load unstyled (`localhost` is exempt, so it only bites over the network).
 - `allowedDevOrigins` is auto-populated from this machine's network interfaces,
   so fast-refresh works over the LAN and a changed IP needs no edit.
+- `CLANNON_DEV_BACKEND_URL` enables `/api/*` reverse proxying. Root launcher
+  owns this server-only variable; production continues using its direct API URL.
 
 ## Configuration map — everything changeable, and where
 
@@ -96,13 +88,12 @@ are substituted automatically.
 
 A reference implementation of this contract — wrapping the real
 Vraksha pipeline with live SSE decision-log streaming, cookie auth,
-and SQLite-backed wiki memory — lives at `backend/api/` (FastAPI):
+and SQLite-backed wiki memory — lives at `backend/api/` (FastAPI).
+Run both sides together:
 
 ```bash
-# from backend/ (with the venv activated)
-uvicorn api.app:app --port 8000
-# then run this frontend with the env above (FRONTEND_ORIGIN on the
-# server must match this app's origin for CORS)
+# from repository root
+./dev.sh
 ```
 
 ### The contract the backend must serve

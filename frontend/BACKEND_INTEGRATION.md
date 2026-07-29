@@ -1,6 +1,6 @@
 # Frontend ⇆ Backend integration spec (complete — build from this, don't guess)
 
-You are a Claude Code instance working in `frontend/`. This is the **complete,
+You are a Claude Code/codex instance working in `frontend/`. This is the **complete,
 authoritative, self-contained** description of what the backend serves today, what's
 built but not yet rendered, and what's coming — plus the exact frontend edits for
 each. **Build entirely from this doc. Do NOT read the backend code** under
@@ -39,18 +39,19 @@ one mode.** This is the single most important rule. Types live in
 
 ### Switch to the real backend (no component edits)
 
-`src/config/app.config.ts` reads these env vars (put them in `frontend/.env.local`):
+For local development, root launcher supplies all values and exposes one
+browser origin:
 
-```
-NEXT_PUBLIC_API_MODE=http
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000   # FastAPI host; Railway URL in prod. No trailing slash.
+```bash
+# from repository root
+./dev.sh
 ```
 
-Run the backend: `cd ../backend && uvicorn api.app:app --port 8000` (full runs also
-need `docker compose up -d clamav qdrant` from the repo root). The backend must set
-`FRONTEND_ORIGIN` to your exact frontend origin (e.g. `http://localhost:3000`) —
-CORS uses `allow_credentials=True`, which forbids `*`, so the origin must match
-exactly or cookies are blocked.
+Next serves `http://<LAN-IP>:3000`; `/api/*` proxies to private FastAPI
+`127.0.0.1:8000`. Launcher starts/checks ClamAV and Qdrant, sets matching CORS,
+and pins local embedding cache. For deployment, set
+`NEXT_PUBLIC_API_MODE=http` and `NEXT_PUBLIC_API_BASE_URL` to public backend URL
+as described below; local proxy is not enabled in production.
 
 ---
 
