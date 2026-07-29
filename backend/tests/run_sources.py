@@ -14,7 +14,7 @@ list in their results; no network, no models, no paid keys.
 
 import asyncio
 
-from foundation import ExpertCallRecord, ToolCallRecord, VrakshaContext
+from foundation import ExpertCallRecord, OrchestratorResponse, ToolCallRecord, VrakshaContext
 from api.run_state import RunState
 import api.run_driver as rd
 
@@ -299,3 +299,34 @@ def test_execute_empty_sources_when_no_grounded_search(monkeypatch):
     asyncio.run(rd.execute(run))
 
     assert run.full_json()["sources"] == []
+
+
+def test_execute_chat_keeps_sources_before_final_message(monkeypatch):
+    ctx = _ctx_with_direct_search(["https://example.com/chat-source"])
+    ctx.orchestrator_response = OrchestratorResponse(
+        text="raw draft",
+        presentation="chat",
+    )
+    ctx.final_response = "filtered chat with sources"
+    _monkeypatch_execute(monkeypatch, ctx)
+
+    run = _run("rz")
+    asyncio.run(rd.execute(run))
+
+    assert run.report is None
+    assert run.message == "filtered chat with sources"
+    assert [source["url"] for source in run.sources] == [
+        "https://example.com/chat-source"
+    ]
+    event_types = [event.get("type") for event in run.events]
+    delivered_at = next(
+        i for i, event in enumerate(run.events)
+        if event.get("type") == "status" and event.get("status") == "delivered"
+    )
+    assert (
+        event_types.index("sources")
+        < event_types.index("message_delta")
+        < delivered_at
+    )
+    assert "report_delta" not in event_types
+    assert "report_done" not in event_types

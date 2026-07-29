@@ -323,15 +323,15 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             run.on_experts_settled(flow.ctx.expert_calls)
 
             ctx = flow.ctx
-            # The conversational message (chat bubble). If the orchestrator streamed it
-            # live via say(), run.message is already built from message_delta events. If
-            # instead it returned its reply as the final answer (a direct turn that didn't
-            # call say()), surface that now so the bubble still shows + replays.
             _resp = ctx.orchestrator_response
-            _final_msg = getattr(_resp, "message", "") if _resp is not None else ""
-            if _final_msg and not run.message:
-                run.message = _final_msg
-                run.emit({"type": "message_delta", "text": _final_msg})
+            _presentation = getattr(_resp, "presentation", "report")
+            if _presentation != "chat":
+                # Preserve the report-mode conversational note. Live say() already
+                # populated run.message; legacy direct producers use response.message.
+                _final_msg = getattr(_resp, "message", "") if _resp is not None else ""
+                if _final_msg and not run.message:
+                    run.message = _final_msg
+                    run.emit({"type": "message_delta", "text": _final_msg})
 
             # Honest completion: the orchestrator degrades rather than failing when the
             # loop cannot finish (wall-clock timeout, provider rate-limit storm, fault)
@@ -403,9 +403,8 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                     )
                 run.status = "failed"
             else:
-                text = ctx.final_response or (
-                    ctx.orchestrator_response.text if ctx.orchestrator_response else ""
-                )
+                # The output filter's accepted text is canonical in both presentations.
+                text = str(ctx.final_response) if ctx.final_response is not None else ""
                 # memory is persisted ONLY on the delivered path (post-filter), so the
                 # /memory view is populated ONLY here. A blocked or failed draft wrote
                 # nothing to memory, and its proposals (e.g. an in-flight `remember`) must
@@ -428,18 +427,25 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                     for finding in ctx.expert_findings
                     for art in (finding.metadata or {}).get("artifacts", [])
                 ]
-                # Collect grounded-search source URLs from all tool call records
-                # (orchestrator direct + expert sub-calls), de-dup, and surface them as
-                # the {type:"sources"} SSE frame BEFORE the report text streams.
+                # Sources and artifacts do not decide presentation.
                 _srcs = _collect_sources(ctx)
                 run.sources = _srcs
                 run.emit({"type": "sources", "sources": _srcs})
-                # Contract order (api/README.md /runs/:id/stream): the report streams
-                # FIRST, the terminal status comes LAST — sources → report_delta×N →
-                # report_done → status:delivered. Flipping the status earlier painted a
-                # DELIVERED badge over a still-streaming report in the UI (frontend pins
-                # the moment to the terminal status event).
-                await run.stream_report(str(text))
+                if _presentation == "chat":
+                    # A lone say() is a weak-model casual answer, not substantive work.
+                    # Real work is authoritative only when Flow recorded a tool/expert call.
+                    if not run.message or ctx.tool_calls or ctx.expert_calls:
+                        separator = "\n\n" if run.message else ""
+                        run.on_log_entry(
+                            type(
+                                "E",
+                                (),
+                                {"kind": "message", "message": f"{separator}{text}"},
+                            )()
+                        )
+                else:
+                    # Report contract: sources → report_delta×N → report_done → delivered.
+                    await run.stream_report(text)
                 run.status = "delivered"
 
     except asyncio.CancelledError:

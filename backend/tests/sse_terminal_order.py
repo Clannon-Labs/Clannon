@@ -28,7 +28,11 @@ def _fake_flow(text="word " * 40):
         filter_result=None,
         failed=False,
         failure_error=None,
-        orchestrator_response=SimpleNamespace(text=text, message=""),
+        orchestrator_response=SimpleNamespace(
+            text="unfiltered report draft",
+            message="",
+            presentation="report",
+        ),
         final_response=text,
         memory_writes_requested=[],
         memory_writes_persisted=[],   # what the Manager actually wrote (surfaced on delivery)
@@ -80,3 +84,27 @@ def test_delivered_run_has_report_when_status_flips(monkeypatch):
     # run.report is set — a live delivered-but-report-None window can't occur
     run = _drive(monkeypatch, _fake_flow())
     assert run.status == "delivered" and run.report is not None
+
+
+def test_typed_report_with_say_keeps_message_and_report_channels(monkeypatch):
+    flow = _fake_flow("accepted report")
+
+    async def fake_run(*args, **kwargs):
+        kwargs["decision_log"].append(
+            SimpleNamespace(kind="message", message="Progress update.", detail={})
+        )
+        return flow
+
+    monkeypatch.setattr(rd.pipeline, "run", fake_run)
+    monkeypatch.setattr(rd, "build_model_overrides", lambda *a, **k: {})
+    monkeypatch.setattr(rd.STORE, "session_turns", lambda *a, **k: [])
+    monkeypatch.setattr(rd.STORE, "persist", lambda run: None)
+
+    run = RunState(id="r-report-say", user_id="u", title="t", brief="b", session_id="r-report-say")
+    asyncio.run(rd.execute(run))
+
+    assert run.message == "Progress update."
+    assert run.report == "accepted report"
+    types = [event.get("type") for event in run.events]
+    assert types.count("message_delta") == 1
+    assert types.count("report_done") == 1
