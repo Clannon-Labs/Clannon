@@ -6,6 +6,48 @@ Transfers live frontend work between Claude Code and Codex.
 
 - Provider: Codex
 - Updated: 2026-07-29
+- Task: owner phone-density critique + instant first-response app shell; preserve
+  exact continuation for tomorrow
+- Implemented now: `/app` auth wait no longer shows a blank full-screen logo.
+  Server-rendered `WorkspaceLoadingShell` arrives as `RequireAuth`'s fallback,
+  matching real desktop rail/mobile header, content cards, and composer
+  geometry. Static server component is passed into client gate as rendered
+  children, so no fake sidebar interactions or account/project data join
+  initial client bundle. Route `loading.tsx` reuses same content skeleton.
+- First-response evidence: dev `/app` HTML is 54,104 raw bytes and ~9,117 bytes
+  under gzip-9, below owner's ~14 KB initial-window target. This is directional,
+  not a production wire guarantee; CDN/compression/TLS deployment must be
+  measured after hosting. Desktop/mobile previews:
+  `frontend/previews/2026-07-29_initial-shell/`.
+- Verification: TypeScript, zero-warning ESLint, Vitest 92/92, isolated Next
+  production build, 1440x900 and 390x844 browser review.
+- Tomorrow TOP frontend task: full mobile density pass, not blanket font
+  shrinking. Current marketing page measures 9,604 px tall at 390 px and stacks
+  nearly every desktop card vertically (starter examples, five pipeline stages,
+  four memory tiers, four pricing plans). Audit 320/360/390/430 widths; restore
+  breathing room through progressive disclosure, horizontal snap/peek where
+  discoverable, section pacing, and fewer simultaneous choices. Preserve tap
+  targets, accessibility, and desktop information.
+- Proposal review: `proposals/to-frontend/owner-critique.md` remains `accepted`,
+  not archived. Backend revise endpoint and backend proposal are now completed/
+  archived, but frontend still owes one real HTTP browser journey proving edited
+  turn descendants stay absent. Run that tomorrow; archive owner proposal only
+  after proof passes.
+- Honest benchmark: remains 84.16. Shell improves perceived readiness, but no
+  measured production FCP/LCP/CLS yet; mobile density work not started.
+
+## Change note
+
+Owner's speed instinct is right; separate fake HTML page is wrong because its
+swap would expose the trick and duplicate layout. Real static shell now paints
+the actual product geometry while data/auth resolve. Mobile critique is also
+valid: full 390 px marketing capture exposes excessive vertical stacking, so
+tomorrow's pass has concrete evidence rather than vague "make responsive" work.
+
+## Previous checkpoint
+
+- Provider: Codex
+- Updated: 2026-07-29
 - Task: fix Dependabot alert 21, `brace-expansion` OOM DoS in frontend lockfile
 - State: fixed with official `brace-expansion@1.1.17` 1.x security backport;
   override floor raised and lockfile regenerated. Dependency is dev-only under

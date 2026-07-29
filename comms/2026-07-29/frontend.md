@@ -38,3 +38,20 @@ TypeScript, ESLint, Vitest 92/92 green.
 
 GitHub advisory metadata still names only 5.0.8 as patched, so alert closure may
 lag even though upstream 1.1.17 explicitly backports GHSA-mh99-v99m-4gvg.
+
+## 23:15 — instant workspace shell landed; mobile density queued
+
+Replaced blank `/app` auth spinner with real server-rendered workspace geometry:
+desktop rail, mobile header, content skeleton, composer. Server component passes
+through client auth gate as rendered fallback—no fake interactions or user data.
+Dev HTML measures ~9.1 KB under gzip-9; TypeScript, ESLint, Vitest 92/92, isolated
+production build, desktop/mobile visual review green.
+
+Owner's phone-density critique confirmed: 390 px marketing capture is 9,604 px
+tall because nearly every desktop card stacks vertically. Tomorrow's top task:
+320/360/390/430 density pass using progressive disclosure and selective
+horizontal snap/peek, not smaller type/tap targets.
+
+Inbox reviewed. Owner critique stays accepted: backend revise endpoint is now
+completed/archived, but frontend still needs real HTTP browser proof before
+archiving its owner proposal.
