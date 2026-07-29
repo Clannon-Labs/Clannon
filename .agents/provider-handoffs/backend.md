@@ -63,7 +63,124 @@ finished something.
 
 ---
 
-## Current checkpoint — PAUSED FOR A WEEK (2026-07-28 evening)
+## Current checkpoint — chat/report intent + orchestrator prompts (2026-07-29)
+
+Owner-confirmed behavior is implemented, tested, and committed locally:
+
+- `900e2cc` routes accepted API answers by typed presentation.
+- `b842ad8` points API development docs at root launcher.
+- `dfcd212` adds required `chat | report` intent to orchestrator contracts,
+  removes length/tool/Markdown/`say()` heuristics, keeps filtered delivery in both
+  modes, and resolves buffered artifact content only for report presentation.
+- `e53bb29` lands canonical root `dev.sh`, same-origin `/api` proxy, dependency
+  startup/readiness, component-launcher removal, and synchronized run docs.
+- `217f7eb` rebuilds central orchestrator prompt v5 from owner's 1603-line
+  structural reference and adds registry-backed batch prompt v1. Engineering
+  batch no longer uses hardcoded two-sentence fallback.
+
+Product semantics now:
+
+- Direct, casual, ordinary, long technical, tool-assisted, and research-summary
+  answers render as open filtered chat.
+- Inline report sheet appears only when user explicitly requested/needed an
+  inline report.
+- Generated files/documents/charts remain artifacts, never automatic reports.
+- `say()` is sparse live commentary for genuinely long expert/batch work. Quick
+  answers do not call it. Long work final may be chat or report by output intent.
+- Weak-model accidental trivial `say()` cannot create second report.
+
+Proof:
+
+- Full backend: `1551 passed, 1 existing RestrictedPython warning`.
+- Chat/report combined focused suite: `92 passed`.
+- Prompt/orchestration/batch focused suite: `225 passed`.
+- Frontend: `npm run lint` and `npm run typecheck` passed.
+- Live Claude Haiku 4.5 identity regression:
+  `run_7722d656692a` delivered
+  `"I'm Clannon, a memory-native research and workflow assistant built by the Clannon team."`
+  as `message`; `report=null`; no experts; no `say()`.
+- Live stack healthy: `http://192.168.18.84:3000`,
+  `/api/health` through Next returns 200.
+
+Active ignored overlay files were updated byte-identically with committed
+baselines:
+`backend/prompts.secure/orchestrator/system.md` and
+`backend/prompts.secure/batch_orchestrator/system.md`.
+
+Integration is ready to push. Do not include unrelated owner edits:
+`CLAUDE.md`, `frontend/CLAUDE.md`, or `assets/Clannon Labs.png`.
+
+## Change note
+
+Old UI defect was deterministic backend routing, not a frontend styling failure:
+any `say()` forced final answer into report. Typed intent now owns presentation,
+and live Haiku verifies simple identity stays one casual chat reply. Owner prompt
+guide changed prompt organization and examples, but incompatible Claude identity,
+unavailable tools, provider policy, and environment-specific machinery were
+deliberately excluded.
+
+## Previous checkpoint — unified local launcher (2026-07-29)
+
+**Pending owner confirmation:** casual `Who are you?` run
+`run_f0c991d05200` exposed deterministic message/deliverable misrouting. Haiku
+called `say()` with one introduction, then returned a second introduction as
+`answer_text`; `_split_message_and_deliverable()` treats presence of any
+`say()` as reason to route final answer into `report`. Filed linked pending
+proposals to orchestration and frontend:
+`2026-07-29_casual_answer_channel_routing.md` and
+`2026-07-29_chat_vs_report_presentation.md`. Owner clarified: `say()` is final
+voice for trivial conversation and progress/commentary for report work; both
+channels are valid when jobs differ. Proposal now recommends explicit
+presentation intent plus a security distinction for unfiltered `say()`. Owner
+has not authorized implementation; do not dispatch before reply.
+
+Owner asked for one root development launcher and synchronized run docs after a
+real UI run failed before any model call. Diagnosis was ClamAV absent at
+`127.0.0.1:3310`; persisted run log said `ClamAV scanner was unavailable during
+the security scan`. Embeddings also pointed at stale `/mnt/win_c`.
+
+Implemented, uncommitted:
+
+- Added executable root `dev.sh`, canonical full-stack entry point.
+- Removed duplicate `backend/dev.sh` and `frontend/dev.sh`;
+  `frontend/package.json`'s `npm run lan` now calls `../dev.sh`.
+- Root launcher starts/reuses persistent ClamAV + Qdrant containers through
+  Docker or Podman, waits for real protocol readiness, uses local embedding
+  cache, replaces only repo-owned stale app listeners, starts FastAPI privately
+  on `127.0.0.1:8000`, starts Next on LAN `:3000`, and owns cleanup.
+- `frontend/next.config.ts` proxies dev-only `/api/*` to private FastAPI when
+  `CLANNON_DEV_BACKEND_URL` is set. Browser now sees one origin/port.
+- Synchronized local-run instructions in `README.md`, `RELEASE.md`,
+  `backend/README.md`, `backend/api/README.md`, `frontend/README.md`, and
+  `frontend/BACKEND_INTEGRATION.md`.
+
+Live proof:
+
+- Root launcher cold-started Podman containers `clannon-dev-clamav` and
+  `clannon-dev-qdrant`; second start reused them.
+- `http://192.168.18.84:3000/api/health` returned OK through Next proxy.
+- `/api/ready` returned Qdrant, embeddings, DB all `up`.
+- `/api/auth/me` returned expected 401 without cookie through proxy; existing
+  browser session returned 200, proving cookie forwarding.
+- Direct real `ClamScanner` clean probe passed.
+- `npm run typecheck`, `bash -n dev.sh`, and `git diff --check` passed.
+- Cleanup test closed ports 3000/8000 while retaining warm service containers.
+- Stack restarted and remains running at `http://192.168.18.84:3000`.
+
+No commit/push requested. Worktree also contains concurrent changes NOT made by
+backend: `.agents/provider-handoffs/frontend.md`, `frontend/CLAUDE.md`, and one
+line in `frontend/BACKEND_INTEGRATION.md` changing “Claude Code” to “Claude
+Code/codex”. Preserve them.
+
+## Previous change note
+
+Local startup previously required two scripts plus separately managed services.
+That let frontend appear healthy while every run failed closed at absent ClamAV,
+and direct LAN API wiring created two browser origins. Root launcher now owns
+complete dependency/application startup while FastAPI remains on its required
+distinct internal TCP port.
+
+## Previous checkpoint — PAUSED FOR A WEEK (2026-07-28 evening)
 
 **The owner is taking a week off. Everything is committed and pushed; the tree is
 clean apart from the frontend session's own uncommitted work, which is theirs and
