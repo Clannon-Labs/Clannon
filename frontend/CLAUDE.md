@@ -16,6 +16,18 @@ note when it materially helps. Do not let repository-wide or backend context
 displace the frontend answer unless the owner explicitly asks about backend or
 cross-cutting system work.
 
+## Frontend File-Length Interpretation
+
+LAW 2's 500-line number is a soft readability signal for frontend, not a hard
+split trigger. Frontend components may stay together beyond it when colocating
+the component family, state, and interaction logic makes the UI easier to
+understand and change. Split when a file carries unrelated responsibilities,
+repeated logic, dead surface, or genuine navigation cost—not to satisfy line
+count alone. Backend applies the limit more strictly because large pipeline,
+security, and stateful modules have different audit and failure risks. This
+frontend interpretation does not relax modularity, single-source, or
+replaceability requirements.
+
 > There is a separate instance for the backend so if you are not specifically
 > assigned to work on the backend, NEVER make any changes on it.
 

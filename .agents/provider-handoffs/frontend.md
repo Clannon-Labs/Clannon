@@ -24,8 +24,10 @@ Transfers live frontend work between Claude Code and Codex.
   still eligible.
 - Owner proposal `proposals/to-frontend/owner-critique.md` remains accepted,
   not done, until that live proof.
-- LAW 2 flag: pre-existing `src/lib/api/mock.ts` is 768 lines (>500 soft cap).
-  Needs a dedicated responsibility split; do not hide it during next mock work.
+- Owner clarified LAW 2 for frontend: 500 lines is a readability signal, not a
+  hard split mandate. Keep cohesive component/state/interaction families
+  together when that reads better; split real responsibility bloat. Durable
+  rule now lives in `frontend/CLAUDE.md`.
 
 ## Change note
 
