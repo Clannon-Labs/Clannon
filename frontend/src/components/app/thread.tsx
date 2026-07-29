@@ -3,10 +3,8 @@ import { Mark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 /**
- * The conversation primitives shared by the run view and its prior turns.
- * User turns are a right-aligned bubble (visually distinct, the chat convention);
- * the assistant turn is full-width and flat, marked with the Clannon glyph — the
- * report, the activity, and the live status all live inside one.
+ * Conversation primitives used by the no-signup demo and assistant turns.
+ * Authenticated sent prompts use TurnPrompt because they own copy/edit actions.
  */
 
 export function UserMessage({ children, className }: { children: ReactNode; className?: string }) {

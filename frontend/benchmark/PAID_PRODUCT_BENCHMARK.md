@@ -178,6 +178,28 @@ evidenced, not chased toward a target. Performance (64) and time to first
 value (78) are unchanged for the reasons already stated; see the 90-gate
 note at the top of this file.
 
+## Pass 5 — sent prompts become editable (2026-07-29)
+
+Owner found a core workflow defect: the only “Edit and resubmit” control lived
+inside a failed/blocked response callout and merely focused an empty follow-up
+composer. It did not edit or resubmit. Successful prompts had no edit action,
+and a user ten turns deep could not restart from an earlier correction.
+
+Frontend now puts Copy and Edit directly on every sent prompt: hover/focus on
+pointer devices, tap reveal at 390px, inline prefilled editor, explicit
+later-turn context warning, and “Restart from here.” The fake callout-local
+button is gone. Mock contract tests prove a middle-turn revision retains the
+prefix, excludes the replaced turn and descendants, preserves the original
+branch, and keeps project/input scope. Browser proof covers desktop edit →
+new path and mobile tap actions in
+`previews/2026-07-29_prompt-revision/`.
+
+**Score stays 84.16.** Real backend branch semantics do not exist yet.
+Frontend filed
+`proposals/to-backend/2026-07-29_revise-turn-branch-contract.md` and wired its
+HTTP adapter, but a mock-green interaction is not a live paid workflow.
+Re-score core workflow/continuity only after real HTTP verification.
+
 ## 3. Hard gates
 
 Weighted score alone cannot hide critical failure.

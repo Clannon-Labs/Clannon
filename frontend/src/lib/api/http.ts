@@ -265,6 +265,37 @@ export class HttpClient implements ClannonClient {
     return (await res.json()) as { id: string };
   }
 
+  async reviseRun(
+    id: string,
+    brief: string,
+    files: File[] = [],
+    models: Record<string, string> = {},
+  ): Promise<{ id: string }> {
+    const form = new FormData();
+    form.append("brief", brief);
+    for (const f of files) form.append("files", f, f.name);
+    if (Object.keys(models).length) form.append("models", JSON.stringify(models));
+    // The browser no longer owns the bytes of a previously-uploaded file.
+    // Reuse is therefore an explicit server-side operation over authoritative,
+    // already-sanitized inputs — never reconstructed from client metadata.
+    form.append("reuseInputs", "true");
+    const res = await fetch(url(appConfig.endpoints.runRevision, { id }), {
+      method: "POST",
+      credentials: appConfig.http.credentials,
+      body: form,
+    });
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        message = errorMessage(await res.json(), message);
+      } catch {
+        // non-JSON error body
+      }
+      throw new ApiError(message, res.status);
+    }
+    return (await res.json()) as { id: string };
+  }
+
   getRunThread(id: string): Promise<Run[]> {
     return request(appConfig.endpoints.runThread, { params: { id } });
   }

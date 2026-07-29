@@ -3,7 +3,10 @@
 import { ChevronRight } from "lucide-react";
 import type { Run } from "@/lib/api";
 import { Report } from "@/components/app/report";
-import { UserMessage, AssistantMessage } from "@/components/app/thread";
+import { AssistantMessage } from "@/components/app/thread";
+import { TurnPrompt } from "@/components/app/turn-prompt";
+
+type RevisePrompt = (runId: string, brief: string) => Promise<void>;
 
 /** Copy for a turn that produced no report, by how it ended. */
 function noReportNote(status: Run["status"]): string {
@@ -24,14 +27,24 @@ function noReportNote(status: Run["status"]): string {
  * rendered as a chat thread (your ask, then what came back). The live turn
  * renders below this in full. Together they read as one continuing conversation.
  */
-export function PriorTurns({ turns }: { turns: Run[] }) {
+export function PriorTurns({
+  turns,
+  onRevise,
+}: {
+  turns: Run[];
+  onRevise?: RevisePrompt;
+}) {
   if (turns.length === 0) return null;
 
   return (
     <section aria-label="Earlier in this conversation" className="mb-8 flex flex-col gap-6">
-      {turns.map((turn) => (
+      {turns.map((turn, index) => (
         <div key={turn.id} className="flex flex-col gap-3">
-          <UserMessage>{turn.brief}</UserMessage>
+          <TurnPrompt
+            turn={turn}
+            laterTurnCount={turns.length - index}
+            onRevise={onRevise}
+          />
           <AssistantMessage>
             {/* the agent's conversational note (commentary) */}
             {turn.message && (

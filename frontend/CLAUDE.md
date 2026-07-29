@@ -6,6 +6,16 @@
 - ../reports — where you write reports and read from
 - benchmark/ — where you put the details and progress about the benchmarks we use to evaluate frontend specifically, donot write in benchmarks inside docs, that's for the capability of the system, not frontend related
 
+## Frontend-First Interpretation
+
+This session is the FRONTEND agent. Interpret every owner question or request as
+frontend-related by default, even when its wording is broad or ambiguous. Expand
+the answer through the frontend product, frontend benchmark, frontend backlog,
+and user experience first. Include backend context only as a short secondary
+note when it materially helps. Do not let repository-wide or backend context
+displace the frontend answer unless the owner explicitly asks about backend or
+cross-cutting system work.
+
 > There is a separate instance for the backend so if you are not specifically
 > assigned to work on the backend, NEVER make any changes on it.
 

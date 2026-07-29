@@ -4,6 +4,58 @@ Transfers live frontend work between Claude Code and Codex.
 
 ## Current checkpoint
 
+- Provider: Codex
+- Updated: 2026-07-29
+- Task: owner critique — sent prompts need stable Copy/Edit actions; editing an
+  earlier turn must restart from its prefix and exclude later turns from context
+- State: frontend implementation complete and mock/browser-proven; real HTTP
+  completion BLOCKED on backend proposal
+  `proposals/to-backend/2026-07-29_revise-turn-branch-contract.md`
+- Built: `TurnPrompt` (desktop hover/focus, mobile tap, inline prefilled edit,
+  explicit context cut), Clipboard API + insecure-LAN fallback, revise client/
+  hook/http/mock contract, real mock lineage branching, removed failed-callout
+  fake edit button
+- Verification: TypeScript, ESLint, Vitest 92/92, isolated production build;
+  Playwright desktop revision 1/1 and 390px tap 1/1. Evidence:
+  `previews/2026-07-29_prompt-revision/`; detail:
+  `reports/frontend/frontend_report_v12.md`
+- Honest benchmark: remains 84.16. Do not raise until backend endpoint lands
+  and a real HTTP revision proves later turns are absent while saved memory is
+  still eligible.
+- Owner proposal `proposals/to-frontend/owner-critique.md` remains accepted,
+  not done, until that live proof.
+- LAW 2 flag: pre-existing `src/lib/api/mock.ts` is 768 lines (>500 soft cap).
+  Needs a dedicated responsibility split; do not hide it during next mock work.
+
+## Change note
+
+Owner's screenshot exposed a functionality defect, not polish: callout-local
+“Edit and resubmit” never edited anything. Frontend now treats prompt actions
+as part of the prompt in every outcome state. Branch semantics cannot be faked
+with follow-up; durable backend proposal carries exact contract.
+
+## Previous checkpoint
+
+- Provider: Codex
+- Updated: 2026-07-29
+- Task: persist owner clarification that this role must interpret broad or
+  ambiguous questions as frontend questions first
+- State: done in `frontend/CLAUDE.md` under `Frontend-First Interpretation`
+- Standing interpretation: lead with frontend product, frontend benchmark,
+  frontend backlog, and user experience. Backend context is optional,
+  secondary, and brief unless owner explicitly asks for backend or
+  cross-cutting system work.
+- Code/product state unchanged. Prior implementation checkpoint follows.
+
+## Change note
+
+Owner corrected a role-context failure: a broad benchmark question was answered
+backend-first even though this is the frontend agent. Frontend-first
+interpretation is now durable in the module charter rather than left only in
+conversation history.
+
+## Previous checkpoint
+
 - Provider: Claude Code
 - Updated: 2026-07-28 (later in the day than the checkpoint below)
 - Task: owner instruction to stop auditing from code/screenshots and

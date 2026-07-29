@@ -405,6 +405,26 @@ export class MockClient implements ClannonClient {
     return { id: newId };
   }
 
+  async reviseRun(id: string, brief: string, files: File[] = []): Promise<{ id: string }> {
+    const target = this.runs.get(id);
+    if (!target) throw new ApiError("Run not found.", 404);
+    if (!["delivered", "blocked", "failed", "cancelled"].includes(target.status)) {
+      throw new ApiError("Wait for this turn to finish or stop it before editing.", 409);
+    }
+
+    // createRun gives the revision its own session: the original branch remains
+    // intact and auditable, while the sidebar treats this as a new path.
+    const { id: revisedId } = await this.createRun(brief, files, undefined, target.projectId);
+    const revised = this.runs.get(revisedId);
+    if (revised) {
+      // Skip the target itself. Following parentRunId now yields the retained
+      // prefix only; every descendant after the target is unreachable.
+      revised.parentRunId = target.parentRunId ?? null;
+      if (files.length === 0) revised.inputs = structuredClone(target.inputs);
+    }
+    return { id: revisedId };
+  }
+
   async cancelRun(id: string): Promise<void> {
     await sleep(150);
     const run = this.runs.get(id);
@@ -418,11 +438,19 @@ export class MockClient implements ClannonClient {
     await sleep(180);
     const anchor = this.runs.get(id);
     if (!anchor) throw new ApiError("Run not found.", 404);
-    const session = anchor.sessionId ?? anchor.id;
-    return [...this.runs.values()]
-      .filter((r) => (r.sessionId ?? r.id) === session)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((r) => structuredClone(r));
+
+    // Follow the actual lineage rather than grouping by sessionId. Linear
+    // conversations produce the same result; revised branches can inherit an
+    // old prefix without accidentally pulling the replaced turn or descendants.
+    const lineage: Run[] = [];
+    const seen = new Set<string>();
+    let cursor: Run | undefined = anchor;
+    while (cursor && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      lineage.unshift(structuredClone(cursor));
+      cursor = cursor.parentRunId ? this.runs.get(cursor.parentRunId) : undefined;
+    }
+    return lineage;
   }
 
   async deleteSession(sessionId: string): Promise<void> {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -17,10 +18,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
-import { useRun, useLiveRun, useRunThread, useDownloadArtifact, useCancelRun } from "@/lib/api/hooks";
+import {
+  useRun,
+  useLiveRun,
+  useRunThread,
+  useDownloadArtifact,
+  useCancelRun,
+  useReviseRun,
+} from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Report } from "@/components/app/report";
 import { RunActivity } from "@/components/app/run-activity";
@@ -28,7 +35,7 @@ import { RunStatusBadge } from "@/components/app/run-status";
 import { EASE, Reveal } from "@/components/motion";
 import { RunComposer, ReportRating } from "@/components/app/run-feedback";
 import { PriorTurns } from "@/components/app/prior-turns";
-import { UserMessage } from "@/components/app/thread";
+import { TurnPrompt } from "@/components/app/turn-prompt";
 import { ArtifactPreview } from "@/components/app/artifact-preview";
 import { Mark } from "@/components/brand/logo";
 import { VerificationStatus } from "@/components/app/verification-status";
@@ -94,11 +101,13 @@ function blockMessage(stage: Run["blockStage"]): { title: string; body: string }
 
 export default function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: run, isLoading, error } = useRun(id);
   const { data: thread } = useRunThread(id);
   const live = useLiveRun(run);
   const download = useDownloadArtifact();
   const cancel = useCancelRun(id);
+  const revise = useReviseRun();
   const toast = useToast();
   const reduce = useReducedMotion();
 
@@ -157,6 +166,11 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     );
   }
 
+  async function revisePrompt(runId: string, brief: string) {
+    const next = await revise.mutateAsync({ id: runId, brief });
+    router.push(`/app/runs/${next.id}`);
+  }
+
   if (isLoading) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -204,7 +218,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
       {/* the conversation — prior turns, then the current turn, as one thread */}
       <div className="mt-3 flex flex-1 flex-col gap-6 pb-10">
-        <PriorTurns turns={priorTurns} />
+        <PriorTurns turns={priorTurns} onRevise={revisePrompt} />
 
         {/* current turn — your ask, then Clannon's response. The brief bubble
             carries the shared view-transition-name, so the clicked run row in
@@ -214,7 +228,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           className="flex flex-col items-end gap-1.5"
           style={{ viewTransitionName: `run-open-${id.replace(/[^a-zA-Z0-9]/g, "-")}` }}
         >
-          <UserMessage>{run.brief}</UserMessage>
+          <TurnPrompt
+            turn={run}
+            onRevise={isTerminal ? revisePrompt : undefined}
+          />
           {run.inputs && run.inputs.length > 0 && (
             <ul className="flex max-w-[85%] flex-wrap justify-end gap-2" aria-label="Attached files">
               {run.inputs.map((input, i) => {
@@ -280,14 +297,6 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                   ? blockMessage(run.blockStage).body
                   : "A pipeline stage failed before delivery. Your token budget was not charged for incomplete work."}
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => document.getElementById("composer-input")?.focus()}
-              >
-                Edit and resubmit
-              </Button>
             </div>
           )}
 

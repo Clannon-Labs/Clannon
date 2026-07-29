@@ -173,6 +173,21 @@ export function useCreateFollowUp(parentId: string) {
   });
 }
 
+/** Revise a sent prompt into a new conversation branch. The backend owns the
+ *  transcript cut: turns after the target cannot leak into the new context. */
+export function useReviseRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      id: string;
+      brief: string;
+      files?: File[];
+      models?: Record<string, string>;
+    }) => getClient().reviseRun(vars.id, vars.brief, vars.files, vars.models),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.runs }),
+  });
+}
+
 /** Delete a whole conversation (a session + all its turns) from history. */
 export function useDeleteSession() {
   const qc = useQueryClient();

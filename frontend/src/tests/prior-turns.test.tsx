@@ -155,8 +155,8 @@ describe("PriorTurns", () => {
 // ---- MockClient.getRunThread contract tests ---------------------------------
 //
 // The cross-session thread ("second session is the magic") depends on
-// getRunThread returning ALL turns of a session in ascending createdAt order.
-// These tests pin that contract against the MockClient implementation.
+// getRunThread returning the active lineage oldest-first. Linear sessions have
+// one lineage; revisions inherit only the prefix before the edited turn.
 
 describe("MockClient.getRunThread", () => {
   it("returns thread turns in ascending createdAt (oldest-first) order", async () => {
@@ -198,5 +198,42 @@ describe("MockClient.getRunThread", () => {
   it("throws 404 for an unknown run id", async () => {
     const client = new MockClient();
     await expect(client.getRunThread("nonexistent_run_id")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("a revision keeps the prefix and excludes the replaced turn plus descendants", async () => {
+    const client = new MockClient();
+    const controller = new AbortController();
+    const settle = async (id: string) => {
+      await client.cancelRun(id);
+      for await (const event of client.streamRun(id, controller.signal)) {
+        expect(event).toEqual({ type: "status", status: "cancelled" });
+        // one cancellation event settles the mock run as terminal
+      }
+    };
+
+    const { id: rootId } = await client.createRun("Original root turn");
+    await settle(rootId);
+    const { id: middleId } = await client.createFollowUp(rootId, "Original middle turn");
+    await settle(middleId);
+    const { id: descendantId } = await client.createFollowUp(middleId, "Later descendant turn");
+    await settle(descendantId);
+
+    const { id: revisedId } = await client.reviseRun(middleId, "Corrected middle turn");
+    const revisedThread = await client.getRunThread(revisedId);
+
+    expect(revisedThread.map((turn) => turn.brief)).toEqual([
+      "Original root turn",
+      "Corrected middle turn",
+    ]);
+    expect(revisedThread.map((turn) => turn.id)).not.toContain(middleId);
+    expect(revisedThread.map((turn) => turn.id)).not.toContain(descendantId);
+
+    // Original branch remains readable rather than being destructively erased.
+    const originalThread = await client.getRunThread(descendantId);
+    expect(originalThread.map((turn) => turn.brief)).toEqual([
+      "Original root turn",
+      "Original middle turn",
+      "Later descendant turn",
+    ]);
   });
 });

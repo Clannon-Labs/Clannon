@@ -99,7 +99,12 @@ test("a filter-blocked run explains the gate, preserves the brief, and offers a 
 
   await expect(page.getByText("Blocked", { exact: true })).toBeVisible({ timeout: 120_000 });
   await expect(page.getByText("Held back by the output filter")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit and resubmit" })).toBeVisible();
+  const sentPrompt = page.getByRole("button", {
+    name: /Force a blocked output for e2e.*show prompt actions/i,
+  });
+  await sentPrompt.hover();
+  await expect(page.getByRole("button", { name: "Edit sent prompt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit and resubmit" })).toHaveCount(0);
 
   // no partial claim over a run that never produced a draft to check
   await expect(page.getByText("Partial", { exact: true })).toHaveCount(0);

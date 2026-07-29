@@ -82,7 +82,15 @@ export interface ClannonClient {
     files?: File[],
     models?: Record<string, string>,
   ): Promise<{ id: string }>;
-  /** Every turn of this run's session, oldest first — the conversation thread. */
+  /** Restart from an edited sent prompt. The new branch retains only turns
+   *  before `id`; descendants stay in history but leave active context. */
+  reviseRun(
+    id: string,
+    brief: string,
+    files?: File[],
+    models?: Record<string, string>,
+  ): Promise<{ id: string }>;
+  /** Every turn in this run's active lineage, oldest first. */
   getRunThread(id: string): Promise<Run[]>;
   /** Delete a whole conversation — the session and every turn in it. */
   deleteSession(sessionId: string): Promise<void>;
