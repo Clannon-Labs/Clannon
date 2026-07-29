@@ -17,6 +17,12 @@ import time
 from typing import Any
 
 from . import auth
+from .run_lineage import (
+    decode_prefix,
+    encode_prefix,
+    prefix_before,
+    resolve_effective_thread,
+)
 from .run_state import RunState, TERMINAL_STATUSES
 
 # Uploaded input files are stored in the artifact store under a "<INPUT_NS><run_id>"
@@ -78,12 +84,38 @@ class RunStore:
         `execute` via `_build_conversation`) — NOT stuffed into the input — so
         only the user's new `ask` passes through sanitize/verify, and the
         orchestrator genuinely continues the conversation."""
+        if parent.lineage_prefix is not None:
+            # Validate persisted prefix ownership before copying it to another row.
+            self.effective_thread(user_id, parent)
         rid = f"run_{secrets.token_hex(6)}"
         title = ask if len(ask) <= 64 else ask[:61].rstrip() + "…"
         run = RunState(
             id=rid, user_id=user_id, title=title, brief=ask,
             parent_run_id=parent.id, session_id=parent.session_id or parent.id,
             project_id=parent.project_id,   # a follow-up stays in the parent's project
+            lineage_prefix=(
+                list(parent.lineage_prefix)
+                if parent.lineage_prefix is not None
+                else None
+            ),
+        )
+        self._runs[rid] = run
+        return run
+
+    def create_revision(self, user_id: str, brief: str, target: RunState) -> RunState:
+        """Open a new branch at ``target`` without altering its original session."""
+        prefix = prefix_before(self, user_id, target)
+        rid = f"run_{secrets.token_hex(6)}"
+        title = brief if len(brief) <= 64 else brief[:61].rstrip() + "…"
+        run = RunState(
+            id=rid,
+            user_id=user_id,
+            title=title,
+            brief=brief,
+            parent_run_id=prefix[-1] if prefix else None,
+            session_id=rid,
+            project_id=target.project_id,
+            lineage_prefix=prefix,
         )
         self._runs[rid] = run
         return run
@@ -236,16 +268,17 @@ class RunStore:
             db.execute(
                 "INSERT OR REPLACE INTO runs "
                 "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,report,message,memory_writes_json,"
-                "feedback_rating,feedback_comment,parent_run_id,session_id,block_stage,artifacts_json,inputs_json,project_id,sources_json,verification_state,"
+                "feedback_rating,feedback_comment,parent_run_id,session_id,lineage_prefix_json,block_stage,artifacts_json,inputs_json,project_id,sources_json,verification_state,"
                 "completion_state,completion_reason) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id, run.user_id, run.title, run.brief, run.status,
                     run.created_at, run.tokens_used, json.dumps(run.log),
                     json.dumps(list(run.experts.values())), run.report, run.message,
                     json.dumps(run.memory_writes),
                     run.feedback_rating, run.feedback_comment, run.parent_run_id,
-                    run.session_id or run.id, run.block_stage, json.dumps(run.artifacts),
+                    run.session_id or run.id, encode_prefix(run.lineage_prefix),
+                    run.block_stage, json.dumps(run.artifacts),
                     json.dumps(run.inputs), run.project_id, json.dumps(run.sources),
                     run.verification_state,
                     run.completion_state, run.completion_reason,
@@ -272,6 +305,9 @@ class RunStore:
         run.parent_run_id = row["parent_run_id"] if "parent_run_id" in keys else None
         # rows created before the session column default to a self-session
         run.session_id = (("session_id" in keys and row["session_id"]) or row["id"])
+        run.lineage_prefix = decode_prefix(
+            row["lineage_prefix_json"] if "lineage_prefix_json" in keys else None
+        )
         run.block_stage = row["block_stage"] if "block_stage" in keys else None
         run.artifacts = json.loads(row["artifacts_json"]) if "artifacts_json" in keys and row["artifacts_json"] else []
         run.inputs = json.loads(row["inputs_json"]) if "inputs_json" in keys and row["inputs_json"] else []
@@ -360,6 +396,10 @@ class RunStore:
         merged = {row["id"]: self._from_row(row) for row in rows if row["id"] not in live}
         merged.update(live)
         return sorted(merged.values(), key=lambda r: r.created_at)
+
+    def effective_thread(self, user_id: str, run: RunState) -> list[RunState]:
+        """Resolve one run's owner-safe inherited prefix plus branch-local turns."""
+        return resolve_effective_thread(self, user_id, run)
 
 
 STORE = RunStore()

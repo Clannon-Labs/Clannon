@@ -88,8 +88,8 @@ class RunState:
     # {id, title, url, domain} Source shape the frontend expects. Populated at delivery
     # by run_driver._collect_sources; empty until the run completes.
     sources: list[dict] = field(default_factory=list)
-    # uploaded input files admitted for this run (metadata only: name/modality/size;
-    # the bytes are passed to execute() and seeded into the expert workspace, never stored here)
+    # Uploaded input metadata. Bytes live only in the artifact store; private
+    # integrity keys stay server-side when this record is serialized.
     inputs: list[dict] = field(default_factory=list)
     subscribers: list[asyncio.Queue] = field(default_factory=list)
     # live execution handle, set by the route right after the run's task is created;
@@ -139,6 +139,10 @@ class RunState:
     # per-session model choices for THIS run (role -> bare model id), layered over
     # the user's workspace defaults at execute time. Empty = use workspace defaults.
     session_models: dict[str, str] = field(default_factory=dict)
+    # ``None`` marks a normal linear session. Revised branches persist the exact
+    # owner-scoped run IDs inherited before their branch-local session; ``[]`` is
+    # therefore meaningful (a revision of a root turn).
+    lineage_prefix: list[str] | None = None
 
     def emit(self, event: dict) -> None:
         self.events.append(event)
@@ -251,7 +255,11 @@ class RunState:
             "report": self.report,
             "sources": self.sources,
             "artifacts": self.artifacts,
-            "inputs": self.inputs,
+            "inputs": [
+                {key: value for key, value in item.items() if not key.startswith("_")}
+                for item in self.inputs
+                if isinstance(item, dict)
+            ],
             "feedbackRating": self.feedback_rating,
             "feedbackComment": self.feedback_comment,
             "parentRunId": self.parent_run_id,

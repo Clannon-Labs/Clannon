@@ -60,6 +60,7 @@ PERSISTED = {
     "verification_state",
     "completion_state",
     "completion_reason",
+    "lineage_prefix",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -124,6 +125,7 @@ def _fully_populated_run() -> RunState:
     # would still look right if we round-tripped the default.
     run.completion_state = "partial"
     run.completion_reason = "timeout"
+    run.lineage_prefix = ["run_prefix01", "run_prefix02"]
     return run
 
 
@@ -189,3 +191,37 @@ def test_get_is_owner_scoped_after_persist(store):
 
     assert store.get("someone_else", original.id) is None
     assert store.get(original.user_id, original.id) is not None
+
+
+def test_existing_database_migrates_nullable_lineage_column(tmp_path, monkeypatch):
+    """Pre-branch SQLite files gain the new nullable prefix without data loss."""
+    import sqlite3
+
+    from api import auth, config
+
+    db_path = tmp_path / "pre_branch.db"
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            """CREATE TABLE runs (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT NOT NULL,
+                brief TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                log_json TEXT NOT NULL DEFAULT '[]',
+                experts_json TEXT NOT NULL DEFAULT '[]',
+                report TEXT, memory_writes_json TEXT NOT NULL DEFAULT '[]'
+            )"""
+        )
+        db.execute(
+            "INSERT INTO runs (id,user_id,title,brief,status,created_at) "
+            "VALUES ('run_old','u1','old','old brief','delivered','2026-01-01')"
+        )
+
+    monkeypatch.setattr(config, "DB_PATH", str(db_path))
+    with auth._db() as db:
+        columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+        row = db.execute(
+            "SELECT lineage_prefix_json FROM runs WHERE id='run_old'"
+        ).fetchone()
+
+    assert "lineage_prefix_json" in columns
+    assert row["lineage_prefix_json"] is None

@@ -65,7 +65,8 @@ def test_uploaded_file_survives_to_a_later_turn(monkeypatch, tmp_path):
 
     async def go():
         run1 = SimpleNamespace(id="rf1", user_id="u", session_id="rf1", inputs=None, created_at="2026-06-18T00:00:01")
-        f = InputFile(name="data.csv", modality="text", data=b"a,b,c\n1,2,3", size=10)
+        data = b"a,b,c\n1,2,3"
+        f = InputFile(name="data.csv", modality="text", data=data, size=len(data))
         await rd.persist_inputs(run1, [f])
         assert run1.inputs and run1.inputs[0].get("id")          # ref recorded on the turn
 

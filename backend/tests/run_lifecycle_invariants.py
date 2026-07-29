@@ -58,6 +58,7 @@ from api.run_state import RunState
 from api.run_store import RunStore
 from api import sse
 import api.run_driver as run_driver
+import api.run_inputs as run_inputs
 
 
 # ── shared fixtures ───────────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ def test_cancel_during_async_input_persistence_stops_registered_task(
     reached = asyncio.Event()
     release = asyncio.Event()
     monkeypatch.setattr(
-        run_driver, "LocalArtifactStore", lambda: _SuspendingArtifactStore(reached, release)
+        run_inputs, "LocalArtifactStore", lambda: _SuspendingArtifactStore(reached, release)
     )
     input_file = SimpleNamespace(name="f.txt", data=b"hi", as_dict=lambda: {"name": "f.txt"})
 

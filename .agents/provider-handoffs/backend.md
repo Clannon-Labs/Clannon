@@ -63,7 +63,47 @@ finished something.
 
 ---
 
-## Current checkpoint — chat/report intent + orchestrator prompts (2026-07-29)
+## Current checkpoint — safe revise-turn branching (2026-07-29)
+
+Frontend's high-priority proposal is implemented and verified:
+
+- `POST /runs/{id}/revise` accepts edited `brief`, optional `models`, replacement
+  `files`, and `reuseInputs` (default true).
+- Revised run gets a new session plus persisted owner/project-scoped lineage
+  prefix. No historical rows are cloned or mutated.
+- One effective-thread resolver drives `/thread`, model conversation, recall
+  transcript, and inherited-file reseeding. Old target and later descendants do
+  not enter revised context.
+- Follow-ups on revised branch retain inherited prefix. Original branch remains
+  readable.
+- Target input reuse reads only target-owned server artifact namespace. New
+  inputs carry SHA-256; legacy inputs remain reusable through namespace + size
+  validation. Missing, malformed, redirected, or hash-mismatched inputs return
+  actionable 409 before run creation.
+- Revision route/request helpers live in focused modules. `app.py` is still
+  pre-existing LAW 2 debt at 748 lines, but this change reduced it from baseline
+  777 rather than growing it to worker draft's 834.
+
+Proof:
+
+- backend full suite: `1566 passed, 1 existing RestrictedPython warning`;
+- focused revision/lifecycle/API suite: `96 passed`;
+- frontend revision UI tests: `19 passed`; TypeScript check passed;
+- invariant checker: 7 PASS, one existing network-permission WARN;
+- live proxied `/api/health` OK and OpenAPI contains revise route.
+
+Pending integration only: review final status, commit API/tests/comms/handoff,
+push. Preserve unrelated owner changes in `CLAUDE.md`, `frontend/CLAUDE.md`, and
+untracked assets.
+
+## Change note
+
+Existing follow-up was linear and would leak descendants after edited turn into
+model and file context. New persisted lineage fixes branch semantics without
+duplicating usage/audit rows. Coordinator review preserved legacy file reuse and
+reduced oversized route file.
+
+## Previous checkpoint — chat/report intent + orchestrator prompts (2026-07-29)
 
 Owner-confirmed behavior is implemented, tested, and committed locally:
 

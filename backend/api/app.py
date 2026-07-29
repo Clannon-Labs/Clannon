@@ -10,7 +10,6 @@ Set FRONTEND_ORIGIN for CORS (default http://localhost:3000). Loads .env /
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import time
@@ -37,10 +36,14 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
-from security.sanitizers import uploads as upload_scan
-
 from . import audit as _audit, auth, config, runs
 from . import decision_audit as _decisions
+from . import run_revision
+from .run_lineage import LineageError
+from .run_requests import (
+    admit_uploads as _admit_uploads,
+    parse_session_models as _parse_session_models,
+)
 from .run_state import TERMINAL_STATUSES
 from .config_validation import fail_fast_if_strict
 from .hardening import install_hardening
@@ -94,6 +97,7 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION, lifespan=lifespan)
+app.include_router(run_revision.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -103,6 +107,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 install_hardening(app)
+
+
+@app.exception_handler(LineageError)
+async def lineage_error(_request: Request, _exc: LineageError) -> JSONResponse:
+    """Fail closed without exposing which stored prefix row was unavailable."""
+    return JSONResponse(
+        {
+            "detail": (
+                "Conversation lineage is unavailable. Start a new conversation "
+                "or retry from an earlier readable turn."
+            )
+        },
+        status_code=409,
+    )
 
 
 # ---------- infrastructure (unauthenticated; expose ONLY process + dependency state) ----------
@@ -289,52 +307,6 @@ def remove_project(project_id: str, user: auth.User = Depends(auth.current_user)
 # the full pipeline. Limits live in config (one source, surfaced via /config).
 
 
-def _parse_session_models(models: str) -> dict[str, str]:
-    """Parse the optional per-conversation `models` form field (a JSON object role -> bare
-    model id). The picker now sends every role the chosen model is valid for, so parsing is
-    BEST-EFFORT: a structurally malformed body (not a JSON object) is a 422, but an individual
-    entry that doesn't validate — an unknown or system-managed (locked) role, or a model
-    outside that role's capability set — is **dropped** (the role falls back to its default),
-    NEVER failing the run over the model picker. The valid subset is applied to the turn;
-    empty/absent -> no overrides (the user's workspace defaults)."""
-    if not models or not models.strip():
-        return {}
-    try:
-        raw = json.loads(models)
-    except (ValueError, TypeError):
-        raise HTTPException(422, "`models` must be a JSON object of role -> model.")
-    if not isinstance(raw, dict):
-        raise HTTPException(422, "`models` must be a JSON object of role -> model.")
-    by_role = {e["layer"]: e for e in config.MODEL_CATALOG}
-    chosen: dict[str, str] = {}
-    for role, model in raw.items():
-        entry = by_role.get(role)
-        if entry is None or entry["locked"]:
-            continue                          # unknown or system-managed role -> ignore, don't fail
-        if model not in entry["options"]:
-            continue                          # model outside this role's capability set -> fall back to default
-        chosen[role] = model
-    return chosen
-
-
-async def _admit_uploads(files: list[UploadFile]) -> list:
-    """Scan each uploaded file at the boundary; return the admitted InputFiles.
-    A rejected file (oversized, unsupported, malicious, unscannable) is a 422 with
-    a readable reason — the run is never created with an unscanned file."""
-    if not files:
-        return []
-    if len(files) > config.MAX_INPUT_FILES:
-        raise HTTPException(422, f"At most {config.MAX_INPUT_FILES} files per run.")
-    admitted = []
-    for upload in files:
-        data = await upload.read()
-        item, reason = await upload_scan.scan_upload(upload.filename or "upload", data)
-        if reason:
-            raise HTTPException(422, reason)
-        admitted.append(item)
-    return admitted
-
-
 @app.get("/runs")
 def list_runs(
     projectId: str | None = None, user: auth.User = Depends(auth.current_user)
@@ -434,12 +406,11 @@ async def follow_up_run(
 
 @app.get("/runs/{run_id}/thread")
 def run_thread(run_id: str, user: auth.User = Depends(auth.current_user)) -> list[dict]:
-    """All turns of this run's session, oldest first — the full conversation."""
+    """All effective turns of this branch, oldest first."""
     run = runs.STORE.get(user.id, run_id)
     if run is None:
         raise HTTPException(404, "Run not found.")
-    session_id = run.session_id or run.id
-    return [t.full_json() for t in runs.STORE.session_turns(user.id, session_id)]
+    return [t.full_json() for t in runs.STORE.effective_thread(user.id, run)]
 
 
 @app.get("/runs/{run_id}/audit")

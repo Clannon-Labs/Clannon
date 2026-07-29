@@ -15,10 +15,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from foundation import Flow, InputFile
+from foundation import Flow
 
 from core import pipeline
-from core.artifacts import LocalArtifactStore
 from core.budget.context import budget_user_scope
 from core.llm import model_overrides, usage_scope
 from core.orchestrator.utils.decision_log import derive_record as _derive_decision_record
@@ -28,9 +27,10 @@ import settings
 
 from . import audit as _audit_trail, auth, config
 from . import decision_audit as _decision_audit
+from .run_inputs import gather_lineage_files, persist_inputs
 from .run_sources import collect_sources as _collect_sources
 from .run_state import RunState, TERMINAL_STATUSES, _now, _process_summary
-from .run_store import STORE, INPUT_NS
+from .run_store import STORE
 
 
 def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
@@ -83,10 +83,9 @@ def _turn_user_content(turn: RunState) -> str:
 
 
 def _prior_turns(run: RunState) -> list[RunState]:
-    """This session's turns strictly BEFORE this one, oldest first."""
-    session = run.session_id or run.id
+    """This run's effective turns strictly before it, oldest first."""
     return [
-        t for t in STORE.session_turns(run.user_id, session)
+        t for t in STORE.effective_thread(run.user_id, run)
         if t.id != run.id and t.created_at < run.created_at
     ]
 
@@ -153,57 +152,9 @@ def _build_transcript(run: RunState) -> list[dict]:
     ]
 
 
-# Bound whole-session file re-seeding so long sessions cannot grow the workspace forever.
-_MAX_SESSION_FILES = 30
-_MAX_SESSION_FILE_BYTES = 64 * 1024 * 1024
-# Separate input namespace prevents collisions and output-route exposure.
-def _input_ns(run_id: str) -> str:
-    return f"{INPUT_NS}{run_id}"
-
-
-async def persist_inputs(run: RunState, input_files: list) -> None:
-    """Persist scanned uploads for later turns and record refs on `run.inputs`.
-    Best-effort: a storage failure affects follow-ups, not the current in-memory turn."""
-    store = LocalArtifactStore()
-    entries: list[dict] = []
-    for f in input_files:
-        meta = f.as_dict()
-        try:
-            meta["id"] = (await store.put(_input_ns(run.id), f.name, f.data)).id
-        except Exception:  # noqa: BLE001 — storage hiccup must not fail the run
-            pass
-        entries.append(meta)
-    run.inputs = entries
-
-
 async def _gather_session_files(run: RunState, current: list | None) -> list:
-    """Load current and prior session uploads for the orchestrator, bounded by count
-    and bytes. Missing or unreadable prior files are skipped."""
-    files = list(current or [])
-    seen = {getattr(f, "name", "") for f in files}
-    total = sum(int(getattr(f, "size", 0) or 0) for f in files)
-    store = LocalArtifactStore()
-    for turn in STORE.session_turns(run.user_id, run.session_id or run.id):
-        if turn.id == run.id or turn.created_at >= run.created_at:
-            continue
-        for meta in (turn.inputs or []):
-            if not isinstance(meta, dict):
-                continue
-            name, aid = meta.get("name"), meta.get("id")
-            if not name or not aid or name in seen:
-                continue
-            if len(files) >= _MAX_SESSION_FILES or total >= _MAX_SESSION_FILE_BYTES:
-                return files
-            try:
-                data = await store.get(aid)
-            except Exception:  # noqa: BLE001
-                continue
-            files.append(InputFile(
-                name=name, modality=meta.get("modality", "text"), data=data, size=len(data),
-            ))
-            seen.add(name)
-            total += len(data)
-    return files
+    """Load current and effective-prior uploads through the lineage door."""
+    return await gather_lineage_files(STORE, run, current)
 
 
 async def execute(run: RunState, input_files: list | None = None) -> None:

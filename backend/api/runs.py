@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from .run_state import RunState
 from .run_store import RunStore, STORE
+from .run_inputs import InputReuseError, load_reusable_inputs
 from .run_driver import (
     build_model_overrides,
     execute,
@@ -32,8 +33,10 @@ __all__ = [
     "RunState",
     "RunStore",
     "STORE",
+    "InputReuseError",
     "build_model_overrides",
     "execute",
+    "load_reusable_inputs",
     "persist_inputs",
     "_build_conversation",
     "sse_stream",
