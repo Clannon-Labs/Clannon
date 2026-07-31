@@ -308,13 +308,12 @@ but does not bypass earlier safety stages.
 Responsibilities:
 
 - interpret the verified user request
-- request memory context from the Memory Manager
+- consume pipeline-prepared relevant user context as inert data
 - decide whether tools or experts are needed, and how many
 - coordinate research, documentation, coding, and platform actions
 - maintain task state
 - stream a structured decision log to the user in real time
 - prepare draft outputs for the output filter
-- propose memory writes after work is complete
 
 ### Decision Log Streaming
 
@@ -402,9 +401,8 @@ Examples:
 - data analysis expert
 - platform notification expert
 
-Experts operate under least-privilege. They have their own skills, tools, and
-local policies scoped to their domain. They must not directly mutate global
-memory — all memory writes go through memory write policy.
+Experts operate under least privilege. They have scoped skills/tools and no
+memory handle. Relevant user context may be pushed as inert task data.
 
 ## Memory System
 
@@ -424,16 +422,19 @@ Responsibilities:
 - rank and filter by relevance, recency, and trust level
 - enforce the Lagrangian token budget allocation across tiers
 - inject the final hydration package into orchestrator context
-- coordinate memory write proposals after task completion
+- curate completed, filter-approved turns with its own bounded LLM
+- expose typed, scope-captured search/save tools only to that curator
+- classify relevant items into semantic, episodic, or procedural tiers
+- enforce deterministic confidence, bounds, dedup, supersession, and provenance
+- expose bounded authenticated list/delete operations for archive delivery
 
 The memory layer is reached only through the Manager, the sole implementer of the
-`MemoryPort` contract. **Correction:** the port has **three** methods — `hydrate`,
-`record_write_proposals`, and `learn` (`backend/foundation/contracts/memory.py:92-128`)
-— not two; and the Manager is **BUILT, not a stub** today (real hydration, Lagrangian
-budget, trust/recency ranking, Qdrant writes — `backend/core/memory/manager.py`). The
-`learn` method is the background memory-agent with its own LLM call, living behind the
-door. Nothing imports memory internals. (Experts/orchestrator only *propose* writes —
-they never write memory directly.)
+`MemoryPort` contract: `hydrate`, `process_turn`, `list_entries`, and
+`delete_entry`. Manager is built: real hydration, Lagrangian budgeting,
+trust/recency ranking, tool-driven curation, Qdrant writes, and archive operations.
+Experts/orchestrator never receive this port. Pipeline memory stages pass prepared
+context in and neutral accepted-turn evidence out; authenticated API delivery owns
+listing/deletion.
 
 ### Lagrangian Memory Budget Allocation
 
@@ -491,8 +492,8 @@ Skills, habits, and repeatable workflows.
 - user preferences, coding habits, documentation style
 - repeated research patterns, orchestration routines, tool-use patterns
 
-Procedural memory mostly supports the orchestrator. Experts and sub-agents can
-also have local procedural knowledge of their own.
+Procedural memory is selected by Manager and may enter later turns only as
+preselected relevant user context.
 
 ### Vector Store Architecture
 

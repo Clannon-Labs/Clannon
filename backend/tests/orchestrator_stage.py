@@ -28,7 +28,7 @@ def test_stage_happy_path_sets_response_and_journal(monkeypatch):
     assert any(e.origin == Origin.ORCHESTRATOR for e in out.journal)
     # the stage NO LONGER writes memory — that is deferred to a post-filter site so a
     # draft the filter blocks never seeds memory (see tests/memory_write_timing.py).
-    assert out.ctx.memory_writes_requested == []
+    assert not hasattr(out.ctx, "memory_writes_requested")
 
 
 def test_stage_degrades_gracefully_on_loop_error(monkeypatch):

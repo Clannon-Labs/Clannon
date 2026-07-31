@@ -5,9 +5,8 @@ Each tool is a `@tool`-decorated class that does one concrete thing and returns 
 
 ## NEVER
 - A tool imports ONLY `registry` + `foundation`. It must NOT import memory, expert,
-  or orchestrator internals. A `wants_memory` tool gets a narrow READ-ONLY
-  `MemorySearcher` injected by the handler — it never imports `core.memory`. Keeps
-  the package a leaf. **One sanctioned exception:** `web_search.py` imports
+  or orchestrator internals. Tools receive no memory handle. **One sanctioned
+  exception:** `web_search.py` imports
   `core.llm.grounded_search` — the same `core.llm`-as-SDK-boundary seam
   `registry/capabilities/handler/__init__.py` already depends on (never
   `pydantic_ai` directly). `scripts/check_invariants.py` models this exact shape

@@ -1,4 +1,4 @@
-"""Tests for the simple orchestrator ports: memory door + decision-log sink.
+"""Legacy Manager compatibility plus orchestrator decision-log sink.
 
 The memory tests run against the real manager (Qdrant + embeddings, per
 core/memory/ARCHITECTURE.md) and skip when Qdrant isn't reachable. Memory is

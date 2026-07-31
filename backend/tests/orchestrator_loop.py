@@ -10,7 +10,6 @@ Orchestrator turn tests, two layers:
 import asyncio
 
 from foundation import NormalizedInput, OrchestratorResponse, VrakshaContext
-from core.memory import MemoryManager
 from core.orchestrator import loop as loop_mod
 from core.orchestrator.ports import Ports
 from core.orchestrator.schemas import OrchestratorAnswer
@@ -46,7 +45,7 @@ class _FakeCaps:
 
 
 def _ports(ctx):
-    return Ports(memory=MemoryManager(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
+    return Ports(caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
 
 
 def test_chat_with_findings_and_tool_work_stays_chat():
@@ -96,13 +95,13 @@ def test_run_loop_resets_say_voice_across_revisions():
     the same ctx carries only the second attempt's voice."""
     ctx = VrakshaContext.new("s")
 
-    ports1 = Ports(memory=MemoryManager(), caps=_SayingCaps(ctx, "rejected-attempt note"),
+    ports1 = Ports(caps=_SayingCaps(ctx, "rejected-attempt note"),
                    log=CtxDecisionLog(ctx))
     resp1 = asyncio.run(loop_mod.run_loop(_norm(), ports1, ctx))
     assert resp1.message == "rejected-attempt note"
 
     # simulate the revision: same ctx, a new attempt with different say() commentary
-    ports2 = Ports(memory=MemoryManager(), caps=_SayingCaps(ctx, "final-attempt note"),
+    ports2 = Ports(caps=_SayingCaps(ctx, "final-attempt note"),
                    log=CtxDecisionLog(ctx))
     resp2 = asyncio.run(loop_mod.run_loop(_norm(), ports2, ctx))
     assert resp2.message == "final-attempt note"            # ONLY the final attempt's voice
@@ -164,7 +163,8 @@ def test_run_turn_offers_the_whole_roster_to_the_model():
     ))
     offered = {t.name for t in tm.last_model_request_parameters.function_tools}
     # experts AND tools are all directly visible — incl. the file experts, the calculator, etc.
-    assert {"remember", "recall", "search_web", "math_calculator", "web_fetch_url"} <= offered
+    assert {"recall", "search_web", "math_calculator", "web_fetch_url"} <= offered
+    assert "remember" not in offered
     assert {"media_analyst", "data_analyst", "code_engineer", "web_research", "synthesis_writer"} <= offered
     assert "search_tools" not in offered              # nothing is deferred, so no discovery tool is injected
 
@@ -177,9 +177,9 @@ def test_run_turn_graceful_forced_answer_at_cap():
     def fn(messages, info):
         # call an always-eager tool while any are offered; once tools are withheld, answer.
         names = {t.name for t in info.function_tools}
-        if "remember" in names:
+        if "recall" in names:
             return ModelResponse(parts=[ToolCallPart(
-                tool_name="remember", args={"content": "note"})])
+                tool_name="recall", args={"query": "note"})])
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(
             tool_name=out.name,
@@ -222,7 +222,6 @@ class _ReportCaps(_FakeCaps):
 def test_referenced_artifact_resolves_only_for_report_presentation():
     report_ctx = VrakshaContext.new("s-report")
     report_ports = Ports(
-        memory=MemoryManager(),
         caps=_ReportCaps(report_ctx, "w1", presentation="report"),
         log=CtxDecisionLog(report_ctx),
     )
@@ -238,7 +237,6 @@ def test_referenced_artifact_resolves_only_for_report_presentation():
     # A separately generated file does not replace the filtered chat summary.
     chat_ctx = VrakshaContext.new("s-chat-file")
     chat_ports = Ports(
-        memory=MemoryManager(),
         caps=_ReportCaps(chat_ctx, "w1", presentation="chat"),
         log=CtxDecisionLog(chat_ctx),
     )
@@ -249,22 +247,16 @@ def test_referenced_artifact_resolves_only_for_report_presentation():
 
 def test_run_loop_dangling_deliverable_falls_back():
     ctx = VrakshaContext.new("s")
-    ports = Ports(memory=MemoryManager(), caps=_ReportCaps(ctx, "nope"), log=CtxDecisionLog(ctx))
+    ports = Ports(caps=_ReportCaps(ctx, "nope"), log=CtxDecisionLog(ctx))
     resp = asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
     assert resp.text == "lean summary"
 
 
-# --- memory degradation: the turn continues, the user is told the truth ------
+# --- prepared context is optional and invisible -------------------------------
 
-def test_memory_fault_degrades_silently():
-    class ExplodingMemory:
-        async def hydrate(self, request):
-            raise RuntimeError("qdrant down")
-        async def record_write_proposals(self, *a):
-            pass
-
+def test_missing_prepared_context_does_not_block_or_narrate():
     ctx = VrakshaContext.new("s")
-    ports = Ports(memory=ExplodingMemory(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
+    ports = Ports(caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
     resp = asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
 
     assert resp.text == "done"          # the answer still happened (memory is never a gate)
@@ -273,17 +265,9 @@ def test_memory_fault_degrades_silently():
     assert not any("memory" in str(e.message).lower() for e in ctx.decision_log)
 
 
-def test_degraded_package_is_silent():
-    from foundation import HydrationPackage
-
-    class DegradedMemory:
-        async def hydrate(self, request):
-            return HydrationPackage(degraded=True, notes="memory temporarily unavailable")
-        async def record_write_proposals(self, *a):
-            pass
-
+def test_context_plumbing_is_silent():
     ctx = VrakshaContext.new("s")
-    ports = Ports(memory=DegradedMemory(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
+    ports = Ports(caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))
     asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
     # a degraded package is invisible — no "unavailable" notice in the decision log
     assert not any("unavailable" in str(e.message) for e in ctx.decision_log)
@@ -310,7 +294,8 @@ def test_build_orchestrator_tools_offers_the_full_roster_eagerly():
     # the file experts + the rest of the roster are all eager (the fix for "uses web search to read a file")
     assert {"media_analyst", "data_analyst", "code_engineer", "docs_writer"} <= names
     assert {"web_research", "synthesis_writer", "verification_claims", "summary_condenser"} <= names
-    assert {"remember", "recall", "search_web", "math_calculator", "web_fetch_url"} <= names
+    assert {"recall", "search_web", "math_calculator", "web_fetch_url"} <= names
+    assert "remember" not in names
 
 
 # --- explicit chat/report presentation routing ------------------------------
@@ -331,7 +316,6 @@ class _AnswerCaps:
 def _run_answer(answer, *, note=""):
     ctx = VrakshaContext.new("s-routing")
     ports = Ports(
-        memory=MemoryManager(),
         caps=_AnswerCaps(answer, note),
         log=CtxDecisionLog(ctx),
     )

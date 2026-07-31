@@ -1,12 +1,11 @@
-"""Wiki-as-text hydration and the semantic/procedural memory agent."""
+"""Wiki-as-text hydration and the legacy curator caller shim."""
 
 import asyncio
 from types import SimpleNamespace
 
-from foundation import HydrationRequest, MemoryPort, MemoryStore, MemoryWriteProposal
+from foundation import HydrationRequest, MemoryPort, MemoryStore
 from core.memory.manager import MemoryManager
 import core.memory.hydration as hydration_mod
-import core.memory.writer as writer_mod
 
 
 def _req(query="", wiki=(), user_id="u"):
@@ -18,7 +17,7 @@ def _req(query="", wiki=(), user_id="u"):
 
 
 def test_manager_satisfies_memory_port():
-    # runtime_checkable: the manager must expose hydrate + record + learn
+    # runtime_checkable: manager exposes hydrate/process/list/delete.
     assert isinstance(MemoryManager(), MemoryPort)
 
 
@@ -46,38 +45,28 @@ def test_hydrate_loads_wiki_as_text_without_vectors():
     assert not pkg.degraded
 
 
-def test_learn_records_distilled_proposals(monkeypatch):
+def test_learn_routes_neutral_turn_to_manager_curator(monkeypatch):
     m = MemoryManager()
-
-    async def fake_distill(task, answer, findings):
-        return [
-            MemoryWriteProposal(store=MemoryStore.SEMANTIC, content="A durable fact.", confidence=0.9),
-            MemoryWriteProposal(store=MemoryStore.PROCEDURAL, content="A working pattern.", confidence=0.8),
-        ]
-    monkeypatch.setattr(writer_mod, "distill", fake_distill)
-
     captured = {}
-    async def fake_record(user_id, session_id, proposals):
-        captured["proposals"] = proposals
-    monkeypatch.setattr(m, "record_write_proposals", fake_record)
+
+    async def fake_process(turn):
+        captured["turn"] = turn
+        return []
+
+    monkeypatch.setattr(m, "process_turn", fake_process)
 
     asyncio.run(m.learn("u", "s", task="t", answer="a", findings=["f"]))
-    stores = {p.store for p in captured["proposals"]}
-    assert stores == {MemoryStore.SEMANTIC, MemoryStore.PROCEDURAL}
+    turn = captured["turn"]
+    assert (turn.user_id, turn.session_id, turn.request, turn.response) == ("u", "s", "t", "a")
+    assert turn.findings == ("f",)
 
 
-def test_learn_is_best_effort_when_distill_fails(monkeypatch):
+def test_learn_is_best_effort_when_curator_fails(monkeypatch):
     m = MemoryManager()
 
-    async def boom(task, answer, findings):
+    async def boom(_turn):
         raise RuntimeError("model down")
-    monkeypatch.setattr(writer_mod, "distill", boom)
+    monkeypatch.setattr(m, "process_turn", boom)
 
-    called = {"n": 0}
-    async def fake_record(*a, **k):
-        called["n"] += 1
-    monkeypatch.setattr(m, "record_write_proposals", fake_record)
-
-    # must not raise, and must not record anything on failure
+    # Compatibility caller still cannot sink an already-delivered turn.
     asyncio.run(m.learn("u", "s", task="t", answer="a", findings=[]))
-    assert called["n"] == 0

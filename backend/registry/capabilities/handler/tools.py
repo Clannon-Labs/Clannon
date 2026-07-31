@@ -24,30 +24,6 @@ from ..schemas import ToolRequest
 _ALL_PERMISSIONS = frozenset(PermissionLevel)
 
 
-class MemorySearcher:
-    """Injected into a `wants_memory` tool: a narrow, READ-ONLY, user-scoped door into
-    the memory layer. The tool never imports memory — it gets this and calls `search`.
-    Reaches the MemoryPort (`core.memory.manager`) lazily from the handler layer (which
-    already connects to core), so the tools/ package keeps importing only registry +
-    foundation, and experts still never WRITE memory (CLAUDE.md constraint #4)."""
-
-    def __init__(self, ctx: VrakshaContext) -> None:
-        self._ctx = ctx
-
-    async def search(self, query: str):
-        """Ranked, user-scoped recall across the memory tiers + the user's wiki, via the
-        MemoryPort's hydrate. Returns a HydrationPackage (items + a `degraded` flag when
-        memory is temporarily unavailable). Best-effort: never raises into the tool."""
-        from core.memory import manager  # the MemoryPort singleton (lazy; no import cycle)
-        from foundation import HydrationPackage, HydrationRequest, NormalizedInput
-
-        try:
-            query_input = NormalizedInput(modality="text", content_type="text/plain", content=query)
-            return await manager.hydrate(HydrationRequest.for_turn(self._ctx, query_input))
-        except Exception:  # noqa: BLE001 — a memory fault degrades recall, never the run
-            return HydrationPackage(degraded=True, notes="memory temporarily unavailable")
-
-
 class ToolHandler:
     """Implements ToolHandlerPort over the capability registry."""
 
@@ -99,9 +75,6 @@ class ToolHandler:
             if self._workspace is None:
                 return self._fail(request, ctx, started, "tool needs a workspace; not available in this scope")
             coro = impl.run(args, self._workspace)
-        elif getattr(impl, "wants_memory", False):
-            # read-only, user-scoped recall — built from this call's ctx (user_id, wiki)
-            coro = impl.run(args, MemorySearcher(ctx))
         else:
             coro = impl.run(args)
 

@@ -9,9 +9,9 @@ episodic, procedural — ranked by trust + recency, budgeted with a Lagrangian
   memory (hydrate returns an empty package; write is a no-op). No other module may
   construct a raw Qdrant / `store` query — this Manager is the only door
   (invariant §V.20, ADR 0002).
-- Experts/orchestrator only PROPOSE writes; they never write memory directly
-  (§I.6). WIKI is user-authored only — a write proposal targeting WIKI is redirected
-  to SEMANTIC; WORKING never persists.
+- Memory Manager's LLM alone chooses inferred relevance and tier. Orchestrator
+  and experts hand over neutral completed-turn evidence; they do not construct
+  durable writes. WIKI is user-authored only; WORKING never persists.
 - Every fault DEGRADES, never fails the run: embeddings/store down ⇒ return a
   `degraded` package with an honest note, never raise into a turn. Be honest about
   empty-because-down vs empty-because-no-memory.
@@ -25,18 +25,19 @@ The Semgrep **build-gate** meant to block unscoped queries is documented but
 CI catches an unscoped query; the single-door rule is the real guard today.
 
 ## Conventions
-- `manager.py` is the door (implements `hydrate`/`record_write_proposals`/`learn`) —
+- `manager.py` is the door (implements `hydrate`/`process_turn`/`list_entries`/
+  `delete_entry`) —
   a THIN `MemoryPort` adapter only (split 2026-07-06, LAW 2): `hydration.py` owns
   the read-side ranking/budgeting internals, `write_policy.py` owns the write-side
   dedup/supersession internals, `tiers.py` holds the `TIER_TRUST`/`TIER_FLOOR`
   dicts both sides need. Same adapter/internals relationship `graph_manager.py`
   has to `graph_store.py`. `store.py` (Qdrant), `embeddings.py` (nomic, 768-dim),
-  `writer.py` (distillation), `batch_store.py`/`batch_awareness_manager.py`
-  (cross-batch awareness) are the other internals. `learn()` is the background
-  memory-agent (best-effort, off the hot path). `memory` prompt is unlocked.
+  `curator.py` (typed internal tools), `writer.py` (post-write judgments), and
+  `batch_store.py`/`batch_awareness_manager.py` (cross-batch awareness) are other
+  internals. Legacy write helpers remain internal only. `memory` prompt is unlocked.
 
 ## Tests
-`tests/memory_isolation.py`, `tests/memory_tools.py`, `tests/memory_wiki_and_learn.py`.
+`tests/memory_isolation.py`, `tests/memory_curator.py`, `tests/memory_write_timing.py`.
 
 ## Authoritative docs
 `core/memory/ARCHITECTURE.md`, `docs/architecture/memory/README.md`, ADR

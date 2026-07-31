@@ -48,7 +48,7 @@ def _caps():
 # ---------------------------------------------------------------------------
 
 def test_orchestrator_loop_is_bounded_at_cap():
-    """A pathological spy that always calls 'remember' (always eager, never deferred)
+    """A pathological spy that always calls session-local `recall`
     must be forced to a final answer once the orchestrator hits settings.ORCHESTRATOR.max_turns
     -- it must NOT loop forever and consume unbounded paid rounds.
 
@@ -63,10 +63,10 @@ def test_orchestrator_loop_is_bounded_at_cap():
     def always_loop(messages, info):
         call_log.append(1)
         names = {t.name for t in info.function_tools}
-        if "remember" in names:
+        if "recall" in names:
             # Keep requesting another tool call until tools are withheld.
             return ModelResponse(parts=[ToolCallPart(
-                tool_name="remember", args={"content": "looping"})])
+                tool_name="recall", args={"query": "looping"})])
         # tools withheld -> cap has fired; produce the forced final answer
         out = info.output_tools[0]
         return ModelResponse(parts=[ToolCallPart(

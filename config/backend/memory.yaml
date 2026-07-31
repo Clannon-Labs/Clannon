@@ -91,3 +91,6 @@ write_timeout_s: 10.0          # hard per-proposal write deadline — was MEMORY
 search_top_k: 10              # candidates fetched per inferred tier at hydration — was MEMORY_SEARCH_TOP_K. > 0
 relevance_floor: 0.30         # drop hits below this raw cosine before ranking — was MEMORY_RELEVANCE_FLOOR. 0<=f<=1
 distill_max_retries: 2        # malformed-output retries for the background distiller — was MEMORY_DISTILL_MAX_RETRIES. >= 0
+curator_max_turns: 8          # hard cap across memory-agent tool calls + final verdict. >= 1
+curator_max_output_tokens: 700 # bounded structured curator output; tools carry actual memory actions. > 0
+list_max_entries: 500         # hard cap for one authenticated archive listing across inferred tiers. > 0

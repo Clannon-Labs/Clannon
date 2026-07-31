@@ -46,7 +46,7 @@ foundation/
       Cross-stage payloads that ride Flow: NormalizedInput, OrchestratorResponse.
     memory.py
       The whole memory boundary: MemoryPort plus its contracts (MemoryItem,
-      HydrationRequest/Package, MemoryWriteProposal).
+      HydrationRequest/Package, MemoryTurn, MemoryItem).
 ```
 
 Model and prompt config loaders live in the root **`registry/`** package

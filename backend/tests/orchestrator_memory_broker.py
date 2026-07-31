@@ -1,6 +1,4 @@
-"""The orchestrator is the memory broker (sole-broker, ARCHITECTURE.md §7.3):
-`memory.search` stays natively offered to the orchestrator so it can broker
-sub-task recall for stateless experts, and the baseline prompt tells it to."""
+"""Memory Manager is sole broker; reasoning agents have no memory surface."""
 
 from pathlib import Path
 
@@ -15,14 +13,12 @@ def _orchestrator_tool_keys():
     return {s.key for s in specs if s and not getattr(s.impl, "wants_workspace", False)}
 
 
-def test_memory_search_is_offered_to_the_orchestrator():
-    # the broker's own door: removing expert grants must never remove THIS
-    assert "memory.search" in _orchestrator_tool_keys()
+def test_no_memory_tool_is_offered_to_the_orchestrator():
+    assert not any(key.startswith("memory.") for key in _orchestrator_tool_keys())
 
 
 def test_no_expert_holds_a_memory_grant():
-    # the sole-broker invariant: experts are stateless — memory access is the
-    # orchestrator's alone; an expert's context arrives pushed (ExpertEnv.hydration)
+    # Experts are stateless. Relevant context is prepared before orchestration.
     discover()
     for card in registry.cards(CapabilityKind.EXPERT):
         spec = registry.get_expert(card["key"])
@@ -32,8 +28,8 @@ def test_no_expert_holds_a_memory_grant():
         )
 
 
-def test_baseline_prompt_instructs_the_orchestrator_to_broker():
-    # the committed baseline (overlay may harden, never weaken — read the repo file)
+def test_baseline_prompt_denies_memory_management():
     text = (Path(__file__).parent.parent / "prompts" / "orchestrator" / "system.md").read_text()
-    assert "Brokering memory for experts" in text
-    assert "memory.search" in text
+    assert "Do not manage, classify, store, search" in text
+    assert "memory.search" not in text
+    assert "remember(" not in text

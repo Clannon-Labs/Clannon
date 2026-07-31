@@ -19,6 +19,7 @@ def env(tmp_path, monkeypatch):
     from api import config, run_driver, run_store
     import api.runs as runs_mod
     import api.run_revision as revision_mod
+    from core.memory import manager
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "revise.db"))
     monkeypatch.setenv("VRAKSHA_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
@@ -27,6 +28,9 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(runs_mod, "STORE", store)
     monkeypatch.setattr(run_driver, "STORE", store)
     monkeypatch.setattr(revision_mod.runs, "STORE", store)
+    async def empty_memory(_user_id):
+        return []
+    monkeypatch.setattr(manager, "list_entries", empty_memory)
 
     executions = []
 
@@ -92,12 +96,20 @@ def _revise(client: TestClient, target_id: str, **data):
     return client.post(f"/runs/{target_id}/revise", data=payload)
 
 
-def test_revise_root_supersedes_all_ten_turns_in_the_same_session(env):
+def test_revise_root_supersedes_all_ten_turns_in_the_same_session(env, monkeypatch):
+    from core.memory import manager
+    from foundation import MemoryItem, MemorySaver, MemoryStore
+
     turns = _seed_linear(env.store, env.owner["id"])
-    turns[0].memory_writes = [
-        {"content": "saved fact survives", "ts": "2026-07-20T00:01:00+00:00"}
-    ]
-    env.store.persist(turns[0])
+    durable = MemoryItem(
+        memory_id="durable-1", store=MemoryStore.EPISODIC,
+        content="saved fact survives", created_at=1784505660,
+        saved_by=MemorySaver.MEMORY_CURATOR,
+    )
+    async def list_entries(user_id):
+        assert user_id == env.owner["id"]
+        return [durable]
+    monkeypatch.setattr(manager, "list_entries", list_entries)
     session_id = turns[0].session_id
 
     response = _revise(

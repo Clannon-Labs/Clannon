@@ -87,11 +87,12 @@ citation, assume it does not run yet.
   │  EXECUTION SUBSTRATE  (one verified request → quality-filtered result)      │
   │                                                                            │
   │  intake [BUILT] → sanitize [BUILT] → normalize [BUILT] → verify [BUILT]     │
+  │        → Manager-prepared context [BUILT]                                   │
   │        → ORCHESTRATOR [BUILT]  (streams decision log live [BUILT])          │
-  │             ├─ experts ×9 [BUILT]   ├─ tools ×9 [BUILT]                     │
+  │             ├─ experts ×9 [BUILT]   ├─ tools ×8 [BUILT]                     │
   │             └─ entropy routing as advisory signal [PROPOSED]               │
   │        → output filter [BUILT, bounded revision] → delivery [BUILT]         │
-  │        → memory writes [BUILT; timing fix PARTIAL]                          │
+  │        → Manager curation [BUILT; post-delivery, async]                     │
   │                                                                            │
   │  Flow is the only transport between every box above.            [BUILT]     │
   └───────────────────────────────────────────────────────────────────────────┘
@@ -127,10 +128,10 @@ nothing but Flow crosses a stage boundary.
 | **LLM seam** | `[BUILT]` | `backend/core/llm/framework.py` is the only `pydantic_ai` importer (`build_agent`, `build_tool_agent`, `run_structured`); model resolution in `core/llm/registry.py`. No other module touches the SDK. |
 | **Orchestrator** | `[BUILT]` | Real native tool-driving loop, `backend/core/orchestrator/{orchestrator,loop}.py`; one real pydantic-ai agent per turn via `registry/capabilities/handler/capability.py:53-110`. The model is a structured *advisor*; Clannon code drives the loop, enforces permissions, streams the log. |
 | **Experts (×9)** | `[BUILT]` | `backend/experts/{web_research,writer,code,data_analysis,documentation,media,notification,summarization,verification}/expert.py`; each delegates to the real agent runner `think()` (`registry/.../support.py:185-220`) with a substantive `system.md` + `skills/`. The two-output split is honored: brief `ExpertSummary` to the orchestrator, full `ExpertFindings` to the output pipeline (`handler/experts.py:82-101`). |
-| **Tools (×9)** | `[BUILT]` | `backend/tools/` — `search.web`, `web.fetch_url`, `http.request` (SSRF-guarded), `fs.read`, `fs.write`, `code.run`, `code.python_exec`, `memory.search`, `math.calculator`. |
+| **Tools (×8)** | `[BUILT]` | `backend/tools/` — `search.web`, `web.fetch_url`, `http.request` (SSRF-guarded), `fs.read`, `fs.write`, `code.run`, `code.python_exec`, `math.calculator`. No agent-facing memory tool exists. |
 | **Output filter** | `[BUILT]`, bounded fail-closed | `backend/security/filter/filter.py:90-117`; locked security role `filter`; block ⇒ `flow.block(FILTER_REJECTED)`. Bounded revision loop in `core/pipeline.py:180-229` (see §7). |
 | **Delivery** | `[BUILT]` | CLI/TUI: `backend/main.py:103-208` (Rich `Live` REPL) + `backend/delivery/delivery.py`. Web: `backend/api/sse.py:18-39` streams the decision log live over SSE (`GET /runs/{id}/stream`). |
-| **Memory writes** | `[BUILT]` (post-filter) | Real Qdrant upsert, persisted **only on the delivered path** by `core/orchestrator/orchestrator.py::persist_turn_memory` (`orchestrator.py:113`), called from `core/pipeline.py::_persist_turn_memory_if_delivered` (`pipeline.py:235`) → `core/memory/manager.py:225-283`. A blocked draft never seeds memory — see §5.3. |
+| **Memory curation** | `[BUILT]` (post-delivery) | `core/memory/lifecycle.py` hands neutral accepted-turn evidence to `MemoryPort.process_turn`. Manager's own LLM selects no-op vs typed internal tools; code policy owns scope and persistence. |
 
 **Flow** `[BUILT]` is the sole inter-stage transport (`foundation/transport/flow.py`;
 ADR 0001). Stages may import shared contracts from `foundation`, but runtime payloads
@@ -150,10 +151,9 @@ knowledge web** layered on the same vectors.
   `user_id`: `vraksha_wiki / vraksha_semantic / vraksha_episodic / vraksha_procedural`
   (`backend/core/memory/store.py:28-33`). Trust order WIKI > SEMANTIC >
   EPISODIC/PROCEDURAL (`manager.py:58-63`).
-- **MemoryPort** `[BUILT]` — the only door. It has **three** async methods (not two):
-  `hydrate`, `record_write_proposals`, and `learn`
-  (`backend/foundation/contracts/memory.py:92-128`). `MemoryManager` is the sole
-  implementer (`manager.py:105`, singleton `:307`); all three are real, not stubs.
+- **MemoryPort** `[BUILT]` — the only door. Its four async methods are `hydrate`,
+  `process_turn`, `list_entries`, and `delete_entry`. `MemoryManager` is sole
+  implementer. Reasoning agents never receive the port.
 - **Lagrangian (water-filling) budget** `[BUILT]` — per-tier floors + remainder
   distributed proportional to each tier's mean rank score, packed under a real
   `tiktoken cl100k_base` count (`manager.py:171-193, 39-56`).
@@ -201,31 +201,19 @@ and missions as nodes, with typed edges between them.
   expression of the existing wiki-beats-all trust rule (Invariant §I.4) and of the
   asserted-history discipline the Mission Engine depends on (§6).
 
-### 5.3 Memory-write timing `[BUILT]`
+### 5.3 Manager-owned curation timing `[BUILT]`
 
-**Fixed (2026-06-26).** Episodic / durable memory writes (and the background `learn()`
-distillation) fire **post-filter, on the delivered path only** — so a draft the output
-filter blocks never seeds memory. The "rejected drafts never touch memory" invariant now
-holds on the **initial pass**, not just inside the bounded revision loop.
+Memory lifecycle is an ordinary stage after delivery. Railway short-circuiting means
+blocked/failed drafts never reach it. `core/memory/lifecycle.py` constructs a neutral
+`MemoryTurn` from final delivered response, findings, decisions, trusted scope, trace,
+and participants; it never selects a tier or constructs a write proposal.
 
-How it works in code:
-
-- The write policy lives in `core/orchestrator/orchestrator.py::persist_turn_memory`
-  (builds the episodic note from the **final delivered** answer, forwards the
-  `remember`-tool proposals, schedules `learn()` distillation). The orchestrator *stage*
-  no longer writes memory — it only produces the draft.
-- The pipeline owns the **timing**: `core/pipeline.py::_persist_turn_memory_if_delivered`
-  (`pipeline.py:235`, called at `:275` and `:286`) runs once, after the output filter has
-  accepted the draft and delivery ran, and is a no-op when `ctx.blocked / failed /
-  filter_blocked`. The
-  revision loop (`recover_from_filter_block`) never persists, so there is exactly one
-  write per turn and never one on a blocked draft.
-
-Earlier behavior (the bug): episodic memory was written inside the orchestrator stage
-*before* the filter adjudicated (old `orchestrator.py:99-128`), so a blocked draft could
-seed episodic memory on the initial pass. A delivered **degraded** answer (timeout /
-rate-limit fallback) seeds memory under the same "only if delivered" rule; a blocked one
-does not. Covered by `backend/tests/memory_write_timing.py`.
+`core/memory/curator.py` runs Manager's own bounded tool-driving LLM. `search_memory`
+and `save_memory` capture trusted scope and remain internal. Saves are staged atomically,
+then deterministic policy enforces tier allow-list, confidence, epistemic typing,
+source-backed facts, transcript rejection, dedup, supersession, and provenance
+(`created_at`, `saved_by`, `session_id`, `trace_id`, rationale, participants). Most
+turns correctly save nothing. The archive lists real Qdrant entries, not run shadows.
 
 ---
 
@@ -326,47 +314,18 @@ Experts return a brief `ExpertSummary` to the orchestrator (keeps its context le
 buffer full `ExpertFindings` to the output pipeline (`handler/experts.py:82-101`). The
 orchestrator never receives raw expert output. Hard constraint.
 
-> **Memory access — RESOLVED → sole-broker.** All memory access is mediated by the
-> Memory Manager. It hydrates the turn's relevant context once, the orchestrator brokers
-> it, and experts are stateless workers that receive their context from the
-> orchestrator/Manager and **never query memory directly**. One auditable memory access
-> point, not N independent expert lookups. (Supersedes the earlier "open fork";
-> `architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md:428-460`.)
+> **Memory access — RESOLVED → Manager-only.** `core/memory/prefetch.py`
+> hydrates once before reasoning and passes only preselected Relevant User Context
+> as inert data. Orchestrator, batches, experts, and ordinary tools hold no
+> `MemoryPort`, `memory.*` capability, tier control, or write proposal surface.
+> Non-NETWORK experts may receive a snapshot of prepared context; NETWORK experts
+> receive none. No mid-task recall broker exists.
 >
-> - `[BUILT]` — the Manager hydrates each turn through the single `MemoryPort` door
->   (`core/memory/prefetch.py` → `MemoryPort.hydrate`, injected into the orchestrator's
->   context); writes are already orchestrator-only (the `remember` tool proposes, experts
->   never write); and every read is constructed in one place (`core/memory/store.py`), so
->   the access point is already singular and auditable.
-> - `[BUILT]` — experts are stateless, context is pushed (2026-07-03, Option D of
->   `reports/backend/report_v4.md`): the turn's hydrated memory is snapshot into
->   `ExpertEnv.hydration` (`registry/capabilities/handler/experts.py::_build_env`) and
->   folded into the expert's task as labelled reference data
->   (`handler/support.py::_memory_note`, applied in `think()`); the
->   orchestrator brokers sub-task-specific recall before spawning (it keeps
->   `memory.search` natively; prompt §"Brokering memory for experts",
->   `prompts/orchestrator/system.md:101`); and **no expert holds a `memory.*` grant**
->   (`experts/writer/expert.py:33` = no tools, `experts/documentation/expert.py:40` =
->   fs only, `experts/web_research/expert.py:30` = web only). Locked by
->   `tests/expert_hydration.py` and `tests/orchestrator_memory_broker.py`
->   (invariant: no registered expert carries a memory grant).
-> - `[BUILT]` — **push is non-NETWORK only** (2026-07-03, report_v6): any expert
->   granted a NETWORK tool (`delivery.notifier`, `verification.claims`,
->   `web.research`) receives an EMPTY hydration snapshot — user memory sitting in
->   the same prompt as an outbound channel is an exfiltration surface under prompt
->   injection (closes the MEDIUM flag from the Option D security review). Their
->   user context arrives solely via the orchestrator's pre-spawn brokering.
-> - `[BUILT]` — **need-context channel** (2026-07-03, report_v6): a non-NETWORK
->   expert can REQUEST mid-task recall via a built-in `need_context(query)` tool but
->   never executes it — the handler-built broker
->   (`handler/experts.py::_make_context_broker`) runs the user-scoped searcher and
->   curates code-only (Manager ranking, cap 5, dedup vs the pushed hydration — per
->   the decided "reads are code-only on the hot path" rule), returns labelled
->   reference data, and audit-records every request on `ctx.tool_calls`
->   (`memory.need_context`) while staying out of the user's decision log. NETWORK
->   experts get no channel. Locked by `tests/expert_need_context.py`. The
->   orchestrator-LLM-in-review variant (a need-context field in the expert's RETURN
->   channel) remains `[PROPOSED]` — it requires an `ExpertOutput` contract change.
+> After accepted delivery, `core/memory/lifecycle.py` hands neutral `MemoryTurn`
+> evidence to Manager. Only Manager's own curator sees its scope-captured internal
+> search/save tools. Locked by `tests/orchestrator_memory_broker.py`,
+> `tests/expert_hydration.py`, `tests/memory_curator.py`, and
+> `tests/memory_write_timing.py`.
 
 ---
 
@@ -480,8 +439,9 @@ shipped speed mechanism.
 
 Each item is future work, not built. Tied to ADRs where they exist.
 
-**Phase A — Memory-write correctness.** ✅ **Done (2026-06-26).** Episodic writes now
-fire post-filter / post-delivery only (§5.3) — a blocked draft never seeds memory.
+**Phase A — Memory-write correctness.** ✅ **Done, strengthened 2026-07-30.**
+Post-delivery Manager curation replaces automatic transcript-like episodic writes;
+blocked drafts never seed memory and reasoning agents cannot manage tiers.
 
 **Phase B — Production storage & tenancy.**
 - SQLite → Postgres/Supabase; add Redis (sessions, rate-limit, **atomic token budgets**
@@ -504,10 +464,8 @@ irreversible-action-approval safety gates; the **decision-log audit mirror** (§
 replay-based; no compaction store).
 
 **Cross-cutting open decisions to make before/within these phases** (flagged, not
-silently settled here): (1) **resolved → sole-broker, `[BUILT]` 2026-07-03** (§7.3):
-experts receive Manager-hydrated context pushed into their task and hold no
-`memory.*` grant; the orchestrator brokers sub-task recall (Option D of
-`reports/backend/report_v4.md`); (2) whether a second entity-embedding space is added
+silently settled here): (1) **resolved → Manager-only, `[BUILT]` 2026-07-30**
+(§7.3); (2) whether a second entity-embedding space is added
 alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job type.
 
 ---
@@ -535,7 +493,7 @@ alongside nomic-768 (§5.1); (3) fail-open vs. fail-closed per background job ty
 statements fixed; see the changelog in `reports/backend/report_v2.md` for exact lines):
 embeddings runtime ("via Ollama" → fastembed local ONNX); verifier model ("Gemini" →
 `anthropic:claude-haiku-4-5`); entropy routing tagged `[PROPOSED]` everywhere it was
-shown as built; MemoryPort corrected to three methods; the Memory Manager corrected
+shown as built; MemoryPort contract corrected; the Memory Manager corrected
 from "stub today" to built; the output-filter "escalate to a different expert" claim
 removed (bounded revision only); and the Semgrep build-gate marked `[PROPOSED]`/absent
 where it was implied to exist; the Neo4j-vs-Kuzu-vs-Qdrant-native graph fork resolved to

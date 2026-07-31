@@ -322,20 +322,6 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             else:
                 # The output filter's accepted text is canonical in both presentations.
                 text = str(ctx.final_response) if ctx.final_response is not None else ""
-                # memory is persisted ONLY on the delivered path (post-filter), so the
-                # /memory view is populated ONLY here. A blocked or failed draft wrote
-                # nothing to memory, and its proposals (e.g. an in-flight `remember`) must
-                # not appear in the view — run.memory_writes stays its empty default.
-                # Surface the PERSISTED set (what the Manager actually wrote), never the
-                # proposals: a proposal the write policy dropped is not a real memory.
-                run.memory_writes = [
-                    {
-                        "content": getattr(w, "content", str(w)),
-                        "rationale": getattr(w, "rationale", ""),
-                        "ts": _now(),
-                    }
-                    for w in ctx.memory_writes_persisted
-                ]
                 # surface the delivered output artifacts (experts captured them to
                 # durable storage; here we just collect their refs for the API).
                 # Only on the delivered path — a withheld draft keeps its files held.

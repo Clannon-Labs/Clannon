@@ -49,7 +49,6 @@ class BatchDefinition:
     tool_keys: frozenset[str]
     system_prompt: str
     grants: frozenset[PermissionLevel] = frozenset({PermissionLevel.READ})
-    allow_memory_write: bool = False   # ratified default-excludes-remember posture (design v2 §C)
     grants_graph: bool = False   # CB2 code-symbol tier opt-in (ratified 2026-07-26) — per-batch, not blanket
 
 
@@ -123,7 +122,6 @@ class BatchHandler:
                     expert_keys=definition.expert_keys,
                     tool_keys=definition.tool_keys,
                     grants=definition.grants,
-                    allow_memory_write=definition.allow_memory_write,
                     graph=self._graph if definition.grants_graph else None,
                     registry=self._registry,
                 )

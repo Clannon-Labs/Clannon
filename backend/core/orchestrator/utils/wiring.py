@@ -10,7 +10,6 @@ different log transport) is the only reason to touch this.
 from __future__ import annotations
 
 from foundation import VrakshaContext
-from core.memory import manager as memory_manager
 from core.memory.batch_awareness_manager import manager as batch_awareness_manager
 from core.memory.graph_manager import manager as graph_manager
 from registry.capabilities import discover
@@ -27,7 +26,7 @@ _unlimited_budget = UnlimitedBudget()
 
 
 def build_default_ports(ctx: VrakshaContext) -> Ports:
-    """Wire the Phase-1 ports: the capability door + memory door + decision-log sink."""
+    """Wire the capability door and decision-log sink."""
     # Imported lazily: both depend on the handler package, which itself depends on
     # core.llm -- importing at module load would re-enter core/__init__ ->
     # orchestrator -> wiring (a cycle).
@@ -36,7 +35,6 @@ def build_default_ports(ctx: VrakshaContext) -> Ports:
 
     discover()                              # import tools/ and experts/ so they self-register
     return Ports(
-        memory=memory_manager,
         awareness=batch_awareness_manager,
         graph=graph_manager,
         budget=_unlimited_budget,

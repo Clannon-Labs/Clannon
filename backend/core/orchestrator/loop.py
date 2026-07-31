@@ -4,7 +4,7 @@ The orchestrator reasoning core — UI-agnostic.
 The orchestrator is a native tool-driving agent: its available tools and experts
 are real tool schemas, and the model runs its own bounded tool loop. This module
 hydrates memory, hands the turn to the capability gateway (`ports.caps.run_turn`),
-streams a live decision log through the sink, and maps the agent's answer to an
+receives pipeline-prepared context, streams a live decision log through the sink, and maps the agent's answer to an
 OrchestratorResponse. The whole-turn timeout is applied by the stage
 (orchestrator.py); turn/usage bounds + the graceful cap fallback live in the
 gateway.
@@ -16,7 +16,6 @@ import logging
 
 from foundation import (
     HydrationPackage,
-    HydrationRequest,
     NormalizedInput,
     OrchestratorResponse,
     VrakshaContext,
@@ -38,17 +37,15 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
     # the delivered chat bubble. The live stream already emitted per attempt; this only
     # governs what the FINAL message carries.
     ctx.assistant_message = ""
-    hydration = await _hydrate(normalized, ports, ctx)
+    hydration = HydrationPackage(items=list(ctx.hydration_items))
     mission = await _sync_mission_state(ports, ctx)
 
     async def on_event(event: dict) -> None:
         """Stream each capability call to the decision-log sink, live — EXCEPT internal
-        plumbing. The orchestrator's memory tool is INVISIBLE (memory must feel like the
-        assistant simply knowing things, never like it is 'running a memory tool'), and
-        `search_tools` is the framework's own capability-discovery step for deferred
-        loading (W2) — neither is a user-meaningful action, so both stay out of the stream."""
+        plumbing. `search_tools` is the framework's own capability-discovery step
+        for deferred loading (W2), so it stays out of the stream."""
         tool = str(event.get("tool", "?"))
-        if tool.startswith("memory.") or tool == "search_tools":
+        if tool == "search_tools":
             return
         # Lift a string `query` arg (recall, web search, ...) to the top of detail so the UI
         # gets a clean `meta.query` to render — the wire mapper stringifies nested values, so
@@ -154,29 +151,3 @@ def _with_mission_context(user_prompt: str, mission) -> str:
         "only to abort without claiming success."
     )
     return f"{user_prompt}\n\n---\n{section}"
-
-
-async def _hydrate(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContext) -> HydrationPackage:
-    """Hydrate memory for the turn — SILENTLY.
-
-    Memory must feel like the assistant simply KNOWING things, so NOTHING about
-    hydration ever reaches the user's decision log: no "requesting memory" notice, no
-    degradation warning. A fault is logged internally and the turn proceeds without
-    memory (augmentation, never a gate).
-
-    Prefers the hydration prefetched right after normalization (so it overlaps the
-    verifier's LLM call instead of being awaited serially here); falls back to hydrating
-    now when no prefetch ran (e.g. a caller that drives stages directly)."""
-    future = getattr(ctx, "hydration_future", None)
-    try:
-        if future is not None:
-            hydration = await future
-        else:
-            hydration = await ports.memory.hydrate(HydrationRequest.for_turn(ctx, normalized))
-    except Exception as exc:  # noqa: BLE001 — memory degrades silently, never fails a turn
-        log.warning("memory hydration degraded: %s", exc)
-        hydration = HydrationPackage(degraded=True, notes="memory temporarily unavailable")
-    ctx.hydration_items = list(hydration.items)
-    if hydration.degraded and hydration.notes:
-        log.info("memory hydration degraded this turn: %s", hydration.notes)  # internal log only
-    return hydration

@@ -97,7 +97,7 @@ def test_batch_prompt_is_scoped_internal_and_forces_internal_chat_shape():
     assert "one delegated\nsub-task" in text
     assert "Use only the tool and expert schemas granted to this batch." in text
     assert "Do not call `say()`" in text
-    assert "Do not call `remember` or write memory." in text
+    assert "memory" not in text.lower()
     assert "Do not spawn another batch." in text
     assert "Complete the work this turn." in text
     assert '`presentation` is always `"chat"`' in text
@@ -109,10 +109,10 @@ def test_batch_prompt_is_scoped_internal_and_forces_internal_chat_shape():
     assert fields == ["answer_text", "presentation", "confidence", "deliverable_ref"]
 
 
-def test_registry_declares_central_v5_and_batch_v1_prompts():
+def test_registry_declares_central_v6_and_batch_v1_prompts():
     manifest = yaml.safe_load(_read(PROMPTS / "registry.yaml"))
     assert manifest["orchestrator"] == {
-        "version": 5,
+        "version": 6,
         "file": "orchestrator/system.md",
         "locked": False,
         "about": True,

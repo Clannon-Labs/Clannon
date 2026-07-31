@@ -26,9 +26,11 @@ that establishes identity, size limits, and modality detection).
         -> sanitizer     ClamAV/YARA pre-gate + modality sanitizer workers
         -> normalizer    code-only NormalizedInput construction
         -> verifier      structured safety/routing verification
-        -> orchestrator  Vraksha-owned reasoning loop (experts + tools + memory)
+        -> context       Memory Manager-prepared relevant context
+        -> orchestrator  Vraksha-owned reasoning loop (experts + tools)
         -> filter        structured safety/groundedness gate on the draft
         -> delivery      sets final_response and delivers
+        -> memory        Memory Manager curates accepted turn evidence
 
 Observation is injected, never embedded: callers pass `on_stage`/`on_stage_end` to
 watch progress and `decision_log` to capture the live decision stream, so the
@@ -48,6 +50,7 @@ from core import intake, normalizer, verifier, orchestrator
 
 log = logging.getLogger(__name__)
 from core.memory import prefetch as hydration_prefetch
+from core.memory import lifecycle as memory_lifecycle
 from security.sanitizers import runner as sanitizer
 from security.filter import run as output_filter_run
 from delivery import run as delivery_run
@@ -79,9 +82,11 @@ ACTIVE_STAGES: list[Stage] = [
     # user-visible status/label as the verifier — memory is invisible).
     Stage(hydration_prefetch.run, "hydration_prefetch", "verifying", "verifying"),
     Stage(verifier.run,      "verifier",     "verifying",           "verifying"),
+    Stage(hydration_prefetch.collect, "context", "working",          "orchestrating"),
     Stage(orchestrator.run,  "orchestrator", "working",             "orchestrating"),
     Stage(output_filter_run, "filter",       "checking the answer", "filtering"),
     Stage(delivery_run,      "delivery",     "delivering",          "filtering"),
+    Stage(memory_lifecycle.run, "memory_lifecycle", "delivering",    "filtering"),
 ]
 
 
@@ -188,8 +193,7 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
 
     The output filter rejected the orchestrator's DRAFT. Hand the rejection reason
     back (`ctx.filter_feedback`) and let the orchestrator RE-REASON — re-running only
-    `run_loop`, NOT the whole orchestrator stage, so a rejected draft is never written
-    to memory — then let the filter adjudicate the new draft. Bounded by
+    `run_loop` — then let the filter adjudicate the new draft. Bounded by
     `FILTER_MAX_REVISIONS`; after that the run stays blocked (fail closed — the filter
     is always the final authority). Each attempt is narrated on the shared decision
     log, so every surface (CLI feed, web SSE) sees the revision live.
@@ -241,25 +245,6 @@ async def recover_from_filter_block(flow: Flow) -> Flow:
     return flow
 
 
-async def _persist_turn_memory_if_delivered(flow: Flow) -> None:
-    """Persist this turn's memory ONLY when the output filter ACCEPTED the draft and it
-    was delivered.
-
-    This is the post-filter write site: a blocked or failed draft never seeds memory, so
-    the "rejected drafts never touch memory" invariant now holds on the INITIAL pass, not
-    only inside the bounded revision loop. The actual write policy lives in the
-    orchestrator (`persist_turn_memory`) — the pipeline owns only the TIMING. Best-effort:
-    the answer is already delivered, so a memory fault must never fail the turn.
-    """
-    ctx = flow.ctx
-    if ctx.blocked or ctx.failed or ctx.filter_blocked:
-        return  # not delivered — never write
-    try:
-        await orchestrator.persist_turn_memory(ctx)
-    except Exception as exc:  # noqa: BLE001 — answer already delivered; memory is best-effort
-        log.warning("post-delivery memory persist dropped: %s", exc)
-
-
 async def _drive_with_revision(
     flow: Flow,
     stages: list[Stage],
@@ -275,14 +260,12 @@ async def _drive_with_revision(
     NEVER delivers content the filter hasn't accepted. A stage list without an
     orchestrator+filter pair (tests/subsets) falls back to a plain linear drive.
 
-    Memory for the turn is persisted ONCE, AFTER the filter accepts and the answer is
-    delivered (`_persist_turn_memory_if_delivered`), so a blocked draft never seeds it.
+    Memory lifecycle is an ordinary post-delivery stage. Railway short-circuiting keeps
+    blocked or failed drafts from reaching it.
     """
     split = _split_at_filter(stages)
     if split is None or settings.SECURITY.filter_max_revisions <= 0:
-        flow = await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
-        await _persist_turn_memory_if_delivered(flow)
-        return flow
+        return await drive(flow, stages, on_stage=on_stage, on_stage_end=on_stage_end)
 
     pre, segment, post = split
     # input gates + the first orchestrator→filter pass
@@ -290,7 +273,5 @@ async def _drive_with_revision(
     if flow.ctx.filter_blocked:
         flow = await recover_from_filter_block(flow)
     if flow.should_stop:
-        return flow  # input-blocked, failed, or still filter-blocked after recovery — NO memory write
-    flow = await drive(flow, post, on_stage=on_stage, on_stage_end=on_stage_end)  # delivery
-    await _persist_turn_memory_if_delivered(flow)  # only now, on the delivered draft
-    return flow
+        return flow  # input-blocked, failed, or still filter-blocked after recovery
+    return await drive(flow, post, on_stage=on_stage, on_stage_end=on_stage_end)

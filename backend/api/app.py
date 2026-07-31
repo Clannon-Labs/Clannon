@@ -511,32 +511,60 @@ def _wiki_json(entry: dict) -> dict:
         "content": entry["content"],
         "updatedAt": datetime.fromtimestamp(entry["updated_at"], tz=timezone.utc).isoformat(),
         "projectId": entry.get("project_id"),
+        "savedBy": "user",
+        "rationale": "User-authored reference.",
+    }
+
+
+def _learned_json(item) -> dict:
+    """Format one real Manager-owned durable entry with complete provenance."""
+    first_line = next(
+        (line.strip() for line in item.content.splitlines() if line.strip()),
+        "Memory",
+    )
+    created = float(getattr(item, "created_at", 0.0) or 0.0)
+    trace_id = getattr(item, "trace_id", "") or ""
+    saved_by = getattr(item, "saved_by", "")
+    saved_by = getattr(saved_by, "value", saved_by) or "unspecified"
+    kind = getattr(item, "kind", "")
+    kind = getattr(kind, "value", kind) or "unspecified"
+    participants = [
+        name.strip()
+        for name in (getattr(item, "participants", "") or "").split(",")
+        if name.strip()
+    ]
+    return {
+        "id": item.memory_id,
+        "tier": item.store.value,
+        "title": first_line[:80],
+        "content": item.content,
+        "updatedAt": (
+            datetime.fromtimestamp(created, tz=timezone.utc).isoformat()
+            if created else None
+        ),
+        "projectId": None,
+        "runId": trace_id or None,
+        "sessionId": getattr(item, "session_id", "") or None,
+        "traceId": trace_id or None,
+        "savedBy": saved_by,
+        "rationale": getattr(item, "rationale", ""),
+        "confidence": float(getattr(item, "confidence", 0.0) or 0.0),
+        "kind": kind,
+        "source": getattr(item, "source", ""),
+        "participants": participants,
     }
 
 
 @app.get("/memory")
-def list_memory(
+async def list_memory(
     projectId: str | None = None, user: auth.User = Depends(auth.current_user)
 ) -> list[dict]:
-    """The user's memory (wiki + episodic), filtered to one project when `projectId` is
-    given, all of it when omitted."""
+    """Wiki plus real Manager-owned inferred tiers for this authenticated user."""
+    from core.memory import manager
+
     wiki = [_wiki_json(entry) for entry in auth.wiki_list(user.id, projectId)]
-    episodic = [
-        {
-            "id": f"{run.id}_m{i}",
-            "tier": "episodic",
-            "title": f"Run: {run.title}",
-            "content": write["content"],
-            "updatedAt": write["ts"],
-            "runId": run.id,
-            "projectId": run.project_id,
-        }
-        for run in runs.STORE.list_for(
-            user.id, projectId, include_superseded=True
-        )
-        for i, write in enumerate(run.memory_writes)
-    ]
-    return wiki + episodic
+    learned = [_learned_json(item) for item in await manager.list_entries(user.id)]
+    return wiki + learned
 
 
 _PREVIEW_MAX_ITEMS = 8    # frontend renders a compact panel; the Manager already ranks
@@ -574,8 +602,7 @@ async def hydration_preview(
         return []
 
     # MemoryEntry shape (like GET /memory) + `score`. Wiki items map back to their
-    # real entries (hydration keeps wiki as verbatim text); learned-tier items have
-    # no API id, so they get a stable preview id + a derived title.
+    # real entries (hydration keeps wiki as verbatim text).
     wiki_by_content = {e["content"]: e for e in wiki_entries}
     out: list[dict] = []
     for i, item in enumerate(pkg.items[:_PREVIEW_MAX_ITEMS]):
@@ -585,21 +612,24 @@ async def hydration_preview(
             updated = datetime.fromtimestamp(entry["updated_at"], tz=timezone.utc).isoformat()
             project = entry.get("project_id")
         else:
-            id_ = f"preview_{i}"
+            id_ = item.memory_id or f"preview_{i}"
             first_line = next((ln.strip() for ln in item.content.splitlines() if ln.strip()), "Memory")
             title = first_line[:80]
             created = getattr(item, "created_at", 0.0)
             updated = datetime.fromtimestamp(created, tz=timezone.utc).isoformat() if created else None
             project = None
-        out.append({
+        shaped = _learned_json(item)
+        shaped.update({
             "id": id_,
-            "tier": item.store.value,
             "title": title,
-            "content": item.content,
             "updatedAt": updated,
             "projectId": project,
             "score": max(0.0, min(1.0, float(item.score))),
         })
+        if entry is not None:
+            shaped["savedBy"] = "user"
+            shaped["rationale"] = "User-authored reference."
+        out.append(shaped)
     return out
 
 
@@ -656,14 +686,17 @@ async def upload_memory(
 
 
 @app.delete("/memory/{entry_id}", status_code=204)
-def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_user)) -> None:
-    """Delete a memory entry, owner-scoped. A WIKI entry (id ``m_…``) is removed from the store;
-    an EPISODIC entry (id ``<run_id>_m<i>``, a pipeline-written recollection) is dropped from its
-    run so it stops appearing — the user's "that's outdated" action. 404 if neither matches."""
+async def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_user)) -> None:
+    """Delete one wiki, inferred, or legacy entry under authenticated ownership."""
+    from core.memory import manager
+
+    if auth.wiki_delete(user.id, entry_id):
+        return
+    if await manager.delete_entry(user.id, entry_id):
+        return
     if runs.STORE.forget_memory_write(user.id, entry_id):
         return
-    if not auth.wiki_delete(user.id, entry_id):
-        raise HTTPException(404, "Memory entry not found.")
+    raise HTTPException(404, "Memory entry not found.")
 
 
 # ---------- usage ----------

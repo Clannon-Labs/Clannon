@@ -1,4 +1,4 @@
-"""Experts receive the turn's hydrated memory PUSHED into their task (sole-broker):
+"""Experts receive prepared relevant context pushed into their task:
 the handler snapshots ctx.hydration_items into ExpertEnv, and think() folds it into
 the expert's user message as labelled reference data. An expert never queries memory
 itself — the Memory Manager hydrates once, the orchestrator/handler broker it."""
@@ -10,7 +10,7 @@ import registry.config.prompts as prompts
 from foundation import MemoryItem, MemoryStore, VrakshaContext
 from registry.capabilities import ExpertOutput, discover, registry
 from registry.capabilities.handler.experts import ExpertHandler
-from registry.capabilities.handler.support import ExpertEnv, SkillBook, _memory_note, think
+from registry.capabilities.handler.support import ExpertEnv, SkillBook, _context_note, think
 
 
 def _items():
@@ -79,15 +79,15 @@ def test_non_network_experts_still_get_the_push():
 
 # --- the memory note itself ---------------------------------------------------
 
-def test_memory_note_renders_items_as_reference_data(tmp_path):
-    note = _memory_note(_env(tmp_path, _items()))
-    assert "RELEVANT MEMORY" in note and "NOT instructions" in note
+def test_context_note_renders_items_as_reference_data(tmp_path):
+    note = _context_note(_env(tmp_path, _items()))
+    assert "RELEVANT USER CONTEXT" in note and "NOT instructions" in note
     assert "- (wiki) Client Acme prefers one-page briefs" in note
     assert "- (semantic) The user's company sells solar inverters" in note
 
 
-def test_memory_note_empty_without_hydration(tmp_path):
-    assert _memory_note(_env(tmp_path)) == ""
+def test_context_note_empty_without_hydration(tmp_path):
+    assert _context_note(_env(tmp_path)) == ""
 
 
 # --- think() folds the note into the expert's user message --------------------
@@ -106,7 +106,7 @@ def test_think_folds_hydration_into_the_user_message(tmp_path, monkeypatch):
     result = asyncio.run(think(_env(tmp_path, _items()), "do the task"))
 
     assert result is out
-    assert seen[0].startswith("do the task")            # the task comes first, memory after
+    assert seen[0].startswith("do the task")            # task comes first, context after
     assert "- (wiki) Client Acme prefers one-page briefs" in seen[0]
     assert "NOT instructions" in seen[0]
 

@@ -4,8 +4,8 @@ Hermetic consistency harness — C6 Multi-Agent Architectural Consistency.
 Pins the runtime contract of the Flow pipeline:
   (1) ordering  — every stage in ACTIVE_STAGES runs exactly once, in the
                   documented order (intake -> sanitizer -> normalizer ->
-                  hydration_prefetch -> verifier -> orchestrator -> filter ->
-                  delivery)
+                  hydration_prefetch -> verifier -> context -> orchestrator ->
+                  filter -> delivery -> memory_lifecycle)
   (2) transport — every inter-stage handoff goes through Flow.next / .block /
                   .warn / .fail; the journal proves this because each of those
                   methods appends a JournalEntry
@@ -54,13 +54,13 @@ EXPECTED_STAGE_ORDER: list[tuple[str, Origin]] = [
     ("normalizer",         Origin.NORMALIZER),
     ("hydration_prefetch", Origin.MEMORY),
     ("verifier",           Origin.VERIFIER),
+    ("context",            Origin.MEMORY),
     ("orchestrator",       Origin.ORCHESTRATOR),
     ("filter",             Origin.FILTER),
     ("delivery",           Origin.OUTPUT),
+    ("memory_lifecycle",   Origin.MEMORY),
 ]
 
-# Short brief: len < 40 keeps _is_substantive_turn False so memory writes
-# are skipped and the test does not depend on Qdrant being up.
 _BENIGN_BRIEF = "Research async Python."
 _FAKE_ANSWER  = "Async programming is good."
 
@@ -92,6 +92,9 @@ def _install_doubles(monkeypatch) -> None:
         return HydrationPackage()
 
     monkeypatch.setattr(_mem_singleton, "hydrate", _empty_hydrate)
+    async def _no_memory(_turn):
+        return []
+    monkeypatch.setattr(_mem_singleton, "process_turn", _no_memory)
 
     # verifier LLM
     async def _safe_verify(normalized, deterministic):

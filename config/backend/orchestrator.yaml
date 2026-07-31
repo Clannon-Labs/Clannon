@@ -1,8 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # config/backend/orchestrator.yaml — orchestrator-tier tunables. BACKEND-CONTROLLED.
-# The routing advisory-scorer's sharpness + entropy bands, the chat-vs-deliverable
-# split threshold, the substantive-turn memory gate, and the degraded (graceful-
-# failure) answer's bounds. Behavior-preserving: every value equals today's literal.
+# Routing advisory sharpness/entropy bands and degraded-answer bounds.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ROUTING (advisory entropy scorer, issue #64 — ADVISORY, never authoritative).
@@ -14,24 +12,6 @@
 routing_default_temperature: 0.1
 routing_entropy_focused_below: 0.34
 routing_entropy_dispersed_at_or_above: 0.67
-
-# CHAT vs DELIVERABLE — a reply at or under this length is treated as a
-# conversational message, not a report deliverable. Unit: characters. > 0.
-chat_reply_max_chars: 600
-
-# SUBSTANTIVE-TURN memory gate — a turn whose task/answer clears these lengths is
-# "substantive" enough to propose a memory write. Unit: characters. > 0.
-substantive_task_chars: 40
-substantive_answer_chars: 200
-
-# EPISODIC-WRITE excerpt caps — how much of a turn's task/answer is stored as the
-# episodic memory record. Unit: characters. > 0.
-episodic_task_excerpt_chars: 200
-episodic_answer_excerpt_chars: 500
-
-# DECISION-RECORD content cap (CB4) — how much of a decision's text is persisted.
-# Unit: characters. > 0.
-decision_record_content_chars: 500
 
 # DEGRADED (graceful-failure) ANSWER bounds — when the turn fails but findings
 # exist, how many findings and how much of each are folded into the honest degraded

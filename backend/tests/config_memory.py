@@ -31,6 +31,9 @@ _TODAY = dict(
     search_top_k=10,
     relevance_floor=0.30,
     distill_max_retries=2,
+    curator_max_turns=8,
+    curator_max_output_tokens=700,
+    list_max_entries=500,
 )
 
 
@@ -62,6 +65,9 @@ def test_d1_migrated_memory_knobs_are_present_and_at_todays_values():
     assert m.search_top_k == 10
     assert m.relevance_floor == 0.30
     assert m.distill_max_retries == 2
+    assert m.curator_max_turns == 8
+    assert m.curator_max_output_tokens == 700
+    assert m.list_max_entries == 500
 
 
 # ── the cross-field invariant (fail loud, not a silent doc note) ───────────────────────────

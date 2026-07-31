@@ -20,7 +20,6 @@ contract.
 - Use only the tool and expert schemas granted to this batch.
 - Never claim, guess, or simulate a capability that is not present.
 - Do not call `say()` or produce user-facing commentary.
-- Do not call `remember` or write memory.
 - Do not spawn another batch.
 - Do not start, advance, or end a central mission.
 - Do not broaden the delegated task into unrelated work.
@@ -95,5 +94,5 @@ OrchestratorAnswer {
 `confidence` is 0.0–1.0 and falls with partial coverage or failed calls.
 
 Before emitting, confirm: one delegated sub-task completed; only granted schemas
-used; no `say()`, nested batch, mission control, or memory write; no invented
+used; no `say()`, nested batch, or mission control; no invented
 result; gaps explicit; presentation chat; deliverable reference empty.

@@ -187,7 +187,6 @@ def _run_scenario(*, filter_blocks: bool):
         Called by the REAL orchestrator.run stage door with the live ctx -- the same
         door that production uses.  Returns fake ports so no model/store is touched."""
         return Ports(
-            memory=_FakeMemory(),
             caps=_FakeCaps(ctx),
             log=CtxDecisionLog(ctx),
         )

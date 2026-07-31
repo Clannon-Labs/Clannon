@@ -29,7 +29,7 @@ verifier:
   locked: true
 
 orchestrator:
-  version: 5
+  version: 6
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
   about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
@@ -45,7 +45,7 @@ filter:
   locked: true   # output safety/quality gate — a security boundary
 
 memory:
-  version: 1
+  version: 2
   file: memory/system.md
   locked: false   # the memory-distillation agent — behavior, not a security boundary
 

@@ -101,13 +101,13 @@ _FOUNDATION_INIT = "foundation/__init__.py"
 # foundational, deliberate relationship (§V.20) unlikely to ever break under
 # routine work, unlike an exact file/edge count.
 _EXPECTED_DIRECT_DEPS_OF_MANAGER = {
-    # Post-013ea90 (manager.py split into thin door + hydration/write_policy/
-    # tiers): manager.py no longer imports embeddings.py directly — that's
-    # write_policy.py's/hydration.py's job now. Kept as a durable subset of
-    # manager.py's real direct imports (not the full set), same spirit as
-    # before: pin a few structurally meaningful facts, not an exact count.
-    "core/memory/__init__.py", "core/memory/write_policy.py",
-    "core/memory/store.py", "core/memory/writer.py", "foundation/__init__.py",
+    # Manager stays a thin door: hydration, manager-owned curation, provenance
+    # translation, persistence policy, and raw-store delegation are separate
+    # internals. Pin this durable subset, not every incidental import.
+    "core/memory/__init__.py", "core/memory/curator.py",
+    "core/memory/hydration.py", "core/memory/items.py",
+    "core/memory/write_policy.py", "core/memory/store.py",
+    "foundation/__init__.py",
 }
 
 

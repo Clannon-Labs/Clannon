@@ -17,7 +17,7 @@ import uuid
 from typing import Any
 
 import settings
-from foundation import MemoryKind, MemoryStore
+from foundation import MemoryKind, MemorySaver, MemoryStore
 
 from .config import MEMORY_DISABLED as DISABLED
 from .config import QDRANT_URL
@@ -218,6 +218,7 @@ def upsert(
     source: str = "",
     superseded_by: str = "",
     participants: str = "",
+    saved_by: str = MemorySaver.UNSPECIFIED.value,
 ) -> str | None:
     """Insert (or refresh, when point_id given) one memory. None on failure.
 
@@ -268,6 +269,7 @@ def upsert(
                         "source": source,
                         "superseded_by": superseded_by,
                         "participants": participants,
+                        "saved_by": saved_by,
                     },
                 )
             ],
@@ -314,6 +316,85 @@ def mark_superseded(tier: MemoryStore, user_id: str, point_id: str, superseded_b
     except Exception as exc:
         _trip(exc)
         return False
+
+
+def list_entries(
+    tier: MemoryStore,
+    user_id: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """List one inferred tier under mandatory tenant scope, without vectors."""
+    client = _qdrant()
+    collection = COLLECTIONS.get(tier)
+    if (
+        client is None
+        or collection is None
+        or tier in (MemoryStore.WIKI, MemoryStore.WORKING)
+        or not user_id
+        or limit <= 0
+    ):
+        return []
+    try:
+        if not client.collection_exists(collection):
+            return []
+        points, _next = client.scroll(
+            collection,
+            scroll_filter=_user_filter(user_id),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        results: list[dict[str, Any]] = []
+        for point in points:
+            payload = point.payload or {}
+            if payload.get("user_id") != user_id:
+                log.error(
+                    "TENANT ISOLATION VIOLATION: %s listed a point for user %r "
+                    "under scope %r — point dropped",
+                    collection,
+                    payload.get("user_id"),
+                    user_id,
+                )
+                continue
+            results.append({"id": str(point.id), **payload})
+        return results
+    except Exception as exc:
+        _trip(exc)
+        return []
+
+
+def delete_entry(user_id: str, memory_id: str) -> bool:
+    """Delete one owned inferred point; foreign and unknown ids both return False."""
+    client = _qdrant()
+    if client is None or not user_id or not memory_id:
+        return False
+    try:
+        from qdrant_client import models as qm
+
+        for tier in (
+            MemoryStore.SEMANTIC,
+            MemoryStore.EPISODIC,
+            MemoryStore.PROCEDURAL,
+        ):
+            collection = COLLECTIONS[tier]
+            if not client.collection_exists(collection):
+                continue
+            points = client.retrieve(
+                collection,
+                ids=[memory_id],
+                with_payload=["user_id"],
+                with_vectors=False,
+            )
+            if not points or (points[0].payload or {}).get("user_id") != user_id:
+                continue
+            client.delete(
+                collection,
+                points_selector=qm.PointIdsList(points=[memory_id]),
+            )
+            return True
+    except Exception as exc:
+        _trip(exc)
+    return False
 
 
 def delete_user(user_id: str) -> None:

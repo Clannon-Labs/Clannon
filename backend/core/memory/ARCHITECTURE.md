@@ -20,9 +20,10 @@ never derives identity from content, model output, or retrieved data.
 | `memory_id` | Memory manager at write time (`uuid4`) | Qdrant point ID. Stable handle for dedup-updates, deletion (user right-to-erasure), and provenance references. |
 | `span_id` | Flow journal per stage | Not stored — memory is below span granularity. |
 
-The port contract carries identity explicitly: `HydrationRequest.user_id` and
-`record_write_proposals(user_id=, session_id=, ...)`. A request without a
-`user_id` is refused (empty hydration, rejected writes) — fail closed on scope.
+The port carries identity explicitly through `HydrationRequest` and
+`MemoryTurn`; list/delete take authenticated scope directly. A request without
+`user_id` is refused (empty hydration/listing, rejected write/delete). Curator
+tools capture trusted turn scope and never accept identity arguments.
 
 ## 2. Tiers
 
@@ -32,9 +33,9 @@ filter (never per-user collections).
 | Tier | Collection | Written by | Trust | Content |
 |---|---|---|---|---|
 | Wiki | `vraksha_wiki` | User only (via delivery layer sync) | 3 (highest) | User-authored .md knowledge |
-| Semantic | `vraksha_semantic` | Write policy (confidence ≥ 0.6) | 2 | Facts/claims with provenance + confidence |
-| Episodic | `vraksha_episodic` | Write policy (always) | 1 | Run outcomes, decisions, history |
-| Procedural | `vraksha_procedural` | Write policy (confidence ≥ 0.6) | 1 | Habits, formats, recurring workflows |
+| Semantic | `vraksha_semantic` | Manager curator + policy | 2 | Durable facts/claims with provenance + confidence |
+| Episodic | `vraksha_episodic` | Manager curator + policy | 1 | Meaningful outcomes, decisions, failures, milestones — never transcripts |
+| Procedural | `vraksha_procedural` | Manager curator + policy | 1 | Stable preferences, habits, repeatable workflows |
 
 `WORKING` memory (current turn) never reaches Qdrant — it lives on `ctx`.
 
@@ -50,6 +51,7 @@ payload: {
   user_id:    str   # MANDATORY — indexed, the scope
   session_id: str   # provenance + session recall
   trace_id:   str   # provenance → decision log
+  saved_by:  str   # trusted MemorySaver; curator writes memory_curator
   tier:       str   # redundant with collection; guards bulk ops
   content:    str   # the memory text (embedded text == stored text)
   rationale:  str   # why the writer proposed it
@@ -62,6 +64,7 @@ payload: {
   valid_at:      float # unix ts the fact became true (vs created_at = when learned); 0 = unknown
   source:        str   # source-document attribution; "" = agent inference
   superseded_by: str   # memory_id of the record replacing this; "" = current (EB1 sets this — inert in CB1)
+  participants:  str   # trusted completed-turn participants
 }
 ```
 
@@ -98,32 +101,47 @@ loop before planning. Steps:
 
 Default token budget: 2000 when the request doesn't set one.
 
-## 5. Write policy (write path)
+## 5. Manager-owned curation and write policy
 
-`record_write_proposals(user_id, session_id, proposals)` — proposals come from
-the orchestrator/experts; the manager alone decides persistence:
+`process_turn(MemoryTurn)` receives neutral, completed-turn evidence after
+delivery. Orchestrator and experts do not select tiers, construct durable
+writes, or access storage. Manager's bounded LLM gets two internal typed tools:
 
-- **Episodic**: always accepted (the non-negotiable baseline tier).
-- **Semantic / Procedural**: accepted when `confidence ≥ 0.6`.
-- **Wiki**: NEVER accepted from proposals — wiki is user-authored only;
-  a proposal targeting wiki is downgraded to semantic.
+- `search_memory` searches existing inferred memory under captured `user_id`;
+- `save_memory` stages one SEMANTIC, EPISODIC, or PROCEDURAL action.
+
+Staging is not persistence. Actions remain buffered until curator returns a
+successful final verdict; any model/tool fault discards them all. Code owns
+scope, call/content/list bounds, non-empty rationale, confidence gates,
+epistemic typing, source-backed facts, transcript rejection, trusted
+`saved_by=memory_curator`, dedup, and supersession. Model alone decides future
+relevance and inferred tier; most turns correctly stage nothing.
+
+- **Wiki / Working**: unrepresentable as curator tiers.
 - **Dedup**: before insert, search the target tier for the same user with
   similarity ≥ 0.97; on a near-duplicate, refresh that point (created_at,
   confidence = max) instead of inserting. Memories converge, never multiply.
   The refresh keeps the **stronger typed signal**, symmetric with confidence:
   `kind` never downgrades (fact > assumption > unspecified), and a non-empty
   `source` / `valid_at` is not wiped by a barer re-write.
-- **Typing**: the writer (`writer.distill`) sets each proposal's `kind` —
-  `fact` only when source-backed (and names the `source`), else `assumption`
-  (the honest default for an inference). `unspecified` is never written; it is
-  the read-time fallback for legacy/untyped points. `superseded_by` is inert in
-  CB1 — EB1's manager-owned invalidation is its only writer.
-- Content is truncated to 2,000 chars before embedding (defensive cap).
+- **Typing**: curator sets `fact`, `assumption`, or `decision`; policy refuses
+  `unspecified`. `superseded_by` remains manager-owned.
+- Content is capped at 2,000 chars before embedding.
+
+`record_write_proposals` and `learn` remain internal compatibility helpers for
+benchmarks/tooling during caller migration. Neither is in `MemoryPort`.
 
 Writes happen post-delivery in the pipeline order, and a write failure NEVER
 fails the run (logged, dropped).
 
-## 6. Failure model — memory never takes a run down
+## 6. Listing and deletion
+
+`list_entries(user_id)` performs bounded tenant-filtered Qdrant scrolls across
+all inferred tiers and returns real points with stable IDs and provenance.
+`delete_entry(user_id, memory_id)` checks ownership inside the store door.
+Missing and foreign ids both return `False`.
+
+## 7. Failure model — memory never takes a run down
 
 Memory is augmentation, not a gate. Every failure degrades, none block:
 
@@ -137,14 +155,13 @@ Memory is augmentation, not a gate. Every failure degrades, none block:
 A one-shot circuit breaker memoizes "Qdrant down" for 30s so a dead store
 costs one timeout per window, not one per call.
 
-## 7. Security invariants
+## 8. Security invariants
 
 1. `user_id` filter is constructed inside the store module — the ONLY place a
    Qdrant query is built. Nothing else imports the qdrant client. (CI Semgrep
    rule for unscoped queries lands with multi-tenancy hardening.)
-2. Identity cannot come from the model: no tool/expert/proposal schema carries
-   a `user_id` field. Identity enters once at the trusted entry
-   (`Flow.new(user_id=)`) and travels only via `ctx`.
+2. Identity cannot come from the model: curator tools carry no `user_id` field.
+   Trusted turn identity is captured by internal tool closures.
 3. Defense in depth on reads: every hit returned by a scoped search is
    re-verified against the requested `user_id` in the store; a mismatch is
    dropped and logged as a tenant-isolation violation.
@@ -159,19 +176,21 @@ costs one timeout per window, not one per call.
    continuing past per-tier faults so one bad collection never leaves the
    others populated (right-to-deletion; called on account deletion).
 
-## 8. Module layout
+## 9. Module layout
 
 ```
 core/memory/
   ARCHITECTURE.md   ← this document
   manager.py        ← MemoryPort implementer; the only door (thin adapter)
   hydration.py      ← read-side: ranking, recency decay, Lagrangian budgeting
+  curator.py        ← Manager LLM + typed scope-captured search/save tools
   write_policy.py   ← write-side: dedup, EB1 supersession, sync_wiki
+  items.py          ← store payload → MemoryItem provenance translator
   tiers.py          ← TIER_TRUST/TIER_FLOOR (shared by hydration + write_policy)
   embeddings.py     ← fastembed nomic-embed-text-v1.5 wrapper (lazy singleton)
   store.py          ← Qdrant access; the ONLY module that builds queries;
                       owns collections, payload indexes, user_id filters
-  writer.py         ← the background memory-agent's distillation step
+  writer.py         ← bounded post-write enrichment/judgment calls
   graph_store.py / graph_manager.py / mission_graph_store.py / graph_extract.py
                     ← GraphPort implementer (Kuzu) — code-import graph +
                       Mission Engine substrate
@@ -182,9 +201,7 @@ core/memory/
 Config via env: `QDRANT_URL` (default `http://localhost:6333`),
 `VRAKSHA_MEMORY_DISABLED=1` forces the degraded mode (tests, CI).
 
-## 9. What stays out (for now)
+## 10. What stays out (for now)
 
-The background memory-agent (LLM-curated consolidation), Lagrangian weights
-learned per user, R2-backed wiki files, and plan-tier enforcement at this
-layer (the delivery layer gates tiers today via `allowed_tiers`). Each slots
-behind the existing door without contract changes.
+Lagrangian weights learned per user, R2-backed wiki files, and plan-tier
+enforcement at this layer (delivery gates tiers through `allowed_tiers`).

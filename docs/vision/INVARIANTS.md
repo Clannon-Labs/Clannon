@@ -50,12 +50,16 @@ invariant here unless it is genuinely non-negotiable and sourced.
    plan, including free. Continuity must work even with nothing else unlocked.
    *(Architecture → Memory Tier Access.)*
 
-6. **Experts never write memory directly.** All writes go through memory write
-   policy. Experts and the orchestrator only *propose* writes.
+6. **Memory Manager alone manages inferred memory.** Experts, batches, and the
+   orchestrator receive no memory handle and never search, classify, propose, or
+   write memory. Pipeline hands neutral accepted-turn evidence to Manager;
+   Manager's own bounded LLM selects no-op vs typed internal tool actions, while
+   deterministic policy owns scope, bounds, confidence, dedup, and provenance.
    *(Architecture → Experts; Hard Constraints.)*
 
-7. **Memory is reached only through the MemoryPort.** Nothing imports memory
-   internals; callers hold only the `MemoryPort` contract.
+7. **Memory is reached only through the MemoryPort.** Memory-owned pipeline
+   stages and authenticated delivery hold the contract. Reasoning agents do not.
+   Nothing outside `core/memory/` imports storage or tier internals.
    *(Architecture → Memory Manager; Architectural Conventions.)*
 
 ## II. Artifacts & Continuity

@@ -203,6 +203,19 @@ class MemoryKind(str, Enum):
                                  # append-only — supersede, never dedup-overwrite
 
 
+class MemorySaver(str, Enum):
+    """Trusted component that caused a durable inferred-memory write.
+
+    This identity comes from pipeline code, never model output. It answers
+    "who saved this?" independently from `source` (where knowledge came from)
+    and `participants` (who took part in a remembered decision).
+    """
+    UNSPECIFIED = "unspecified"      # legacy point written before saver provenance
+    ORCHESTRATOR = "orchestrator"    # legacy points from retired direct-write path
+    MEMORY_CURATOR = "memory_curator"  # post-turn distillation agent
+    SYSTEM = "system"                # tooling/import path without a turn actor
+
+
 # ---------------------------------------------------------------------------
 # Batch lifecycle (batch architecture — the control-plane status axis)
 # Used by: the BatchAwarenessPort contract + its core/memory implementer

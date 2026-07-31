@@ -22,9 +22,8 @@ import time
 import settings
 from foundation import HydrationPackage, HydrationRequest, MemoryItem, MemoryStore
 
-from . import embeddings, store
+from . import embeddings, items as memory_items, store
 from .tiers import TIER_FLOOR, TIER_TRUST
-from .write_policy import _coerce_kind
 
 log = logging.getLogger(__name__)
 
@@ -206,22 +205,13 @@ async def hydrate(request: HydrationRequest) -> HydrationPackage:
                 if spent + cost > allocation[tier]:
                     break
                 spent += cost
-                items.append(MemoryItem(
-                    store=tier, content=hit.get("content", ""),
-                    score=hit["rank_score"], trust=TIER_TRUST[tier],
-                    created_at=float(hit.get("created_at", 0.0)),
-                    rationale=hit.get("rationale", ""),
-                    confidence=float(hit.get("confidence", 0.0)),
-                    session_id=hit.get("session_id", ""),
-                    trace_id=hit.get("trace_id", ""),
-                    # typed-knowledge (CB1) — legacy hits lack these keys and
-                    # fall back to the contract defaults via .get().
-                    kind=_coerce_kind(hit.get("kind")),
-                    valid_at=float(hit.get("valid_at", 0.0)),
-                    source=hit.get("source", ""),
-                    superseded_by=hit.get("superseded_by", ""),
-                    participants=hit.get("participants", ""),
-                ))
+                items.append(
+                    memory_items.from_payload(
+                        tier,
+                        hit,
+                        score=hit["rank_score"],
+                    )
+                )
 
     items.sort(key=lambda i: (i.trust, i.score), reverse=True)
     return HydrationPackage(items=items, token_budget=budget)

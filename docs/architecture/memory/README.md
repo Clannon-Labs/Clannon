@@ -48,7 +48,7 @@ This subsystem has **two authoritative documents** — read both:
 Per [../../vision/INVARIANTS.md](../../vision/INVARIANTS.md): memory is
 first-class; institutional memory (decisions, contracts, risks) outranks
 conversation; wiki beats everything; episodic is the non-negotiable baseline;
-experts never write directly; access is only through the MemoryPort. The
+reasoning agents never manage it; access is only through the MemoryPort. The
 [Attention Threshold](../../vision/ATTENTION_THRESHOLD.md) raises the bar further:
 typed knowledge, decision retrieval outranking chat retrieval, and a cross-media
 knowledge graph (see [../media/](../media/)).

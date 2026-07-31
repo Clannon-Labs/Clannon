@@ -40,7 +40,6 @@ class Capabilities:
     ctx: VrakshaContext
     _tools: ToolHandler
     _experts: ExpertHandler
-    _allow_memory_write: bool = True   # gates the `remember` built-in; True preserves .open()'s behavior
     _batches: BatchHandler | None = None   # None for every scoped_to() instance -- see its docstring (recursion guard)
     # Mission Engine loop-wiring (ratified 2026-07-25): None for every scoped_to() instance too --
     # a batch's own scoped turn never starts/advances/ends a mission (that's the central
@@ -72,7 +71,7 @@ class Capabilities:
     @classmethod
     def scoped_to(
         cls, ctx: VrakshaContext, *, expert_keys, tool_keys, grants,
-        allow_memory_write: bool = False, graph: GraphPort | None = None, registry=default_registry,
+        graph: GraphPort | None = None, registry=default_registry,
     ) -> "Capabilities":
         """Open a gateway restricted to specific expert/tool keys and permission
         grants — for a batch orchestrator scoped to one domain (batch-orchestrator
@@ -82,15 +81,6 @@ class Capabilities:
         is never accidental. Built from `ToolHandler`/`ExpertHandler`'s own
         compose-never-widen `.scoped()`, so this can be further narrowed safely
         (e.g. nesting) without ever escaping the scope requested here.
-
-        `allow_memory_write` defaults to False (unlike `.open()`'s implicit True) —
-        closes the ratified design's F2 finding one tier down: the central
-        orchestrator's `remember` + unrestricted-NETWORK combination is a real
-        exfiltration-surface risk this codebase never extended the "no memory +
-        no egress together" rule to; a batch orchestrator's default is the safer
-        posture, with per-batch config (once it exists) able to opt back in
-        explicitly. `recall` (read-only, this session only) is unaffected — this
-        gates the WRITE side only.
 
         `graph` (CB2 code-symbol tier, ratified 2026-07-26) is the SAME opt-in
         shape: `None` by default, explicitly passed by a caller that decided this
@@ -104,7 +94,7 @@ class Capabilities:
         `spawn_batch` to its own model (the recursion guard; see batches.py)."""
         tools = ToolHandler(registry=registry).scoped(allowed_keys=tool_keys, grants=grants)
         experts = ExpertHandler(registry=registry, tools=tools, graph=graph).scoped(allowed_keys=expert_keys)
-        return cls(ctx=ctx, _tools=tools, _experts=experts, _allow_memory_write=allow_memory_write, _graph=graph)
+        return cls(ctx=ctx, _tools=tools, _experts=experts, _graph=graph)
 
     @property
     def _registry(self):
@@ -173,7 +163,6 @@ class Capabilities:
                 # when the user attached files this turn, surface the file-reading experts up
                 # front so the orchestrator can actually read the upload (not fall back to search)
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
-                with_memory_write=self._allow_memory_write,
                 batches=self._batches,
                 graph=self._graph, budget=self._budget,
             ),

@@ -44,8 +44,8 @@ D1 slice (2026-07-06, f628a0b): the MEMORY_* group formerly in
 `foundation/vocab/constants.py` — same equality-pin / causation-proof split:
   ✓ hydration.py's _SEARCH_K/_RELEVANCE_FLOOR and store.search's default
     `limit` equal settings.MEMORY (import-frozen, equality-pin)
-  ✓ hydration._embed_bounded's read deadline and writer.distill/
-    judge_supersession's retry count are GENUINELY wired (call-time reads,
+  ✓ hydration._embed_bounded's read deadline plus curator/writer retry counts
+    are GENUINELY wired (call-time reads,
     same causation-proof shape as the Qdrant timeout above)
 
 Run:
@@ -56,6 +56,7 @@ from __future__ import annotations
 import inspect
 
 import settings
+import core.memory.curator as curator
 import core.memory.embeddings as embeddings
 import core.memory.graph_extract as graph_extract
 import core.memory.graph_store as graph_store
@@ -64,7 +65,7 @@ import core.memory.store as store
 import core.memory.tiers as tiers
 import core.memory.write_policy as write_policy
 import core.memory.writer as writer
-from foundation import MemoryStore
+from foundation import MemoryStore, MemoryTurn
 
 
 def test_tier_trust_and_floor_match_settings():
@@ -172,27 +173,26 @@ def test_embed_bounded_read_timeout_is_genuinely_wired(monkeypatch):
     assert result is None, "a stalled embed must degrade via the (patched, tiny) read timeout"
 
 
-def test_writer_retries_are_genuinely_wired(monkeypatch):
-    """Causation proof for both writer.py call sites: a fake build_agent
-    captures the `retries` kwarg it's actually invoked with. Returns None
-    (a bogus handle) rather than raising — build_agent() is called OUTSIDE
-    both functions' try/except, so a raise here would propagate uncaught;
-    the None handle instead makes the (real) run_structured() fail, which
-    IS inside the try/except, so distill()/judge_supersession() degrade
-    normally (best-effort, never raises)."""
+def test_memory_agent_retries_are_genuinely_wired(monkeypatch):
+    """Curator and one-shot writer judgments both read configured retries."""
     captured = []
 
-    def _fake_build_agent(*args, **kwargs):
+    def _fake_build(*args, **kwargs):
         captured.append(kwargs.get("retries"))
         return None
 
-    monkeypatch.setattr(writer, "build_agent", _fake_build_agent)
+    monkeypatch.setattr(curator, "build_tool_agent", _fake_build)
+    monkeypatch.setattr(writer, "build_agent", _fake_build)
     sentinel = 7   # distinct from the real default (2) — rules out coincidence
     patched = settings.MemoryConfig(**{**settings.MEMORY.model_dump(), "distill_max_retries": sentinel})
     monkeypatch.setattr(settings, "MEMORY", patched)
 
     import asyncio as _asyncio
-    assert _asyncio.run(writer.distill("task", "answer", [])) == []
+    turn = MemoryTurn(
+        user_id="u", session_id="s", trace_id="t",
+        request="task", response="answer",
+    )
+    assert _asyncio.run(curator.process_turn(turn)) == []
     assert _asyncio.run(writer.judge_supersession("a", "b")) is False
 
     assert captured == [sentinel, sentinel]

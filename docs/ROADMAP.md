@@ -68,14 +68,15 @@ PARTIAL.**
 1. **CB3 / EB3 — real media ingestion.** Mechanism proven, actual multi-modal
    ingestion absent. Owner: memory (extractor) + orchestration (experts).
 2. **CB1 / EB1 — temporal truth.** `fact|assumption` + `valid_at` typing has
-   **landed**; the harness marks that discriminator PASS. What remains: retrieval
-   explanation (the "why this memory"), complete provenance (author/RFC linkage),
-   and explicit supersession linkage so current-vs-historical is a relationship,
-   not prose. Owner: memory.
+   **landed**. Manager-owned tier curation plus save-time rationale/saver/session/
+   trace/participant provenance and real archive visibility landed 2026-07-30.
+   What remains: retrieval explanation (why an item was selected), complete
+   author/RFC linkage, and explicit supersession linkage so current-vs-historical
+   is a relationship, not prose. Owner: memory.
 3. **Harden existing foundations, then build batch architecture.** Owner
    greenlit Redis-budget and batch foundations on 2026-07-28. Build is no
    longer decision-gated, but remains stability-first and propose-first: prove
-   Redis money safety, then Mission Engine, bounded cross-batch memory slice,
+   Redis money safety, then Mission Engine, bounded cross-batch awareness,
    and one batch end-to-end.
 4. **Budget enforcement go-live.** Code is built but ships
    `enforcement_enabled=False`. Owner supplied provider-pricing references;
@@ -142,7 +143,7 @@ benefit-backed proposal.
 | Role | Current lane |
 |---|---|
 | **backend** (coordinator) | existing-system hardening; Redis-budget design/review; foundation/config seams; review + integrate + push; dispatch workers |
-| **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + provenance + supersession linkage (`valid_at` typing is DONE) |
+| **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + author/RFC provenance + supersession linkage (Manager-only curation/save provenance DONE) |
 | **orchestration** | central/batch prompt contracts landed; continue Mission Engine + batch hardening, propose-first where owner-gated |
 | **security** | standing invariant review of budget/batch designs; widen adversarial regression coverage when new classes appear |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |

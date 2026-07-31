@@ -158,6 +158,9 @@ class MemoryConfig(BaseModel):
     search_top_k: int = Field(gt=0)
     relevance_floor: float = Field(ge=0.0, le=1.0)
     distill_max_retries: int = Field(ge=0)
+    curator_max_turns: int = Field(ge=1)
+    curator_max_output_tokens: int = Field(gt=0)
+    list_max_entries: int = Field(gt=0)
 
     @model_validator(mode="after")
     def _dedup_is_a_subset_of_supersession(self) -> "MemoryConfig":
@@ -182,20 +185,13 @@ def _load_memory() -> MemoryConfig:
 
 class OrchestratorConfig(BaseModel):
     """Orchestrator-tier tunables (`config/backend/orchestrator.yaml`): the routing
-    advisory-scorer's default sharpness + entropy bands, the chat-vs-deliverable split
-    threshold, the substantive-turn memory gate, and the degraded answer's bounds."""
+    advisory-scorer's default sharpness + entropy bands and degraded-answer bounds."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     routing_default_temperature: float = Field(gt=0.0)
     routing_entropy_focused_below: float = Field(ge=0.0, le=1.0)
     routing_entropy_dispersed_at_or_above: float = Field(ge=0.0, le=1.0)
-    chat_reply_max_chars: int = Field(gt=0)
-    substantive_task_chars: int = Field(gt=0)
-    substantive_answer_chars: int = Field(gt=0)
-    episodic_task_excerpt_chars: int = Field(gt=0)
-    episodic_answer_excerpt_chars: int = Field(gt=0)
-    decision_record_content_chars: int = Field(gt=0)
     degraded_per_finding_chars: int = Field(gt=0)
     degraded_max_findings: int = Field(gt=0)
     degraded_confidence: float = Field(ge=0.0, le=1.0)
@@ -226,7 +222,7 @@ def _load_orchestrator() -> OrchestratorConfig:
 class ExpertsConfig(BaseModel):
     """Expert-tier tunables (`config/backend/experts.yaml`): media-preprocessing bounds,
     the media expert's inline-attachment size limit, and the expert-handler's
-    artifact-capture + need-context caps."""
+    artifact-capture caps."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -241,7 +237,6 @@ class ExpertsConfig(BaseModel):
     media_inline_limit_bytes: int = Field(gt=0)
     max_artifacts: int = Field(gt=0)
     max_artifact_bytes: int = Field(gt=0)
-    need_context_max_items: int = Field(gt=0)
     # D1 move — migrating out of foundation/vocab/constants.py.
     timeout_s: float = Field(gt=0.0)
     max_concurrent: int = Field(gt=0)
@@ -258,16 +253,14 @@ def _load_experts() -> ExpertsConfig:
 
 
 class ToolsConfig(BaseModel):
-    """Tool-tier tunables (`config/backend/tools.yaml`): per-tool caps (diff, fetch_url,
-    http_request, memory_search), chart SVG geometry, and the remember/recall bounds."""
+    """Tool-tier tunables (`config/backend/tools.yaml`): per-tool caps, chart SVG
+    geometry, and the session-local recall bound."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     diff_max_chars: int = Field(gt=0)
     fetch_url_max_redirects: int = Field(ge=0)
     http_request_max_headers: int = Field(gt=0)
-    memory_search_default_results: int = Field(gt=0)
-    memory_search_max_results: int = Field(gt=0)
     chart_width: int = Field(gt=0)
     chart_height: int = Field(gt=0)
     chart_margin_top: int = Field(ge=0)
@@ -275,9 +268,7 @@ class ToolsConfig(BaseModel):
     chart_margin_bottom: int = Field(ge=0)
     chart_margin_left: int = Field(ge=0)
     chart_max_bar_width: float = Field(gt=0.0)
-    remember_max_chars: int = Field(gt=0)
     recall_max_hits: int = Field(gt=0)
-    remember_write_confidence: float = Field(ge=0.0, le=1.0)
     tool_output_preview_chars: int = Field(gt=0)
     # D1 move — migrating out of foundation/vocab/constants.py.
     timeout_s: float = Field(gt=0.0)
@@ -285,13 +276,6 @@ class ToolsConfig(BaseModel):
     max_retries: int = Field(ge=0)
     max_output_bytes: int = Field(gt=0)
     fetch_max_response_bytes: int = Field(gt=0)
-
-    @model_validator(mode="after")
-    def _search_bounds_ordered(self) -> "ToolsConfig":
-        if not (self.memory_search_default_results <= self.memory_search_max_results):
-            raise ValueError("memory_search_default_results must be <= memory_search_max_results")
-        return self
-
 
 def _load_tools() -> ToolsConfig:
     raw = _load_mapping("backend/tools.yaml")

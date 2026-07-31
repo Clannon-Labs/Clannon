@@ -12,11 +12,15 @@ from fastapi.testclient import TestClient
 def db(tmp_path, monkeypatch):
     from api import config, run_store
     import api.runs as runs_mod
+    from core.memory import manager
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
     store = run_store.RunStore()                       # fresh store: no cross-test live runs
     monkeypatch.setattr(run_store, "STORE", store)
     monkeypatch.setattr(runs_mod, "STORE", store)      # the routes read runs.STORE
+    async def empty_memory(_user_id):
+        return []
+    monkeypatch.setattr(manager, "list_entries", empty_memory)
     yield
 
 
@@ -139,28 +143,53 @@ def test_wiki_upload_scopes_via_query_param(db):
     assert client.get(f"/memory?projectId={other}").json() == []       # stays isolated, no leak
 
 
-def test_episodic_memory_can_be_deleted(db):
+def test_inferred_memory_can_be_deleted(db, monkeypatch):
     from api.app import app
-    from api.runs import STORE
+    from core.memory import manager
+    from foundation import MemoryItem, MemoryKind, MemorySaver, MemoryStore
 
     client = TestClient(app)
     me = client.post("/auth/signup", json={"name": "Ed", "email": "ed@x.com", "password": "password123"}).json()
 
-    run = STORE.create(me["id"], "did a thing")
-    run.memory_writes = [
-        {"content": "fact one", "ts": "2026-06-18T00:00:01"},
-        {"content": "fact two (outdated)", "ts": "2026-06-18T00:00:02"},
+    entries = [
+        MemoryItem(
+            memory_id="point-1", store=MemoryStore.EPISODIC,
+            content="fact one", created_at=1781740801,
+            saved_by=MemorySaver.MEMORY_CURATOR,
+        ),
+        MemoryItem(
+            memory_id="point-2", store=MemoryStore.EPISODIC,
+            content="fact two (outdated)", created_at=1781740802,
+            kind=MemoryKind.ASSUMPTION, rationale="turn outcome",
+            saved_by=MemorySaver.MEMORY_CURATOR, session_id="s1", trace_id="t1",
+        ),
     ]
-    run.status = "delivered"
-    STORE.persist(run)
+    async def list_entries(user_id):
+        assert user_id == me["id"]
+        return list(entries)
+    async def delete_entry(user_id, memory_id):
+        assert user_id == me["id"]
+        for item in list(entries):
+            if item.memory_id == memory_id:
+                entries.remove(item)
+                return True
+        return False
+    monkeypatch.setattr(manager, "list_entries", list_entries)
+    monkeypatch.setattr(manager, "delete_entry", delete_entry)
 
     episodic = [m for m in client.get("/memory").json() if m["tier"] == "episodic"]
     assert len(episodic) == 2
     outdated = next(m for m in episodic if "outdated" in m["content"])
+    assert outdated["id"] == "point-2"
+    assert outdated["savedBy"] == "memory_curator"
+    assert outdated["rationale"] == "turn outcome"
+    assert outdated["kind"] == "assumption"
+    assert outdated["sessionId"] == "s1"
+    assert outdated["traceId"] == "t1"
+    assert outdated["updatedAt"]
 
-    # the "that's outdated" delete now works on an episodic entry (was a 404 / "can't update")
     assert client.delete(f"/memory/{outdated['id']}").status_code == 204
     after = [m for m in client.get("/memory").json() if m["tier"] == "episodic"]
     assert [m["content"] for m in after] == ["fact one"]              # only the outdated one removed
 
-    assert client.delete(f"/memory/{run.id}_m9").status_code == 404   # unknown index -> clean 404
+    assert client.delete("/memory/point-9").status_code == 404

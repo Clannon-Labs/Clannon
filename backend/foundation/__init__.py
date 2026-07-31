@@ -23,6 +23,7 @@ from .contracts.memory import (
     MemoryItem,
     HydrationRequest,
     HydrationPackage,
+    MemoryTurn,
     MemoryWriteProposal,
     MemoryPort,
 )
@@ -98,6 +99,7 @@ from .vocab.types import (
     PermissionLevel,
     MemoryStore,
     MemoryKind,
+    MemorySaver,
     Origin,
     BatchLifecycleStatus,
 )
@@ -113,6 +115,7 @@ __all__ = [
     "MemoryItem",
     "HydrationRequest",
     "HydrationPackage",
+    "MemoryTurn",
     "MemoryWriteProposal",
     "MemoryPort",
     "NodeLabel",
@@ -187,6 +190,7 @@ __all__ = [
     "PermissionLevel",
     "MemoryStore",
     "MemoryKind",
+    "MemorySaver",
     "Origin",
 
     # constants (always import as module)

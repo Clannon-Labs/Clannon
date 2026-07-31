@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 import settings
 from foundation import (
@@ -26,13 +27,17 @@ from foundation import (
     GraphEdge,
     GraphNode,
     GraphScope,
+    MemoryItem,
     MemoryKind,
+    MemorySaver,
     MemoryStore,
+    MemoryTurn,
     MemoryWriteProposal,
     NodeLabel,
 )
 
 from . import embeddings, graph_manager, graph_store, store, writer
+from .items import _coerce_kind
 from .tiers import TIER_TRUST
 
 log = logging.getLogger(__name__)
@@ -91,18 +96,12 @@ _KIND_RANK = {
 }
 
 
-def _coerce_kind(raw: object) -> MemoryKind:
-    """Map a stored `kind` payload value back to MemoryKind, fail-soft. A legacy
-    point has no `kind` (raw is None) and an unknown/garbled value must never raise
-    into a turn — both degrade to UNSPECIFIED (the honest 'untyped' default)."""
-    try:
-        return MemoryKind(raw)
-    except (ValueError, KeyError):
-        return MemoryKind.UNSPECIFIED
-
-
 async def record_write_proposals(
-    user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
+    user_id: str,
+    session_id: str,
+    proposals: list[MemoryWriteProposal],
+    *,
+    saved_by: MemorySaver = MemorySaver.UNSPECIFIED,
 ) -> list[MemoryWriteProposal]:
     """Persist the proposals that clear the write policy; return the subset that
     was ACTUALLY written.
@@ -115,7 +114,59 @@ async def record_write_proposals(
     `settings.MEMORY.write_timeout_s`: a stalled store degrades (drops the
     rest) instead of hanging the delivered path — symmetric with the read
     path's deadline."""
-    persisted: list[MemoryWriteProposal] = []
+    persisted = await _persist_proposals(
+        user_id,
+        session_id,
+        proposals,
+        trace_id="",
+        saved_by=saved_by,
+    )
+    return [proposal for proposal, _tier, _memory_id in persisted]
+
+
+async def persist_curated(
+    turn: MemoryTurn,
+    proposals: list[MemoryWriteProposal],
+) -> list[MemoryItem]:
+    """Persist successful curator tool actions with code-owned provenance."""
+    persisted = await _persist_proposals(
+        turn.user_id,
+        turn.session_id,
+        proposals,
+        trace_id=turn.trace_id,
+        saved_by=MemorySaver.MEMORY_CURATOR,
+    )
+    by_id: dict[str, MemoryItem] = {}
+    for proposal, tier, memory_id in persisted:
+        by_id[memory_id] = MemoryItem(
+            store=tier,
+            content=proposal.content.strip()[:_MAX_CONTENT_CHARS],
+            memory_id=memory_id,
+            trust=TIER_TRUST[tier],
+            created_at=time.time(),
+            rationale=proposal.rationale,
+            confidence=proposal.confidence,
+            session_id=turn.session_id,
+            trace_id=turn.trace_id,
+            saved_by=MemorySaver.MEMORY_CURATOR,
+            kind=proposal.kind,
+            valid_at=proposal.valid_at,
+            source=proposal.source,
+            participants=proposal.participants,
+        )
+    return list(by_id.values())
+
+
+async def _persist_proposals(
+    user_id: str,
+    session_id: str,
+    proposals: list[MemoryWriteProposal],
+    *,
+    trace_id: str,
+    saved_by: MemorySaver,
+) -> list[tuple[MemoryWriteProposal, MemoryStore, str]]:
+    """Shared bounded persistence loop for curator and legacy tooling."""
+    persisted: list[tuple[MemoryWriteProposal, MemoryStore, str]] = []
     if not proposals or not user_id:
         return persisted
     for proposal in proposals:
@@ -131,8 +182,16 @@ async def record_write_proposals(
         if not content:
             continue
         try:
-            wrote = await asyncio.wait_for(
-                _persist_one(tier, user_id, session_id, content, proposal),
+            memory_id = await asyncio.wait_for(
+                _persist_one(
+                    tier,
+                    user_id,
+                    session_id,
+                    content,
+                    proposal,
+                    trace_id=trace_id,
+                    saved_by=saved_by,
+                ),
                 timeout=settings.MEMORY.write_timeout_s,
             )
         except asyncio.TimeoutError:
@@ -141,15 +200,18 @@ async def record_write_proposals(
                 settings.MEMORY.write_timeout_s,
             )
             break  # a stalled store fails every write; bail like the embeddings-down path
-        if not wrote:
+        if not memory_id:
             break  # embeddings down — every remaining embed would fail too
-        persisted.append(proposal)
+        persisted.append((proposal, tier, memory_id))
     return persisted
 
 
 async def _persist_one(
     tier: MemoryStore, user_id: str, session_id: str,
     content: str, proposal: MemoryWriteProposal,
+    *,
+    trace_id: str = "",
+    saved_by: MemorySaver = MemorySaver.SYSTEM,
 ) -> str | None:
     """Embed + dedup-aware upsert one already-policy-cleared proposal. Returns
     the memory_id actually persisted, or None when nothing was — embeddings
@@ -189,28 +251,29 @@ async def _persist_one(
         valid_at = valid_at or float(prev.get("valid_at", 0.0))
         participants = participants or prev.get("participants", "")
     is_new = point_id is None  # captured before store.upsert below decides the real id
-    memory_id = await asyncio.to_thread(
-        store.upsert,
-        tier,
-        user_id=user_id,
-        session_id=session_id,
-        trace_id="",  # trace plumbed when proposals carry it
-        vector=vectors[0],
-        content=content,
-        rationale=proposal.rationale,
-        confidence=confidence,
-        trust=TIER_TRUST[tier],
-        point_id=point_id,
+    upsert_kwargs = {
+        "user_id": user_id,
+        "session_id": session_id,
+        "trace_id": trace_id,
+        "vector": vectors[0],
+        "content": content,
+        "rationale": proposal.rationale,
+        "confidence": confidence,
+        "trust": TIER_TRUST[tier],
+        "point_id": point_id,
         # typed-knowledge (CB1) — carry the proposer's epistemic type +
         # temporal validity + source through to the payload (dedup-merged
         # above to keep the stronger signal). superseded_by is NOT threaded
         # here: supersession is manager-owned EB1 work, never expert-proposed
         # (MemoryWriteProposal has no such field).
-        kind=kind.value,
-        valid_at=valid_at,
-        source=source,
-        participants=participants,
-    )
+        "kind": kind.value,
+        "valid_at": valid_at,
+        "source": source,
+        "participants": participants,
+    }
+    if saved_by is not MemorySaver.UNSPECIFIED:
+        upsert_kwargs["saved_by"] = saved_by.value
+    memory_id = await asyncio.to_thread(store.upsert, tier, **upsert_kwargs)
     # EB1: `existing` was searched BEFORE this upsert, so it can never be this
     # same memory — self-supersession is structurally impossible here, not
     # merely excluded by the similarity band. Only a fresh insert (point_id

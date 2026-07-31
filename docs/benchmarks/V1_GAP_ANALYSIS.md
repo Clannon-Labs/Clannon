@@ -43,19 +43,25 @@ CB5's PASS claim did not hold up to an independent check — reverted to PARTIAL
 ## Per-benchmark detail
 
 ### CB1 — Persistent Cross-Session Memory — PARTIAL (strong)
-**BUILT:** 4-tier Qdrant memory with a single write door
-(`core/memory/manager.py::record_write_proposals`) and cross-session retrieval
+**BUILT:** 4-tier Qdrant memory with a single Manager door and cross-session retrieval
 (`::hydrate`), `user_id`-scoped (`core/memory/store.py::_user_filter`), trust
 ordering (SEMANTIC>EPISODIC/PROCEDURAL, `_TIER_TRUST`), recency decay, relevance
 floor. `tests/benchmarks/c1_memory.py` + `c1_persistent_memory_demo.py` prove the
 Day-1-seed → **fresh-session, empty-transcript** Day-7 retrieval, tier survival,
 and off-topic distractor drop — the "second-session magic," no chat replay.
+Since 2026-07-30, `MemoryPort.process_turn` gives neutral accepted-turn evidence
+to Manager's own bounded tool-driving curator. It alone chooses no-op vs
+semantic/episodic/procedural saves; raw prompt/answer transcripts are rejected.
+Archive listing now reads real Qdrant points across all inferred tiers and
+surfaces stable ID, timestamp, save rationale, confidence, source, saver,
+session, trace, and participants. Orchestrator/experts have no memory handle.
 **PARTIAL:** fact-vs-assumption typing and `valid_at` have landed; the current
 harness marks that discriminator PASS. Explain-reasoning and
 current-vs-historical remain PARTIAL: score/tier provide a machine-readable
-retrieval basis, but no reasoning narrative exists, and supersession is not a
-linked temporal relationship. Provenance remains PARTIAL because author/RFC
-linkage is incomplete (`tests/benchmarks/c1_memory.py`).
+retrieval basis and save rationale explains retention, but no retrieval-selection
+narrative exists, and supersession is not a linked temporal relationship.
+Provenance remains PARTIAL because author/RFC linkage is incomplete
+(`tests/benchmarks/c1_memory.py`).
 **Path to PASS (no graph):** add retrieval explanation, complete provenance,
 and link superseded knowledge so current and historical states are explicit.
 This also advances EB1.

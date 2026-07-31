@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MemoryPort
+from foundation import BatchAwarenessPort, BudgetPort, GraphPort
 
 from .schemas import DecisionLogEntry
 
@@ -34,11 +34,9 @@ class DecisionLogSink(Protocol):
 @dataclass
 class Ports:
     """The seams the orchestrator loop depends on. Assembled by build_default_ports."""
-    memory: MemoryPort
     caps: "Capabilities"        # the Flow-inspired tool/expert door
     log: DecisionLogSink
-    # Defaulted + trailing so existing keyword-only test construction sites (Ports(memory=...,
-    # caps=..., log=...)) keep working unchanged; None means "no awareness consumption" -- the
+    # None means "no awareness consumption" -- the
     # same fail-closed-to-no-op posture BatchHandler already has for a None awareness port.
     awareness: BatchAwarenessPort | None = None
     # Mission Engine loop-wiring (ratified 2026-07-25): both None means missions are simply

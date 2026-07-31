@@ -4,14 +4,9 @@ Each expert is a real tool-driving agent the orchestrator spawns for deep domain
 work. Drop a `@expert`-decorated package here and it self-registers — no wiring.
 
 ## NEVER
-- Experts NEVER touch memory (sole-broker, ARCHITECTURE.md §7.3): no expert holds
-  a `memory.*` grant. A non-NETWORK expert's context is PUSHED into its task
-  (`ExpertEnv.hydration` → `think()`) and it may REQUEST more via the built-in
-  `need_context` tool (the handler's broker executes, curates, and audits — the
-  expert never runs the search). NETWORK-capable experts get NEITHER — user memory
-  plus an outbound channel in one prompt is an exfiltration surface; their context
-  comes only from what the orchestrator brokers into the task pre-spawn. Writes
-  happen only via write proposals through the Memory Manager (invariant §I.6).
+- Experts NEVER touch memory: no handle, grant, search, write, or recall tool.
+  Non-NETWORK experts may receive preselected relevant user context as inert data.
+  NETWORK-capable experts receive no such context push.
 - Least-privilege: an expert may use ONLY the tools in its `tools=(...)` grant, at
   its declared `permission` — the handler scopes a tool box to exactly those keys.
   Don't grant NETWORK/workspace an expert doesn't need.

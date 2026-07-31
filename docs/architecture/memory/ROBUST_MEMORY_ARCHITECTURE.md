@@ -1,5 +1,19 @@
 # Robust Memory Architecture (Target Design)
 
+> **One thing I wanna be clear about before you read and implement this:**
+> - This file might describe some of our features by exaggerating, always check what actually exists
+>   in the code before you believe what this file says we have or have solved already and doesn't need
+    to be touched. Always fact check with the actual code and end to end testing by talking to Clannon
+    like users would do before believing anything is built or not and how good
+>
+> - Think yourself has a customer paying $10k to use this tool, would you be happy if you got memory
+    like it has today? Exactly, you got the answer. So make it so that even paying $10k/month feels
+    worth it when you know about how amazing the memory is, you can actually feel it as a user, you
+    shouldn't even need to know about what memory does or the architecture or anything.
+    Just that I am really impressed by it!
+
+    That's the goal!
+
 > **Purpose:** The single proposed target for Clannon's memory layer — the most
 > robust design we can justify, synthesised from the 2026 frontier and mapped onto
 > Clannon's existing skeleton, invariants, and the Attention Threshold pillars.
@@ -40,7 +54,7 @@ What does **not** exist anywhere is the *fusion*: a memory layer that is at once
 belief-revision write-gate with drift-bounded reconciliation, **(d)** carrying
 full claim→source provenance lineage, **(e)** hardened against memory poisoning,
 and **(f)** hard-isolated per tenant — all behind **one port** that **degrades,
-never fails a run**, and is aimed at one job: the freelancer/agency research
+never fails a run**, and is aimed at one job: any type of
 workflow that gets smarter every session. The moat is the synthesis and the
 target, not a new primitive. Treat every claim below as defensible engineering,
 not a benchmark we have already won.
@@ -71,6 +85,8 @@ internals.
 ---
 
 ## 2. Where we are vs the frontier (grounded)
+
+> the exact file path and lines might be different as we might have passed from this but the overall state mentioned is same even till now
 
 Current shipped behaviour, cited to the code, against the 2026 state of the art.
 
@@ -143,6 +159,9 @@ solved under, not an aspiration.
 
 ## 5. The architecture — five layers behind one door
 
+> **You are free to propose a better acrchitecture or improve this one**
+> **And if we have already introduced/built a part better that what this described, great!**
+
 ```
                        ┌──────────────── MemoryPort (unchanged surface) ────────────────┐
   orchestrator ───────▶│ hydrate()  record_write_proposals()  learn()                   │
@@ -167,7 +186,7 @@ filter with `is_tenant=true` (`store.py:82-89`), and identity-set-once
   Curator reads it to reconcile the mutable layers (L4). This is SSGM's
   dual-track storage and it is what makes drift *bounded* rather than cumulative.
 - **A graph index** (see open decision §10): either Qdrant-native (entities as
-  points, edges as a dedicated `vraksha_edges` collection with `user_id` +
+  points, edges as a dedicated `clannon_edges` collection with `user_id` +
   `src`/`dst` payload, adjacency by filtered query) or an embedded graph DB
   (Kuzu) behind the same door. **Recommendation: start Qdrant-native** to avoid a
   new datastore before there is data to justify it (Attention Threshold

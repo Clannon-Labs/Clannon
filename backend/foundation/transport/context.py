@@ -294,20 +294,11 @@ class VrakshaContext:
 
     hydration_future: Any | None = None       # in-flight memory hydration started right after
                                               # normalization so it overlaps the verifier; the
-                                              # orchestrator awaits it (an asyncio future/None)
+                                              # memory prefetch collector awaits it
     hydration_items: list[Any] = field(default_factory=list)
                                               # foundation.MemoryItem
                                               # memory injected this turn — the output filter
                                               # treats these as legitimate grounding sources
-
-    memory_writes_requested: list[Any] = field(default_factory=list)
-                                              # foundation.MemoryWriteProposal
-                                              # items the orchestrator flagged for memory (PROPOSED)
-    memory_writes_persisted: list[Any] = field(default_factory=list)
-                                              # foundation.MemoryWriteProposal — the subset the
-                                              # Memory Manager ACTUALLY wrote (set post-filter by
-                                              # persist_turn_memory). The /memory view surfaces
-                                              # THIS, never the proposals, so no phantom writes show.
 
     # ------------------------------------------------------------------
     # OUTPUT FILTER

@@ -392,10 +392,9 @@ class _FakeCaps:
 
 
 def _fake_ports(ctx, graph):
-    from core.memory import MemoryManager
     from core.orchestrator.utils.decision_log import CtxDecisionLog
     caps = _FakeCaps(ctx)
-    return Ports(memory=MemoryManager(), caps=caps, log=CtxDecisionLog(ctx), graph=graph, budget=UnlimitedBudget()), caps
+    return Ports(caps=caps, log=CtxDecisionLog(ctx), graph=graph, budget=UnlimitedBudget()), caps
 
 
 def test_run_loop_sets_mission_id_and_folds_context_before_calling_run_turn():
@@ -428,8 +427,7 @@ def test_run_loop_clears_mission_id_when_the_graph_has_no_awareness_port():
     degrades to the same no-op as awareness/batches, never crashes."""
     ctx = _ctx("s-no-graph")
     ctx.mission_id = "stale-value-that-must-be-cleared"
-    from core.memory import MemoryManager
     from core.orchestrator.utils.decision_log import CtxDecisionLog
-    ports = Ports(memory=MemoryManager(), caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))  # graph=None default
+    ports = Ports(caps=_FakeCaps(ctx), log=CtxDecisionLog(ctx))  # graph=None default
     asyncio.run(loop_mod.run_loop(_norm(), ports, ctx))
     assert ctx.mission_id == ""

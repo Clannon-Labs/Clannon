@@ -16,8 +16,8 @@ in `memory_typed_knowledge`'s sibling `memory_provenance.py`
   ✓ a garbled stored `kind` coerces to UNSPECIFIED (fail-soft, never raises a turn)
   ✓ `superseded_by` is INERT in CB1: nothing on the write path sets it (EB1 owns
     supersession), so it always reads back ""
-  ✓ the writer types its output honestly: "fact" → FACT, everything else →
-    ASSUMPTION (never UNSPECIFIED — that's reserved for legacy/untyped)
+  ✓ stored kinds coerce fail-soft: known values survive; malformed values become
+    UNSPECIFIED rather than being promoted.
 
 Run:
     cd backend && .venv/bin/python -m pytest tests/memory_typed_knowledge.py -v
@@ -35,7 +35,7 @@ from foundation import (
     NormalizedInput,
 )
 
-from core.memory import store, writer
+from core.memory import items, store
 
 _USER = "tk-user-alpha"
 _SESSION = "tk-session-001"
@@ -299,13 +299,12 @@ def test_superseded_by_is_not_expert_proposable():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. The writer types honestly: fact only when asserted, else assumption
+# 6. Stored epistemic kinds fail soft without promotion.
 # ─────────────────────────────────────────────────────────────────────────────
-def test_writer_coerce_kind_is_honest():
-    assert writer._coerce_kind("fact") is MemoryKind.FACT
-    assert writer._coerce_kind("FACT") is MemoryKind.FACT
-    # inferred / blank / garbled all floor to ASSUMPTION — never UNSPECIFIED,
-    # which is reserved for legacy records the writer never touched.
-    assert writer._coerce_kind("assumption") is MemoryKind.ASSUMPTION
-    assert writer._coerce_kind("") is MemoryKind.ASSUMPTION
-    assert writer._coerce_kind("something-else") is MemoryKind.ASSUMPTION
+def test_stored_kind_coercion_is_honest():
+    assert items._coerce_kind("fact") is MemoryKind.FACT
+    assert items._coerce_kind("assumption") is MemoryKind.ASSUMPTION
+    assert items._coerce_kind("decision") is MemoryKind.DECISION
+    assert items._coerce_kind("FACT") is MemoryKind.UNSPECIFIED
+    assert items._coerce_kind("") is MemoryKind.UNSPECIFIED
+    assert items._coerce_kind("something-else") is MemoryKind.UNSPECIFIED

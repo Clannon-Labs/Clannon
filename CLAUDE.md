@@ -2,6 +2,8 @@
 
 @AGENTS.md
 
+> Small note: We are moving towards private alpha deployment on a real domain, so make product so that a tester i hire can test it and not find any vulnerabilities and should want to use it daily in their daily life by asking me to allow them (cuz it would be private alpha then)
+
 ## ⚖️ THE CODING LAWS — read first, every session, every agent, before you write a line
 
 These are **LAWS, not preferences.** You do not weigh them against convenience — the law wins.

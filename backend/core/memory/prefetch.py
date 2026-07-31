@@ -10,7 +10,7 @@ It is NON-BLOCKING and INVISIBLE:
   * it emits NOTHING to the decision log — memory should feel like the assistant simply
     knowing things, never like it is "fetching memory".
 
-Best-effort: a fault here just skips the prefetch and the orchestrator hydrates itself.
+Best-effort: a fault yields empty prepared context and never fails the turn.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import logging
 import time
 from typing import Any
 
-from foundation import Flow, HydrationRequest, Origin
+from foundation import Flow, HydrationPackage, HydrationRequest, Origin
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +36,35 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
         normalized = getattr(ctx, "normalized_input", None)
         if normalized is not None and getattr(ctx, "user_id", ""):
             request = HydrationRequest.for_turn(ctx, normalized)
-            # fire-and-track: the orchestrator awaits ctx.hydration_future
+            # fire-and-track: this module's collect stage awaits it after verification
             ctx.hydration_future = asyncio.ensure_future(manager.hydrate(request))
-    except Exception as exc:  # noqa: BLE001 — prefetch is best-effort; orchestrator falls back
+    except Exception as exc:  # noqa: BLE001 — prefetch is best-effort
         log.warning("memory hydration prefetch skipped: %s", exc)
+    return flow.next(payload, Origin.MEMORY, started)
+
+
+async def collect(flow: Flow[Any]) -> Flow[Any]:
+    """Resolve prepared context before orchestration, behind the memory boundary."""
+    started = time.monotonic()
+    ctx = flow.ctx
+    payload = await flow.load()
+    hydration = HydrationPackage()
+    try:
+        future = ctx.hydration_future
+        if future is not None:
+            hydration = await future
+        elif ctx.normalized_input is not None and ctx.user_id:
+            from . import manager
+
+            hydration = await manager.hydrate(
+                HydrationRequest.for_turn(ctx, ctx.normalized_input)
+            )
+    except Exception as exc:  # noqa: BLE001 — augmentation never gates a turn
+        log.warning("memory hydration degraded: %s", exc)
+        hydration = HydrationPackage(
+            degraded=True, notes="context preparation temporarily unavailable"
+        )
+    ctx.hydration_items = list(hydration.items)
+    if hydration.degraded and hydration.notes:
+        log.info("context preparation degraded this turn: %s", hydration.notes)
     return flow.next(payload, Origin.MEMORY, started)

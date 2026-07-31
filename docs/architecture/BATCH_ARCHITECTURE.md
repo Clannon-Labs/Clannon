@@ -58,26 +58,12 @@ orchestrator's context exploding. The **batch** is the missing grouping layer.
   across *batches* (not just experts), surface as evidence, let judgment decide
   routing — never a hard math gate (entropy-as-advisory — docs/ARCHITECTURE.md §7.2).
 
-## 4. Two-tier sole-broker memory `[PROPOSED]` (extends sole-broker, does NOT violate it)
+## 4. Memory boundary `[SUPERSEDED 2026-07-30]`
 
-The sole-broker principle applies at **two tiers**, still one principle:
-
-- **Central orchestrator** — full memory access (unchanged from today's BUILT
-  sole-broker).
-- **Batch orchestrator** — its own domain/work-scoped memory **plus a deliberately
-  thin cross-batch awareness slice**: just enough summary of what other batches are
-  doing/have concluded to recognize "this belongs to batch Y — delegate/flag." NOT
-  full access to other batches' detail.
-- **Experts** — unchanged sole-broker: stateless, no memory grant, hydrated by
-  **their batch orchestrator** (or `need_context` to their batch orchestrator, not
-  the central one).
-- Broker chain: central brokers for batch orchestrators; batch orchestrators broker
-  for their experts. **No new memory path bypasses the door.**
-
-> **Required sub-spec before any build:** the "minimal cross-batch awareness slice"
-> is a **new memory contract** — what goes in it, how it stays small, how it
-> refreshes. Must be designed as an explicit extension of
-> `docs/architecture/memory/ROBUST_MEMORY_ARCHITECTURE.md` and **proposed first**.
+Earlier two-tier broker design is retired. Central/batch orchestrators and experts
+have no memory handle, search tool, tier control, or write proposal surface.
+Memory-owned pipeline stages push preselected relevant context as inert task data
+and hand neutral accepted-turn evidence back to Manager after delivery.
 
 ## 5. Context-window discipline across batches `[PROPOSED]` (the hard problem)
 

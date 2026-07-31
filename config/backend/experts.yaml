@@ -1,8 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # config/backend/experts.yaml — expert-tier tunables. BACKEND-CONTROLLED.
 # Media-preprocessing bounds (doc/PDF/whisper/video), the media expert's inline-
-# attachment size limit, and the expert-handler's artifact-capture + need-context
-# caps. Behavior-preserving: every value equals today's literal.
+# attachment size limit, and expert-handler artifact-capture caps.
 #
 # NOTE: per-expert `model_role` is deliberately NOT here — it's the owner-flagged
 # identity-vs-dial decision (docket D12); it stays in each expert's own file
@@ -23,11 +22,9 @@ ffmpeg_timeout_s: 90.0          # wall-clock bound on an ffmpeg invocation
 # MEDIA EXPERT (experts/media/expert.py) — inline-vs-skip attachment size limit.
 media_inline_limit_bytes: 15728640   # 15 MB
 
-# EXPERT HANDLER (registry/capabilities/handler/experts.py) — artifact-capture +
-# need-context caps (classified BACKEND, not security).
+# EXPERT HANDLER (registry/capabilities/handler/experts.py) — artifact capture.
 max_artifacts: 20               # max artifacts captured from one expert run
 max_artifact_bytes: 10485760    # 10 MB per captured artifact
-need_context_max_items: 5       # max items a need_context recall returns
 
 # ── D1 MOVE: expert bounds migrating OUT of foundation/vocab/constants.py ─────────────────────
 timeout_s: 240.0                # per expert invocation — was EXPERT_TIMEOUT_S. > 0

@@ -192,17 +192,13 @@ def test_run_turn_offers_only_the_scoped_capability_set_to_the_model():
     # pydantic-ai tool names can't carry a "." -- the handler names them key.replace(".", "_")
     assert "dom_risky" in offered_names
     assert "tt_write" not in offered_names, "an ungranted tool must not even be offered"
-    assert "remember" not in offered_names, \
-        "a scoped Capabilities defaults allow_memory_write=False -- remember must not be offered"
+    assert "remember" not in offered_names
     assert "recall" in offered_names, "recall (read-only, session-scoped) is unaffected"
 
 
-def test_scoped_capabilities_can_opt_back_into_memory_write():
-    reg = _registry_with(expert_tool_grants=("tt.read",))
-    caps = Capabilities.scoped_to(
-        _ctx(), expert_keys={"dom.risky"}, tool_keys={"tt.read"},
-        grants=frozenset({PermissionLevel.READ}), allow_memory_write=True, registry=reg,
-    )
+def test_open_never_offers_memory_management():
+    discover_reg = _registry_with(expert_tool_grants=("tt.read",))
+    caps = Capabilities.open(_ctx(), registry=discover_reg)
     offered_names: list[str] = []
 
     def spy(messages, info):
@@ -214,16 +210,8 @@ def test_scoped_capabilities_can_opt_back_into_memory_write():
         )])
 
     asyncio.run(caps.run_turn(
-        system_prompt="orchestrate", user_prompt="go", output_type=OrchestratorAnswer,
-        model=FunctionModel(spy),
+        system_prompt="orchestrate", user_prompt="go",
+        output_type=OrchestratorAnswer, model=FunctionModel(spy),
     ))
-    assert "remember" in offered_names, "an explicit opt-in must restore it"
-
-
-def test_open_still_offers_remember_unchanged():
-    """Regression: Capabilities.open() (today's central orchestrator) must be
-    completely unaffected by the new default -- it never calls scoped_to, so
-    _allow_memory_write stays True."""
-    discover_reg = _registry_with(expert_tool_grants=("tt.read",))
-    caps = Capabilities.open(_ctx(), registry=discover_reg)
-    assert caps._allow_memory_write is True
+    assert "remember" not in offered_names
+    assert not any(name.startswith("memory_") for name in offered_names)

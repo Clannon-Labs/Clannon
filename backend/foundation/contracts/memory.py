@@ -1,13 +1,12 @@
 """
 The memory boundary.
 
-Everything the orchestrator and the memory layer agree on, in one place: the
-contract dataclasses they exchange, plus the MemoryPort protocol they exchange
-them through. Both layers depend only on this shape — neither imports the other.
+Everything pipeline/delivery and memory layer agree on: neutral contract
+dataclasses plus MemoryPort protocol. Consumers never import memory internals.
 
 A port is the contract two layers agree on so neither has to import the other. It
-lives here, the nearest common point, precisely so the consumer (orchestrator)
-and the implementer (memory manager) stay decoupled. Today MemoryPort is the only
+lives here, the nearest common point, precisely so pipeline/delivery consumers
+and Memory Manager stay decoupled. Today MemoryPort is the only
 cross-layer port; add others beside it as they appear.
 """
 
@@ -16,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
-from ..vocab.types import MemoryStore, MemoryKind
+from ..vocab.types import MemoryKind, MemorySaver, MemoryStore
 from .payloads import NormalizedInput
 
 
@@ -26,9 +25,10 @@ from .payloads import NormalizedInput
 
 @dataclass(frozen=True, slots=True)
 class MemoryItem:
-    """One retrieved memory, ready to hydrate into orchestrator context."""
+    """One retrieved item, ready for pipeline-prepared user context."""
     store: MemoryStore
     content: str
+    memory_id: str = ""          # stable store id; empty for wiki / legacy synthetic items
     score: float = 0.0          # per-query relevance (rank_score = cosine × recency)
     trust: int = 0              # higher = more authoritative (wiki > inferred)
     created_at: float = 0.0     # unix ts the memory was written; 0 = unknown (wiki)
@@ -39,6 +39,8 @@ class MemoryItem:
     confidence: float = 0.0     # write-time confidence (0–1)
     session_id: str = ""        # originating session; "" for wiki / unknown
     trace_id: str = ""          # originating trace; "" when not plumbed at write time
+    saved_by: MemorySaver = MemorySaver.UNSPECIFIED
+                                # trusted component that caused persistence
     # Typed-knowledge (CB1) — additive; UNSPECIFIED/0.0/"" preserve legacy behaviour.
     kind: MemoryKind = MemoryKind.UNSPECIFIED  # fact vs assumption; UNSPECIFIED = untyped/legacy
     valid_at: float = 0.0        # unix ts the fact became true (vs created_at = when learned); 0 = unknown
@@ -52,7 +54,7 @@ class MemoryItem:
 @dataclass(frozen=True, slots=True)
 class HydrationRequest:
     """
-    What the orchestrator asks the memory manager to hydrate for a turn.
+    What memory-owned prefetch asks Manager to hydrate for a turn.
 
     user_id is the MANDATORY memory scope (every read filters on it);
     session_id is provenance/within-session recall only. allowed_tiers
@@ -88,10 +90,8 @@ class HydrationRequest:
         """Build a turn's hydration request from a context object + the input to
         search on. THE single source of truth for turning a ctx (`session_id`,
         `user_id`, `wiki_entries`) into the request shape — used by the prefetch
-        stage, the orchestrator's serial hydration fallback, and the mid-task
-        `memory.search` tool, so the session/user/wiki extraction lives in exactly
-        one place. `ctx` is duck-typed (read via `getattr`); foundation imports no
-        context type. Callers keep their own guards (e.g. skip when no user_id)."""
+        stage and authenticated preview delivery, so session/user/wiki extraction
+        lives in one place. `ctx` is duck-typed; foundation imports no context type."""
         return cls(
             session_id=getattr(ctx, "session_id", "") or "",
             user_id=getattr(ctx, "user_id", "") or "",
@@ -117,10 +117,31 @@ class HydrationPackage:
 
 
 @dataclass(frozen=True, slots=True)
+class MemoryTurn:
+    """One completed, filter-approved turn handed to the Memory Manager.
+
+    This is neutral evidence, not a storage instruction. Callers do not choose
+    tiers or writes; the manager's own curator decides whether anything is worth
+    retaining and uses its internal tools behind the sole-broker boundary.
+    """
+    user_id: str
+    session_id: str
+    trace_id: str
+    request: str
+    response: str
+    findings: tuple[str, ...] = ()
+    decisions: tuple[str, ...] = ()
+    participants: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryWriteProposal:
     """
-    A write the orchestrator/experts PROPOSE after a task. Nothing writes memory
-    directly — the memory manager owns whether/where/how a proposal is persisted.
+    One internal candidate produced by Memory Manager curator tooling.
+
+    Kept in foundation temporarily for benchmark/tooling compatibility while
+    legacy direct-write harnesses migrate. Runtime orchestrators and experts do
+    not construct this type; they hand neutral `MemoryTurn` evidence to Manager.
     """
     store: MemoryStore
     content: str
@@ -139,40 +160,29 @@ class MemoryWriteProposal:
 @runtime_checkable
 class MemoryPort(Protocol):
     """
-    The ONLY way anything talks to the memory layer.
+    The ONLY way runtime code talks to memory.
 
-    The memory manager is the sole implementer; the orchestrator is the sole
-    caller (for now). Memory internals (stores, policies, the future background
-    memory-agent with its own LLM call) stay behind this door — callers see only
-    these two methods.
+    Memory Manager is sole implementer. Pipeline memory stages call hydration
+    and turn curation; authenticated delivery calls bounded list/delete. Memory
+    internals, storage, tier decisions, and curator tools stay behind this door.
     """
 
     async def hydrate(self, request: HydrationRequest) -> HydrationPackage:
         """Return ranked, budget-bounded context to inject before planning."""
         ...
 
-    async def record_write_proposals(
-        self, user_id: str, session_id: str, proposals: list[MemoryWriteProposal]
-    ) -> list[MemoryWriteProposal]:
-        """Hand proposed writes (scoped to a user + session) to the manager; it
-        decides whether/where to persist. Returns the subset ACTUALLY persisted
-        (the manager may drop a proposal below the confidence floor, or when the
-        store/embeddings are down) so a caller surfaces only real writes, never a
-        phantom — see `MemoryManager.record_write_proposals`."""
+    async def process_turn(self, turn: MemoryTurn) -> list[MemoryItem]:
+        """Curate one completed turn. The manager's own LLM chooses no-op vs.
+        typed tool actions; callers cannot select tiers or propose writes.
+        Returns only entries actually persisted."""
         ...
 
-    async def learn(
-        self,
-        user_id: str,
-        session_id: str,
-        *,
-        task: str,
-        answer: str,
-        findings: list[str],
-    ) -> None:
-        """Distil durable memory from a completed turn — semantic facts and
-        procedural patterns — and persist what's worth keeping. This is the
-        background memory-agent (its own LLM call) living behind the door:
-        callers hand over the turn, not pre-made proposals. Best-effort; a
-        failure here never affects the turn."""
+    async def list_entries(self, user_id: str) -> list[MemoryItem]:
+        """Return bounded durable inferred-memory entries for one authenticated
+        user. Empty scope or store failure returns an empty list."""
+        ...
+
+    async def delete_entry(self, user_id: str, memory_id: str) -> bool:
+        """Delete one inferred-memory point only when it belongs to `user_id`.
+        Unknown and foreign ids are indistinguishable (`False`)."""
         ...

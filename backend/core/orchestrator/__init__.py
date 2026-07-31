@@ -1,6 +1,5 @@
-"""Orchestrator layer. run() is the stage entry point used by the pipeline;
-persist_turn_memory() is the post-filter memory write the pipeline calls on delivery."""
+"""Orchestrator layer. run() is the stage entry point used by the pipeline."""
 
-from .orchestrator import persist_turn_memory, run
+from .orchestrator import run
 
-__all__ = ["persist_turn_memory", "run"]
+__all__ = ["run"]

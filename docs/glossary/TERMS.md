@@ -88,12 +88,11 @@ output filter → delivery**, with async memory writes after delivery.
   - **Episodic memory** — experiences/events: decisions, prior conversations,
     completed tasks, failures, milestones. The non-negotiable baseline tier.
   - **Procedural memory** — skills, habits, repeatable workflows, preferences.
-- **Memory Manager** — the component that proactively hydrates context (it pushes,
-  doesn't wait), ranks by relevance/recency/trust, enforces the budget, and
-  coordinates write proposals. The sole implementer of the MemoryPort.
-- **MemoryPort** — the only door to memory. **Three** methods: `hydrate`,
-  `record_write_proposals`, and `learn` (`backend/foundation/contracts/memory.py:92-128`).
-  Nothing imports memory internals.
+- **Memory Manager** — sole component that hydrates, classifies, persists, lists,
+  and deletes memory. Its own bounded LLM uses internal typed tools; deterministic
+  policy owns scope and storage.
+- **MemoryPort** — only door to memory. Four methods: `hydrate`, `process_turn`,
+  `list_entries`, and `delete_entry`. Reasoning agents do not receive it.
 - **Hydration** — assembling the relevant memory package and injecting it into the
   orchestrator's context before planning. Selective and trust-aware; never full
   transcript replay.
@@ -105,8 +104,8 @@ output filter → delivery**, with async memory writes after delivery.
 - **Trust ordering** — the rule that higher-trust tiers win on conflict
   (wiki > inferred memory).
 - **Recency decay** — down-weighting older memories during ranking.
-- **Dedup / write policy** — the governed path by which proposed writes are
-  deduplicated and committed; experts/orchestrator only *propose*.
+- **Dedup / write policy** — deterministic Manager path that validates,
+  deduplicates, attributes, and commits curator-staged actions.
 
 ## Knowledge representation & graph
 
