@@ -6,8 +6,7 @@ Two modes:
     .venv/bin/python main.py "your brief"    one-shot, exit code reflects outcome
     .venv/bin/python main.py                 interactive TUI
 
-(The `vraksha` command installed by install.sh lands in the same place,
-running this file inside the runtime container.)
+(Root `dev.sh` is the canonical local entry point; it reaches this same file.)
 
 The TUI keeps the terminal clean: you see your prompts, a live activity
 feed while the pipeline works, and the answer. Full details (decision log,

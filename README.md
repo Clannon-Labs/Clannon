@@ -160,32 +160,10 @@ Useful docs:
 
 ## Installation
 
-There are two ways to set up Clannon right now.
+**Clannon is proprietary and hosted. There is no public download.** It is used
+through the deployed product, not installed by end users.
 
-### The Fast Path
-
-Linux:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-linux.sh | bash
-```
-
-WSL:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-wsl.sh | bash
-```
-
-macOS:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vraksha/Clannon/main/install-macos.sh | bash
-```
-> After that, just run `vraksha` to start your first session.
-
-The installer path is meant for the future full runtime. If you are hacking on
-the current pipeline layers, the developer path below is the clearest way to
-see what is working today.
+What follows is for people working ON Clannon, not people using it.
 
 ### The Developer Path
 

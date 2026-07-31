@@ -29,13 +29,19 @@ instead of just timing out.
 
 ## Setup
 
-Fastest path: run the installer for your platform (install-linux.sh,
-install-macos.sh, install-wsl.sh). It sets up the runtime in docker and
-gives you a global `vraksha` command. After that you just need keys in
-.env.local (the first run creates it from the template and tells you).
+Clannon is proprietary and hosted — there is no end-user install. This is
+developer setup only.
 
-Manual setup if you'd rather not docker the agent itself: Python 3.12,
-Docker for the support services, and a Gemini API key.
+Local development has one canonical entry point: root `dev.sh`. You need
+Python 3.12, Docker for the support services (Qdrant + ClamAV, both defined
+in docker-compose.yml), and provider keys in `backend/.env.local` (copy it
+from `.env.example`).
+
+System packages for the media sanitizers — ffmpeg, exiftool
+(`libimage-exiftool-perl` on Debian/Ubuntu, `perl-Image-ExifTool` on Fedora)
+and libmagic — are baked into `backend/Dockerfile`. Running the backend
+outside Docker means installing those yourself, or image uploads fail closed
+with a bare "No such file or directory: 'exiftool'".
 
 ```bash
 cd backend                                              # all backend files live here
