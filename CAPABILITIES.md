@@ -2,7 +2,22 @@
 
 **Created for:** Abraham Muhammad
 
-This document describes everything your AI assistant can do for you — the tools available, what you can accomplish, and how the assistant approaches your requests.
+This document describes what your AI assistant can do for you — the tools available, what you can accomplish, and how the assistant approaches your requests.
+
+> **How to read this document.** Everything below is marked one of two ways, and
+> they are two stages of the same road, not two different lists:
+>
+> - **✅ Working** — exercised end-to-end and confirmed. If it is marked working,
+>   it has actually been run, not just built.
+> - **◐ Building** — the machinery exists and is wired in, but it has not been
+>   proven end-to-end yet, so it may be uneven. These are the next things to land,
+>   not distant ideas.
+>
+> Nothing here is aspirational marketing. A ◐ is a capability with its foundation
+> already in place — the honest distance between "we built it" and "we watched it
+> work". Where something is ◐, the note says exactly what is missing.
+
+*Last verified: 2026-07-31.*
 
 ---
 
@@ -15,40 +30,45 @@ Your AI assistant is a versatile tool designed to help you research, analyze, wr
 ## Core Capabilities
 
 ### 1. Analysis & Research
-- **Web research** — find current information online with cited sources
-- **Data analysis** — work with datasets, compute statistics, identify trends
-- **Claims verification** — check facts against reliable sources and flag unfounded claims
-- **Content synthesis** — combine information from multiple sources into coherent summaries
+- ✅ **Web research** — find current information online with cited sources
+- ✅ **Data analysis** — work with datasets, compute statistics, identify trends
+- ✅ **Claims verification** — check facts against reliable sources and flag unfounded claims
+- ✅ **Content synthesis** — combine information from multiple sources into coherent summaries
 
 ### 2. Writing & Documentation
-- **Professional documents** — READMEs, technical specs, design documents, changelogs, decision records
-- **Copy and content** — emails, proposals, marketing copy, reports
-- **Document structure** — organized information that's scannable and actionable
-- **Editing & refinement** — improve clarity, consistency, and tone
+- ✅ **Professional documents** — READMEs, technical specs, design documents, changelogs, decision records
+- ✅ **Copy and content** — emails, proposals, marketing copy, reports
+- ✅ **Document structure** — organized information that's scannable and actionable
+- ✅ **Editing & refinement** — improve clarity, consistency, and tone
 
 ### 3. Development & Engineering
-- **Code writing** — new functions, scripts, and programs in multiple languages
-- **Debugging** — understand errors, identify root causes, suggest fixes
-- **Code review** — analyze code quality, security, and best practices
-- **Execution** — run code (where safe and appropriate)
+- ✅ **Code writing** — new functions, scripts, and programs in multiple languages
+- ✅ **Debugging** — understand errors, identify root causes, suggest fixes
+- ✅ **Code review** — analyze code quality, security, and best practices
+- ✅ **Execution** — run code (where safe and appropriate)
 
 ### 4. Project & Task Management
-- **Mission tracking** — break down complex projects into steps and track progress
-- **Batch delegation** — queue multiple related tasks and run them systematically
-- **Dependency management** — order tasks correctly when some depend on others
-- **Status reporting** — summarize what's been done and what's next
+- ◐ **Mission tracking** — break down complex projects into steps and track progress.
+  *Durable missions are built and offered to the assistant, but on a long research
+  task it currently tends to keep researching rather than opening a mission. Ask for
+  it explicitly and expect it to be uneven for now.*
+- ◐ **Batch delegation** — queue multiple related tasks and run them systematically
+- ◐ **Dependency management** — order tasks correctly when some depend on others
+- ✅ **Status reporting** — summarize what's been done and what's next
 
 ### 5. Information Extraction
-- **Images** — read text, extract data, identify objects and layout
-- **PDFs** — extract text, tables, and structured information
-- **Audio/Video** — transcribe, summarize, extract key moments
-- **Documents** — pull quotes, data, and specific information from long text
+- ✅ **Images** — read text, extract data, identify objects and layout
+- ◐ **PDFs** — extract text, tables, and structured information
+- ◐ **Audio/Video** — transcribe, summarize, extract key moments.
+  *The sanitizers and the media expert handle these; only images have been
+  confirmed end-to-end so far.*
+- ✅ **Documents** — pull quotes, data, and specific information from long text
 
 ### 6. External Delivery
-- **Webhooks & HTTP** — push results to external services and APIs
-- **Slack** — post structured messages and reports via an incoming webhook URL
-- **Discord** — post updates and notifications via a webhook URL
-- **Anything webhook-addressable** — Zapier or a custom endpoint, same mechanism
+- ✅ **Webhooks & HTTP** — push results to external services and APIs
+- ◐ **Slack** — post structured messages and reports via an incoming webhook URL
+- ◐ **Discord** — post updates and notifications via a webhook URL
+- ◐ **Anything webhook-addressable** — Zapier or a custom endpoint, same mechanism
 
 ---
 
@@ -85,12 +105,16 @@ Your assistant has access to the following tools, organized by category:
 | **Code Execution** | Run code safely in controlled environments |
 | **Debugging** | Analyze errors, propose fixes, and improve code quality |
 
-### Task Management
+### Task Management — ◐ building
 | Tool | What It Does |
 |------|-------------|
-| **Mission Tracking** | Define objectives, break into steps, track progress toward completion |
-| **Batch Task Delegation** | Queue multiple related tasks and execute systematically |
-| **Dependency Resolution** | Order tasks correctly when one depends on another |
+| ◐ **Mission Tracking** | Define objectives, break into steps, track progress toward completion |
+| ◐ **Batch Task Delegation** | Queue multiple related tasks and execute systematically |
+| ◐ **Dependency Resolution** | Order tasks correctly when one depends on another |
+
+*All three are built and connected — the assistant is offered these tools on every
+turn. What is not yet reliable is it reaching for them on its own during a long
+task. Say "track this as a mission" to steer it, and tell us when it drifts.*
 
 ### Integration & Delivery
 | Tool | What It Does |
@@ -102,10 +126,14 @@ Your assistant has access to the following tools, organized by category:
 ### Media Analysis
 | Tool | What It Does |
 |------|-------------|
-| **Image Analysis** | Read text, extract data, identify objects and structure |
-| **PDF Extraction** | Pull text, tables, and metadata from PDF documents |
-| **Audio Transcription** | Convert audio to text, extract key information |
-| **Video Analysis** | Summarize video content, extract text and key moments |
+| ✅ **Image Analysis** | Read text, extract data, identify objects and structure |
+| ◐ **PDF Extraction** | Pull text, tables, and metadata from PDF documents |
+| ◐ **Audio Transcription** | Convert audio to text, extract key information |
+| ◐ **Video Analysis** | Summarize video content, extract text and key moments |
+
+*Uploads are virus-scanned and stripped of metadata before anything reads them, for
+every media type. Images are confirmed working end-to-end; the other three share the
+same path and are next to be proven.*
 
 ### Utilities
 | Tool | What It Does |
@@ -151,7 +179,10 @@ Your assistant has access to the following tools, organized by category:
 
 *Example:* "I need to redesign my website: audit the current site, sketch new layouts, write responsive HTML/CSS, migrate content."
 
-→ Assistant creates a mission with subtasks, tracks which are done/in-progress/blocked, suggests next steps.
+→ Assistant breaks the work into steps and reports on them. ◐ Durable mission
+tracking — subtasks that survive across sessions with done/in-progress/blocked
+status — is wired in but not yet reliable on long tasks; say "track this as a
+mission" if you want it, and tell us when it doesn't.
 
 ### Verify Facts
 **Check claims and flag unsupported statements.**
@@ -256,8 +287,33 @@ The assistant has access to a temporary workspace where it can create, read, and
 
 ---
 
+## Where This Is Going
+
+The ◐ items are not a wishlist. Every one of them already has its machinery built
+and wired in — missions are anchored durably in a graph, batches route work to
+domain experts, the media sanitizers already scan and clean audio, video and PDF
+before anything reads them. The gap is between *built* and *proven*, and closing it
+is the current work.
+
+That gap is stated rather than hidden for one reason: a capability list you cannot
+trust is worse than a short one. Everything marked ✅ has been run end-to-end. When
+a ◐ becomes a ✅, it will be because someone watched it work, not because it was
+finished on paper.
+
+The direction, in order:
+
+1. **Prove the rest of media** — PDF, audio and video down the same path images
+   already travel.
+2. **Make missions reliable** — so a long project holds its shape across sessions
+   without being steered back on course.
+3. **Deepen what the assistant knows about itself** — richer instructions per
+   expert, so it reaches for the right capability without being told.
+
 ## Questions?
 
-This document describes what's possible. For specific questions about capabilities, limitations, or how to approach a task, just ask your assistant. It can walk you through options and help you get started.
+For specific questions about capabilities, limitations, or how to approach a task,
+just ask your assistant. It can walk you through options and help you get started —
+and if it does something a ✅ above says it should not, that is a bug worth
+reporting.
 
 **Start with any task above, and the assistant will handle the rest.**
