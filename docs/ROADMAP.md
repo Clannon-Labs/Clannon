@@ -4,7 +4,13 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-07-28**, after owner proposal sweep.
+Last reconciled: **2026-07-31**.
+
+**pydantic-ai is UNPINNED at 2.18.0** (2026-07-31). The July pin blamed a broken
+bounded-loop money guard; the real cause was our classifier inferring a permanent
+failure from the dependency's error *text*, which 2.18 changed by adding a docs
+link. Fixed by matching on type. Upgrade procedure:
+`docs/architecture/DEPENDENCY_VERSION_STRATEGY.md`.
 
 > **Standing rule:** if you finish your lane and nothing here is assigned to you,
 > **that is a valid state.** Write your handoff and stop. Do not invent work

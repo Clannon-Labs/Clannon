@@ -129,3 +129,36 @@ tier may be part of the quality complaint, test before blaming prompts.
 - Local Qdrant container stopped.
 
 **Queued, not dispatched (quota):** both `proposals/to-api/` items.
+
+## session 2 — pydantic-ai 2.18.0 UNPINNED (`9f28b86`)
+
+Owner challenged my caution on upgrading. They were right; the empirical result
+settled it in their favour.
+
+**What "silently broke the money guard" actually was:** 2.18 appends a help hint to
+`UsageLimitExceeded`'s message ("...see the docs on usage limits:
+.../agent/#usage-limits"). `usage limits` is one of our `_RATE_LIMIT_MARKERS`. So a
+hit spend/turn ceiling classified as transient `rate_limit` and got RETRIED, past
+the ceiling it enforces. No API changed; a docs link moved.
+
+**The loop cap was never broken** — `test_orchestrator_loop_is_bounded_at_cap`
+passes on 2.18 untouched. What was outsourced was the IDENTITY of a permanent
+failure, read from the dependency's prose.
+
+Fix: `classify_failure` decides ours by TYPE before inspecting text. New test pins
+it against a `UsageLimitExceeded` whose message is stuffed with rate-limit markers.
+Mutation-checked.
+
+Suite on 2.18.0: **1557 passed, 0 failed, 0 skipped** (live Qdrant).
+
+**Already paid off:** `RunUsage.cache_hit_ratio` exists in 2.18 — the thing I
+hand-built counters for this morning. Wiring it is the obvious next small task, and
+it answers the owner's token question directly.
+
+**Canonical:** `docs/architecture/DEPENDENCY_VERSION_STRATEGY.md`. The rule that
+matters: an upgrade never breaks us with a type error — it breaks us when a
+guarantee quietly stops holding while the types still match. So contract tests must
+pin BEHAVIOUR, not that we passed a parameter. Configured != works.
+
+**Note:** `.gitignore` (M) and `CAPABILITIES.md` (untracked) appeared mid-session
+from outside this agent. Left untouched.
