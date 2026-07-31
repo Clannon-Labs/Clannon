@@ -22,6 +22,13 @@
 # into a prompt at load time — edit that ONE file to change what the assistant knows
 # about Clannon and the org behind it. Default-on for the orchestrator (the
 # user-facing persona); leave it off for the security gates and internal agents.
+#
+# Batch orchestrators: there is NO single shared batch prompt. Each field's batch
+# gets its own entry, named `batch_orchestrator.<batch_key>` (batch_key matches
+# `batches.yaml` exactly), pointing at its own `batches/<batch_key>/orchestrator/
+# system.md`. A batch's prompt carries that field's domain knowledge and is never
+# reused across batches; `registry/config/batches.py` resolves each batch's prompt
+# by its own key and fails closed (ConfigError) if a batch has no matching entry.
 
 verifier:
   version: 2
@@ -34,10 +41,12 @@ orchestrator:
   locked: false   # persona/behavior is customizable later; not a security boundary
   about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
 
-batch_orchestrator:
+batch_orchestrator.engineering:
   version: 1
-  file: batch_orchestrator/system.md
+  file: batches/engineering/orchestrator/system.md
   locked: false   # internal scoped behavior; overlay-aware, not a security boundary
+  # one batch orchestrator per field -- this batch's prompt carries engineering's
+  # own domain knowledge and is NOT shared with any other batch's prompt
 
 filter:
   version: 1

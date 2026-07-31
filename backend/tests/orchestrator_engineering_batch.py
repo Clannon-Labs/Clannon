@@ -81,7 +81,7 @@ def test_engineering_batch_config_loads_and_activates_spawn_batch():
     definition = caps._batches._batch_registry["engineering"]
     assert definition.expert_keys == frozenset({"code.engineer"})
     assert definition.tool_keys == frozenset({"fs.read", "fs.write", "fs.patch", "code.run", "code.ast_search", "code.dep_graph"})
-    assert definition.system_prompt == get_prompt("batch_orchestrator").text
+    assert definition.system_prompt == get_prompt("batch_orchestrator.engineering").text
 
 
 def test_engineering_batch_end_to_end_spawns_runs_code_engineer_records_awareness():

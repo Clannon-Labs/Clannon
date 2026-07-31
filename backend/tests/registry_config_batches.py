@@ -103,17 +103,21 @@ engineering:
 def test_loader_injects_overlay_resolved_registry_prompt(tmp_path):
     base = tmp_path / "prompts"
     overlay = tmp_path / "prompts.secure"
-    (base / "batch_orchestrator").mkdir(parents=True)
-    (overlay / "batch_orchestrator").mkdir(parents=True)
+    (base / "batches" / "engineering" / "orchestrator").mkdir(parents=True)
+    (overlay / "batches" / "engineering" / "orchestrator").mkdir(parents=True)
     (base / "registry.yaml").write_text(
-        "batch_orchestrator:\n"
+        "batch_orchestrator.engineering:\n"
         "  version: 1\n"
-        "  file: batch_orchestrator/system.md\n"
+        "  file: batches/engineering/orchestrator/system.md\n"
         "  locked: false\n",
         encoding="utf-8",
     )
-    (base / "batch_orchestrator" / "system.md").write_text("BASE BATCH", encoding="utf-8")
-    (overlay / "batch_orchestrator" / "system.md").write_text("OVERLAY BATCH", encoding="utf-8")
+    (base / "batches" / "engineering" / "orchestrator" / "system.md").write_text(
+        "BASE BATCH", encoding="utf-8"
+    )
+    (overlay / "batches" / "engineering" / "orchestrator" / "system.md").write_text(
+        "OVERLAY BATCH", encoding="utf-8"
+    )
     prompts = PromptRegistry.from_dir(base, overlay_dir=overlay)
     path = _write(tmp_path, """
 engineering:
@@ -126,6 +130,84 @@ engineering:
     definition = _load_batches(path, prompt_registry=prompts)["engineering"]
 
     assert definition.system_prompt == "OVERLAY BATCH"
+
+
+def test_batch_with_no_matching_prompt_entry_fails_closed(tmp_path):
+    """Per-batch prompts, not a shared default: a batch_key with no
+    `batch_orchestrator.<batch_key>` entry in the prompt registry must never
+    silently fall back to some other batch's (or a shared) prompt."""
+    base = tmp_path / "prompts"
+    (base / "batches" / "engineering" / "orchestrator").mkdir(parents=True)
+    (base / "registry.yaml").write_text(
+        "batch_orchestrator.engineering:\n"
+        "  version: 1\n"
+        "  file: batches/engineering/orchestrator/system.md\n"
+        "  locked: false\n",
+        encoding="utf-8",
+    )
+    (base / "batches" / "engineering" / "orchestrator" / "system.md").write_text(
+        "ENGINEERING PROMPT", encoding="utf-8"
+    )
+    prompts = PromptRegistry.from_dir(base)
+    path = _write(tmp_path, """
+engineering:
+  domain: engineering
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read]
+  grants: [read]
+research:
+  domain: research
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read]
+  grants: [read]
+""")
+
+    with pytest.raises(ConfigError, match="no registered prompt 'batch_orchestrator.research'"):
+        _load_batches(path, prompt_registry=prompts)
+
+
+def test_two_batches_with_different_prompts_get_different_prompt_text(tmp_path):
+    """The whole point of per-batch prompts: two batches never share text, even
+    when both are perfectly valid and both resolve cleanly."""
+    base = tmp_path / "prompts"
+    (base / "batches" / "engineering" / "orchestrator").mkdir(parents=True)
+    (base / "batches" / "research" / "orchestrator").mkdir(parents=True)
+    (base / "registry.yaml").write_text(
+        "batch_orchestrator.engineering:\n"
+        "  version: 1\n"
+        "  file: batches/engineering/orchestrator/system.md\n"
+        "  locked: false\n"
+        "batch_orchestrator.research:\n"
+        "  version: 1\n"
+        "  file: batches/research/orchestrator/system.md\n"
+        "  locked: false\n",
+        encoding="utf-8",
+    )
+    (base / "batches" / "engineering" / "orchestrator" / "system.md").write_text(
+        "ENGINEERING PROMPT", encoding="utf-8"
+    )
+    (base / "batches" / "research" / "orchestrator" / "system.md").write_text(
+        "RESEARCH PROMPT", encoding="utf-8"
+    )
+    prompts = PromptRegistry.from_dir(base)
+    path = _write(tmp_path, """
+engineering:
+  domain: engineering
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read]
+  grants: [read]
+research:
+  domain: research
+  expert_keys: [code.engineer]
+  tool_keys: [fs.read]
+  grants: [read]
+""")
+
+    batches = _load_batches(path, prompt_registry=prompts)
+
+    assert batches["engineering"].system_prompt == "ENGINEERING PROMPT"
+    assert batches["research"].system_prompt == "RESEARCH PROMPT"
+    assert batches["engineering"].system_prompt != batches["research"].system_prompt
 
 
 def test_empty_file_yields_no_batches(tmp_path):

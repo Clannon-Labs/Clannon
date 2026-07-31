@@ -2,6 +2,13 @@
 # experts need (see `registry/config/batches.py`'s loader for the fail-closed
 # contract, mirroring `models.yaml`/`registry/config/models.py`).
 #
+# Each batch_key here MUST have a matching `batch_orchestrator.<batch_key>` entry
+# in `prompts/registry.yaml` (file at `prompts/batches/<batch_key>/orchestrator/
+# system.md`) -- there is no single shared batch prompt. Batch orchestration is
+# domain-specific: one field's batch orchestrator carries that field's own
+# knowledge and is never the same prompt as another batch's. A batch_key with no
+# matching prompt entry fails closed (ConfigError) at load time.
+#
 # `tool_keys` MUST list every tool any member expert individually requests, not
 # just what the batch orchestrator's own model calls directly — a batch's tool
 # scope is INTERSECTED against each expert's own requested tools

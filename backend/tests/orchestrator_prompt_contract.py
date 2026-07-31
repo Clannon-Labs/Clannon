@@ -21,7 +21,7 @@ def _read(path: Path) -> str:
 
 def test_orchestrator_prompts_are_clannon_only_with_no_copied_provider_identity():
     central = _read(PROMPTS / "orchestrator" / "system.md")
-    batch = _read(PROMPTS / "batch_orchestrator" / "system.md")
+    batch = _read(PROMPTS / "batches" / "engineering" / "orchestrator" / "system.md")
     assert "You are Clannon" in central
     assert "answer as Clannon" in central
     assert "one short sentence\n(25 words maximum)" in central
@@ -92,7 +92,7 @@ def test_central_prompt_contains_all_discriminating_examples():
 
 
 def test_batch_prompt_is_scoped_internal_and_forces_internal_chat_shape():
-    text = _read(PROMPTS / "batch_orchestrator" / "system.md")
+    text = _read(PROMPTS / "batches" / "engineering" / "orchestrator" / "system.md")
     assert "internal, scoped Clannon batch orchestrator" in text
     assert "one delegated\nsub-task" in text
     assert "Use only the tool and expert schemas granted to this batch." in text
@@ -117,16 +117,16 @@ def test_registry_declares_central_v6_and_batch_v1_prompts():
         "locked": False,
         "about": True,
     }
-    assert manifest["batch_orchestrator"] == {
+    assert manifest["batch_orchestrator.engineering"] == {
         "version": 1,
-        "file": "batch_orchestrator/system.md",
+        "file": "batches/engineering/orchestrator/system.md",
         "locked": False,
     }
 
 
 def test_active_local_overlays_match_committed_prompt_behavior_when_present():
-    for name in ("orchestrator", "batch_orchestrator"):
-        baseline = PROMPTS / name / "system.md"
-        overlay = OVERLAY / name / "system.md"
+    for relative in ("orchestrator/system.md", "batches/engineering/orchestrator/system.md"):
+        baseline = PROMPTS / relative
+        overlay = OVERLAY / relative
         if overlay.exists():
             assert _read(overlay) == _read(baseline)

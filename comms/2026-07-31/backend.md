@@ -110,3 +110,4 @@ token budget) is the leading suspect for BOTH the flaky
 at all". Write visibility is ruled out at scale. Also note: orchestrator AND memory
 both run on `claude-haiku-4-5` per `models.yaml` ("dev: cheap by default") — model
 tier may be part of the quality complaint, test before blaming prompts.
+- `17:41` **orchestration** worker via **claude** — 2026-07-31_per-batch-prompt-directories.md — exit 0, 481s — output: `.agents/runs/20260731-173329-orchestration.out`
