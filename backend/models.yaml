@@ -1,3 +1,26 @@
+# ---------------------------------------------------------------------------
+# HAIKU ON THE ORCHESTRATOR IS DELIBERATE. DO NOT "FIX" IT. (owner, 2026-07-31)
+#
+# The central orchestrator and the memory layer run on a LOW tier on purpose, and
+# the reason is a measurement one, not a cost one:
+#
+#   We need to know whether something works because OUR SYSTEM is good, or because
+#   a stronger model's raw intelligence papered over a system that is bad.
+#
+# A frontier model hides bad prompts, bad tool descriptions, bad memory retrieval
+# and bad routing — it succeeds anyway, and we learn nothing about what we built.
+# Testing on a lower tier makes the system itself the variable. If it works on
+# haiku, the system is genuinely carrying it; if it only works on a bigger model,
+# we built something that needs rescuing.
+#
+# So: a task failing on haiku is a signal to fix the SYSTEM (prompt, tools,
+# retrieval, routing), NOT a reason to raise the tier. Raising the tier to make a
+# failure go away destroys exactly the signal this setting exists to produce.
+#
+# Changing this is the owner's call. Production tier selection is a separate,
+# later decision — "if it works on haiku it flies on sonnet" is the upside.
+# ---------------------------------------------------------------------------
+
 # Free-tier Gemini quota is scarce (billing unavailable): spend it ONLY on what
 # Gemini alone can do — grounded search + multimodal. Every other layer runs on
 # paid keys (anthropic primary) so research never starves. XPRIZE minimum (one

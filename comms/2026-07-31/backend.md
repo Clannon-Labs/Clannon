@@ -56,3 +56,57 @@ nothing was built for them. Findings that change the questions:
 - **`registry/config/batches.py` hardcodes one prompt for every batch**
   (`_BATCH_PROMPT_NAME = "batch_orchestrator"`). Exactly one batch exists today,
   so the owner's per-batch prompt structure is cheap now and expensive later.
+
+## dispatched workers
+- `16:59` **memory** worker via **claude** — 2026-07-31_upsert-write-visibility.md — exit 0, 710s — output: `.agents/runs/20260731-164808-memory.out`
+- `17:21` **memory** worker via **claude** — 2026-07-31_upsert-write-visibility.md — exit 0, 1250s — output: `.agents/runs/20260731-170044-memory.out`
+
+## owner ruling landed (proposals/to-backend/owner_final_decision_regarding_earlier_3_worries.md)
+
+Owner greenlit: best prompt caching, much longer/detailed system prompts per their
+guide, cheaper+faster models where worth it, prompt directory restructure, and
+reducing guard false positives.
+
+**Three claims I made earlier today were WRONG and are retracted.** Recording them
+because the corrections change what anyone should work on:
+
+1. **"No prompt caching in core/llm."** False. `registry.model_settings_for_layer`
+   sets `anthropic_cache_instructions` + `anthropic_cache_tool_definitions` on every
+   layer and `anthropic_cache` on the multi-turn ones, tested in
+   `tests/llm_framework.py` and `tests/model_settings.py`. I grepped the raw
+   Anthropic API spelling (`cache_control`, `ephemeral`) instead of pydantic-ai's
+   parameter names.
+2. **"A remember-then-ask sequence can silently lose the write."** Measured false by
+   the memory worker: 0 misses / 4800 round-trips under concurrency. See
+   `proposals/archive/to-memory/2026-07-31_upsert-write-visibility.md`.
+3. **"A NamedTuple keeps the existing positional unpacking working."** False —
+   `retry.py` unpacked 3 names from a now-5-field tuple. The suite caught it.
+
+**Caveat on what IS proven about caching:** the tests assert the cache *settings*
+are present. That proves configuration, not cache hits. Nobody has measured
+effectiveness — which is exactly what the `usage.py` change now makes possible.
+
+## landed
+
+- `core/llm/usage.py` — prompt-cache counters (`cache_read_tokens`,
+  `cache_write_tokens`) were being silently discarded by `extract_usage`. Now
+  carried through. `total_tokens` (billed) stays unchanged; `total_tokens_processed`
+  (volume) added. Mutation-checked: reverting turns 2 tests red.
+- `core/llm/retry.py` — attribute access instead of tuple unpacking; budget pricing
+  deliberately still uses full-rate input/output only.
+
+## dispatched
+
+- **api** — `2026-07-31_surface-cache-token-counters.md` (surface the counters so
+  cache effectiveness is observable; ROADMAP §2.4 budget go-live would mis-price
+  every cached run until then).
+- **api** — `2026-07-31_memory-archive-cross-user-http-proof.md` (still queued).
+
+## for the next memory session — START HERE
+
+`core/memory/hydration.py` ranking/thresholds (relevance floor, tier trust, top-K,
+token budget) is the leading suspect for BOTH the flaky
+`test_memory_store_and_recall_for_user` AND the owner's "memory doesn't work much
+at all". Write visibility is ruled out at scale. Also note: orchestrator AND memory
+both run on `claude-haiku-4-5` per `models.yaml` ("dev: cheap by default") — model
+tier may be part of the quality complaint, test before blaming prompts.

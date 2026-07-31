@@ -65,6 +65,56 @@ def test_usage_scope_meters_real_tokens():
     assert u.requests == 2
 
 
+class _FakeCachedUsage:
+    """A provider result where most of the prefix came from the prompt cache.
+
+    Mirrors how pydantic-ai reports Anthropic: the cached prefix is NOT part of
+    `input_tokens`, it arrives as separate write/read counters.
+    """
+    input_tokens = 100
+    output_tokens = 50
+    requests = 1
+    cache_read_tokens = 4000
+    cache_write_tokens = 1000
+
+
+class _FakeCachedResult:
+    def usage(self):
+        return _FakeCachedUsage()
+
+
+def test_cache_counters_are_carried_through_not_dropped():
+    """Regression: `extract_usage` used to read only input/output/requests, so a
+    cache hit was invisible and nobody could tell whether prompt caching worked."""
+    tokens = usage_mod.extract_usage(_FakeCachedResult())
+    assert tokens.cache_read_tokens == 4000
+    assert tokens.cache_write_tokens == 1000
+
+    with usage_scope() as u:
+        usage_mod.accumulate(_FakeCachedResult())
+    assert u.cache_read_tokens == 4000
+    assert u.cache_write_tokens == 1000
+
+
+def test_billed_total_excludes_cached_tokens_but_processed_total_includes_them():
+    """The two totals answer different questions and must not be conflated: a
+    cached read is ~0.1x, so folding it into `total_tokens` would overstate spend,
+    while omitting it from the volume view hides what the model actually read."""
+    with usage_scope() as u:
+        usage_mod.accumulate(_FakeCachedResult())
+    assert u.total_tokens == 150               # billed at full rate: 100 + 50
+    assert u.total_tokens_processed == 5150    # + 4000 cache read + 1000 cache write
+
+
+def test_a_result_without_cache_counters_still_meters():
+    """Providers that report no cache counters (or a shape we don't recognise) must
+    degrade to zeros, never raise — metering never interferes with a run."""
+    with usage_scope() as u:
+        usage_mod.accumulate(_FakeResult())
+    assert (u.cache_read_tokens, u.cache_write_tokens) == (0, 0)
+    assert u.total_tokens == u.total_tokens_processed == 150
+
+
 def test_usage_accumulate_is_a_noop_outside_a_scope():
     # must never raise, and must not error on an unrecognized result shape
     usage_mod.accumulate(_FakeResult())

@@ -49,6 +49,21 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
+Read code before claiming or changing (owner instruction, 2026-07-31):
+- NEVER state what codebase does/doesn't do from memory. Open it, look.
+- Hardest rule for ABSENCE claims ("we don't have X"). One failed grep feels like
+  proof, isn't. Search the CONCEPT two ways — our spelling AND the dependency's —
+  then read the owning module.
+- CONFIGURED != WORKS. Cache-settings tests passed and proved configuration; nobody
+  had measured a cache hit. Same shape as CB5: green check on wrong question.
+- Mechanism that COULD explain a symptom = hypothesis. Only measurement makes it cause.
+- Reasoning about an API != reading it.
+- Say which you did: "read X:120" and "I believe X" are different sentences.
+- Three failures one session (2026-07-31): "no prompt caching" (grepped Anthropic raw
+  spelling, not pydantic-ai param names), "write-then-read loses memory" (measured 0
+  misses / 4800 trials), "NamedTuple keeps positional unpacking" (suite caught it).
+  Each caught only by something independent. Don't rely on being caught.
+
 Roadmap — `docs/ROADMAP.md`. Read when asking "what should I work on?".
 Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent work.
 

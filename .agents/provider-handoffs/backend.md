@@ -63,7 +63,95 @@ finished something.
 
 ---
 
-## Current checkpoint — private-alpha environment split (2026-07-29)
+## Current checkpoint — memory behind the Manager + owner's prompt/caching ruling (2026-07-31)
+
+**Landed and pushed (`6d0ef5e`):** the Manager-owned memory rewrite. Orchestrator has
+no MemoryPort, never hydrates, builds no write proposals; `remember()`,
+`memory.search` and the expert context broker are gone. Pipeline gained a `context`
+stage (Manager-prepared hydration, before reasoning) and a `memory_lifecycle` stage
+(after delivery, hands the curator a neutral `MemoryTurn`). `GET/DELETE /memory` now
+serve real Qdrant entries with provenance instead of the `run.memory_writes` shadow.
+
+That tree arrived DIRTY and uncommitted: the memory worker succeeded, both
+orchestration workers died on provider usage limits without doing any work, and the
+previous codex coordinator did the orchestrator/pipeline/foundation/api migration by
+hand before being cut off. Verified before landing rather than trusted.
+
+**Owner ruling in `proposals/to-backend/owner_final_decision_regarding_earlier_3_worries.md`:**
+best prompt caching, much longer/detailed system prompts per their guide
+(`Vault/projects/System_prompt_style_guides/PROPMT_TO_GET_INTELLIGENCE_LIKE_CLAUDE-FABLE-5.md`,
+1603 lines — read its OUTLINE, not the whole file, it is 123KB), cheaper/faster
+models where worth it, prompt directory restructure, fewer guard false positives.
+
+### THREE THINGS I GOT WRONG TODAY — do not repeat them
+
+Every one came from asserting recall instead of reading the tree:
+
+1. **"No prompt caching."** Wrong. It is configured on every layer in
+   `core/llm/registry.py:198-209` and tested. I grepped `cache_control|ephemeral`
+   (the raw Anthropic spelling) instead of pydantic-ai's `anthropic_cache_*`.
+2. **"Write-then-read can silently lose a memory."** Measured false — 0 misses in
+   4800 concurrent round-trips.
+3. **"A NamedTuple keeps positional unpacking working."** It does not when the
+   tuple grows; `retry.py` unpacked 3 from 5.
+
+**The distinction that survived all three:** cache *settings* being present proves
+CONFIGURATION, not cache HITS. Nobody has measured effectiveness. Same shape as the
+CB5 lesson — a green check on the wrong question.
+
+### Sequencing agreed with the owner (my "caching first" argument is DEAD)
+
+1. **Prompt directory restructure first.** Per-batch prompts need a home, and
+   writing 1000-line prompts into a layout about to change is waste. The whole seam
+   is `registry/config/batches.py:_BATCH_PROMPT_NAME` (hardcoded `batch_orchestrator`,
+   one prompt for EVERY batch) plus `prompts/registry.yaml`. Exactly ONE batch
+   exists (`engineering`) — cheapest it will ever be.
+2. **Then prompts.** Memory read/write first: the memory system prompt is **39
+   lines** while the secure overlay took filter 64 -> 518 and verifier 90 -> 219. The
+   moat has the thinnest prompt in the system.
+3. **Memory read LLM** — owner's design: keep vector search, add a lightweight LLM
+   with powerful tools that CANNOT open memory directly. Tools-only access is also
+   what keeps tenant isolation enforceable.
+
+### Open, flagged to the owner, awaiting their word
+
+- **Guard false positives.** `verifier`/`filter` are `locked: true` and CB5 is
+  PARTIAL *because detection already evades on paraphrase*. Cutting false positives
+  by making the guard MORE DISCRIMINATING is supported; LOWERING THE BAR on a leaky
+  boundary is not, and I told the owner I would want that recorded if they want it.
+  Any guard prompt change runs against `tests/benchmarks/cb5_verdict_honesty.py`.
+- **Model tier.** `models.yaml` runs orchestrator AND memory on `claude-haiku-4-5`
+  ("dev: cheap by default"). Some of "it can't do basic tasks" may be tier, not
+  prompt. Test before blaming prompts.
+
+### Next memory session STARTS HERE
+
+`core/memory/hydration.py` ranking/thresholds — relevance floor, tier trust, top-K,
+token budget. Leading suspect for BOTH the flaky
+`tests/orchestrator_ports.py::test_memory_store_and_recall_for_user` and the owner's
+"memory doesn't work much at all". Write visibility is ruled out at scale.
+
+### Operational notes
+
+- A live Qdrant matters: `podman run -d --rm --name clannon-qdrant -p 127.0.0.1:6333:6333
+  qdrant/qdrant:latest`. Without it 12 memory/isolation tests SKIP — exactly the ones
+  a memory change needs. Green with it: 1550 passed, 1 skipped (ClamAV).
+- **Worker briefs must say "do NOT run the full suite — the coordinator does".** A
+  worker burned its entire budget waiting on pytest and delivered nothing.
+- **Worker briefs must carry a stop condition.** The memory worker's "measure first,
+  stop if zero" is the only reason we did not ship a fix on a 76% number that turned
+  out to be a measurement artifact.
+- I printed the owner's API keys into a transcript by grepping `.env.local` for key
+  names. Owner rotated the two with balance. Use `grep -c`/`-l` on secret files.
+
+## Change note
+
+Previous checkpoint predated the entire memory rewrite. Rewritten around what a cold
+reader now needs: what landed, the three retracted claims and why they happened, the
+owner's ruling with agreed sequencing, and the single place the next memory session
+should start.
+
+## Previous checkpoint — private-alpha environment split (2026-07-29)
 
 Owner requested separate local and production environment files for backend and
 frontend. Frontend already had correct ignored `.env.local` / `.env.prod`; it

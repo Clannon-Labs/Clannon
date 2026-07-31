@@ -142,7 +142,12 @@ async def run_agent(
                     # empty `budget_model_id`) must degrade to "settle via the finally-refund
                     # below" and still return the real result, never re-enter the retry logic.
                     try:
-                        input_tokens, output_tokens, _requests = usage.extract_usage(result)
+                        # Attribute access, not tuple unpacking: `extract_usage` also carries
+                        # the prompt-cache counters, and pricing here deliberately uses only
+                        # the full-rate input/output — a cached read bills ~0.1x and folding
+                        # it in at full price would over-charge the reservation.
+                        tokens = usage.extract_usage(result)
+                        input_tokens, output_tokens = tokens.input_tokens, tokens.output_tokens
                         # Priced against the LAYER's primary model (`budget_model_id`), not
                         # necessarily whichever fallback-chain member actually served this call —
                         # a rare-failover accuracy gap accepted alongside the anchor spec's other

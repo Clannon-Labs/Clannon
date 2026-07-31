@@ -4,6 +4,48 @@
 
 > Small note: We are moving towards private alpha deployment on a real domain, so make product so that a tester i hire can test it and not find any vulnerabilities and should want to use it daily in their daily life by asking me to allow them (cuz it would be private alpha then)
 
+## 🔍 READ THE CODE BEFORE YOU CLAIM IT OR CHANGE IT (owner instruction, 2026-07-31)
+
+**Never state what the codebase does, or doesn't do, from memory. Open it and look.**
+This applies hardest to claims of ABSENCE — "we don't have X", "there's no Y" — because
+a single failed grep feels like proof and isn't.
+
+Before you tell the owner (or another agent) that something is missing, broken, or
+already built, you must have READ the thing. A search that returned nothing is not
+evidence until you have checked that you searched for the right name.
+
+**Three failures in ONE session on 2026-07-31, all the same mistake:**
+
+- **"There is no prompt caching in `core/llm/`."** False. It is configured on every
+  layer (`registry.py`, `anthropic_cache_instructions` / `anthropic_cache_tool_definitions`
+  / `anthropic_cache`) and tested. The grep was for the raw Anthropic API spelling
+  (`cache_control`, `ephemeral`) instead of the framework's parameter names. **A
+  vocabulary mismatch reads exactly like an absence.** Grep for the CONCEPT from at
+  least two angles, and confirm by reading the module that would own it.
+- **"A write-then-read can silently lose a memory."** Plausible, mechanical, wrong.
+  Measured at 0 misses in 4800 concurrent round-trips. A mechanism that *could*
+  explain a symptom is a hypothesis; only a measurement makes it a cause.
+- **"A NamedTuple keeps the existing positional unpacking working."** It does not once
+  the tuple grows. The suite caught it. **Reasoning about an API is not reading it.**
+
+**The distinction that survived all three, and generalises:** a check that something is
+CONFIGURED is not a check that it WORKS. The cache settings tests pass and prove
+configuration; nobody had ever measured a cache hit. Same shape as the CB5 lesson below
+— a green check on the wrong question.
+
+So, before claiming or changing:
+1. **Read the file that owns the behaviour**, not just search results.
+2. **For absence claims, search the concept two ways** (our spelling AND the
+   dependency's), then read the owning module to confirm.
+3. **For behaviour claims, run it or measure it.** Say "measured" or "unverified" —
+   never blur them.
+4. **Say which you did.** "I read X:120" and "I believe X" are different sentences and
+   the owner is entitled to know which one they are getting.
+
+Cheap to obey, and every one of those three was caught only because something
+independent checked it — a grep, a worker with a stop condition, the suite. Do not rely
+on being caught.
+
 ## ⚖️ THE CODING LAWS — read first, every session, every agent, before you write a line
 
 These are **LAWS, not preferences.** You do not weigh them against convenience — the law wins.
