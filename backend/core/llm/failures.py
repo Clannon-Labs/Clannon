@@ -31,7 +31,7 @@ import asyncio
 from typing import Literal
 
 import httpx
-from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
+from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UsageLimitExceeded
 
 # The union of what both original classifiers distinguished:
 #   rate_limit   — a provider quota / 429 / "at capacity" condition
@@ -98,7 +98,22 @@ def classify_failure(exc: BaseException) -> FailureKind:
     rate-limit wins over timeout (a stalled run is most often a 429 storm retried
     into the wall clock), and only then the transient-server / timeout / permanent
     buckets. The rate-limit walk recurses through ExceptionGroup members and the
-    cause/context chain; the rest inspect the outermost exception."""
+    cause/context chain; the rest inspect the outermost exception.
+
+    OUR limit breach is decided by TYPE, before any text is inspected. It is a
+    permanent, fail-closed condition — the loop/spend ceiling did its job — and
+    classifying it as a transient `rate_limit` would make the retry wrapper try
+    again, i.e. spend past the ceiling the limit exists to enforce.
+
+    This ordering is not stylistic. pydantic-ai 2.18 appended a help hint to
+    `UsageLimitExceeded`'s message ("...see the docs on usage limits...
+    https://ai.pydantic.dev/agent/#usage-limits"), and the substring `usage limits`
+    is one of the provider rate-limit markers below. No API changed, nothing threw
+    — a documentation link moved, and a money guard silently became retryable.
+    Matching an invariant on a dependency's error TEXT is outsourcing a promise
+    (LAW 6); matching on its type is not."""
+    if isinstance(exc, UsageLimitExceeded):
+        return "error"
     if _looks_rate_limited(exc, set()):
         return "rate_limit"
     if isinstance(exc, TimeoutError):        # asyncio.TimeoutError is an alias since 3.11

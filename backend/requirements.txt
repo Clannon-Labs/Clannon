@@ -13,10 +13,26 @@ python-magic
 # AGENT FRAMEWORK
 # ============================================================
 
-pydantic-ai==2.4.0           # core agent framework. PINNED (2026-07-27): 2.18.0 silently
-                             # broke the bounded-loop money guard — see
-                             # proposals/archive/to-owner/REPLY_NEEDED_rust-strategy.md
-                             # and the release-blocker ruling. Do not unpin without re-proving the bound.
+pydantic-ai==2.18.0          # core agent framework. UNPINNED 2026-07-31 — the bound was
+                             # re-proven, which is what the old pin asked for.
+                             #
+                             # The 2026-07-27 pin said 2.18.0 "silently broke the bounded-loop
+                             # money guard". Root cause, found this time because the suite named
+                             # it: 2.18 appends a help hint to UsageLimitExceeded's message
+                             # ("...see the docs on usage limits: .../agent/#usage-limits"), and
+                             # `usage limits` is one of our provider rate-limit markers. So a hit
+                             # spend/turn ceiling classified as a transient rate_limit and got
+                             # RETRIED — past the ceiling it exists to enforce. No API changed;
+                             # a documentation link moved.
+                             #
+                             # Fixed by deciding OUR invariant on the exception TYPE instead of
+                             # the dependency's prose (core/llm/failures.py::classify_failure),
+                             # pinned by test_our_limit_breach_is_never_transient_whatever_its_
+                             # message_says. The loop cap itself was never broken.
+                             #
+                             # Upgrade procedure + what must stay true:
+                             # docs/architecture/DEPENDENCY_VERSION_STRATEGY.md
+                             # Re-check by 2026-08-31.
 pydantic[email]              # strict schema validation + email type support
 jsonschema                   # secondary JSON validation before pydantic validation
 

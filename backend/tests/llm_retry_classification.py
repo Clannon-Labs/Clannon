@@ -27,6 +27,7 @@ import pytest
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UsageLimitExceeded
 
 from core.llm import retry
+from core.llm.failures import classify_failure, is_transient
 from core.llm.retry import run_agent
 
 
@@ -87,6 +88,27 @@ _CASES = [
     ("rate_limit_by_message", lambda: RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded"), True),
     ("overloaded_by_message", lambda: RuntimeError("the model is overloaded, please retry"), True),
 ]
+
+
+def test_our_limit_breach_is_never_transient_whatever_its_message_says():
+    """A limit breach is OURS, and is decided by TYPE, never by message text.
+
+    pydantic-ai 2.18 appended a help hint to UsageLimitExceeded's message --
+    "...see the docs on usage limits... https://ai.pydantic.dev/agent/#usage-limits"
+    -- and `usage limits` is one of the provider rate-limit markers. That silently
+    reclassified a hit spend/turn ceiling as a transient rate limit, which the retry
+    wrapper then RETRIES: spending past the very ceiling the limit enforces. No API
+    changed and nothing threw; a documentation link moved.
+
+    So this pins the invariant against the worst case the text could ever contain,
+    not against today's wording. If someone reorders classify_failure to consult
+    text before type, this goes red.
+    """
+    hostile = UsageLimitExceeded(
+        "429 rate limit: quota exceeded, too many requests -- see the docs on usage limits"
+    )
+    assert classify_failure(hostile) == "error"
+    assert is_transient(hostile) is False
 
 
 @pytest.mark.parametrize("label,factory,expected_transient", _CASES, ids=[c[0] for c in _CASES])
