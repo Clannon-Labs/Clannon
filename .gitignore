@@ -89,6 +89,7 @@ static_analysis_semgrep_*
 static_analysis_semgrep_*/
 
 conversation/
+achievements/
 # conversation/ was updated to:
 # `reports/*`, not `reports/` — git does not descend into an excluded DIRECTORY,
 # so a `!` re-include for a file inside it is silently dead. Excluding the
