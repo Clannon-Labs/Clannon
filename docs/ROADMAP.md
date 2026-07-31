@@ -78,7 +78,27 @@ PARTIAL.**
    longer decision-gated, but remains stability-first and propose-first: prove
    Redis money safety, then Mission Engine, bounded cross-batch awareness,
    and one batch end-to-end.
-4. **Budget enforcement go-live.** Code is built but ships
+4. **Prompt depth pass (owner-ratified 2026-07-31).** Owner ruled: much longer,
+   far more detailed system prompts following their guide
+   (`Vault/projects/System_prompt_style_guides/PROPMT_TO_GET_INTELLIGENCE_LIKE_CLAUDE-FABLE-5.md`
+   — read its OUTLINE, it is 123KB). Structure is READY: per-batch prompt
+   directories landed 2026-07-31. Order: **memory read/write prompts first** (the
+   memory system prompt is 39 lines, while the secure overlay took filter to 518
+   and verifier to 219 — the moat has the thinnest prompt in the system), then the
+   central orchestrator, then experts and batch orchestrators. Owner: backend +
+   memory + orchestration.
+5. **Memory read-side LLM (owner-ratified 2026-07-31).** Keep vector search; add a
+   lightweight LLM that retrieves exactly what the orchestrator needs. It must
+   reach memory ONLY through powerful, precise tools — it must not be able to open
+   and read memory directly. That constraint is also what keeps tenant isolation
+   enforceable. Owner: memory.
+6. **Guard false positives (owner-ratified 2026-07-31, option 1 only).** Cut false
+   positives by making the guards MORE DISCRIMINATING — better examples, sharper
+   instructions per the guide. **NOT by lowering the bar**: owner chose this
+   explicitly over compromising detection. `verifier`/`filter` are `locked: true`
+   and CB5 is PARTIAL *because detection already evades on paraphrase*, so any
+   change runs against `tests/benchmarks/cb5_verdict_honesty.py`. Owner: security.
+7. **Budget enforcement go-live.** Code is built but ships
    `enforcement_enabled=False`. Owner supplied provider-pricing references;
    backend must verify them against official current prices, represent
    tier/modality differences honestly, measure conservative infrastructure

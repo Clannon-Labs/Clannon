@@ -111,3 +111,21 @@ at all". Write visibility is ruled out at scale. Also note: orchestrator AND mem
 both run on `claude-haiku-4-5` per `models.yaml` ("dev: cheap by default") — model
 tier may be part of the quality complaint, test before blaming prompts.
 - `17:41` **orchestration** worker via **claude** — 2026-07-31_per-batch-prompt-directories.md — exit 0, 481s — output: `.agents/runs/20260731-173329-orchestration.out`
+- `17:47` **api** worker via **claude** — 2026-07-31_surface-cache-token-counters.md — exit 137, 29s — output: `.agents/runs/20260731-174722-api.out`
+
+## paused — owner at 92% weekly usage
+
+- Killed the api worker mid-launch: headless workers spend the SAME quota. It had
+  made no changes; tree was clean.
+- Landed + pushed: `6d0ef5e` (memory behind the Manager), `2547696` (cache-token
+  accounting + owner rulings recorded in code), `4fd07bc` (per-batch prompt dirs).
+- Owner rulings in ROADMAP §2.4/2.5/2.6: prompt depth pass (memory prompts FIRST),
+  memory read-side LLM (tools-only, must not read memory directly), guard false
+  positives via BETTER PROMPTS ONLY — never lowering the bar.
+- `models.yaml` now explains why haiku is deliberate. Do not upgrade the tier to
+  make a failure go away; that destroys the signal the setting exists to produce.
+- Owner thoughts NOT archived — one of three is only half-implemented; archiving
+  would bury live work. Reason recorded in `proposals/archive/to-backend/`.
+- Local Qdrant container stopped.
+
+**Queued, not dispatched (quota):** both `proposals/to-api/` items.

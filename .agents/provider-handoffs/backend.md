@@ -63,7 +63,55 @@ finished something.
 
 ---
 
-## Current checkpoint — memory behind the Manager + owner's prompt/caching ruling (2026-07-31)
+## Current checkpoint — PAUSED at 92% usage limit (2026-07-31, late)
+
+**STOP: do not dispatch workers without checking quota.** The owner hit 92% of their
+weekly limit. Headless workers spend the SAME quota as your own session — an api
+worker was launched and immediately killed for this reason (it had made no changes).
+
+### Pushed this session
+
+- `6d0ef5e` — memory management moves behind the Manager (see below).
+- `2547696` — prompt-cache tokens were being discarded from every accounting path;
+  now carried through. Plus the owner's haiku rationale in `models.yaml` and the
+  "read the code before you claim it" rule in `CLAUDE.md`/`AGENTS.md`.
+- `4fd07bc` — per-batch orchestrator prompt directories, fail-closed, no shared
+  default. Prompt content is a pure rename; the REWRITE is the next task.
+
+### Owner rulings settled 2026-07-31 — all in ROADMAP 2.4/2.5/2.6
+
+1. **Guards: option 1 ONLY.** Cut false positives by making guards MORE
+   DISCRIMINATING (better examples/instructions), never by lowering the bar. Owner
+   was explicit: "better examples/prompt is way better than compromising."
+2. **Haiku stays, deliberately.** Rationale is now at the TOP of `models.yaml`: a
+   frontier model hides bad prompts/tools/retrieval by succeeding anyway, so the low
+   tier makes the SYSTEM the variable. A task failing on haiku means fix the system,
+   NEVER raise the tier. Do not "helpfully" upgrade it.
+3. **Directory restructure first, then prompts.** Done; prompts are next.
+
+### Next task, ready to start
+
+**Prompt depth pass**, memory read/write prompts FIRST (39 lines today vs filter's
+518 and verifier's 219). The structure to write into now exists.
+
+### Queued, NOT dispatched (quota)
+
+- `proposals/to-api/2026-07-31_surface-cache-token-counters.md`
+- `proposals/to-api/2026-07-31_memory-archive-cross-user-http-proof.md`
+
+### Still true from earlier today
+
+Next memory session starts at `core/memory/hydration.py` ranking/thresholds — the
+leading suspect for the flaky `test_memory_store_and_recall_for_user` AND the
+owner's "memory doesn't work much at all". Write visibility is RULED OUT (0 misses
+/ 4800 concurrent trials).
+
+## Change note
+
+Session paused on owner instruction at 92% weekly usage. Recorded the three rulings
+where a cold reader will hit them, and the quota trap that killed a worker.
+
+## Previous checkpoint — memory behind the Manager + owner's prompt/caching ruling (2026-07-31)
 
 **Landed and pushed (`6d0ef5e`):** the Manager-owned memory rewrite. Orchestrator has
 no MemoryPort, never hydrates, builds no write proposals; `remember()`,
