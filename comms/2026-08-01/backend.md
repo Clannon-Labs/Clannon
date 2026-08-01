@@ -119,3 +119,14 @@ Proof:
 - live disposable-user API + real Haiku: `forget_memory` called, run delivered,
   Qdrant entry absent afterward, success reported; disposable state cleaned.
 - `19:52` **security** worker via **codex** — 2026-08-01_identity-filter-inverted.md — exit 0, 807s — output: `.agents/runs/20260801-193904-security.out`
+
+## current time — real tool, real API proof
+
+Owner added `tools/time.py` after Clannon could not answer a simple current-time
+question. Hardened it as a deterministic READ tool: UTC default, optional explicit
+IANA timezone, aware ISO-8601 output, honest schema/description, invalid-zone failure.
+
+Focused proof: 12 passed. Real API + real model against a disposable user asked for
+current Kathmandu time, called `time.current_time`, delivered a complete answer, and
+named Kathmandu. Disposable SQLite/Qdrant state cleaned. Full backend: **1579 passed**,
+one existing RestrictedPython warning.

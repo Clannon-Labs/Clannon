@@ -146,6 +146,7 @@ same path and are next to be proven.*
 ### Utilities
 | Tool | What It Does |
 |------|-------------|
+| ✅ **Current Date & Time** | Read live current time in UTC or a requested IANA timezone |
 | **Text Diffing** | Compare versions of text and highlight changes |
 | **Conversation Recall** | Access documented facts and prior context from previous sessions |
 | **File Operations** | Read, write, and organize files in your workspace |
