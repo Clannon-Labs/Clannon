@@ -53,3 +53,45 @@ not how uploads travel.
 
 ## dispatched workers
 - `13:25` **orchestration** worker via **claude** — 2026-08-01_decision-log-events-not-payloads.md — exit 0, 495s — output: `.agents/runs/20260801-131709-orchestration.out`
+
+## answer-loss bug — found by the owner using the product, fixed
+
+Owner asked Clannon what model it is, saw only the say() preamble, and never got
+the answer. The answer existed, was correct, and appeared ONLY in the server's
+terminal log. Run reported `delivered`.
+
+**Cause** (`api/run_driver.py`, introduced recently in `900e2cc`): chat delivery
+gated on `if not run.message or ctx.tool_calls or ctx.expert_calls`. A say()
+preamble sets `run.message`; an identity question needs no tool or expert; all
+three false, answer dropped. Worse, **`say` is a native tool that does not
+register in `ctx.tool_calls`** — the guard checked for evidence of work in a list
+the relevant call never appears in.
+
+**Fix:** deliver unless the user has already seen EXACTLY this text.
+`already_delivered = bool(run.message) and run.message.strip() == text.strip()`.
+
+**A real trade was hiding here, and it is now explicit.** The suppression existed
+to stop a weak model that paraphrases itself posting two near-identical messages.
+That case is genuine. The old heuristic could not tell it apart from a preamble +
+real answer, and optimised for the cosmetic case at the cost of the catastrophic
+one. Policy now: **a duplicated line is cosmetic, a swallowed answer is a broken
+product** — when in doubt, deliver. A paraphrasing model may now post two similar
+messages; that is the accepted cost, not a new bug.
+
+`tests/message_channel.py::test_chat_with_only_accidental_say_retains_say_as_sole_response`
+pinned the OLD policy. Rewritten rather than deleted, with the reasoning in its
+docstring, plus a counterpart pinning the one case still suppressed (an exact
+duplicate). New file `tests/chat_answer_reaches_the_user.py` — 5 tests including
+the owner's exact shape. Mutation-checked: restoring the old guard fails the two
+that matter.
+
+**Boundary crossing, declared:** `api/**` is the API specialist's tree and I
+edited it directly instead of dispatching, because it was a user-visible
+answer-loss bug and the owner asked for a quick fix.
+
+Suite: **1567 passed, 0 failed, 0 skipped** (live Qdrant + ClamAV).
+
+`tests/orchestrator_ports.py::test_memory_store_and_recall_for_user` failed once
+mid-session and passes in isolation — the known pre-existing flake. Write
+visibility is ruled out (0/4800); `core/memory/hydration.py` ranking remains the
+suspect.

@@ -124,10 +124,43 @@ def test_chat_without_say_delivers_only_filtered_final_message(monkeypatch):
     _assert_no_report_events(run)
 
 
-def test_chat_with_only_accidental_say_retains_say_as_sole_response(monkeypatch):
+def test_chat_with_a_say_still_delivers_a_DIFFERENT_final_answer(monkeypatch):
+    """Policy changed deliberately on 2026-08-01, after this cost a real answer.
+
+    This used to assert the opposite: with a say() and no tool/expert call, the
+    final answer was SUPPRESSED as a weak model repeating itself. The owner then
+    asked Clannon what model it was, saw only the say() preamble ("I'm going to
+    answer your question directly"), and never received the answer at all -- it
+    existed, was correct, and appeared solely in the server's terminal log.
+
+    The two cases are genuinely hard to tell apart: a weak model paraphrasing
+    itself, versus a preamble followed by the real answer. The old "did work
+    happen" heuristic distinguished them badly, and `say` does not even register
+    in ctx.tool_calls, so it could not see the call that set run.message.
+
+    So the trade is now explicit and deliberate: suppress ONLY an exact duplicate
+    (pinned below), and otherwise always deliver. A duplicated line is a cosmetic
+    annoyance; a swallowed answer is a broken product.
+    """
     run = _drive_chat(
         monkeypatch,
-        _chat_ctx(filtered="Weak model repeated this answer."),
+        _chat_ctx(filtered="The actual, different answer."),
+        say="Casual answer already shown.",
+    )
+
+    assert run.message == "Casual answer already shown.\n\nThe actual, different answer."
+    assert _message_deltas(run) == [
+        "Casual answer already shown.",
+        "\n\nThe actual, different answer.",
+    ]
+    _assert_no_report_events(run)
+
+
+def test_chat_does_not_repeat_a_final_answer_identical_to_the_say(monkeypatch):
+    """The one case still worth suppressing: the user has already seen this text."""
+    run = _drive_chat(
+        monkeypatch,
+        _chat_ctx(filtered="Casual answer already shown."),
         say="Casual answer already shown.",
     )
 

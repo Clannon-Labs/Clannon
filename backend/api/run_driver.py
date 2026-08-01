@@ -335,9 +335,25 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
                 run.sources = _srcs
                 run.emit({"type": "sources", "sources": _srcs})
                 if _presentation == "chat":
-                    # A lone say() is a weak-model casual answer, not substantive work.
-                    # Real work is authoritative only when Flow recorded a tool/expert call.
-                    if not run.message or ctx.tool_calls or ctx.expert_calls:
+                    # Deliver the accepted answer UNLESS the user has already seen
+                    # exactly it via say(). The only thing worth suppressing here is a
+                    # literal duplicate; anything else must reach the chat.
+                    #
+                    # This used to gate on "did real work happen" — deliver only if
+                    # `not run.message or ctx.tool_calls or ctx.expert_calls`. That
+                    # silently DROPPED the answer whenever the model said something
+                    # first and then answered directly with no tool or expert call,
+                    # which is an ordinary shape: say() is a preamble ("let me answer
+                    # that directly"), the answer is the substance. The user then saw
+                    # only the preamble and never the answer, with the real text
+                    # visible solely in the server log. `say` is a native tool that
+                    # does not register in ctx.tool_calls, so the guard could not see
+                    # the very call that set run.message.
+                    #
+                    # Compare CONTENT, and when in doubt deliver: a duplicated line is
+                    # a cosmetic annoyance, a swallowed answer is a broken product.
+                    already_delivered = bool(run.message) and run.message.strip() == text.strip()
+                    if text.strip() and not already_delivered:
                         separator = "\n\n" if run.message else ""
                         run.on_log_entry(
                             type(
