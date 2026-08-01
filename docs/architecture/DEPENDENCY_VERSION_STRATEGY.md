@@ -17,8 +17,8 @@ time. When they ship a capability, the default is to **take it**.
 
 Two facts make staying current urgent rather than optional:
 
-- **They move fast.** `2.4.0` (2026-07-02) to `2.18.0` (2026-07-24) is **14 minor
-  versions in three weeks**. A pin does not hold a position; it accumulates a debt
+- **They move fast.** `2.4.0` (2026-07-02) to `2.22.0` (2026-08-01) is **18 minor
+  versions in one month**. A pin does not hold a position; it accumulates a debt
   that grows every week.
 - **We are early.** Experiments are cheap now and expensive later. The cheapest time
   to make upgrades routine is before there are users.
@@ -34,9 +34,11 @@ import fails, the suite goes red, you fix it in a minute.
 What bites is a **silent behavioural change**: the API is identical, the types match,
 the code runs, and a guarantee we were relying on quietly stops holding.
 
-This happened. `pydantic-ai 2.18.0` was tried on 2026-07-27 and reverted because it
-**silently broke the bounded-loop money guard** (`requirements.txt`). Nothing threw.
-The bound just stopped bounding.
+This happened. `pydantic-ai 2.18.0` was tried on 2026-07-27 and reverted because its
+`UsageLimitExceeded` prose gained a documentation URL containing our generic
+rate-limit marker. We misclassified our own hard ceiling as a transient provider
+rate limit and retried it. The API and exception type remained valid; our prose
+coupling was the bug (`requirements.txt`).
 
 That is LAW 6, stated exactly:
 
@@ -114,12 +116,12 @@ explain. Every pin states, in the requirements file, next to the pin:
 - **what must be proven** to unpin;
 - **a re-check date**.
 
-The existing `pydantic-ai` pin comment does the first two well. Add the third.
+The existing `pydantic-ai` pin comment carries all three.
 
 ### 3.5 Take what they ship
 
-Staying current is not defensive; it is how we get work for free. Capabilities in
-`2.18.0` we currently do without, and would otherwise have to build:
+Staying current is not defensive; it is how we get work for free. Capabilities
+available since `2.18.0` that we can integrate instead of rebuilding include:
 
 - `cache_hit_ratio` — answers "is prompt caching actually hitting?", which we had to
   build counters for by hand.
@@ -132,6 +134,14 @@ Staying current is not defensive; it is how we get work for free. Capabilities i
 vulnerability fixed in 2.5.0 does not reach us — `rg 'ag_ui|AGUI'` over the backend
 returns nothing. Neither does the durability rewrite: no DBOS, Prefect, or Temporal
 wrappers exist here.
+
+### Upgrade record
+
+- **2026-08-01 — 2.18.0 → 2.22.0.** Only the four-package Pydantic AI family
+  changed. Focused behavioural gates: 93 passed. Full backend: 1613 passed.
+  Invariant check: 7 PASS, one existing NETWORK-path WARN. We support this proven
+  version through the adapter; we do not promise compatibility with every historical
+  release.
 
 ## 4. What this is not
 

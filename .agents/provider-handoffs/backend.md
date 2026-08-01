@@ -63,33 +63,29 @@ finished something.
 
 ---
 
-## Current checkpoint — fixed billing + observable cache usage (2026-08-01)
+## Current checkpoint — owner proposals triaged; Pydantic AI 2.22 proven (2026-08-01)
 
-Owner-thought audit confirmed four facts: recent trivial runs consumed 18k–34k
-full-rate tokens; cache settings existed but hits were unobservable; `/usage` used a
-daily-moving trailing window; no run admission checked plan token entitlement.
+Pushed `d608e18` for cache-token observability and `39094fc` for fixed billing
+anniversaries, mock settlement/add-ons/upgrades, and coarse 402 run admission. Memory
+tier authorization was already closed in `12ee636`. Exact per-call/concurrent budget
+enforcement remains OFF; one admitted run may overshoot.
 
-Pushed `d608e18`: provider cache read/write counters now persist through run state,
-SQLite migration/reload, run JSON, and `/usage`; `tokensUsed` remains full-rate input
-+ output. Mutation removal failed; full backend 1596 passed.
+Current coordinator diff upgrades Pydantic AI 2.18.0 → 2.22.0. Only the four-package
+Pydantic AI family changed. Focused behavioural gates: 93 passed. Full backend:
+**1613 passed**, three known/order-sensitive warnings. Invariant checker: 7 PASS, one
+existing NETWORK-path WARN. Commit/push this unit without touching frontend's active
+dirty tree.
 
-Current reviewed worktree adds fixed UTC signup/payment-anniversary periods, a
-persistent mock checkout ledger, idempotent secret-authenticated confirmation,
-current-period add-on credits, configured-plan upgrades, corrupt-plan fail-closed
-behavior, and structured 402 admission before root/follow-up/revision persistence.
-One admitted run may overshoot and concurrent admission may race: exact per-call
-Redis money-cost enforcement remains OFF. Fail-first billing suite: 17 failures;
-focused coordinator proof 53 passed; full backend **1613 passed**. Frontend proposal
-queued because its interactive tree is active.
-
-Next: commit/push billing unit, then test the current Pydantic AI 2.22.0 bump (repo is
-2.18.0). Memory deep-reader and prompt-depth work remain separate large roadmap items.
+Owner thoughts now carry explicit responses. Resolved: current dependency upgrade,
+prompt directory structure, cache counter observability. Partial: billing exactness,
+prompt-depth, cost routing. Open: additive deep-memory retrieval. Do not build an
+always-on reader LLM or pad prompts to a line quota; those require scoped design and
+real-product eval.
 
 ## Change note
 
-Rewritten after resolving owner billing/token proposals. Records measured token use,
-cache observability, fixed-period/mock-billing implementation, honest coarse-gate
-limit, and exact next dependency task.
+Rewritten after triaging every active owner thought and proving current Pydantic AI.
+Records settled decisions, verification, and large work deliberately left open.
 
 ## Previous checkpoint — plan-tier bypass closed; time + identity proven (2026-08-01)
 

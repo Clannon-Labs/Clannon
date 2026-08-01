@@ -163,3 +163,14 @@ passed**, one existing RestrictedPython warning.
   remains OFF.
 - Proof: 17 fail-first billing tests; 53 coordinator-focused passed; full backend
   1613 passed. Frontend contract queued while frontend interactive tree is active.
+
+## Owner-thought resolution + Pydantic AI current
+
+- Audited all six active owner thoughts and combined backend proposal against code,
+  SQLite run evidence, real achievements, and canonical architecture.
+- Upgraded Pydantic AI 2.18.0 → 2.22.0 behind the one adapter. Only its four-package
+  family changed. Focused behavioural gates: 93 passed; full backend: 1613 passed;
+  invariants: 7 PASS, one existing NETWORK-path WARN.
+- Resolved: dependency version and prompt layout. Partial: fixed billing, prompt
+  depth, token efficiency. Open: exact per-call budget broker and scoped deep-memory
+  retrieval. No arbitrary prompt-length target or every-version compatibility tax.

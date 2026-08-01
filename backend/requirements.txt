@@ -13,8 +13,8 @@ python-magic
 # AGENT FRAMEWORK
 # ============================================================
 
-pydantic-ai==2.18.0          # core agent framework. UNPINNED 2026-07-31 — the bound was
-                             # re-proven, which is what the old pin asked for.
+pydantic-ai==2.22.0          # core agent framework. UPGRADED 2026-08-01 after the
+                             # behavioural gates below re-proved our invariants.
                              #
                              # The 2026-07-27 pin said 2.18.0 "silently broke the bounded-loop
                              # money guard". Root cause, found this time because the suite named
