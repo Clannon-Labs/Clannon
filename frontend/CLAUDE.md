@@ -1,5 +1,7 @@
 @AGENTS.md
 
+> Small note: We are moving towards private alpha deployment on a real domain, so make product so that a tester i hire can test it and not find any vulnerabilities and should want to use it daily in their daily life by asking me to allow them (cuz it would be private alpha then)
+
 # Important directories
 - frontend/proposals — proposals from the OWNER to you
 - ../proposals — the cross-agent channel (you ↔ backend agent); format spec in ../proposals/README.md

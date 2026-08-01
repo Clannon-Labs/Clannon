@@ -147,8 +147,8 @@ function EntryCard({
     <article className="rounded-lg border border-border bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[15px] font-semibold leading-snug">{entry.title}</h3>
-        {editable && (
-          <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 gap-1">
+          {editable && (
             <button
               type="button"
               onClick={onEdit}
@@ -157,16 +157,18 @@ function EntryCard({
             >
               <Pencil className="size-4" />
             </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              aria-label={`Delete “${entry.title}”`}
-              className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-soft hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-            </button>
-          </div>
-        )}
+          )}
+          {/* every tier is owner-scoped deletable — only wiki gets edit + undo,
+              since inferred tiers have no recreate op to undo back into */}
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete “${entry.title}”`}
+            className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-soft hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       </div>
       {/* wiki entries are markdown — render them, don't show bare #/* */}
       <div className="relative mt-2 text-muted-foreground">
@@ -206,6 +208,28 @@ function EntryCard({
         {entry.source && <span>from {entry.source}</span>}
         {entry.runId && <span className="font-mono">{entry.runId}</span>}
       </p>
+      {(entry.savedBy || entry.rationale || entry.kind || entry.sessionId || entry.traceId || entry.participants?.length) && (
+        <dl className="mt-3 grid gap-x-5 gap-y-1 border-t border-border pt-3 text-[11px] text-faint sm:grid-cols-2">
+          {entry.savedBy && (
+            <div><dt className="inline font-medium text-muted-foreground">Saved by </dt><dd className="inline">{entry.savedBy.replaceAll("_", " ")}</dd></div>
+          )}
+          {entry.kind && entry.kind !== "unspecified" && (
+            <div><dt className="inline font-medium text-muted-foreground">Identity </dt><dd className="inline">{entry.kind}</dd></div>
+          )}
+          {entry.rationale && (
+            <div className="sm:col-span-2"><dt className="inline font-medium text-muted-foreground">Why </dt><dd className="inline">{entry.rationale}</dd></div>
+          )}
+          {entry.sessionId && (
+            <div><dt className="inline font-medium text-muted-foreground">Session </dt><dd className="inline font-mono">{entry.sessionId}</dd></div>
+          )}
+          {entry.traceId && (
+            <div><dt className="inline font-medium text-muted-foreground">Trace </dt><dd className="inline font-mono">{entry.traceId}</dd></div>
+          )}
+          {!!entry.participants?.length && (
+            <div className="sm:col-span-2"><dt className="inline font-medium text-muted-foreground">Participants </dt><dd className="inline">{entry.participants.join(", ")}</dd></div>
+          )}
+        </dl>
+      )}
     </article>
   );
 }
@@ -248,22 +272,28 @@ export default function MemoryPage() {
   }, [entries, query]);
 
   function deleteWithUndo(entry: MemoryEntry) {
+    const isWiki = entry.tier === "wiki";
     remove.mutate(entry.id, {
       onSuccess: () => {
         setConfirmDelete(null);
         toast({
-          title: "Wiki entry deleted",
+          title: isWiki ? "Wiki entry deleted" : `${TIER_LABELS[entry.tier]} entry deleted`,
           description: `“${entry.title}” is no longer visible to agents.`,
-          action: {
-            label: "Undo",
-            onClick: () =>
-              save.mutate({
-                tier: entry.tier,
-                title: entry.title,
-                content: entry.content,
-                projectId: entry.projectId,
-              }),
-          },
+          // undo only exists for wiki — re-saving is a real recreate. An inferred
+          // entry was written by the pipeline's own memory policy, not typed by
+          // hand; there's no "undo" that wouldn't be a fake resurrection.
+          action: isWiki
+            ? {
+                label: "Undo",
+                onClick: () =>
+                  save.mutate({
+                    tier: entry.tier,
+                    title: entry.title,
+                    content: entry.content,
+                    projectId: entry.projectId,
+                  }),
+              }
+            : undefined,
         });
       },
     });
@@ -526,8 +556,18 @@ export default function MemoryPage() {
         {confirmDelete && (
           <div>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              “{confirmDelete.title}” will be removed from your wiki and agents
-              stop seeing it immediately. You&apos;ll have a few seconds to undo.
+              {confirmDelete.tier === "wiki" ? (
+                <>
+                  “{confirmDelete.title}” will be removed from your wiki and agents
+                  stop seeing it immediately. You&apos;ll have a few seconds to undo.
+                </>
+              ) : (
+                <>
+                  “{confirmDelete.title}” will be removed and agents stop seeing it
+                  immediately. This tier is written by the pipeline, not by hand —
+                  there&apos;s no undo, but nothing stops it being learned again.
+                </>
+              )}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setConfirmDelete(null)}>

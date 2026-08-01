@@ -179,6 +179,13 @@ export interface MemoryEntry {
   /** semantic tier */
   confidence?: number;
   source?: string;
+  /** Manager-owned persistence provenance. */
+  savedBy?: "user" | "memory_curator" | "system" | "orchestrator" | "unspecified";
+  rationale?: string;
+  kind?: "fact" | "assumption" | "decision" | "unspecified";
+  sessionId?: string;
+  traceId?: string;
+  participants?: string[];
   /** episodic tier */
   runId?: string;
   /** The project (client/body of work) this memory belongs to. */
@@ -187,8 +194,8 @@ export interface MemoryEntry {
 
 /**
  * One hydration-preview hit — a dry-run of what the Manager would hydrate for
- * a draft brief. Render-only: learned-tier hits carry synthetic `preview_<n>`
- * ids (never build links or mutations off them) and may lack a timestamp.
+ * a draft brief. Render-only; unsaved hits may carry synthetic `preview_<n>`
+ * ids (never build mutations off those) and may lack a timestamp.
  */
 export interface HydrationPreviewEntry extends Omit<MemoryEntry, "updatedAt"> {
   updatedAt: string | null;

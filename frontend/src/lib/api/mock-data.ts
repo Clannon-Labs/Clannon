@@ -270,6 +270,11 @@ export const SEED_MEMORY: MemoryEntry[] = [
     updatedAt: hoursAgo(26),
     confidence: 0.96,
     source: "gov.uk",
+    savedBy: "memory_curator",
+    rationale: "Source-backed client-domain fact likely useful in future research.",
+    kind: "fact",
+    sessionId: "run_seed_1",
+    traceId: "run_seed_1",
   },
   {
     id: "m4",
@@ -280,6 +285,11 @@ export const SEED_MEMORY: MemoryEntry[] = [
     updatedAt: hoursAgo(26),
     confidence: 0.81,
     source: "run_seed_1",
+    savedBy: "memory_curator",
+    rationale: "Stable market conclusion reused across related briefs.",
+    kind: "assumption",
+    sessionId: "run_seed_1",
+    traceId: "run_seed_1",
   },
   {
     id: "m5",
@@ -289,6 +299,12 @@ export const SEED_MEMORY: MemoryEntry[] = [
     content: "3 experts, 312k tokens, 6 sources. Client accepted recommendation; follow-up on 3PL selection expected.",
     updatedAt: hoursAgo(26),
     runId: "run_seed_1",
+    savedBy: "memory_curator",
+    rationale: "Meaningful delivered outcome with an expected follow-up.",
+    kind: "decision",
+    sessionId: "run_seed_1",
+    traceId: "run_seed_1",
+    participants: ["research.batch", "synthesis.writer"],
   },
   {
     id: "m6",
@@ -298,6 +314,11 @@ export const SEED_MEMORY: MemoryEntry[] = [
     content: "Run blocked at verifier — brief contained a pasted spreadsheet with unredacted emails. User notified, resubmission pending.",
     updatedAt: hoursAgo(73),
     runId: "run_seed_3",
+    savedBy: "memory_curator",
+    rationale: "Safety interruption affects the next attempt.",
+    kind: "decision",
+    sessionId: "run_seed_3",
+    traceId: "run_seed_3",
   },
   {
     id: "m7",
@@ -306,6 +327,9 @@ export const SEED_MEMORY: MemoryEntry[] = [
     title: "Market-entry briefs get a regulatory section",
     content: "Learned across 4 runs: when the brief involves selling into a new country, always spawn a regulatory expert even if not asked.",
     updatedAt: hoursAgo(50),
+    savedBy: "memory_curator",
+    rationale: "Repeated deliverable convention observed across four runs.",
+    kind: "assumption",
   },
   {
     id: "m8",
@@ -314,6 +338,9 @@ export const SEED_MEMORY: MemoryEntry[] = [
     title: "Competitor tables sorted by estimated revenue",
     content: "User reorders tables this way when exporting — do it by default.",
     updatedAt: hoursAgo(90),
+    savedBy: "memory_curator",
+    rationale: "Repeated user correction indicates a durable workflow preference.",
+    kind: "assumption",
   },
 ];
 

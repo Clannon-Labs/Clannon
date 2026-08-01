@@ -24,6 +24,18 @@ if (typeof File !== "undefined" && !File.prototype.text) {
   };
 }
 
+// <dialog>.showModal()/close() are unimplemented in jsdom — used by
+// components/ui/dialog.tsx (the wiki editor + delete confirmation)
+if (typeof HTMLDialogElement !== "undefined") {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+    this.dispatchEvent(new Event("close"));
+  };
+}
+
 // matchMedia is absent in jsdom — used by motion/react's useReducedMotion
 Object.defineProperty(window, "matchMedia", {
   writable: true,
