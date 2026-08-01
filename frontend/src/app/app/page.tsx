@@ -2,25 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useCreateRun, useMe, useRuns } from "@/lib/api/hooks";
+import { FolderPlus } from "lucide-react";
+import { useCreateRun, useMe, useProjects, useRuns } from "@/lib/api/hooks";
 import {
-  useCurrentProject,
+  useCreateProjectDialog,
   useCurrentProjectId,
 } from "@/components/app/project-provider";
 import { ApiError } from "@/lib/api";
 import { Mark } from "@/components/brand/logo";
+import { Button } from "@/components/ui/button";
 import { Composer } from "@/components/app/composer";
-import { FirstRunGuide } from "@/components/app/first-run-guide";
 import { HydrationPanel } from "@/components/app/hydration-panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
-import {
-  workspaceDraftKey,
-} from "@/lib/browser-drafts";
-import {
-  saveBrowserTextDraft,
-  useBrowserTextDraft,
-} from "@/lib/use-browser-draft";
+import { workspaceDraftKey } from "@/lib/browser-drafts";
+import { useBrowserTextDraft } from "@/lib/use-browser-draft";
 import { cn } from "@/lib/utils";
 
 // Greetings that read fine in front of ", <name>" (and standalone, when there's
@@ -92,16 +88,12 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { data: user } = useMe();
   const projectId = useCurrentProjectId();
-  const currentProject = useCurrentProject();
   const { data: runs } = useRuns(projectId);
+  const { data: projects } = useProjects();
   const createRun = useCreateRun();
-  const [briefProjectId, setBriefProjectId] = useState<string>();
+  const { openDialog: openCreateProject } = useCreateProjectDialog();
   const [error, setError] = useState<string | null>(null);
-  const draftProjectId =
-    briefProjectId && (!projectId || projectId === briefProjectId)
-      ? briefProjectId
-      : projectId;
-  const draftKey = user?.id ? workspaceDraftKey(user.id, draftProjectId) : null;
+  const draftKey = user?.id ? workspaceDraftKey(user.id, projectId) : null;
   const [brief, setBrief] = useBrowserTextDraft(draftKey);
   // pick a greeting once per load (re-rendering on every keystroke must not reshuffle it)
   const [greet] = useState(pickGreeting);
@@ -109,7 +101,13 @@ export default function WorkspacePage() {
   const firstName = user?.name.split(" ")[0] ?? "";
   const isFirstRun = runs?.length === 0;
   const workspaceReady = Boolean(user) && runs !== undefined;
-  const showFirstRunGuide = workspaceReady && isFirstRun && !brief.trim();
+  // the "create your first project" nudge — only when there's truly no
+  // project yet (a user who already has one, even with zero runs, has
+  // already given that context; nudging them to make a redundant "first"
+  // one would be wrong, not just repetitive). Recedes once typing starts,
+  // same reasoning as the old first-run form: don't clutter mid-brief.
+  const showFirstRunCta =
+    workspaceReady && isFirstRun && projects?.length === 0 && !brief.trim();
   // "Welcome back"/"Look who's back"/"The archive missed you" are all false
   // on a genuinely first visit — there's nothing to come back to yet. Gate on
   // !workspaceReady too: `runs` starts undefined while the query is in
@@ -153,23 +151,30 @@ export default function WorkspacePage() {
             <Skeleton className="h-24 rounded-xl" />
             <Skeleton className="h-24 rounded-xl" />
           </div>
-        ) : showFirstRunGuide ? (
-          <FirstRunGuide
-            currentProject={currentProject}
-            onUseBrief={(nextBrief, nextProjectId) => {
-              if (user?.id) {
-                const nextDraftKey = workspaceDraftKey(user.id, nextProjectId ?? projectId);
-                saveBrowserTextDraft(nextDraftKey, nextBrief);
-              }
-              setBriefProjectId(nextProjectId);
-            }}
-            onUseExample={() => {
-              setBriefProjectId(undefined);
-              setBrief(EXAMPLE_BRIEFS[0].brief);
-            }}
-          />
         ) : (
           <>
+            {showFirstRunCta && (
+              /* nudge, not a gate — a first-timer can just start typing below.
+                 The actual name/goal/context/files form lives in the New
+                 Project dialog this opens, triggered by a click, not shown
+                 by default (owner correction, 2026-08-01: those fields were
+                 previously ambient on this screen with no click needed). */
+              <div className="mt-7 flex flex-col items-start gap-3 rounded-2xl border border-border-strong bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Start with a project
+                  </p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+                    Give Clannon a name, the goal, and any context or files up front —
+                    every run in it starts already knowing your client.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={openCreateProject} className="shrink-0">
+                  <FolderPlus className="size-4" aria-hidden /> Create your first project
+                </Button>
+              </div>
+            )}
+
             {/* starter cards — clicking loads the full brief into the composer.
                 Compact rows on a phone, full cards on a wider screen. */}
             <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
@@ -202,7 +207,7 @@ export default function WorkspacePage() {
         )}
       </div>
 
-      {workspaceReady && !showFirstRunGuide && (
+      {workspaceReady && (
         /* docked composer — same control set as the run reply, same place too */
         <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
           <Composer
@@ -215,7 +220,7 @@ export default function WorkspacePage() {
             onSubmit={(files, models) => {
               setError(null);
               createRun.mutate(
-                  { brief, files, models, projectId: briefProjectId ?? projectId },
+                { brief, files, models, projectId },
                 {
                   onSuccess: ({ id }) => {
                     setBrief("");

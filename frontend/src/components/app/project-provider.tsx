@@ -19,6 +19,12 @@ interface ProjectCtx {
   /** The user's stored pick — may be stale (deleted) or null (never chosen). */
   selectedProjectId: string | null;
   selectProject: (id: string) => void;
+  /** The "New project" dialog's open state, shared so anything (the sidebar
+   *  switcher, a home-screen CTA) can trigger the one real create flow instead
+   *  of each place growing its own copy. */
+  creatingProject: boolean;
+  openCreateProject: () => void;
+  closeCreateProject: () => void;
 }
 
 const Context = createContext<ProjectCtx | null>(null);
@@ -31,6 +37,7 @@ const Context = createContext<ProjectCtx | null>(null);
  */
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [selectedProjectId, setSelected] = useState<string | null>(readStored);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const selectProject = (id: string) => {
     setSelected(id);
@@ -41,7 +48,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = useMemo(() => ({ selectedProjectId, selectProject }), [selectedProjectId]);
+  const value = useMemo(
+    () => ({
+      selectedProjectId,
+      selectProject,
+      creatingProject,
+      openCreateProject: () => setCreatingProject(true),
+      closeCreateProject: () => setCreatingProject(false),
+    }),
+    [selectedProjectId, creatingProject],
+  );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 
@@ -56,6 +72,12 @@ export const ALL_PROJECTS = "all";
 
 export function useSelectProject() {
   return useProjectCtx().selectProject;
+}
+
+/** Shared "New project" dialog state — see `openCreateProject` for why. */
+export function useCreateProjectDialog() {
+  const { creatingProject, openCreateProject, closeCreateProject } = useProjectCtx();
+  return { open: creatingProject, openDialog: openCreateProject, closeDialog: closeCreateProject };
 }
 
 /** True when the user has explicitly chosen the "All projects" scope. */

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { buildFirstBrief } from "@/components/app/first-run-guide";
 import { MockClient } from "@/lib/api/mock";
 import { planById } from "@/config/plans";
 import {
@@ -8,36 +7,6 @@ import {
   workspaceDraftKey,
   writeTextDraft,
 } from "@/lib/browser-drafts";
-
-describe("first-run brief builder", () => {
-  it("turns decision context into an explicit, editable deliverable", () => {
-    const brief = buildFirstBrief({
-      project: "Acme UK expansion",
-      decision: "Decide whether to enter the UK market this year",
-      context: "Budget is £250k and launch must happen before October",
-      deliverable: "comparison",
-    });
-
-    expect(brief).toContain("For Acme UK expansion, prepare a comparison.");
-    expect(brief).toContain("Decide whether to enter the UK market this year");
-    expect(brief).toContain("Budget is £250k");
-    expect(brief).toContain("comparison table");
-    expect(brief).toContain("Cite every material claim");
-    expect(brief).not.toContain("..");
-  });
-
-  it("omits empty optional context without leaving broken punctuation", () => {
-    const brief = buildFirstBrief({
-      project: "Northstar",
-      decision: "Choose the strongest launch market for next quarter",
-      context: " ",
-      deliverable: "recommendation",
-    });
-
-    expect(brief).not.toContain("Context and constraints");
-    expect(brief).not.toContain("..");
-  });
-});
 
 describe("mock signup first-user state", () => {
   it("does not expose seeded projects, runs, memory, or usage", async () => {

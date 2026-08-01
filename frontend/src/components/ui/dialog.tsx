@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,7 @@ export function Dialog({
   className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -50,6 +51,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       onCancel={(e) => {
         // Escape: run the same animated close instead of the instant native one
         e.preventDefault();
@@ -67,7 +69,9 @@ export function Dialog({
       )}
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="display-soft text-lg">{title}</h2>
+        <h2 id={titleId} className="display-soft text-lg">
+          {title}
+        </h2>
         <button
           type="button"
           onClick={onClose}

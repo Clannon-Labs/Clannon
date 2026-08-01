@@ -12,15 +12,6 @@ async function signup(page: import("@playwright/test").Page, email: string) {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-async function throughFirstRunGuide(page: import("@playwright/test").Page) {
-  await page.getByLabel("Client or project").fill("Solveig · EU expansion");
-  await page.getByLabel("What decision or outcome do you need?").fill(
-    "Decide whether EU solar subsidy changes affect our Q4 pricing.",
-  );
-  await page.getByRole("button", { name: "Build editable brief" }).click();
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue(/Solveig/);
-}
-
 test("a partial-timeout delivery renders the completion badge and banner, and Continue works", async ({
   page,
 }) => {
@@ -28,8 +19,9 @@ test("a partial-timeout delivery renders the completion badge and banner, and Co
   // default 30s per-test timeout isn't enough to watch one run to terminal.
   test.setTimeout(150_000);
   await signup(page, `partial-${Date.now()}@example.com`);
-  await throughFirstRunGuide(page);
-
+  // the composer is always available now — a project is optional, not a gate
+  // (owner correction, 2026-08-01: project creation moved behind an explicit
+  // "Create your first project" click, no longer auto-shown on this screen)
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(PARTIAL_BRIEF);
   await page.getByRole("button", { name: "Send" }).click();
@@ -63,7 +55,6 @@ test("the partial banner reads correctly at 390px", async ({ page }) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signup(page, `partial-mobile-${Date.now()}@example.com`);
-  await throughFirstRunGuide(page);
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(PARTIAL_BRIEF);
@@ -88,7 +79,6 @@ test("a filter-blocked run explains the gate, preserves the brief, and offers a 
   // (same ~70-90s as a normal delivery) — it diverges only at the very end.
   test.setTimeout(150_000);
   await signup(page, `blocked-${Date.now()}@example.com`);
-  await throughFirstRunGuide(page);
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(

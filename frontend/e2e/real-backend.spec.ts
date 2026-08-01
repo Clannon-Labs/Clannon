@@ -29,17 +29,23 @@ test("real backend: paid desktop journey reaches durable delivery", async ({ pag
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
   await signup(page, `paid-desktop-${Date.now()}@example.com`);
-  await expect(page.getByRole("heading", { name: "Start with decision, not prompt craft." })).toBeVisible();
+  await expect(page.getByText("Start with a project")).toBeVisible();
 
-  await page.getByLabel("Client or project").fill(project);
-  await page.getByLabel("What decision or outcome do you need?").fill(decision);
-  await page.getByLabel("Useful context or constraints (optional)").fill(context);
-  await page.getByRole("button", { name: "Decision memo" }).click();
-  await page.getByRole("button", { name: "Build editable brief" }).click();
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue(/Northstar/);
+  // real backend + a paid-ish plan is expected here (this suite targets a
+  // live account, not the free-tier default) — the New Project dialog's
+  // goal/context fields only render when the plan includes wiki; if this
+  // account is free-tier only "Project name" will be present and this will
+  // correctly fail loudly rather than silently skip the assertion.
+  await page.getByRole("button", { name: "Create your first project" }).click();
+  await page.getByLabel("Project name").fill(project);
+  await page.getByLabel(/What's the goal for this project/).fill(decision);
+  await page.getByLabel("Tell Clannon about this client").fill(context);
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("button", { name: `Project ${project}` })).toBeVisible();
 
   await page.goto("/app/memory");
   await expect(page.getByRole("heading", { name: "The archive" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Goal for this project" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Client: Northstar · Nepal launch/ })).toBeVisible();
 
   await page.goto("/app/settings?tab=models");
@@ -48,12 +54,7 @@ test("real backend: paid desktop journey reaches durable delivery", async ({ pag
 
   await page.goto("/app");
   const composer = page.getByRole("textbox", { name: "Message" });
-  await expect(composer).toHaveValue(/For Northstar · Nepal launch, prepare a decision memo/);
   await removeDevelopmentIndicator(page);
-  await page.screenshot({
-    path: "previews/2026-07-28_real-backend-pass/after/restored-draft-1280x800.png",
-    fullPage: true,
-  });
   await composer.fill(
     `For ${project}, prepare a decision memo. ${decision}. ${context} Cite material claims and separate facts from assumptions.`,
   );

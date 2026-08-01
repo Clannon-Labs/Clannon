@@ -27,22 +27,24 @@ test("new user reaches a live, scoped assignment without prompt expertise", asyn
 
   await signup(page);
 
-  await expect(page.getByRole("heading", { name: "Start with decision, not prompt craft." })).toBeVisible();
+  // project creation is behind an explicit click, not shown by default
+  // (owner correction, 2026-08-01) — the composer itself is available
+  // immediately, no gate.
   await expect(page.getByText("Meridian")).toHaveCount(0);
-  await expect(page.getByText("First assignment")).toBeVisible();
-
-  await page.getByLabel("Client or project").fill("Acme · UK expansion");
-  await page.getByLabel("What decision or outcome do you need?").fill(decision);
+  await expect(page.getByText("Start with a project")).toBeVisible();
+  await page.getByRole("button", { name: "Create your first project" }).click();
   await page
-    .getByLabel("Useful context or constraints (optional)")
-    .fill("Budget is £250k. Launch must happen before October.");
-  await page.getByRole("button", { name: "Comparison" }).click();
-  await page.getByRole("button", { name: "Build editable brief" }).click();
+    .getByRole("dialog", { name: "New project" })
+    .getByLabel("Project name")
+    .fill("Acme · UK expansion");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("button", { name: "Project Acme · UK expansion" })).toBeVisible();
 
   const composer = page.getByRole("textbox", { name: "Message" });
-  await expect(composer).toHaveValue(/For Acme · UK expansion, prepare a comparison\./);
-  await expect(composer).toHaveValue(new RegExp(decision));
-  await expect(composer).toHaveValue(/Cite every material claim/);
+  await composer.fill(
+    `For Acme · UK expansion, prepare a comparison. ${decision}. Budget is £250k. ` +
+      "Launch must happen before October. Cite every material claim and separate facts from assumptions.",
+  );
 
   await removeDevelopmentIndicator(page);
   await page.screenshot({
@@ -66,14 +68,17 @@ test("new user reaches a live, scoped assignment without prompt expertise", asyn
   expect(browserErrors).toEqual([]);
 });
 
-test("first assignment remains usable at phone width", async ({ page }) => {
+test("creating a first project remains usable at phone width", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signup(page);
 
-  await expect(page.getByRole("heading", { name: "Start with decision, not prompt craft." })).toBeVisible();
-  await page.getByLabel("Client or project").fill("Acme mobile");
-  await page.getByLabel("What decision or outcome do you need?").fill(decision);
-  await expect(page.getByRole("button", { name: "Build editable brief" })).toBeEnabled();
+  await expect(page.getByText("Start with a project")).toBeVisible();
+  await page.getByRole("button", { name: "Create your first project" }).click();
+  await page
+    .getByRole("dialog", { name: "New project" })
+    .getByLabel("Project name")
+    .fill("Acme mobile");
+  await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
 
   await removeDevelopmentIndicator(page);
   await page.screenshot({

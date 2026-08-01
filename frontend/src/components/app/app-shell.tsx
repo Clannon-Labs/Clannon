@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { CommandPalette } from "@/components/app/command-palette";
+import { NewProjectDialog } from "@/components/app/new-project-dialog";
 import { Sidebar } from "@/components/app/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       <Sidebar collapsed={collapsed} onToggle={toggle} />
       <CommandPalette />
+      <NewProjectDialog />
       <main
         id="main"
         className={cn(
