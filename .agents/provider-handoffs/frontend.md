@@ -5,6 +5,65 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
+- Updated: 2026-08-01 (later still, same session — third update)
+- Task: owner asked to (1) browser-test v15's redesign myself, (2) continue
+  the benchmark, (3) propose UX ideas and act on the one picked.
+- (1) Live click-through against real backend: singular dialog confirmed
+  (the v15 shared-dialog fix holds), CTA zero-projects gating confirmed,
+  dialog resolves as `role="dialog"` with a real name via the accessibility
+  tree (the v15 `aria-labelledby` fix, verified for real).
+- (2) Wrote up 3 sessions of already-shipped, unscored work as
+  `benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 6: outcome clarity 87->89,
+  trust/control 89->91, core workflow 86->87, accessibility 95->96.
+  84.16 -> 84.93.
+- (3) Offered 5 ranked ideas (2 known bugs — untested failed/quota mock
+  states, a dialog autofocus quirk found during v15 testing; a stale
+  mobile-density task; 2 real features — pin the project goal in view,
+  templates/saved workflows). Owner picked goal-pinning.
+- Implemented: `src/lib/project-goal.ts` (shared `GOAL_MEMORY_TITLE`
+  constant + `findGoalEntry()` — no new backend field, same wiki-entry
+  convention the goal/context/files feature already used). Pinned "GOAL"
+  card on the workspace home screen, placed so it stays visible whether a
+  brief is being typed or not (unlike the memory recap beside it, which
+  recedes to a chip on purpose).
+- Verified live on a mock Pro-plan account (needed wiki unlocked to set a
+  goal at all): renders at rest, stays visible while typing, zero console
+  errors either state. `tsc`/`eslint` clean, vitest 103/103 (new
+  `src/tests/project-goal.test.ts`, 3 tests).
+- **Known, flagged, not fixed**: on a near-empty project the same goal entry
+  can also surface once inside `hydration-panel.tsx`'s memory recap list
+  (it's a real wiki entry, competes for the recap's own 4-slot ranking).
+  Didn't reach into that component's ranking logic for a small feature
+  addition — it's a carefully choreographed, deliberately designed piece
+  ("Second-Session Moment," UI_SPEC §7). Recedes naturally as memory
+  accumulates; would take one line to exclude if the owner wants it closed
+  now (`restingRecap` in `hydration-panel.tsx`).
+- Benchmark Pass 7: continuity/retention 88->89. 84.93 -> **85.03 -> 85**.
+- Process note: reused the port-3100 mock-server pattern from v15, but
+  recorded the exact background PID this time and killed only that PID +
+  its direct child at cleanup — no broad `pkill -f` anywhere this round,
+  after v15's mistake. Confirmed `:3000` untouched before and after.
+- Commit `edfb7ec`, pushed clean (fast-forward, no conflict). Full detail:
+  `reports/frontend/frontend_report_v16.md`; comms:
+  `comms/2026-08-01/frontend.md`.
+
+## Change note
+
+Two habits worth keeping from this pass: (1) when the owner asks for "test
+it yourself," a live click-through catches things e2e alone can't — this
+round it re-confirmed both v15 fixes hold under real backend conditions, not
+just mock. (2) when adding a small feature that touches a carefully
+choreographed existing component (here, `hydration-panel.tsx`'s recap
+ranking), the discipline is to NOT reach in and special-case it — flag the
+resulting overlap honestly instead. A minor visible redundancy, disclosed,
+is better than an undisclosed change to a deliberately designed piece for
+one new caller's convenience. Also: recording the exact PID at every
+background-process launch from now on, not just after getting burned once —
+the port-3100 pattern will keep recurring for e2e/build verification.
+
+## Previous checkpoint (same day, earlier still — second update)
+
+- Provider: Claude Code
 - Updated: 2026-08-01 (later still, same session)
 - Task: owner correction — the goal/context/reference-files fields (added
   moments earlier, see Previous checkpoint) had landed in TWO places: the

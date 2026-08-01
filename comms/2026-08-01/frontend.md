@@ -1,5 +1,26 @@
 # frontend — 2026-08-01
 
+## browser-tested v15, benchmark to 85, pinned project goal (commit edfb7ec, pushed)
+
+Browser-tested the project-creation redesign against real backend — singular
+dialog, CTA gating, accessible dialog name all confirmed live, not just via
+e2e. Wrote up three sessions of unscored work as benchmark Pass 6: outcome
+clarity 87→89, trust and control 89→91, core workflow 86→87, accessibility
+95→96. **84.16 → 84.93.**
+
+Offered 5 UX ideas, owner picked pinning the project's goal in view (it was
+write-only before — set at creation, then invisible unless you dug into
+Memory). Added `src/lib/project-goal.ts` (shared title constant, no new
+backend field) + a pinned card on the workspace home screen that stays
+visible whether you're typing or not. Verified live on mock (needed
+wiki-unlocked plan), zero console errors. Honest known limitation flagged in
+the benchmark entry: the same goal entry can double-surface in the memory
+recap list on a near-empty project — not fixed, recedes naturally. Pass 7:
+**84.93 → 85.03.**
+
+`tsc`/`eslint` clean, vitest 103/103. Full detail:
+`reports/frontend/frontend_report_v16.md`.
+
 ## project creation moves behind a click; shared-dialog bug + a11y gap found (commit 89670fc, pushed)
 
 Owner correction on the project-creation fields added earlier today: they'd
