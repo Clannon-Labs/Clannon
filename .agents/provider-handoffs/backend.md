@@ -63,7 +63,89 @@ finished something.
 
 ---
 
-## Current checkpoint — PAUSED at 92% usage limit (2026-07-31, late)
+## Current checkpoint — identity unified, decision-log leak closed, 2.18 landed (2026-08-01)
+
+**OWNER IS TESTING THE RUNNING PRODUCT RIGHT NOW.** I promised no `backend/` edits
+until they say they are done. Docs, comms and proposals only. Ask before changing
+anything under `backend/`.
+
+### Pushed since the last checkpoint
+
+- `9f28b86` **pydantic-ai UNPINNED to 2.18.0.** The July pin blamed a broken
+  bounded-loop money guard. Real cause: 2.18 appends a help hint to
+  `UsageLimitExceeded`'s message ending `.../agent/#usage-limits`, and `usage limits`
+  is one of our `_RATE_LIMIT_MARKERS`, so a hit spend ceiling classified as a
+  transient rate limit and got RETRIED past the ceiling. The loop cap itself was
+  never broken. Fixed by deciding OUR invariant on the exception TYPE, never on the
+  dependency's prose. Canonical: `docs/architecture/DEPENDENCY_VERSION_STRATEGY.md`.
+- `bfe6e44` / `ea1e2b5` **CAPABILITIES.md** — user-facing doc, corrected against the
+  code and marked ✅ working vs ◐ building.
+- `9aa8e4f` **Vraksha-era installers deleted** with the public `curl | bash` README
+  block. Clannon is proprietary and hosted; there is no end-user install.
+- `b96968a` **Identity unified + decision-log leak closed** (see below).
+
+### The two live-product bugs the owner found, and what they were
+
+**1. The decision log bypassed the output filter.** `loop.py` emitted the full draft
+into the decision log inside the orchestrator stage, which runs BEFORE the filter,
+and `api/run_state.py` streams that to the client. Every blocked draft had already
+been delivered. Now `DecisionLogEntry.full_content` holds the real text for the
+durable audit mirror only; `message` is the event (`"answer drafted"`). **Rule: the
+decision log carries EVENTS, never payloads.**
+
+**2. Experts did not know they were Clannon.** `about: true` appeared once in
+`registry.yaml` — only the central orchestrator got the identity block. Experts
+opened with "a specialist that works for the Clannon orchestrator", which is exactly
+why the capabilities doc came out in third person ("your AI assistant").
+`prompts.secure/about_clannon.md` is now the MASTER identity block: you ARE Clannon
+whichever layer you run as, speak as I/me, plus what Clannon is built from and where
+its knowledge ends. Composition verified: orchestrator yes, batch orchestrator yes
+(v2, `about: true`), verifier no, filter no — gates judge text, they do not speak.
+
+### OPEN — highest value next
+
+1. **The identity filter is still inverted.** `prompts.secure/filter/system.md`
+   matches identity on MENTION not CLAIM, so a correct denial ("I'm not GPT, Claude
+   or Gemini") gets BLOCKED, and its company clause literally permits "made by
+   Anthropic" — which is how the leak reached the owner. Brief with corrected wording
+   and a REQUIRED bidirectional test:
+   `proposals/to-security/2026-08-01_identity-filter-inverted.md`. NOT yet dispatched.
+2. **Expert identity wiring is unproven at runtime.** Expert prompts load through the
+   expert handler, NOT `registry.yaml`, so `about: true` cannot reach them. I fixed
+   the prompt TEXT in all five `prompts.secure/experts/*/system.md`, but nothing
+   composes the shared block into experts and there is no test. If the owner still
+   sees third-person expert output, that is this.
+3. **Prompt depth pass** (ROADMAP §2.4) — memory prompt is still **39 lines** vs
+   filter 518 / verifier 219. Owner considers memory the moat.
+4. **Sanitizer records an EMPTY reason on timeout** —
+   `flow.fail(result, Origin.SANITIZER)` where `str(asyncio.TimeoutError())` is `''`.
+   A fail-closed gate that cannot say why it closed.
+5. **Cold sanitize measured 10.1s against `sanitizer_timeout_worker_s: 10.0`.** Saved
+   only by a best-effort warmup that logs a warning and continues if it fails.
+6. Two queued `proposals/to-api/` items (cache counters, cross-user HTTP proof).
+
+### Hard-won lessons from this session — read before testing anything
+
+**Four of my "bugs" were my own harness.** A direct `pipeline.run()` skips
+`core/warmup.py`, so Presidio loads inside the request and trips the 10s cap. Raw
+bytes as `raw_input` is NOT how uploads travel — the API seeds `ctx.input_files` via
+`scan_upload` (`api/run_driver.py:182`). **If your setup differs from production's,
+you are measuring your setup.** Media WORKS through the real path; missions are wired
+and offered (`wiring.py:39-40` passes graph AND budget) but the model does not reach
+for them — 42 tool calls of repeated web search, then the wall clock.
+
+**Worker briefs must carry a stop condition and forbid the full suite.** One worker
+burned its whole budget on pytest and delivered nothing; another nearly shipped a fix
+on a 76% miss rate that turned out to be a measurement artifact, and caught it only
+because the brief said "measure first, stop if zero".
+
+## Change note
+
+Rewritten after the owner tested the product and found two real defects. Records what
+each actually was, what is still open in priority order, and the harness trap that
+produced four false findings in one session.
+
+## Previous checkpoint — PAUSED at 92% usage limit (2026-07-31, late)
 
 **STOP: do not dispatch workers without checking quota.** The owner hit 92% of their
 weekly limit. Headless workers spend the SAME quota as your own session — an api
