@@ -57,7 +57,10 @@ def _db() -> sqlite3.Connection:
         """CREATE TABLE IF NOT EXISTS runs (
             id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT NOT NULL,
             brief TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
-            tokens_used INTEGER NOT NULL DEFAULT 0, log_json TEXT NOT NULL DEFAULT '[]',
+            tokens_used INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+            log_json TEXT NOT NULL DEFAULT '[]',
             experts_json TEXT NOT NULL DEFAULT '[]', report TEXT, message TEXT,
             memory_writes_json TEXT NOT NULL DEFAULT '[]',
             feedback_rating TEXT, feedback_comment TEXT, feedback_at REAL,
@@ -69,13 +72,15 @@ def _db() -> sqlite3.Connection:
             superseded INTEGER NOT NULL DEFAULT 0
         )"""
     )
-    # self-healing migration: add columns missing on databases created before
-    # the feedback/follow-up feature (CREATE TABLE IF NOT EXISTS won't alter them)
+    # Self-healing additive migrations: CREATE TABLE IF NOT EXISTS does not alter
+    # databases created before a field shipped.
     _existing = {r[1] for r in conn.execute("PRAGMA table_info(runs)")}
     for _col, _decl in (
         ("feedback_rating", "TEXT"),
         ("feedback_comment", "TEXT"),
         ("feedback_at", "REAL"),
+        ("cache_read_tokens", "INTEGER NOT NULL DEFAULT 0"),
+        ("cache_write_tokens", "INTEGER NOT NULL DEFAULT 0"),
         ("parent_run_id", "TEXT"),
         ("session_id", "TEXT"),
         ("lineage_prefix_json", "TEXT"),

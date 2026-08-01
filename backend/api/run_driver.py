@@ -34,6 +34,13 @@ from .run_state import RunState, TERMINAL_STATUSES, _now, _process_summary
 from .run_store import STORE
 
 
+def _capture_usage(run: RunState, usage: Any) -> None:
+    """Copy provider-reported counters without changing billed-token semantics."""
+    run.tokens_used = usage.total_tokens
+    run.cache_read_tokens = usage.cache_read_tokens
+    run.cache_write_tokens = usage.cache_write_tokens
+
+
 def build_model_overrides(user_id: str, session: dict[str, str] | None = None) -> dict[str, str]:
     """Resolve run model overrides as role -> "provider:model".
 
@@ -242,7 +249,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             # real metered tokens for this turn (every model call funnelled through
             # core.llm.run_agent within the scope above). Charged on every outcome —
             # delivered, blocked, or cancelled — since the models already ran.
-            run.tokens_used = run_usage.total_tokens
+            _capture_usage(run, run_usage)
 
             # reconcile the FINAL expert state: a filter-recovery revision re-runs the
             # reasoning without re-firing the orchestrator stage's on_stage_end, so
@@ -393,11 +400,11 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # charge the tokens spent up to the stop (completed model calls accumulated
         # before the cancel interrupted the in-flight one), per the usage-based model.
         if run_usage is not None:
-            run.tokens_used = run_usage.total_tokens
+            _capture_usage(run, run_usage)
         run.status = "cancelled"
     except Exception as exc:  # the web layer never lets a run take the server down
         if run_usage is not None:
-            run.tokens_used = run_usage.total_tokens
+            _capture_usage(run, run_usage)
         run.on_log_entry(
             type("E", (), {"kind": "error", "message": f"pipeline error: {exc}", "detail": {}})()
         )

@@ -15,15 +15,17 @@ def write_run(
     """Persist one run, optionally overriding its supersession bit."""
     db.execute(
         "INSERT OR REPLACE INTO runs "
-        "(id,user_id,title,brief,status,created_at,tokens_used,log_json,experts_json,"
+        "(id,user_id,title,brief,status,created_at,tokens_used,cache_read_tokens,"
+        "cache_write_tokens,log_json,experts_json,"
         "report,message,memory_writes_json,feedback_rating,feedback_comment,"
         "parent_run_id,session_id,lineage_prefix_json,block_stage,artifacts_json,"
         "inputs_json,project_id,sources_json,verification_state,completion_state,"
         "completion_reason,superseded) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             run.id, run.user_id, run.title, run.brief, run.status,
-            run.created_at, run.tokens_used, json.dumps(run.log),
+            run.created_at, run.tokens_used, run.cache_read_tokens,
+            run.cache_write_tokens, json.dumps(run.log),
             json.dumps(list(run.experts.values())), run.report, run.message,
             json.dumps(run.memory_writes), run.feedback_rating,
             run.feedback_comment, run.parent_run_id, run.session_id or run.id,

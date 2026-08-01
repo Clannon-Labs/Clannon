@@ -76,6 +76,8 @@ def _seed_linear(store, user_id: str, count: int = 10, project_id: str | None = 
         run.status = "delivered"
         run.report = f"answer {number}"
         run.tokens_used = number * 100
+        run.cache_read_tokens = number * 1_000
+        run.cache_write_tokens = number * 10
         store.persist(run)
         turns.append(run)
         parent = run
@@ -136,9 +138,12 @@ def test_revise_root_supersedes_all_ten_turns_in_the_same_session(env, monkeypat
     visible = env.client.get("/runs").json()
     assert [run["id"] for run in visible] == [revised_id]
     assert {run["sessionId"] for run in visible} == {session_id}
-    assert env.client.get("/usage").json()["used"] == sum(
+    usage = env.client.get("/usage").json()
+    assert usage["used"] == sum(
         turn.tokens_used for turn in turns
     )
+    assert usage["cacheReadTokens"] == sum(turn.cache_read_tokens for turn in turns)
+    assert usage["cacheWriteTokens"] == sum(turn.cache_write_tokens for turn in turns)
     assert [item["content"] for item in env.client.get("/memory").json()] == [
         "saved fact survives"
     ]

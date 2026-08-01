@@ -752,6 +752,8 @@ def usage(user: auth.User = Depends(auth.current_user)) -> dict:
     window = settings.BUDGET.usage_metering_window_days   # D10: trailing window from config
     start = today - timedelta(days=window - 1)
     by_day = {(start + timedelta(days=i)).isoformat(): 0 for i in range(window)}
+    cache_read_tokens = 0
+    cache_write_tokens = 0
     for r in runs.STORE.list_for(user.id, include_superseded=True):
         try:
             day = datetime.fromisoformat(r.created_at).astimezone(timezone.utc).date().isoformat()
@@ -759,11 +761,15 @@ def usage(user: auth.User = Depends(auth.current_user)) -> dict:
             continue
         if day in by_day:
             by_day[day] += int(getattr(r, "tokens_used", 0) or 0)
+            cache_read_tokens += int(getattr(r, "cache_read_tokens", 0) or 0)
+            cache_write_tokens += int(getattr(r, "cache_write_tokens", 0) or 0)
     return {
         "periodStart": start.isoformat(),
         "periodEnd": today.isoformat(),
         "budget": plan["tokenBudget"],
         "used": sum(by_day.values()),
+        "cacheReadTokens": cache_read_tokens,
+        "cacheWriteTokens": cache_write_tokens,
         "byDay": [{"date": d, "tokens": t} for d, t in by_day.items()],
     }
 

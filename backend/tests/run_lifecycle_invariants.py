@@ -28,7 +28,7 @@ Findings this file backs (see reports/api/ for the write-up):
    — confirmed correct: `execute()`'s `except CancelledError` re-raises (a
    delete is not a user cancel), and the `finally` still skips `persist()`
    because `run.deleted` is set. Pinned so it stays this way.
-4. `run_usage.total_tokens`, read in the `except` handlers after the `with
+4. Run usage counters, read in the `except` handlers after the `with
    usage_scope(): ...` block has unwound, stays valid — `usage_scope`'s
    context manager only resets a ContextVar; it never mutates the `Usage`
    object callers hold a reference to. Pinned.
@@ -313,6 +313,36 @@ def test_tokens_used_readable_after_cancel_unwinds_usage_scope(store, hermetic_e
         "tokens spent before the cancel must still be charged — got "
         f"{run.tokens_used}"
     )
+
+
+def test_cache_usage_reaches_run_api_and_persisted_reload(
+    store, hermetic_execute, monkeypatch
+):
+    """A real usage scope must not drop provider-reported prompt-cache activity.
+
+    `tokensUsed` remains the full-rate input/output total. Cache counters travel
+    beside it through execution, SQLite, and the run's public REST shape.
+    """
+    from core.llm import usage as usage_mod
+
+    async def meter_cached_run(*args, **kwargs):
+        usage = usage_mod._USAGE.get()
+        usage.input_tokens += 100
+        usage.output_tokens += 50
+        usage.cache_read_tokens += 4_000
+        usage.cache_write_tokens += 1_000
+        return _fake_flow()
+
+    monkeypatch.setattr(run_driver.pipeline, "run", meter_cached_run)
+    run = store.create("u1", "brief")
+
+    asyncio.run(run_driver.execute(run, []))
+
+    restored = store.get("u1", run.id)
+    assert restored is not None
+    assert restored.full_json()["tokensUsed"] == 150
+    assert restored.full_json()["cacheReadTokens"] == 4_000
+    assert restored.full_json()["cacheWriteTokens"] == 1_000
 
 
 def test_terminal_status_publishes_after_exactly_one_successful_persist(

@@ -363,12 +363,14 @@ class RunStore:
             brief=row["brief"], status=row["status"], created_at=row["created_at"],
         )
         run.tokens_used = row["tokens_used"]
+        keys = row.keys()
+        run.cache_read_tokens = row["cache_read_tokens"] if "cache_read_tokens" in keys else 0
+        run.cache_write_tokens = row["cache_write_tokens"] if "cache_write_tokens" in keys else 0
         run.log = json.loads(row["log_json"])
         run.experts = {e["id"]: e for e in json.loads(row["experts_json"])}
         run.report = row["report"]
         run.memory_writes = json.loads(row["memory_writes_json"])
         # columns added by later migrations — guard for rows/readers without them
-        keys = row.keys()
         run.message = row["message"] if "message" in keys else None
         run.feedback_rating = row["feedback_rating"] if "feedback_rating" in keys else None
         run.feedback_comment = row["feedback_comment"] if "feedback_comment" in keys else None

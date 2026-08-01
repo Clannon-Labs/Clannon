@@ -47,6 +47,8 @@ PERSISTED = {
     "report",
     "message",
     "tokens_used",
+    "cache_read_tokens",
+    "cache_write_tokens",
     "artifacts",
     "inputs",
     "memory_writes",
@@ -94,6 +96,8 @@ def _fully_populated_run() -> RunState:
         created_at="2026-06-20T12:34:56+00:00",
     )
     run.tokens_used = 4242
+    run.cache_read_tokens = 9001
+    run.cache_write_tokens = 777
     run.log = [
         {"id": "log_aa", "ts": "2026-06-20T12:35:00+00:00", "kind": "tool_call",
          "title": "web_search", "meta": {"query": "clannon"}},
@@ -196,11 +200,12 @@ def test_get_is_owner_scoped_after_persist(store):
     assert store.list_for(original.user_id, include_superseded=True)[0].id == original.id
 
 
-def test_existing_database_migrates_lineage_and_supersession_columns(tmp_path, monkeypatch):
-    """Old SQLite files gain revision metadata without hiding existing runs."""
+def test_existing_database_migrates_additive_run_columns(tmp_path, monkeypatch):
+    """Old SQLite files gain new run metadata without hiding existing runs."""
     import sqlite3
 
     from api import auth, config
+    from api.run_store import RunStore
 
     db_path = tmp_path / "pre_branch.db"
     with sqlite3.connect(db_path) as db:
@@ -223,10 +228,20 @@ def test_existing_database_migrates_lineage_and_supersession_columns(tmp_path, m
     with auth._db() as db:
         columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
         row = db.execute(
-            "SELECT lineage_prefix_json, superseded FROM runs WHERE id='run_old'"
+            "SELECT lineage_prefix_json, superseded, cache_read_tokens, "
+            "cache_write_tokens FROM runs WHERE id='run_old'"
         ).fetchone()
 
     assert "lineage_prefix_json" in columns
     assert row["lineage_prefix_json"] is None
     assert "superseded" in columns
     assert row["superseded"] == 0
+    assert "cache_read_tokens" in columns
+    assert "cache_write_tokens" in columns
+    assert row["cache_read_tokens"] == 0
+    assert row["cache_write_tokens"] == 0
+
+    restored = RunStore().get("u1", "run_old")
+    assert restored is not None
+    assert restored.full_json()["cacheReadTokens"] == 0
+    assert restored.full_json()["cacheWriteTokens"] == 0

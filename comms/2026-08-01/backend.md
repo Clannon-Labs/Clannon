@@ -147,3 +147,5 @@ Proof: mutation-first suite failed 13 cases before enforcement; worker focused m
 187 passed; representative filter removal failed; coordinator full backend **1595
 passed**, one existing RestrictedPython warning.
 - `20:45` **api** worker via **codex** — 2026-08-01_memory-plan-tier-server-enforcement.md — exit 0, 1261s — output: `.agents/runs/20260801-202441-api.out`
+- `22:20` **orchestration** worker via **codex** — 2026-08-01_decision-log-events-not-payloads.md — exit 1, 469s — output: `.agents/runs/20260801-221230-orchestration.out`
+- `22:28` **api** worker via **codex** — 2026-07-31_surface-cache-token-counters.md — exit 0, 454s — output: `.agents/runs/20260801-222026-api.out`

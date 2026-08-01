@@ -81,6 +81,10 @@ class RunState:
     # may have a message and no report (pure conversation), both, or report only.
     message: str | None = None
     tokens_used: int = 0
+    # Provider-reported prompt-cache activity stays separate from tokens_used:
+    # cache reads/writes have different prices and must not silently reprice plans.
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     # delivered output artifacts (ArtifactRef dicts) — files an expert produced
     # and published, captured out of its workspace to durable storage
     artifacts: list[dict] = field(default_factory=list)
@@ -242,6 +246,8 @@ class RunState:
             "status": self.status,
             "createdAt": self.created_at,
             "tokensUsed": self.tokens_used,
+            "cacheReadTokens": self.cache_read_tokens,
+            "cacheWriteTokens": self.cache_write_tokens,
             "expertCount": len(self.experts),
             "sessionId": self.session_id or self.id,
             "projectId": self.project_id,
