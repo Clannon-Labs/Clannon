@@ -36,8 +36,10 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
+from foundation import MemoryStore
 from . import audit as _audit, auth, config, runs
 from . import decision_audit as _decisions
+from .memory_entitlements import allowed_memory_tiers
 from . import run_revision
 from .run_lineage import LineageError
 from .run_requests import (
@@ -263,6 +265,12 @@ def _require_project(user_id: str, project_id: str | None) -> str | None:
     return pid
 
 
+def _require_memory_tier(user: auth.User, tier: MemoryStore) -> None:
+    """Refuse paid memory actions from the authenticated server-side plan."""
+    if tier not in allowed_memory_tiers(user.plan):
+        raise HTTPException(403, "This memory action is not available on your plan.")
+
+
 @app.get("/projects")
 def list_projects(user: auth.User = Depends(auth.current_user)) -> list[dict]:
     """The user's projects, newest activity first."""
@@ -272,8 +280,10 @@ def list_projects(user: auth.User = Depends(auth.current_user)) -> list[dict]:
 @app.post("/projects", status_code=201)
 def create_project(body: ProjectCreateBody, user: auth.User = Depends(auth.current_user)) -> dict:
     name = body.name.strip()
-    project = auth.project_create(user.id, name, body.color)
     seed = (body.seedFacts or "").strip()
+    if seed:
+        _require_memory_tier(user, MemoryStore.WIKI)
+    project = auth.project_create(user.id, name, body.color)
     if seed:
         auth.wiki_create(user.id, f"Client: {name} — context", seed, project_id=project["id"])
     return _project_json(project)
@@ -559,11 +569,24 @@ def _learned_json(item) -> dict:
 async def list_memory(
     projectId: str | None = None, user: auth.User = Depends(auth.current_user)
 ) -> list[dict]:
-    """Wiki plus real Manager-owned inferred tiers for this authenticated user."""
+    """Caller-entitled wiki and Manager-owned tiers for this authenticated user."""
     from core.memory import manager
 
-    wiki = [_wiki_json(entry) for entry in auth.wiki_list(user.id, projectId)]
-    learned = [_learned_json(item) for item in await manager.list_entries(user.id)]
+    allowed_tiers = allowed_memory_tiers(user.plan)
+    wiki = (
+        [_wiki_json(entry) for entry in auth.wiki_list(user.id, projectId)]
+        if MemoryStore.WIKI in allowed_tiers
+        else []
+    )
+    learned = (
+        [
+            _learned_json(item)
+            for item in await manager.list_entries(user.id)
+            if getattr(item, "store", None) in allowed_tiers
+        ]
+        if allowed_tiers
+        else []
+    )
     return wiki + learned
 
 
@@ -588,12 +611,18 @@ async def hydration_preview(
     from core.memory import manager  # the MemoryPort door (lazy: heavy deps)
     from foundation import HydrationRequest, NormalizedInput
 
-    wiki_entries = auth.wiki_list(user.id, projectId)
+    allowed_tiers = allowed_memory_tiers(user.plan)
+    wiki_entries = (
+        auth.wiki_list(user.id, projectId)
+        if MemoryStore.WIKI in allowed_tiers
+        else []
+    )
     try:
         pkg = await manager.hydrate(HydrationRequest(
             session_id="",   # preview: no session, no run — provenance stays empty
             user_id=user.id,
             normalized=NormalizedInput(modality="text", content_type="text/plain", content=text),
+            allowed_tiers=allowed_tiers,
             wiki=HydrationRequest.wiki_pairs(wiki_entries),
         ))
     except Exception:  # noqa: BLE001 — best-effort preview, never an error surface
@@ -605,7 +634,12 @@ async def hydration_preview(
     # real entries (hydration keeps wiki as verbatim text).
     wiki_by_content = {e["content"]: e for e in wiki_entries}
     out: list[dict] = []
-    for i, item in enumerate(pkg.items[:_PREVIEW_MAX_ITEMS]):
+    entitled_items = (
+        item for item in pkg.items if getattr(item, "store", None) in allowed_tiers
+    )
+    for i, item in enumerate(entitled_items):
+        if i >= _PREVIEW_MAX_ITEMS:
+            break
         entry = wiki_by_content.get(item.content) if item.store.value == "wiki" else None
         if entry is not None:
             id_, title = entry["id"], entry["title"]
@@ -638,11 +672,15 @@ def create_memory(body: MemoryBody, user: auth.User = Depends(auth.current_user)
     if body.tier != "wiki":
         raise HTTPException(403, "Only wiki memory is user-writable; other tiers are written by the pipeline.")
     project_id = _require_project(user.id, body.projectId)
+    _require_memory_tier(user, MemoryStore.WIKI)
     return _wiki_json(auth.wiki_create(user.id, body.title, body.content, project_id))
 
 
 @app.put("/memory/{entry_id}")
 def update_memory(entry_id: str, body: MemoryBody, user: auth.User = Depends(auth.current_user)) -> dict:
+    if auth.wiki_get(user.id, entry_id) is None:
+        raise HTTPException(404, "Memory entry not found.")
+    _require_memory_tier(user, MemoryStore.WIKI)
     entry = auth.wiki_update(user.id, entry_id, body.title, body.content)
     if entry is None:
         raise HTTPException(404, "Memory entry not found.")
@@ -662,6 +700,7 @@ async def upload_memory(
     unknown/other-user project is a 422; absent -> unscoped / account default."""
     pid = (projectId or request.query_params.get("projectId") or "").strip()
     project_id = _require_project(user.id, pid)
+    _require_memory_tier(user, MemoryStore.WIKI)
     if not files:
         raise HTTPException(422, "No files received.")
     if len(files) > config.WIKI_UPLOAD_MAX_FILES:

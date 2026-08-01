@@ -89,13 +89,16 @@ class HydrationRequest:
     def for_turn(cls, ctx: object, normalized: NormalizedInput | None) -> "HydrationRequest":
         """Build a turn's hydration request from a context object + the input to
         search on. THE single source of truth for turning a ctx (`session_id`,
-        `user_id`, `wiki_entries`) into the request shape — used by the prefetch
-        stage and authenticated preview delivery, so session/user/wiki extraction
-        lives in one place. `ctx` is duck-typed; foundation imports no context type."""
+        `user_id`, `memory_allowed_tiers`, `wiki_entries`) into the request shape —
+        used by the prefetch stage and authenticated delivery, so entitlement and
+        session/user/wiki extraction live in one place. `ctx` is duck-typed;
+        foundation imports no context type."""
+        allowed = getattr(ctx, "memory_allowed_tiers", None)
         return cls(
             session_id=getattr(ctx, "session_id", "") or "",
             user_id=getattr(ctx, "user_id", "") or "",
             normalized=normalized,
+            allowed_tiers=tuple(allowed) if allowed is not None else None,
             wiki=cls.wiki_pairs(getattr(ctx, "wiki_entries", None)),
         )
 

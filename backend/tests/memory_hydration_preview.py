@@ -16,6 +16,9 @@ def db(tmp_path, monkeypatch):
     import api.runs as runs_mod
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    # Existing shape/ranking cases exercise wiki + semantic together.
+    # Tier filtering itself has a dedicated free/starter/pro matrix.
+    monkeypatch.setattr(config, "DEFAULT_PLAN", "pro")
     store = run_store.RunStore()
     monkeypatch.setattr(run_store, "STORE", store)
     monkeypatch.setattr(runs_mod, "STORE", store)

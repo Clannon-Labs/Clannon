@@ -325,6 +325,9 @@ def test_execute_interrupted_run_preserves_authoritative_answer_participants(
     monkeypatch.setattr(core.pipeline, "run", _stub_pipeline)
     monkeypatch.setattr(STORE, "session_turns", lambda uid, sid: [])
     monkeypatch.setattr(STORE, "persist", lambda run: None)
+    # This harness replaces auth storage with an audit-only schema. Preserve the
+    # all-tier fixture behavior while production execute() resolves real DB plans.
+    monkeypatch.setattr(auth_mod, "user_plan", lambda uid: "pro")
     monkeypatch.setattr(auth_mod, "fetch_wiki", lambda uid, pid: [])
     monkeypatch.setattr(auth_mod, "model_prefs_get", lambda uid: {})
 

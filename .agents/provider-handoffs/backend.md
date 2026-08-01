@@ -63,7 +63,36 @@ finished something.
 
 ---
 
-## Current checkpoint — false memory-deletion success fixed (2026-08-01)
+## Current checkpoint — plan-tier bypass closed; time + identity proven (2026-08-01)
+
+Frontend live test found a fresh free account received full paid wiki content from
+`GET /memory`; UI lock was cosmetic. Audit found same entitlement missing from
+hydration preview, real run hydration, and wiki mutations. Backend now derives exact
+durable tiers once from canonical `config/backend/tiers.yaml`, fails unknown plans
+closed, filters list/preview even if Manager over-returns, carries exact tiers into
+normal pipeline hydration, withholds locked wiki, and refuses paid wiki create/update/
+upload/project-seed before persistence. Delete stays available after downgrade.
+
+Proof: 13 mutation-first failures on old behavior; focused 187 passed; removing GET
+filter failed; full backend **1595 passed**. Frontend's unrelated active work preserved.
+
+Also landed and pushed today: `time.current_time` as deterministic READ tool (UTC
+default, optional IANA zone), proven through real API + real model; identity filter
+claim-vs-mention live regression plus old-rule mutation proof. Commits before current
+entitlement integration: `d852b0d`, `12ee636`.
+
+Broader plan audit: `user.plan` otherwise drives auth response and `/usage` budget
+display. There is no general entitlement middleware. Only structured `memoryTiers`
+can be enforced honestly today; model/workflow/project entitlements exist only as
+marketing feature strings. Budget enforcement remains separately tracked OFF in
+ROADMAP §2.7. Do not infer authorization rules from marketing prose.
+
+## Change note
+
+Rewritten after frontend found live paid-tier disclosure. Records full runtime scope,
+fail-closed fix, proof, and broader plan-policy limit.
+
+## Previous checkpoint — false memory-deletion success fixed (2026-08-01)
 
 Owner reported Clannon claimed it removed a memory, but Memory page still showed
 it. Audit of exact two runs proved no delete attempt happened: first run called

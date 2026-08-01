@@ -43,6 +43,8 @@ def env(tmp_path, monkeypatch):
     import api.runs as runs_mod
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    # Continuity proof intentionally seeds wiki, which starts at starter.
+    monkeypatch.setattr(config, "DEFAULT_PLAN", "starter")
     store = run_store.RunStore()
     monkeypatch.setattr(run_store, "STORE", store)
     monkeypatch.setattr(runs_mod, "STORE", store)

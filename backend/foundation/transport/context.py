@@ -234,6 +234,12 @@ class VrakshaContext:
                                               # `recall` tool can return the verbatim text of ANY earlier
                                               # turn even when `conversation` condensed it (W8).
 
+    memory_allowed_tiers: tuple | None = None
+                                              # tuple[foundation.MemoryStore, ...], set by the trusted
+                                              # delivery boundary from the authenticated user's plan.
+                                              # None preserves all-tier behavior for non-product callers;
+                                              # an empty tuple means no memory entitlement.
+
     wiki_entries: list = field(default_factory=list)
                                               # the user's wiki entries [{"title","content"}], set by
                                               # the delivery layer that owns wiki storage (SQLite/R2).

@@ -130,3 +130,20 @@ Focused proof: 12 passed. Real API + real model against a disposable user asked 
 current Kathmandu time, called `time.current_time`, delivered a complete answer, and
 named Kathmandu. Disposable SQLite/Qdrant state cleaned. Full backend: **1579 passed**,
 one existing RestrictedPython warning.
+
+## memory plan tiers — server enforcement restored
+
+Frontend live test proved free account received full paid wiki content from
+`GET /memory`; UI lock was cosmetic. Code audit found broader same-path bypass:
+normal runs and hydration preview also left `allowed_tiers=None` (all tiers), while
+wiki create/update/upload/project-seed mutations ignored plan.
+
+Fixed from canonical `config/backend/tiers.yaml` through one fail-closed API policy.
+List, preview, and real pipeline hydration now carry/filter exact tiers; paid wiki
+writes return 403 before persistence; ownership remains 404/422; delete stays allowed
+after downgrade. Unknown/malformed plans receive zero memory entitlement.
+
+Proof: mutation-first suite failed 13 cases before enforcement; worker focused matrix
+187 passed; representative filter removal failed; coordinator full backend **1595
+passed**, one existing RestrictedPython warning.
+- `20:45` **api** worker via **codex** — 2026-08-01_memory-plan-tier-server-enforcement.md — exit 0, 1261s — output: `.agents/runs/20260801-202441-api.out`

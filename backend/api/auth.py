@@ -237,6 +237,13 @@ def current_user(request: Request) -> User:
     return User(row["id"], row["email"], row["name"], row["plan"])
 
 
+def user_plan(user_id: str) -> str | None:
+    """Current server-side plan for one trusted user id; None when absent."""
+    with _db() as db:
+        row = db.execute("SELECT plan FROM users WHERE id=?", (user_id,)).fetchone()
+    return row["plan"] if row is not None else None
+
+
 def fetch_wiki(user_id: str, project_id: str | None = None) -> list[dict]:
     """A user's wiki entries (title + content), newest first. Handed to the
     pipeline so the memory manager can load the wiki tier as text at hydration.
@@ -280,6 +287,16 @@ def wiki_list(user_id: str, project_id: str | None = None) -> list[dict]:
     with _db() as db:
         rows = db.execute(sql, params).fetchall()
     return [_wiki_row(r) for r in rows]
+
+
+def wiki_get(user_id: str, entry_id: str) -> dict | None:
+    """One owner-scoped wiki entry; foreign and unknown ids are identical."""
+    with _db() as db:
+        row = db.execute(
+            "SELECT * FROM wiki_entries WHERE id=? AND user_id=?",
+            (entry_id, user_id),
+        ).fetchone()
+    return _wiki_row(row) if row is not None else None
 
 
 def wiki_create(user_id: str, title: str, content: str, project_id: str | None = None) -> dict:

@@ -22,6 +22,8 @@ def env(tmp_path, monkeypatch):
     from core.memory import manager
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "revise.db"))
+    # Project-scoped wiki hydration is a starter-tier behavior.
+    monkeypatch.setattr(config, "DEFAULT_PLAN", "starter")
     monkeypatch.setenv("VRAKSHA_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     store = run_store.RunStore()
     monkeypatch.setattr(run_store, "STORE", store)

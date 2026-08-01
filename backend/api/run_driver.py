@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from foundation import Flow
+from foundation import Flow, MemoryStore
 
 from core import pipeline
 from core.budget.context import budget_user_scope
@@ -27,6 +27,7 @@ import settings
 
 from . import audit as _audit_trail, auth, config
 from . import decision_audit as _decision_audit
+from .memory_entitlements import allowed_memory_tiers
 from .run_inputs import gather_lineage_files, persist_inputs
 from .run_sources import collect_sources as _collect_sources
 from .run_state import RunState, TERMINAL_STATUSES, _now, _process_summary
@@ -175,9 +176,18 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # full transcript used by `recall` (W8).
         flow.ctx.conversation = _build_conversation(run)
         flow.ctx.session_transcript = _build_transcript(run)
+        # Resolve entitlement at execution time from server persistence. A stale
+        # client or queued run cannot retain tiers after a downgrade; missing or
+        # corrupt plans become an explicit empty grant.
+        allowed_tiers = allowed_memory_tiers(auth.user_plan(run.user_id))
+        flow.ctx.memory_allowed_tiers = allowed_tiers
         # Project-scope the highest-trust wiki to prevent client bleed; learned Qdrant
         # tiers remain account-scoped pending the memory workstream.
-        flow.ctx.wiki_entries = auth.fetch_wiki(run.user_id, run.project_id)
+        flow.ctx.wiki_entries = (
+            auth.fetch_wiki(run.user_id, run.project_id)
+            if MemoryStore.WIKI in allowed_tiers
+            else []
+        )
         # Seed all bounded session files so experts can read earlier uploads.
         flow.ctx.input_files = session_files
 

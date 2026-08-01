@@ -15,6 +15,9 @@ def db(tmp_path, monkeypatch):
     from core.memory import manager
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    # This module proves paid wiki/project behavior. Free-tier refusal is pinned
+    # separately in memory_plan_entitlements.py.
+    monkeypatch.setattr(config, "DEFAULT_PLAN", "starter")
     store = run_store.RunStore()                       # fresh store: no cross-test live runs
     monkeypatch.setattr(run_store, "STORE", store)
     monkeypatch.setattr(runs_mod, "STORE", store)      # the routes read runs.STORE
