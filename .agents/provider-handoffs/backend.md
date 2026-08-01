@@ -63,7 +63,36 @@ finished something.
 
 ---
 
-## Current checkpoint — identity unified, decision-log leak closed, 2.18 landed (2026-08-01)
+## Current checkpoint — false memory-deletion success fixed (2026-08-01)
+
+Owner reported Clannon claimed it removed a memory, but Memory page still showed
+it. Audit of exact two runs proved no delete attempt happened: first run called
+session-local `recall`; second called only `say` and then claimed success. There
+was no model-visible delete capability, while prompt explicitly prohibited memory
+management.
+
+Current tree adds central-only `forget_memory(memory_id)` through existing
+`MemoryPort`. Relevant inferred context carries opaque ids; command accepts only
+an id already selected into this authenticated turn, and Manager rechecks tenant
+ownership at storage. False/guessed/unavailable paths return `deleted: false` and
+explicitly forbid a success claim. Batches/experts receive no port. Wiki remains
+UI-managed. Memory curator deterministically skips delete/forget turns so it
+cannot recreate removed content during post-delivery curation.
+
+Verified: focused 69 + seam-specific 19 passed; invariant checker 7 PASS / one
+existing WARN; full backend **1574 passed**. Real API + real Haiku against a
+disposable user/memory called `forget_memory`, delivered, removed the Qdrant
+entry, and reported success. Disposable state cleaned.
+
+Unrelated work remains dirty and MUST be preserved: frontend memory-provenance
+changes plus untracked `backend/tools/time.py`.
+
+## Change note
+
+Rewritten after owner found a real false-success memory action. Records exact
+run evidence, new least-privilege command, anti-recreation guard, and live proof.
+
+## Previous checkpoint — identity unified, decision-log leak closed, 2.18 landed (2026-08-01)
 
 **OWNER IS TESTING THE RUNNING PRODUCT RIGHT NOW.** I promised no `backend/` edits
 until they say they are done. Docs, comms and proposals only. Ask before changing

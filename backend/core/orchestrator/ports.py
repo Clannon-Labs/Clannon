@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from foundation import BatchAwarenessPort, BudgetPort, GraphPort
+from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MemoryPort
 
 from .schemas import DecisionLogEntry
 
@@ -46,3 +46,6 @@ class Ports:
     # swap seam for backend's real Redis-backed anchor later -- see utils/unlimited_budget.py).
     graph: GraphPort | None = None
     budget: BudgetPort | None = None
+    # Central orchestration receives only one model-visible memory command
+    # (forget_memory); batches and experts never receive this port.
+    memory: MemoryPort | None = None

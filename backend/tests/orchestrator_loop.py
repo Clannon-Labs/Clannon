@@ -165,6 +165,7 @@ def test_run_turn_offers_the_whole_roster_to_the_model():
     # experts AND tools are all directly visible — incl. the file experts, the calculator, etc.
     assert {"recall", "search_web", "math_calculator", "web_fetch_url"} <= offered
     assert "remember" not in offered
+    assert "forget_memory" not in offered  # test gateway has no MemoryPort
     assert {"media_analyst", "data_analyst", "code_engineer", "web_research", "synthesis_writer"} <= offered
     assert "search_tools" not in offered              # nothing is deferred, so no discovery tool is injected
 
@@ -299,6 +300,7 @@ def test_build_orchestrator_tools_offers_the_full_roster_eagerly():
     assert {"web_research", "synthesis_writer", "verification_claims", "summary_condenser"} <= names
     assert {"recall", "search_web", "math_calculator", "web_fetch_url"} <= names
     assert "remember" not in names
+    assert "forget_memory" not in names  # helper call has no MemoryPort
 
 
 # --- explicit chat/report presentation routing ------------------------------

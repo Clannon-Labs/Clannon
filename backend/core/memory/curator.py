@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -37,6 +38,12 @@ _MAX_REQUEST_CHARS = 3_000
 _MAX_RESPONSE_CHARS = 5_000
 _MAX_EVIDENCE_ITEMS = 8
 _MAX_EVIDENCE_CHARS = 1_000
+
+_MEMORY_DELETION_REQUEST = re.compile(
+    r"\b(?:delete|remove|erase|forget)\b.{0,80}\b(?:memory|remembered|remember)\b"
+    r"|\b(?:memory|remembered)\b.{0,80}\b(?:delete|remove|erase|forget)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class CuratedTier(str, Enum):
@@ -68,6 +75,11 @@ def _looks_like_transcript(content: str, turn: MemoryTurn) -> bool:
         ("user:", "assistant:"),
     )
     return any(left in normalized and right in normalized for left, right in transcript_pairs)
+
+
+def _requests_memory_deletion(request: str) -> bool:
+    """Privacy fail-safe: never recreate content during a forget/delete turn."""
+    return bool(_MEMORY_DELETION_REQUEST.search(request or ""))
 
 
 async def _search_existing(user_id: str, query: str, limit: int) -> list[dict[str, object]]:
@@ -222,7 +234,7 @@ def _turn_prompt(turn: MemoryTurn) -> str:
 
 async def process_turn(turn: MemoryTurn) -> list[MemoryItem]:
     """Let the manager's LLM curate one turn, then persist accepted tool actions."""
-    if not turn.user_id:
+    if not turn.user_id or _requests_memory_deletion(turn.request):
         return []
     session = _CuratorSession(turn)
     try:

@@ -17,7 +17,7 @@ This document describes what your AI assistant can do for you — the tools avai
 > already in place — the honest distance between "we built it" and "we watched it
 > work". Where something is ◐, the note says exactly what is missing.
 
-*Last verified: 2026-07-31.*
+*Last verified: 2026-08-01.*
 
 ---
 
@@ -69,6 +69,14 @@ Your AI assistant is a versatile tool designed to help you research, analyze, wr
 - ◐ **Slack** — post structured messages and reports via an incoming webhook URL
 - ◐ **Discord** — post updates and notifications via a webhook URL
 - ◐ **Anything webhook-addressable** — Zapier or a custom endpoint, same mechanism
+
+### 7. Memory Control
+- ✅ **Forget learned memory by asking** — when a relevant learned item is visible
+  to Clannon, an explicit delete/forget request routes through the authenticated
+  Memory Manager and reports success only after storage confirms deletion.
+- ✅ **Manual memory control** — user-authored wiki entries and learned entries can
+  still be removed from Memory page. Wiki entries remain UI-managed; natural-language
+  deletion deliberately cannot guess or delete a wiki entry.
 
 ---
 

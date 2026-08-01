@@ -20,7 +20,7 @@ from typing import Any, Awaitable, Callable
 from dataclasses import dataclass
 
 import settings
-from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MaxRetriesExceededError, VrakshaContext
+from foundation import BatchAwarenessPort, BudgetPort, GraphPort, MaxRetriesExceededError, MemoryPort, VrakshaContext
 
 from .. import CapabilityKind, registry as default_registry
 from .batches import BatchDefinition, BatchHandler
@@ -46,6 +46,7 @@ class Capabilities:
     # orchestrator's job coordinating the WHOLE mission), same recursion-guard shape as _batches.
     _graph: GraphPort | None = None
     _budget: BudgetPort | None = None
+    _memory: MemoryPort | None = None
 
     @classmethod
     def open(
@@ -54,6 +55,7 @@ class Capabilities:
         awareness: BatchAwarenessPort | None = None,
         graph: GraphPort | None = None,
         budget: BudgetPort | None = None,
+        memory: MemoryPort | None = None,
     ) -> "Capabilities":
         """Open a full-power gateway for one request. `batch_registry` (batch_key
         -> BatchDefinition) is the ONLY construction site that can populate the
@@ -66,7 +68,10 @@ class Capabilities:
         tools = ToolHandler(registry=registry)
         experts = ExpertHandler(registry=registry, tools=tools, graph=graph)
         batches = BatchHandler(batch_registry=batch_registry, registry=registry, awareness=awareness, graph=graph)
-        return cls(ctx=ctx, _tools=tools, _experts=experts, _batches=batches, _graph=graph, _budget=budget)
+        return cls(
+            ctx=ctx, _tools=tools, _experts=experts, _batches=batches,
+            _graph=graph, _budget=budget, _memory=memory,
+        )
 
     @classmethod
     def scoped_to(
@@ -152,6 +157,7 @@ class Capabilities:
         deps = OrchestratorDeps(
             ctx=self.ctx, tools=self._tools, experts=self._experts, batches=self._batches, model=model,
             graph=self._graph, budget=self._budget,
+            memory=self._memory,
         )
 
         handle = build_tool_agent(
@@ -164,7 +170,7 @@ class Capabilities:
                 # front so the orchestrator can actually read the upload (not fall back to search)
                 files_attached=bool(getattr(self.ctx, "input_files", None)),
                 batches=self._batches,
-                graph=self._graph, budget=self._budget,
+                graph=self._graph, budget=self._budget, memory=self._memory,
             ),
             deps_type=OrchestratorDeps,
             retries=settings.ORCHESTRATOR.max_retries,

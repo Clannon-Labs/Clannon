@@ -299,6 +299,7 @@ class OrchestratorDeps:
     model: object | None = None     # the same model override run_turn itself got, reused for a spawned batch's own nested run_turn (so a test's FunctionModel spy governs both levels hermetically)
     graph: object | None = None     # GraphPort; None unless Capabilities.open() was given one (mission-engine loop-wiring)
     budget: object | None = None    # BudgetPort; None unless Capabilities.open() was given one (mission-engine loop-wiring)
+    memory: object | None = None    # MemoryPort; exposed to model only through forget_memory
 
 
 def _make_orchestrator_tool_fn(key: str, input_schema: type, description: str) -> Callable:
@@ -588,6 +589,7 @@ def build_orchestrator_tools(
     tool_specs: list, expert_specs: list, on_message: Callable | None = None,
     *, files_attached: bool = False, batches: object | None = None,
     graph: object | None = None, budget: object | None = None,
+    memory: object | None = None,
 ) -> list:
     """Native tools for the orchestrator agent: every available tool + expert as a
     guarded wrapper, plus the session-local `recall` built-in and (when a message
@@ -620,6 +622,10 @@ def build_orchestrator_tools(
         fns.append(_make_start_mission_tool())
         fns.append(_make_advance_mission_tool())
         fns.append(_make_end_mission_tool())
+    if memory is not None:
+        from .native_memory import build_forget_memory_tool
+
+        fns.append(build_forget_memory_tool())
     for spec in tool_specs:
         fns.append(_offer(_make_orchestrator_tool_fn(spec.key, spec.input_schema, spec.description), spec))
     for spec in expert_specs:

@@ -65,6 +65,22 @@ def test_low_signal_turn_can_complete_with_zero_writes(monkeypatch):
     assert called["persist"] == 0
 
 
+def test_memory_deletion_turn_never_recreates_content(monkeypatch):
+    """A forget request bypasses curator entirely after deletion succeeds/fails."""
+    monkeypatch.setattr(
+        curator,
+        "build_tool_agent",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("curator ran")),
+    )
+
+    result = asyncio.run(MemoryManager().process_turn(_turn(
+        request="Remove the remembered launch preference from memory.",
+        response="Memory removed.",
+    )))
+
+    assert result == []
+
+
 def test_curator_can_stage_all_three_inferred_tiers_with_trusted_provenance(monkeypatch):
     async def drive(tools):
         assert "staged" in await tools["save_memory"](

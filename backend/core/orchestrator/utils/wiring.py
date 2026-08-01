@@ -12,6 +12,7 @@ from __future__ import annotations
 from foundation import VrakshaContext
 from core.memory.batch_awareness_manager import manager as batch_awareness_manager
 from core.memory.graph_manager import manager as graph_manager
+from core.memory.manager import manager as memory_manager
 from registry.capabilities import discover
 
 from ..ports import Ports
@@ -38,9 +39,10 @@ def build_default_ports(ctx: VrakshaContext) -> Ports:
         awareness=batch_awareness_manager,
         graph=graph_manager,
         budget=_unlimited_budget,
+        memory=memory_manager,
         caps=Capabilities.open(
             ctx, batch_registry=load_batches(), awareness=batch_awareness_manager,
-            graph=graph_manager, budget=_unlimited_budget,
+            graph=graph_manager, budget=_unlimited_budget, memory=memory_manager,
         ),   # one door; tool/expert calls + guards inside
         log=CtxDecisionLog(ctx),
     )

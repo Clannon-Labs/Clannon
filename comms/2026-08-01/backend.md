@@ -95,3 +95,26 @@ Suite: **1567 passed, 0 failed, 0 skipped** (live Qdrant + ClamAV).
 mid-session and passes in isolation — the known pre-existing flake. Write
 visibility is ruled out (0/4800); `core/memory/hydration.py` ranking remains the
 suspect.
+
+## natural-language memory deletion — false success fixed
+
+Owner asked Clannon to remove a learned memory. Run audit proved it never tried:
+the first turn called only session `recall`; the deletion turn called only `say`,
+then claimed success. No deletion capability existed, and the prompt explicitly
+told orchestration not to manage memory.
+
+Fixed with a central-only `forget_memory(memory_id)` command. Manager-selected
+context now carries opaque deletion handles for inferred entries. The command
+accepts only an id visible in this authenticated turn, then Manager rechecks
+ownership and storage. Guessed/foreign/missing ids fail without deletion; Clannon
+is explicitly forbidden to claim success unless result is `deleted: true`.
+Batches/experts receive no memory port. Wiki remains UI-managed. Curator skips
+delete/forget turns so removed content cannot be recreated immediately.
+
+Proof:
+
+- focused: 69 passed, then new seam-specific 19 passed;
+- invariant checker: 7 PASS, 1 existing NETWORK-path WARN;
+- full backend: **1574 passed**, one existing RestrictedPython warning;
+- live disposable-user API + real Haiku: `forget_memory` called, run delivered,
+  Qdrant entry absent afterward, success reported; disposable state cleaned.
