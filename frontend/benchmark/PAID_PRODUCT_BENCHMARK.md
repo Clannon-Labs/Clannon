@@ -5,10 +5,11 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **84.16 -> 84/100**  
+Current verified score: **84.93 -> 85/100**  
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
-`benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`, and
-`reports/frontend/frontend_report_v8.md` through `frontend_report_v11.md`
+`benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`,
+`previews/2026-08-01_project-creation-redesign/`, and
+`reports/frontend/frontend_report_v8.md` through `frontend_report_v15.md`
 
 **90 is not reachable without backend/framework-level work, independent of
 further frontend UX passes.** The gate-90 checklist requires mobile
@@ -65,17 +66,17 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 
 | Dimension | Weight | Score | Weighted |
 |---|---:|---:|---:|
-| Outcome clarity | 15 | 87 | 13.05 |
+| Outcome clarity | 15 | 89 | 13.35 |
 | Time to first value | 12 | 78 | 9.36 |
-| Core workflow | 18 | 86 | 15.48 |
-| Trust and control | 12 | 89 | 10.68 |
+| Core workflow | 18 | 87 | 15.66 |
+| Trust and control | 12 | 91 | 10.92 |
 | Continuity and retention | 10 | 88 | 8.80 |
 | Performance and smoothness | 12 | 64 | 7.68 |
 | Failure recovery | 7 | 88 | 6.16 |
-| Accessibility | 5 | 95 | 4.75 |
+| Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **84.16 -> 84** |
+| **Total** | **100** |  | **84.93 -> 85** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -199,6 +200,77 @@ Frontend filed
 `proposals/to-backend/2026-07-29_revise-turn-branch-contract.md` and wired its
 HTTP adapter, but a mock-green interaction is not a live paid workflow.
 Re-score core workflow/continuity only after real HTTP verification.
+
+## Pass 6 — memory honesty, a real plan-tier bypass, project creation redesigned (2026-08-01)
+
+Three pieces of work landed this session, all with real evidence (this
+Pass's core-workflow move below is separate from — does not resolve — Pass
+5's deferred "re-score after real HTTP verification" of prompt revision):
+
+1. **Memory provenance + honest inferred-tier delete**
+   (`reports/frontend/frontend_report_v13.md`). Memory cards now show real
+   curator provenance (saved-by, kind, rationale). More load-bearing for
+   score: inferred-tier (semantic/episodic/procedural) entries are now
+   deletable — they always were server-side, the UI just never exposed it —
+   and the delete confirmation/toast stopped unconditionally claiming
+   "removed from your wiki... a few seconds to undo" for tiers that have no
+   undo. Browser-verified via a real page-render test
+   (`src/tests/memory-page.test.tsx`), not a mock of the assertion.
+
+2. **A genuine plan-tier bypass, found by using the feature, not built into
+   it** (`reports/frontend/frontend_report_v14.md`). Adding optional
+   goal/context/reference-files to project creation and testing it against
+   the *live* backend (reachable for the first time this session) as a
+   fresh free-tier signup surfaced that `GET /memory`, `POST /projects`,
+   `POST /memory`, and `POST /memory/upload` never check `user.plan` at
+   all — a locked-tier account's wiki shows as UI-locked but the content is
+   already in the network response, and nothing stops writing to it either.
+   Confirmed live, not inferred. Frontend's fix removes the UI path
+   entirely (fields don't render, not just get a warning, when the plan
+   lacks wiki) and independently guards the submit path — verified via
+   `src/tests/new-project-dialog.test.tsx` (4 tests) proving both branches
+   and the guard. Filed
+   `proposals/to-backend/2026-08-01_memory-plan-tier-not-enforced-serverside.md`
+   (high priority) for the actual server-side enforcement, correctly kept
+   out of frontend's tree.
+
+3. **Project creation moved behind an explicit click**
+   (`reports/frontend/frontend_report_v15.md`). Owner correction: those same
+   fields had also landed in `FirstRunGuide`, an older flow that auto-showed
+   a decision/context/deliverable form as the *default* home screen for any
+   zero-run account — exactly the "ambient, not click-triggered" pattern the
+   owner flagged as wrong. Deleted it; home screen is now identical for
+   first-time and returning users, with a "Start with a project" CTA shown
+   only when the account has zero projects (not zero runs — an account with
+   one project isn't told to make its "first" one again). e2e testing (not
+   inspection) caught a real bug in the process: lifting the dialog's open
+   state into shared context caused both `ProjectSwitcher` DOM instances
+   (sidebar duplicates for desktop rail vs. mobile drawer) to open their own
+   dialog off one shared flag. Fixed by mounting the dialog once in
+   `AppShell`. Also fixed, found while chasing that: `components/ui/
+   dialog.tsx` never gave the native `<dialog>` element an accessible name
+   (`aria-labelledby`) — true of every dialog in the app, not just this one.
+
+**This session's full verification, not just unit tests**: live browser
+click-through against the real backend, desktop and 390px
+(`previews/2026-08-01_project-creation-redesign/`), a keyboard-only pass
+confirming the dialog's focus trap and tab order and that Escape returns
+focus to the trigger, an accessibility-tree check that the dialog now
+resolves as `role="dialog"` with a real name, and zero console errors at
+every step across four fresh signups. `tsc`/`eslint` clean, vitest 100/100,
+5/5 on the affected e2e specs run against a real mock production build (not
+just `npx playwright test` — a full `next build && next start` on a
+separate port, the only way to trust the result wasn't dev-mode artifacts).
+
+**Score moves 84.16 -> 84.93.** Outcome clarity 87 -> 89 (the exact
+"where do I go for X" confusion the owner flagged, resolved and verified,
+not just claimed). Trust and control 89 -> 91 (an honest delete promise
+plus a real plan-tier bypass found and closed on the frontend side, both
+evidenced). Core workflow 86 -> 87 (project setup is now one coherent entry
+point instead of two competing ones). Accessibility 95 -> 96 (a real,
+app-wide `aria-labelledby` fix, verified via the accessibility tree, not
+assumed from the visual). Performance (64) and time to first value (78)
+unchanged for the reasons already stated elsewhere in this file.
 
 ## 3. Hard gates
 
