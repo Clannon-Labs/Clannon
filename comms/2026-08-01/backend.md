@@ -118,3 +118,4 @@ Proof:
 - full backend: **1574 passed**, one existing RestrictedPython warning;
 - live disposable-user API + real Haiku: `forget_memory` called, run delivered,
   Qdrant entry absent afterward, success reported; disposable state cleaned.
+- `19:52` **security** worker via **codex** — 2026-08-01_identity-filter-inverted.md — exit 0, 807s — output: `.agents/runs/20260801-193904-security.out`
