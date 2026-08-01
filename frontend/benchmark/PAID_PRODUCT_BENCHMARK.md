@@ -5,11 +5,12 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **84.93 -> 85/100**  
+Current verified score: **85.03 -> 85/100**  
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
 `benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`,
-`previews/2026-08-01_project-creation-redesign/`, and
-`reports/frontend/frontend_report_v8.md` through `frontend_report_v15.md`
+`previews/2026-08-01_project-creation-redesign/`,
+`previews/2026-08-01_project-goal-pinned/`, and
+`reports/frontend/frontend_report_v8.md` through `frontend_report_v16.md`
 
 **90 is not reachable without backend/framework-level work, independent of
 further frontend UX passes.** The gate-90 checklist requires mobile
@@ -70,13 +71,13 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 | Time to first value | 12 | 78 | 9.36 |
 | Core workflow | 18 | 87 | 15.66 |
 | Trust and control | 12 | 91 | 10.92 |
-| Continuity and retention | 10 | 88 | 8.80 |
+| Continuity and retention | 10 | 89 | 8.90 |
 | Performance and smoothness | 12 | 64 | 7.68 |
 | Failure recovery | 7 | 88 | 6.16 |
 | Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **84.93 -> 85** |
+| **Total** | **100** |  | **85.03 -> 85** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -271,6 +272,39 @@ point instead of two competing ones). Accessibility 95 -> 96 (a real,
 app-wide `aria-labelledby` fix, verified via the accessibility tree, not
 assumed from the visual). Performance (64) and time to first value (78)
 unchanged for the reasons already stated elsewhere in this file.
+
+## Pass 7 — the project's goal stays pinned in view (2026-08-01, same day)
+
+Owner's own idea, picked from a short list offered after Pass 6: the goal
+set at project creation was write-only — a wiki entry indistinguishable
+from any other once saved, with no way to see it again except digging into
+the Memory tab. Added a small pinned card on the workspace home screen
+(`GOAL — <text>`) whenever the current project has one, sourced from the
+same wiki entry the New Project dialog already writes (`src/lib/
+project-goal.ts` — a shared title constant so writer and reader can't drift,
+no new backend field, no proposal needed).
+
+Verified live, not assumed: created a project with a goal on a Pro-plan mock
+account, confirmed the card renders at rest, then typed a brief and
+confirmed it — unlike the memory recap directly below it, which correctly
+recedes to a small chip — stays fully visible while typing. Zero console
+errors either state. `previews/2026-08-01_project-goal-pinned/`. New
+`src/tests/project-goal.test.ts` (3 tests) covers the lookup logic itself
+(tier must be wiki, title must match exactly, absence cases).
+
+Honest limitation: on a near-empty project, the same goal entry also
+surfaces once inside the recap list below (it's a real wiki entry, so nothing
+stops the recap's own ranking from picking it as one of its four rotating
+slots) — visible duplication on this specific edge case. Not fixed; recedes
+naturally once a project accumulates enough other memory that the recap's
+slots fill with other candidates first. Flagging rather than hiding it.
+
+**Score moves 84.93 -> 85.03.** Continuity and retention 88 -> 89 — this
+dimension is explicitly about context surviving across a working session;
+the goal now does exactly that, verified live in both the resting and
+typing states, not just written and assumed. No other dimension moves —
+mobile completeness and visual craft aren't re-scored from a single
+desktop-only capture (390px wasn't captured for this specific change).
 
 ## 3. Hard gates
 

@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FolderPlus } from "lucide-react";
-import { useCreateRun, useMe, useProjects, useRuns } from "@/lib/api/hooks";
+import { FolderPlus, Target } from "lucide-react";
+import { useCreateRun, useMe, useMemoryEntries, useProjects, useRuns } from "@/lib/api/hooks";
 import {
   useCreateProjectDialog,
   useCurrentProjectId,
@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
 import { workspaceDraftKey } from "@/lib/browser-drafts";
 import { useBrowserTextDraft } from "@/lib/use-browser-draft";
+import { findGoalEntry } from "@/lib/project-goal";
 import { cn } from "@/lib/utils";
 
 // Greetings that read fine in front of ", <name>" (and standalone, when there's
@@ -90,6 +91,11 @@ export default function WorkspacePage() {
   const projectId = useCurrentProjectId();
   const { data: runs } = useRuns(projectId);
   const { data: projects } = useProjects();
+  // set once at project creation, in the New Project dialog — pinned here so
+  // "why am I working on this" stays in view instead of waiting in the
+  // Memory tab until you go looking for it
+  const { data: memoryEntries } = useMemoryEntries(projectId);
+  const goal = findGoalEntry(memoryEntries);
   const createRun = useCreateRun();
   const { openDialog: openCreateProject } = useCreateProjectDialog();
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +150,19 @@ export default function WorkspacePage() {
             Describe the work. I&apos;ll route it, run the research in parallel, and
             bring back something verified — carrying what I remember about your clients.
           </p>
+          {/* pinned, not part of the recap below — stays put whether you're
+              typing or not, same as the greeting above it */}
+          {goal && (
+            <div className="mx-auto mt-5 flex max-w-md items-start gap-2.5 rounded-lg border border-border bg-surface px-4 py-3 text-left">
+              <Target className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <div className="min-w-0">
+                <p className="tag-label text-faint">Goal</p>
+                <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-foreground">
+                  {goal.content}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {!workspaceReady ? (

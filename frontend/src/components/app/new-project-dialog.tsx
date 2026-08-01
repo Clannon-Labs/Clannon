@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/hooks";
 import { useCreateProjectDialog, useSelectProject } from "@/components/app/project-provider";
 import { ApiError } from "@/lib/api";
+import { GOAL_MEMORY_TITLE } from "@/lib/project-goal";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
@@ -82,7 +83,7 @@ export function NewProjectDialog() {
           // toast pointing at the Memory tab, never a rollback.
           if (trimmedGoal) {
             saveGoal.mutate(
-              { tier: "wiki", title: "Goal for this project", content: trimmedGoal, projectId: project.id },
+              { tier: "wiki", title: GOAL_MEMORY_TITLE, content: trimmedGoal, projectId: project.id },
               {
                 onError: (err) =>
                   toast({
