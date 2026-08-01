@@ -4,10 +4,58 @@ Transfers live frontend work between Claude Code and Codex.
 
 ## Current checkpoint
 
+- Provider: Claude Code
+- Updated: 2026-08-01
+- Task: close `proposals/to-frontend/2026-07-30_memory-provenance-cards.md`
+  (backend proposal: render curator provenance on Memory archive cards).
+- Found mid-flight: a prior uncommitted session had already done most of it
+  (types, mock fixtures, card rendering). Read the proposal's acceptance
+  list against the diff line by line and found the real gap — delete was
+  wiki-only in the UI even though the mock backend already allowed deleting
+  any tier; confirm dialog + toast unconditionally claimed "wiki" + "undo"
+  for every tier.
+- Implemented: inferred tiers (semantic/episodic/procedural) are now
+  deletable (owner-scoped, no edit, no undo — there's no recreate op for a
+  pipeline-derived fact); wiki keeps edit + real undo. Dialog/toast copy is
+  now tier-honest instead of hardcoded to wiki language.
+- Verification: `tsc --noEmit` clean, `eslint` clean, full vitest 97/97
+  (was 92). New `src/tests/memory-page.test.tsx` renders the real page with
+  hooks doubled and asserts the DOM/interactions, not just types — added a
+  `<dialog>.showModal/close` polyfill to `setup.ts` since it's the first
+  test to open one. Did **not** get a real Chrome click-through: the
+  `claude-in-chrome` extension wasn't connected in this environment (tried
+  after the user offered their own Brave window too — same failure), and a
+  second `next dev` for Playwright collided with an existing `:3000` server
+  already running in `http` mode against an unreachable backend, which I
+  left alone rather than kill (might have been someone's active window).
+  Said this plainly in the report rather than calling it browser-verified.
+- Commit `6531b29`, pushed clean to `origin/main`. Full detail:
+  `reports/frontend/frontend_report_v13.md`; comms:
+  `comms/2026-08-01/frontend.md`.
+- Housekeeping note for whoever reads this next: this checkpoint had gone
+  stale — it still said "2026-07-29 / tomorrow: mobile density" while HEAD
+  had already moved through `eb48dc9`/`981c8d7` (sent-prompt revision work,
+  which also archived `owner-critique.md` — confirmed archived, so that
+  proposal is genuinely done, not just forgotten). The mobile-density task
+  below is preserved as-is since I found no commit that clearly closes it —
+  worth confirming its real status before resuming it blind.
+
+## Change note
+
+Genuine gap between "types/mock/rendering done" and "acceptance criteria
+met" — the proposal explicitly required inferred-tier delete, and it was
+easy to read the uncommitted diff as finished without checking that one
+line item. Also restored handoff continuity: the file had gone three
+sessions stale (still dated 2026-07-29) while real work landed on top of
+it, so the mobile-density task and the owner-critique proposal status below
+needed a fresh read against `git log`, not a trust of what this file said.
+
+## Previous checkpoint
+
 - Provider: Codex
 - Updated: 2026-07-29
-- Task: owner phone-density critique + instant first-response app shell; preserve
-  exact continuation for tomorrow
+- Task: owner phone-density critique + instant first-response app shell;
+  preserve exact continuation for tomorrow
 - Implemented now: `/app` auth wait no longer shows a blank full-screen logo.
   Server-rendered `WorkspaceLoadingShell` arrives as `RequireAuth`'s fallback,
   matching real desktop rail/mobile header, content cards, and composer
@@ -21,30 +69,20 @@ Transfers live frontend work between Claude Code and Codex.
   `frontend/previews/2026-07-29_initial-shell/`.
 - Verification: TypeScript, zero-warning ESLint, Vitest 92/92, isolated Next
   production build, 1440x900 and 390x844 browser review.
-- Tomorrow TOP frontend task: full mobile density pass, not blanket font
-  shrinking. Current marketing page measures 9,604 px tall at 390 px and stacks
-  nearly every desktop card vertically (starter examples, five pipeline stages,
-  four memory tiers, four pricing plans). Audit 320/360/390/430 widths; restore
-  breathing room through progressive disclosure, horizontal snap/peek where
-  discoverable, section pacing, and fewer simultaneous choices. Preserve tap
-  targets, accessibility, and desktop information.
-- Proposal review: `proposals/to-frontend/owner-critique.md` remains `accepted`,
-  not archived. Backend revise endpoint and backend proposal are now completed/
-  archived, but frontend still owes one real HTTP browser journey proving edited
-  turn descendants stay absent. Run that tomorrow; archive owner proposal only
-  after proof passes.
-- Honest benchmark: remains 84.16. Shell improves perceived readiness, but no
-  measured production FCP/LCP/CLS yet; mobile density work not started.
+- Tomorrow TOP frontend task (status unconfirmed as of 2026-08-01 — see
+  Change note above): full mobile density pass, not blanket font shrinking.
+  Current marketing page measures 9,604 px tall at 390 px and stacks nearly
+  every desktop card vertically (starter examples, five pipeline stages,
+  four memory tiers, four pricing plans). Audit 320/360/390/430 widths;
+  restore breathing room through progressive disclosure, horizontal
+  snap/peek where discoverable, section pacing, and fewer simultaneous
+  choices. Preserve tap targets, accessibility, and desktop information.
+- Proposal review: `proposals/to-frontend/owner-critique.md` — CONFIRMED
+  archived as of 2026-08-01 (`eb48dc9`/`981c8d7` landed the sent-prompt
+  revision work this was waiting on). No longer open.
+- Honest benchmark: was 84.16 as of this checkpoint; not re-measured since.
 
-## Change note
-
-Owner's speed instinct is right; separate fake HTML page is wrong because its
-swap would expose the trick and duplicate layout. Real static shell now paints
-the actual product geometry while data/auth resolve. Mobile critique is also
-valid: full 390 px marketing capture exposes excessive vertical stacking, so
-tomorrow's pass has concrete evidence rather than vague "make responsive" work.
-
-## Previous checkpoint
+## Older checkpoint
 
 - Provider: Codex
 - Updated: 2026-07-29
