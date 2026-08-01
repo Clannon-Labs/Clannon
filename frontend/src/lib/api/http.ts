@@ -37,9 +37,12 @@ function withQuery(endpoint: string, query: Record<string, string | undefined>):
 }
 
 /**
- * FastAPI's `detail` is a string for HTTPException but an ARRAY of
- * error objects for Pydantic validation (422) — coerce both to prose,
- * never let an object reach Error's message (it renders "[object Object]").
+ * FastAPI's `detail` takes three shapes depending on how the endpoint raised:
+ * a plain string (`HTTPException(422, "too short")`), an ARRAY of Pydantic
+ * validation objects, or a STRUCTURED dict (`HTTPException(402, {code,
+ * message, ...})` — e.g. billing.admit_run's token-budget-exhausted error).
+ * All three must resolve to prose; an object reaching Error's message
+ * renders literally as "[object Object]".
  */
 function errorMessage(body: unknown, fallback: string): string {
   if (typeof body !== "object" || body === null) return fallback;
@@ -52,7 +55,27 @@ function errorMessage(body: unknown, fallback: string): string {
       .filter(Boolean);
     if (msgs.length) return msgs.join(" · ");
   }
+  if (typeof detail === "object" && detail !== null) {
+    const nested = (detail as { message?: unknown }).message;
+    if (typeof nested === "string") return nested;
+  }
   return fallback;
+}
+
+/** The structured-detail shape's machine-readable `code` (e.g.
+ *  "token_budget_exhausted"), wherever FastAPI actually put it — top-level
+ *  for a plain dict body, or nested one level inside `detail` for a raised
+ *  HTTPException, which is how every real endpoint sends one. */
+function errorCode(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const top = (body as { code?: unknown }).code;
+  if (typeof top === "string") return top;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "object" && detail !== null) {
+    const nested = (detail as { code?: unknown }).code;
+    if (typeof nested === "string") return nested;
+  }
+  return undefined;
 }
 
 async function request<T>(
@@ -78,7 +101,7 @@ async function request<T>(
       try {
         const body = await res.json();
         message = errorMessage(body, message);
-        code = body.code;
+        code = errorCode(body);
       } catch {
         // non-JSON error body; keep statusText
       }

@@ -164,9 +164,19 @@ describe("PriorTurns", () => {
 // getRunThread returns the retained same-session lineage oldest-first.
 // Revisions replace one turn after deleting that turn and its descendants.
 
+// login() puts the client on the Pro plan (6M budget); the seeded demo runs
+// alone total ~599k tokens, already over the unauthenticated default's free
+// 100k budget, which createRun's admission check (mirroring the real
+// backend's billing.admit_run) now correctly refuses.
+async function newAuthedClient(): Promise<MockClient> {
+  const client = new MockClient();
+  await client.login({ email: "thread-tests@example.com", password: "password1234" });
+  return client;
+}
+
 describe("MockClient.getRunThread", () => {
   it("returns thread turns in ascending createdAt (oldest-first) order", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
     const { id: rootId } = await client.createRun("First brief in the session");
     const { id: followId } = await client.createFollowUp(rootId, "Follow-up question for testing");
     const thread = await client.getRunThread(followId);
@@ -175,7 +185,7 @@ describe("MockClient.getRunThread", () => {
   });
 
   it("includes the root run when called from a follow-up", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
     const { id: rootId } = await client.createRun("Root question");
     const { id: followId } = await client.createFollowUp(rootId, "Follow-up question");
     const thread = await client.getRunThread(followId);
@@ -185,7 +195,7 @@ describe("MockClient.getRunThread", () => {
   });
 
   it("returns a single-element thread for a root run with no follow-ups", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
     const { id } = await client.createRun("Standalone question");
     const thread = await client.getRunThread(id);
     expect(thread.length).toBe(1);
@@ -193,7 +203,7 @@ describe("MockClient.getRunThread", () => {
   });
 
   it("all thread members share the same sessionId", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
     const { id: rootId } = await client.createRun("Root turn for session check");
     const { id: followId } = await client.createFollowUp(rootId, "Follow-up turn");
     const thread = await client.getRunThread(followId);
@@ -207,7 +217,7 @@ describe("MockClient.getRunThread", () => {
   });
 
   it("a middle revision keeps its session, project, and prefix while deleting its suffix", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
 
     const memoryBefore = await client.listMemory();
     const { id: rootId } = await client.createRun(
@@ -240,7 +250,7 @@ describe("MockClient.getRunThread", () => {
   }, 10_000);
 
   it("a root revision removes the entire old conversation and leaves only its replacement", async () => {
-    const client = new MockClient();
+    const client = await newAuthedClient();
 
     const { id: rootId } = await client.createRun(
       "Original root turn",

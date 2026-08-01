@@ -320,6 +320,20 @@ export class MockClient implements ClannonClient {
     if (trimmed.length < appConfig.limits.briefMinChars) {
       throw new ApiError("Brief is too short — give the pipeline something to work with.", 422);
     }
+    // mirrors the real backend's billing.admit_run — refuse before creating
+    // anything once the period's entitlement is spent. The composer already
+    // disables Send well before this (useBudgetExhausted), so reaching this
+    // means either a stale usage fetch or a bypassed UI — the mock should
+    // refuse it the same way the real backend does either way, not silently
+    // accept it.
+    const { used, budget } = await this.usedAndBudget();
+    if (used >= budget) {
+      throw new ApiError(
+        "Token budget exhausted for this billing period.",
+        402,
+        "token_budget_exhausted",
+      );
+    }
     const id = nextId("run");
     // clamp on a word boundary — never a mid-word cut before the ellipsis
     // a known demo brief gets its curated label — the report's H1 is a real
@@ -575,6 +589,18 @@ export class MockClient implements ClannonClient {
       return;
     }
 
+    // QA/e2e-only: `failed` is a real terminal RunStatus (an unexpected
+    // pipeline-stage crash, distinct from `blocked` — no gate caught
+    // anything, something just broke) that the mock never reached either —
+    // same gap as the blocked/partial cases above, closing the last
+    // untested state named in the gate-95 checklist ("blocked, failed, and
+    // partial-verification states are tested").
+    if (run.brief.toLowerCase().includes("force a failed run for e2e")) {
+      run.status = "failed";
+      yield { type: "status", status: "failed" };
+      return;
+    }
+
     // Output filter cleared — stream the report in word chunks. Event order
     // mirrors the real backend: deltas → report_done → status:delivered
     // (a DELIVERED badge over a still-streaming report is a contract breach).
@@ -613,6 +639,15 @@ export class MockClient implements ClannonClient {
     if (run.brief.toLowerCase().includes("force a partial timeout for e2e")) {
       run.completionState = "partial";
       run.completionReason = "timeout";
+    }
+    // QA/e2e-only: "quota exceeded" has no dedicated RunStatus in this app's
+    // model — it's an upstream rate/budget limit stopping the loop mid-run,
+    // i.e. completionReason "rate_limit" (CompletionBanner already has copy
+    // for it, added alongside "timeout", but nothing had ever exercised
+    // this specific reason in a browser until now).
+    if (run.brief.toLowerCase().includes("force a quota exceeded for e2e")) {
+      run.completionState = "partial";
+      run.completionReason = "rate_limit";
     }
     yield { type: "report_done" };
     yield { type: "status", status: "delivered" };
@@ -739,14 +774,21 @@ export class MockClient implements ClannonClient {
 
   /* ---------- account ---------- */
 
+  /** Shared by getUsage() and createRun()'s admission check — one place
+   *  computing spend, so the two can't silently drift apart. */
+  private async usedAndBudget(): Promise<{ used: number; budget: number }> {
+    const user = await this.me();
+    const plan = planById(user?.plan ?? "free");
+    const used = [...this.runs.values()].reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
+    return { used, budget: plan.tokenBudget };
+  }
+
   async getUsage(): Promise<UsageSummary> {
     await sleep(240);
     // computed live: spend is the sum of real run tokens, budget is the user's
     // plan — not a static seed. Mirrors how the backend meters per call.
-    const user = await this.me();
-    const plan = planById(user?.plan ?? "free");
+    const { used, budget } = await this.usedAndBudget();
     const runs = [...this.runs.values()];
-    const used = runs.reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
 
     const days = 14;
     // Returning demo accounts get a plausible history. A genuinely empty
@@ -770,7 +812,7 @@ export class MockClient implements ClannonClient {
       periodEnd: new Date(new Date(byDay[0].date).getTime() + 30 * 86_400_000)
         .toISOString()
         .slice(0, 10),
-      budget: plan.tokenBudget,
+      budget,
       used,
       byDay,
     };

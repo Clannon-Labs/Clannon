@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type FormEvent } from "react";
+import Link from "next/link";
 import { ArrowUp, Plus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ export function Composer({
   busy = false,
   onStop,
   className,
+  budgetExhausted = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -50,6 +52,11 @@ export function Composer({
   busy?: boolean;
   onStop?: () => void;
   className?: string;
+  /** The account is out of tokens this period. Blocks submission here too —
+   *  the sidebar's own exhausted card said so, but Send stayed live until
+   *  this existed, a real gap since the sidebar isn't always in view
+   *  (collapsed rail, mobile). Typing still works; only sending is gated. */
+  budgetExhausted?: boolean;
 }) {
   const attach = useFileAttachments();
   const session = useSessionModels();
@@ -57,10 +64,11 @@ export function Composer({
   const taRef = useAutoResize(value, 280);
 
   const tooShort = value.trim().length < appConfig.limits.briefMinChars;
+  const blocked = tooShort || budgetExhausted;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (tooShort || pending) return;
+    if (blocked || pending) return;
     onSubmit(attach.files, session.models);
   }
 
@@ -95,7 +103,7 @@ export function Composer({
               !e.ctrlKey &&
               !e.altKey &&
               !e.nativeEvent.isComposing &&
-              !tooShort &&
+              !blocked &&
               !pending &&
               !busy &&
               isFinePointer()
@@ -155,7 +163,7 @@ export function Composer({
                   type="submit"
                   size="icon"
                   loading={pending}
-                  disabled={tooShort}
+                  disabled={blocked}
                   aria-label="Send"
                   className="size-10 sm:size-9"
                 >
@@ -166,10 +174,20 @@ export function Composer({
           </div>
         </div>
       </div>
-      {(submitError || attach.error) && (
-        <p role="alert" className="mt-2 px-1 text-sm text-destructive">
-          {submitError || attach.error}
+      {budgetExhausted ? (
+        <p role="status" className="mt-2 px-1 text-sm text-muted-foreground">
+          You&apos;re out of tokens this period — write freely, Send unlocks once you{" "}
+          <Link href="/app/settings?tab=billing" className="text-primary hover:underline">
+            upgrade
+          </Link>{" "}
+          or the period resets.
         </p>
+      ) : (
+        (submitError || attach.error) && (
+          <p role="alert" className="mt-2 px-1 text-sm text-destructive">
+            {submitError || attach.error}
+          </p>
+        )
       )}
     </form>
   );

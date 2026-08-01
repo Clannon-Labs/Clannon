@@ -30,7 +30,14 @@ import { InfoTip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import { siteConfig } from "@/config/site.config";
 import { APP_NAV as NAV } from "@/config/nav.config";
-import { useDeleteSession, useEffectivePlan, useMe, useRuns, useUsage } from "@/lib/api/hooks";
+import {
+  useBudgetExhausted,
+  useDeleteSession,
+  useEffectivePlan,
+  useMe,
+  useRuns,
+  useUsage,
+} from "@/lib/api/hooks";
 import { ProjectSwitcher } from "@/components/app/project-switcher";
 import { useCurrentProjectId } from "@/components/app/project-provider";
 import { groupBySession, type SessionEntry } from "@/lib/sessions";
@@ -69,7 +76,7 @@ function RailBody({
 
   const pct = usage ? Math.min(100, Math.round((usage.used / usage.budget) * 100)) : 0;
   const remaining = usage ? Math.max(0, usage.budget - usage.used) : 0;
-  const exhausted = !!usage && usage.used >= usage.budget;
+  const exhausted = useBudgetExhausted();
   const resetDate = usage
     ? new Date(usage.periodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "";

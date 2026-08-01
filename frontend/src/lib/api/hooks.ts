@@ -256,6 +256,16 @@ export function useUsage() {
   return useQuery({ queryKey: queryKeys.usage, queryFn: () => getClient().getUsage() });
 }
 
+/** True once this period's token budget is spent — the one place this check
+ *  lives, so the sidebar's card and the composer's own gate can't drift
+ *  apart (sidebar.tsx computed this inline before; the composer had no
+ *  check at all, so Send stayed live even with the sidebar showing
+ *  "out of tokens"). */
+export function useBudgetExhausted(): boolean {
+  const { data } = useUsage();
+  return !!data && data.used >= data.budget;
+}
+
 export function useModelConfig() {
   return useQuery({ queryKey: queryKeys.models, queryFn: () => getClient().getModelConfig() });
 }

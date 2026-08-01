@@ -3,7 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FolderPlus, Target } from "lucide-react";
-import { useCreateRun, useMe, useMemoryEntries, useProjects, useRuns } from "@/lib/api/hooks";
+import {
+  useBudgetExhausted,
+  useCreateRun,
+  useMe,
+  useMemoryEntries,
+  useProjects,
+  useRuns,
+} from "@/lib/api/hooks";
 import {
   useCreateProjectDialog,
   useCurrentProjectId,
@@ -97,6 +104,7 @@ export default function WorkspacePage() {
   const { data: memoryEntries } = useMemoryEntries(projectId);
   const goal = findGoalEntry(memoryEntries);
   const createRun = useCreateRun();
+  const budgetExhausted = useBudgetExhausted();
   const { openDialog: openCreateProject } = useCreateProjectDialog();
   const [error, setError] = useState<string | null>(null);
   const draftKey = user?.id ? workspaceDraftKey(user.id, projectId) : null;
@@ -234,6 +242,7 @@ export default function WorkspacePage() {
             onChange={setBrief}
             pending={createRun.isPending}
             submitError={error}
+            budgetExhausted={budgetExhausted}
             rows={1}
             placeholder="How can I help you today?"
             onSubmit={(files, models) => {

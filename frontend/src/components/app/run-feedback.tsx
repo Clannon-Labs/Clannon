@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
-import { useSetRunFeedback, useCreateFollowUp, useMe } from "@/lib/api/hooks";
+import { useBudgetExhausted, useSetRunFeedback, useCreateFollowUp, useMe } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -34,6 +34,7 @@ export function RunComposer({
   const router = useRouter();
   const { data: user } = useMe();
   const followUp = useCreateFollowUp(runId);
+  const budgetExhausted = useBudgetExhausted();
   const [followError, setFollowError] = useState<string | null>(null);
   const draftKey = user?.id ? runReplyDraftKey(user.id, runId) : null;
   const [ask, setAsk] = useBrowserTextDraft(draftKey);
@@ -45,6 +46,7 @@ export function RunComposer({
         onChange={setAsk}
         pending={followUp.isPending}
         submitError={followError}
+        budgetExhausted={budgetExhausted}
         busy={busy}
         onStop={onStop}
         placeholder={
