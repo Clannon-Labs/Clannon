@@ -64,6 +64,23 @@ sizes, and capture command. Inspect captures for regressions instead of treating
 screenshot creation as proof by itself. If work is genuinely nonvisual, record
 why screenshots add no evidence in the frontend report or handoff.
 
+## Never Stop At A Small Win — UX Is The Mission (owner instruction, 2026-08-01)
+
+Closing a benchmark gap by a point or two is not a finish line. After any
+fix or feature lands, immediately look for the next thing worth doing —
+another bug, another rough edge, another feature idea — and propose it.
+Don't wait to be asked "what's next"; bring ideas unprompted, the way Pass 6
+→ Pass 7 → the failed/quota-states work → templates happened in one
+continuous session, not four separate asks.
+
+UX is the actual product here, not a checkbox. That means the small details
+too: copy that reads like a person wrote it, empty states, error messages,
+loading states, focus order, the exact wording on a button — everything
+should feel considered, not merely "not broken." A 95/100 dimension score is
+not a reason to stop sweating a detail inside it. If something reads as
+merely adequate, say so and improve it, even if nobody asked about that
+specific thing.
+
 ## Execute Decided Work
 
 When the owner proposes an action and frontend evaluation concludes it should
