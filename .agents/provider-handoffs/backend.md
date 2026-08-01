@@ -63,34 +63,44 @@ finished something.
 
 ---
 
-## Current checkpoint — plan-tier bypass closed; time + identity proven (2026-08-01)
+## Current checkpoint — fixed billing + observable cache usage (2026-08-01)
 
-Frontend live test found a fresh free account received full paid wiki content from
-`GET /memory`; UI lock was cosmetic. Audit found same entitlement missing from
-hydration preview, real run hydration, and wiki mutations. Backend now derives exact
-durable tiers once from canonical `config/backend/tiers.yaml`, fails unknown plans
-closed, filters list/preview even if Manager over-returns, carries exact tiers into
-normal pipeline hydration, withholds locked wiki, and refuses paid wiki create/update/
-upload/project-seed before persistence. Delete stays available after downgrade.
+Owner-thought audit confirmed four facts: recent trivial runs consumed 18k–34k
+full-rate tokens; cache settings existed but hits were unobservable; `/usage` used a
+daily-moving trailing window; no run admission checked plan token entitlement.
 
-Proof: 13 mutation-first failures on old behavior; focused 187 passed; removing GET
-filter failed; full backend **1595 passed**. Frontend's unrelated active work preserved.
+Pushed `d608e18`: provider cache read/write counters now persist through run state,
+SQLite migration/reload, run JSON, and `/usage`; `tokensUsed` remains full-rate input
++ output. Mutation removal failed; full backend 1596 passed.
 
-Also landed and pushed today: `time.current_time` as deterministic READ tool (UTC
-default, optional IANA zone), proven through real API + real model; identity filter
-claim-vs-mention live regression plus old-rule mutation proof. Commits before current
-entitlement integration: `d852b0d`, `12ee636`.
+Current reviewed worktree adds fixed UTC signup/payment-anniversary periods, a
+persistent mock checkout ledger, idempotent secret-authenticated confirmation,
+current-period add-on credits, configured-plan upgrades, corrupt-plan fail-closed
+behavior, and structured 402 admission before root/follow-up/revision persistence.
+One admitted run may overshoot and concurrent admission may race: exact per-call
+Redis money-cost enforcement remains OFF. Fail-first billing suite: 17 failures;
+focused coordinator proof 53 passed; full backend **1613 passed**. Frontend proposal
+queued because its interactive tree is active.
 
-Broader plan audit: `user.plan` otherwise drives auth response and `/usage` budget
-display. There is no general entitlement middleware. Only structured `memoryTiers`
-can be enforced honestly today; model/workflow/project entitlements exist only as
-marketing feature strings. Budget enforcement remains separately tracked OFF in
-ROADMAP §2.7. Do not infer authorization rules from marketing prose.
+Next: commit/push billing unit, then test the current Pydantic AI 2.22.0 bump (repo is
+2.18.0). Memory deep-reader and prompt-depth work remain separate large roadmap items.
 
 ## Change note
 
-Rewritten after frontend found live paid-tier disclosure. Records full runtime scope,
-fail-closed fix, proof, and broader plan-policy limit.
+Rewritten after resolving owner billing/token proposals. Records measured token use,
+cache observability, fixed-period/mock-billing implementation, honest coarse-gate
+limit, and exact next dependency task.
+
+## Previous checkpoint — plan-tier bypass closed; time + identity proven (2026-08-01)
+
+Frontend live test found a fresh free account received full paid wiki content from
+`GET /memory`; UI lock was cosmetic. Backend now derives durable tiers from canonical
+config, fails unknown plans closed, filters list/preview/runtime hydration, and refuses
+paid wiki writes before persistence. Delete stays available after downgrade.
+
+Proof: 13 mutation-first failures; focused 187 passed; full backend 1595 passed.
+Also landed: `time.current_time` with real API/model proof and identity-filter
+claim-vs-mention mutation proof (`d852b0d`, `12ee636`).
 
 ## Previous checkpoint — false memory-deletion success fixed (2026-08-01)
 

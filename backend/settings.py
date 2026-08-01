@@ -54,7 +54,6 @@ class BudgetConfig(BaseModel):
     spend_ceiling_fraction: float = Field(gt=0.0, le=1.0)  # 0 < f ≤ 1; ≥(1-f) is locked margin
     history_char_budget: int = Field(gt=0)                 # chars before oldest turns condense
     verbatim_turn_floor: int = Field(ge=1)                 # most-recent turns always kept whole
-    usage_metering_window_days: int = Field(gt=0)          # /usage trailing display window (D10)
     infra_cost_per_call_micros: int = Field(ge=0)          # µ$ flat, every LLM call (B2b)
     infra_cost_per_second_micros: int = Field(ge=0)        # µ$ per wall-clock second (B2b)
     default_memory_budget_tokens: int = Field(gt=0)        # default hydration token budget

@@ -6,7 +6,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from . import auth, config, runs
+from . import auth, billing, config, runs
 from .run_requests import admit_uploads, parse_session_models
 from .run_state import TERMINAL_STATUSES
 
@@ -40,6 +40,7 @@ async def revise_run(
     # Scanning and blob reads yield. Re-authorize so concurrent deletion cannot
     # create a branch whose inherited rows vanished during preflight.
     target = _terminal_target(user.id, run_id)
+    billing.admit_run(user.id)
     loop = asyncio.get_running_loop()
     run = runs.STORE.create_revision(
         user.id,

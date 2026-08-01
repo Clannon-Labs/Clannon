@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -101,9 +102,23 @@ def _revise(client: TestClient, target_id: str, **data):
 
 
 def test_revise_root_supersedes_all_ten_turns_in_the_same_session(env, monkeypatch):
+    from api import auth, billing
     from core.memory import manager
     from foundation import MemoryItem, MemorySaver, MemoryStore
 
+    # Keep this fixture's July 20 turns inside a fixed July 1 -> August 1
+    # anniversary period. The test proves superseded usage remains billable; it
+    # must not depend on the old trailing-window behavior.
+    with auth._db() as db:
+        db.execute(
+            "UPDATE users SET created_at=? WHERE id=?",
+            (datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp(), env.owner["id"]),
+        )
+    monkeypatch.setattr(
+        billing,
+        "utc_now",
+        lambda: datetime(2026, 7, 25, 12, tzinfo=timezone.utc),
+    )
     turns = _seed_linear(env.store, env.owner["id"])
     durable = MemoryItem(
         memory_id="durable-1", store=MemoryStore.EPISODIC,

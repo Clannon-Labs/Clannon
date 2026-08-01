@@ -14,7 +14,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -24,7 +24,6 @@ load_dotenv(".env")
 load_dotenv(".env.local", override=True)
 
 from observability import configure_logging
-import settings
 
 # Route every run's traces (module logs, provider HTTP, warnings, decision log)
 # to the one unified file, exactly like the CLI — before the pipeline imports below.
@@ -37,7 +36,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
 from foundation import MemoryStore
-from . import audit as _audit, auth, config, runs
+from . import audit as _audit, auth, billing, config, runs
 from . import decision_audit as _decisions
 from .memory_entitlements import allowed_memory_tiers
 from . import run_revision
@@ -100,6 +99,7 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION, lifespan=lifespan)
 app.include_router(run_revision.router)
+app.include_router(billing.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -340,6 +340,7 @@ async def create_run(
     project_id = _require_project(user.id, projectId)
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
+    billing.admit_run(user.id)
     run = runs.STORE.create(user.id, brief, project_id)
     run.session_models = session_models
     # Register before any post-creation await: once STORE exposes the run, every
@@ -407,6 +408,7 @@ async def follow_up_run(
         raise HTTPException(422, "Say a little more to continue.")
     input_files = await _admit_uploads(files)
     session_models = _parse_session_models(models)
+    billing.admit_run(user.id)
     loop = asyncio.get_running_loop()
     run = runs.STORE.create_followup(
         user.id,
@@ -738,42 +740,6 @@ async def delete_memory(entry_id: str, user: auth.User = Depends(auth.current_us
     raise HTTPException(404, "Memory entry not found.")
 
 
-# ---------- usage ----------
-
-
-@app.get("/usage")
-def usage(user: auth.User = Depends(auth.current_user)) -> dict:
-    """Real metered usage for the current period: the actual tokens this user's runs
-    spent (run.tokensUsed, summed over a trailing 30-day window) against their plan's
-    monthly budget. The Redis-atomic budget ENFORCEMENT (decrement + hard stop) lands
-    separately; this is the read-only view the sidebar meter and Settings render."""
-    plan = next((p for p in config.PLANS if p["id"] == user.plan), config.PLANS[0])
-    today = datetime.now(timezone.utc).date()
-    window = settings.BUDGET.usage_metering_window_days   # D10: trailing window from config
-    start = today - timedelta(days=window - 1)
-    by_day = {(start + timedelta(days=i)).isoformat(): 0 for i in range(window)}
-    cache_read_tokens = 0
-    cache_write_tokens = 0
-    for r in runs.STORE.list_for(user.id, include_superseded=True):
-        try:
-            day = datetime.fromisoformat(r.created_at).astimezone(timezone.utc).date().isoformat()
-        except (TypeError, ValueError):
-            continue
-        if day in by_day:
-            by_day[day] += int(getattr(r, "tokens_used", 0) or 0)
-            cache_read_tokens += int(getattr(r, "cache_read_tokens", 0) or 0)
-            cache_write_tokens += int(getattr(r, "cache_write_tokens", 0) or 0)
-    return {
-        "periodStart": start.isoformat(),
-        "periodEnd": today.isoformat(),
-        "budget": plan["tokenBudget"],
-        "used": sum(by_day.values()),
-        "cacheReadTokens": cache_read_tokens,
-        "cacheWriteTokens": cache_write_tokens,
-        "byDay": [{"date": d, "tokens": t} for d, t in by_day.items()],
-    }
-
-
 # ---------- model settings (catalog lives in api/config.py) ----------
 
 
@@ -819,16 +785,3 @@ def set_model(body: ModelBody, user: auth.User = Depends(auth.current_user)) -> 
     if body.model not in entry["options"]:
         raise HTTPException(422, "Model not available for this role.")
     auth.model_prefs_set(user.id, body.layer, body.model)
-
-
-# ---------- billing (Stripe lands post-checkpoint) ----------
-
-
-@app.post("/billing/checkout")
-def checkout(user: auth.User = Depends(auth.current_user)) -> dict:
-    raise HTTPException(501, "Billing is not wired yet — Stripe checkout arrives with the cloud release.")
-
-
-@app.post("/billing/portal")
-def billing_portal(user: auth.User = Depends(auth.current_user)) -> dict:
-    raise HTTPException(501, "Billing is not wired yet — Stripe portal arrives with the cloud release.")

@@ -459,7 +459,9 @@ Everything already in `CONFIG_INVENTORY.md`'s first pass or already in `config/*
 - `foundation/vocab/constants.py:60-68` · `TEXTUAL_MIME_TYPES` frozenset · which `application/*` MIME types intake treats as TEXT · **BACKEND** (admission policy — note)
 
 ### → `config/backend/api.yaml` (ops / display truncations / metering)
-- `api/app.py:689` · `window = 30` · usage-metering trailing window in days (billing/margin surface) · **BACKEND**
+- Billing period length is no longer a free-running window knob. `api/billing.py`
+  derives fixed UTC anniversary boundaries from trusted account/payment dates;
+  `periodEnd` is the exclusive next reset boundary.
 - `api/run_state.py:21` · `_REPORT_CHUNK_WORDS = 6` · SSE report-streaming chunk size (words per delta) · **AMBIGUOUS** (perceived-streaming UX)
 - `api/run_state.py:61` · `tool_calls[:12]` · process-summary tool-call display cap · **COSMETIC**
 - `api/run_state.py:164,182,191` · `[:60]` expert name / `[:40]` domain / `[:400]` summary · expert-panel field truncations · **COSMETIC**

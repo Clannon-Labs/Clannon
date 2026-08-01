@@ -70,6 +70,12 @@ COOKIE_DOMAIN = os.getenv("SERVER_COOKIE_DOMAIN") or None
 SESSION_TTL_S = 60 * 60 * 24 * 14  # 14 days
 DB_PATH = os.getenv("SERVER_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "clannon.db"))
 
+# Explicit deployment-only switch for the local Stripe-shaped billing simulator.
+# Checkout creation remains useful while disabled, but only a holder of this secret
+# may settle one. Production leaves the switch off until deliberately configured.
+MOCK_BILLING_ENABLED = os.getenv("SERVER_MOCK_BILLING_ENABLED", "0") == "1"
+MOCK_BILLING_SECRET = os.getenv("SERVER_MOCK_BILLING_SECRET") or None
+
 # Transport-layer body-size ceiling enforced by hardening.BodySizeLimitMiddleware BEFORE
 # any route or pipeline stage runs.  Must exceed any legitimate payload: the largest
 # upload is WIKI_UPLOAD_MAX_BYTES × WIKI_UPLOAD_MAX_FILES = 5 MB plus multipart overhead.

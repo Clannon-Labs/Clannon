@@ -24,12 +24,6 @@ history_char_budget: 200000
 # model never loses the immediate conversational thread. Unit: turns. Safe range: ≥ 1.
 verbatim_turn_floor: 2
 
-# ── USAGE METERING WINDOW (api/app.py /usage) — decision D10 ──────────────────────────────
-# The trailing window the /usage endpoint sums a user's real spend over to show against their
-# plan budget (the sidebar meter + Settings). Display/reporting ONLY — NOT the enforcement
-# ceiling (that is spend_ceiling_fraction). Unit: days. Safe range: > 0.
-usage_metering_window_days: 30
-
 # ── INFRA COST (decision B2b) ────────────────────────────────────────────────────────────
 # The non-LLM cost of a unit of work, folded INTO the real cost the margin ceiling checks so
 # infra is never ignored. Two components: a flat per-call charge (compute/egress/storage

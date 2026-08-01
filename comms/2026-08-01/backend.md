@@ -149,3 +149,17 @@ passed**, one existing RestrictedPython warning.
 - `20:45` **api** worker via **codex** — 2026-08-01_memory-plan-tier-server-enforcement.md — exit 0, 1261s — output: `.agents/runs/20260801-202441-api.out`
 - `22:20` **orchestration** worker via **codex** — 2026-08-01_decision-log-events-not-payloads.md — exit 1, 469s — output: `.agents/runs/20260801-221230-orchestration.out`
 - `22:28` **api** worker via **codex** — 2026-07-31_surface-cache-token-counters.md — exit 0, 454s — output: `.agents/runs/20260801-222026-api.out`
+- `22:56` **api** worker via **codex** — 2026-08-01_fixed-billing-cycle-mock-credits.md — exit 0, 1356s — output: `.agents/runs/20260801-223341-api.out`
+
+## Billing-period + mock entitlement control plane
+
+- Replaced sliding 30-day `/usage` window with fixed UTC anniversary periods;
+  Jan-31 clamps in February then recovers Mar-31.
+- Added persistent pending/failed/confirmed mock checkout ledger, idempotent
+  secret-authenticated confirmation, current-period add-ons, configured upgrades,
+  and unknown-plan fail-closed behavior.
+- Root/follow-up/revision creation now refuses exhausted users with structured 402
+  before persistence. Coarse admission is explicit; exact Redis per-call enforcement
+  remains OFF.
+- Proof: 17 fail-first billing tests; 53 coordinator-focused passed; full backend
+  1613 passed. Frontend contract queued while frontend interactive tree is active.

@@ -104,8 +104,12 @@ PARTIAL.**
    explicitly over compromising detection. `verifier`/`filter` are `locked: true`
    and CB5 is PARTIAL *because detection already evades on paraphrase*, so any
    change runs against `tests/benchmarks/cb5_verdict_honesty.py`. Owner: security.
-7. **Budget enforcement go-live.** Code is built but ships
-   `enforcement_enabled=False`. Owner supplied provider-pricing references;
+7. **Budget enforcement go-live.** Fixed anniversary periods, confirmed mock
+   add-on/upgrade settlement, and coarse server-side run admission landed
+   2026-08-01. Admission honestly checks completed current-period usage before
+   creating a root/follow-up/revision; one admitted run can still overshoot and
+   concurrent admissions can race. Exact per-call Redis money-cost enforcement
+   is built but ships `enforcement_enabled=False`. Owner supplied provider-pricing references;
    backend must verify them against official current prices, represent
    tier/modality differences honestly, measure conservative infrastructure
    cost, seed production budgets, prove recovery/concurrency, and obtain

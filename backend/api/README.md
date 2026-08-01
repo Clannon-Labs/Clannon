@@ -37,7 +37,9 @@ Loads `.env` then `.env.local` from `backend/` (the working directory, same as
 | `SERVER_COOKIE_DOMAIN` | _(unset)_ | Session-cookie `Domain`. Unset = host-only (same-origin dev). Set `.clannon.com` (leading dot) so ONE cookie is valid for the apex and every subdomain — the mechanism behind seamless, no-relogin auth when the workspace moves to `app.clannon.com`. |
 | `SERVER_DEFAULT_PLAN` | `free` | Plan for new signups. Use `pro` in local dev to unlock all memory tiers. |
 | `SERVER_COOKIE_SECURE` | `0` | Set `1` in production (HTTPS) so the session cookie is Secure. |
-| `SERVER_DB_PATH` | `api/data/clannon.db` | SQLite location (users, sessions, projects, wiki, runs, model prefs). |
+| `SERVER_DB_PATH` | `api/data/clannon.db` | SQLite location (users, sessions, projects, wiki, runs, model prefs, mock billing). |
+| `SERVER_MOCK_BILLING_ENABLED` | `0` | Set `1` only where server-owned mock settlement is intentionally available. |
+| `SERVER_MOCK_BILLING_SECRET` | unset | Deployment/test secret for mock confirmation. Required when mock settlement is enabled; never returned to clients. |
 
 ## Module map
 
@@ -45,6 +47,7 @@ Loads `.env` then `.env.local` from `backend/` (the working directory, same as
 |---|---|
 | `app.py` | FastAPI assembly, CORS, and core routes. |
 | `auth.py` | Users + sessions + the SQLite data layer (projects, wiki, model prefs — every query lives here, never in the routes). Scrypt, httpOnly cookies. The dev stand-in for Supabase — swap this one module when Supabase lands. |
+| `billing.py` | Fixed UTC anniversary periods, mock checkout ledger/router, additive token entitlement, and coarse pre-run admission. Stripe replaces this seam; Redis per-call cost enforcement stays separate. |
 | `runs.py` | Thin façade over run state, storage, execution, inputs, lineage, and SSE. |
 | `run_requests.py` | Shared multipart upload admission and per-run model override parsing. |
 | `run_revision.py` | Safe revise-turn HTTP route and terminal-target preflight. |
@@ -57,7 +60,9 @@ Loads `.env` then `.env.local` from `backend/` (the working directory, same as
 ## The contract
 
 Auth is an httpOnly session cookie (`clannon_session`); every endpoint except
-`/config` and the auth routes requires it and is scoped to the signed-in user.
+`/config`, auth routes, and server-only `/billing/mock/confirm` requires it and
+is scoped to the signed-in user. Mock confirmation instead requires its deployment
+secret and is disabled by default.
 JSON keys are camelCase to match the frontend types in
 `clannon/frontend/src/lib/api/types.ts`.
 
@@ -113,9 +118,12 @@ is proposed to the frontend separately.
 | `/memory/hydration-preview` | GET | `?brief=<text>&projectId=<id>` (projectId optional) | `(MemoryEntry & {score: number})[]` — plan-filtered dry-run of `MemoryPort.hydrate`, ranked by Manager trust+similarity+recency and capped at 8. Request carries exact allowed tiers; wiki is supplied only when entitled; response is independently filtered if Manager over-returns. Best-effort: brief `<3` chars, degraded memory, or memory fault ⇒ `[]` |
 | `/memory` | POST | `{tier:"wiki", title, content, projectId?}` | created entry. Only wiki is user-writable and WIKI entitlement is required (403 otherwise); unknown/other-user `projectId` is 422 |
 | `/memory/:id` | PUT / DELETE | entry / — | PUT updates owner-scoped wiki and requires WIKI entitlement. DELETE works across all durable tiers regardless of current plan, preserving deletion/right-to-erasure after downgrade; owner-scoped, unknown/foreign id 404. Wiki UPLOAD `/memory/upload` takes `projectId` as form field or query param and also requires WIKI entitlement |
-| `/usage` | GET | — | `UsageSummary` `{periodStart, periodEnd, budget, used, cacheReadTokens, cacheWriteTokens, byDay[]}` — `used` is the REAL metered spend (sum of `run.tokensUsed`, including superseded turns, over a trailing 30-day window), `budget` is the user's plan budget. Runs expose the same cache counters beside `tokensUsed`; providers that report none yield `0`. Cached tokens stay separate because their prices differ: `tokensUsed` remains full-rate input + output and is unchanged. Redis-atomic budget enforcement (decrement + hard stop) lands separately. |
+| `/usage` | GET | — | `UsageSummary` `{periodStart, periodEnd, periodEndExclusive:true, baseBudget, additionalCredits, budget, used, cacheReadTokens, cacheWriteTokens, byDay[]}`. Period is anchored to signup date or latest confirmed plan-payment date in UTC; missing month days clamp without drift (Jan 31 → Feb 28/29 → Mar 31). `periodEnd` is exclusive. `used` sums real `run.tokensUsed`, including superseded turns, only inside that fixed period. `budget = baseBudget + confirmed current-period credits`; pending/failed credits grant zero and unknown plans fail closed to zero. Cached counters remain separate. |
 | `/settings/models` | GET / PUT | — / `{layer, model}` | `RoleModelConfig[]` / 204. One entry PER ROLE: 5 selectable (orchestrator, research, planner, code, media_expert) + verifier/filter read-only. Each entry carries `model` (the user's workspace default or the system default), `default`, `options`, `locked`, and `experts` (which experts the role drives). Defaults are derived from `models.yaml` (Claude for reasoning, Gemini for media). PUT sets the per-user WORKSPACE default for a role (403 locked, 422 model not in options). Per-SESSION overrides go on the run POST via `models`. |
-| `/billing/checkout` `/billing/portal` | POST | — | 501 until Stripe |
+| `/billing/checkout` | POST | `{kind:"add_on", creditAmount}` or `{kind:"upgrade", planId}` | Creates owner-scoped pending mock checkout. Add-ons are positive integers capped by highest configured plan budget. Upgrades accept only a higher configured plan. Extra fields (including user, price, or success) are rejected. Pending state changes no entitlement. |
+| `/billing/checkouts/:id` | GET | — | Owner-scoped mock checkout state; foreign/unknown IDs both return `404`. |
+| `/billing/portal` | POST | — | Owner's current plan plus latest 50 mock checkouts and server add-on cap. Presentation only; it grants nothing. |
+| `/billing/mock/confirm` | POST | `{checkoutId, confirmationId, outcome:"confirmed"|"failed"}` + `X-Clannon-Mock-Billing-Secret` | Stripe-webhook-shaped server action. Disabled unless `SERVER_MOCK_BILLING_ENABLED=1`; secret comes only from `SERVER_MOCK_BILLING_SECRET`. Confirmation IDs are idempotent. Failed settlement grants nothing; confirmed add-on applies once to current period; confirmed upgrade changes only checkout owner and resets their payment anniversary. Never call from browser code. |
 
 ### Terminal presentation
 
@@ -252,4 +260,8 @@ run in a real browser. The stored session cookie must be Secure, HttpOnly, and
 domain-scoped to `.clannon.com`.
 
 Production replacements tracked: Supabase (swap `auth.py`), Postgres for the
-current SQLite store, Stripe (`/billing/*`), Redis token metering (`/usage`).
+current SQLite store, and Stripe replacing mock settlement. Run admission is
+intentionally coarse: it checks `used >= budget` before root/follow-up/revision
+persistence, so one admitted run may overshoot and concurrent admissions may both
+proceed. Redis per-call atomic money-cost enforcement remains separate, off, and
+subject to ROADMAP pricing/seeding/recovery/security gates.
