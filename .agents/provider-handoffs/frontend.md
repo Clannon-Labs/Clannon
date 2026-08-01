@@ -5,6 +5,82 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
+- Updated: 2026-08-01 (fourth update, same session)
+- Task: owner ordered three things — (1) failed/quota-exceeded mock states,
+  (2) templates/saved workflows next, (3) add a standing CLAUDE.md
+  instruction to keep proposing UX work unprompted and sweat small details
+  instead of stopping at a small benchmark bump.
+- (3) done first (cheap, durable): "Never Stop At A Small Win" section
+  added to `frontend/CLAUDE.md`.
+- (1) done: two new mock QA triggers (`status:"failed"`,
+  `completionReason:"rate_limit"` for quota-exceeded's mid-run form) close
+  gate-95's last two untested states. Went further into PRE-run quota
+  exhaustion too (the more literal "quota-exceeded" reading) since it was
+  directly implied and testing (1) surfaced it: the composer had zero
+  awareness of an exhausted budget even though the sidebar's own card did.
+  Added `useBudgetExhausted()` (hooks.ts) + a `budgetExhausted` prop on
+  `Composer`, wired at both call sites — Send disables, Enter stops
+  submitting, calm inline message + upgrade link, typing never blocked.
+- Read `backend/api/billing.py`'s `admit_run`: real backend already
+  enforces budget server-side correctly (structured 402, no proposal
+  needed) — but `http.ts`'s `errorMessage()` couldn't parse that nested
+  structured body at all, silently falling back to generic text. Fixed the
+  parser (`errorCode()` too — was reading from the wrong place). Added the
+  same admission check to mock's `createRun` for parity.
+- **Mistake, self-caught, no data lost**: while hand-writing a mutation
+  check for a new test, `git checkout --` on `composer.tsx` to undo one
+  deliberate line discarded the WHOLE uncommitted feature — checkout
+  doesn't know intent, only HEAD. Caught within one command (grepped for
+  `budgetExhausted`, found nothing), reconstructed the exact diff from this
+  conversation's own record, re-verified everything before continuing.
+  **`git checkout --` is retired from this workflow except on a file with
+  zero uncommitted work worth losing** — use a targeted revert or stash
+  instead, always.
+- Verification: `tsc`/`eslint` clean, vitest 109/109 (new
+  `composer.test.tsx` — 4 tests, one is a same-file sanity check proving
+  Enter-to-submit is reachable in this test harness at all before trusting
+  a test that asserts it's blocked, since `isFinePointer()` reads
+  `matchMedia` which the global test setup always stubs `false`; and
+  `http-error-parsing.test.ts` — 2 tests). Full mock-mode e2e (production
+  build, port 3100, exact launch PID recorded to a scratch file and killed
+  precisely — no `pkill -f` pattern anywhere this round):
+  `completion-status.spec.ts` 5/5 (both new tests), `first-value.spec.ts`
+  2/2 unaffected. `prior-turns.test.tsx` needed 6 tests fixed to actually
+  log in first — they'd been constructing an unauthenticated `MockClient`
+  whose seeded demo data (~599k tokens) was already over the unauthenticated
+  default's free 100k budget, an inconsistency the missing admission check
+  had been silently papering over.
+- **Not done, said so plainly**: no live click-through of the
+  budget-exhausted composer state specifically — reaching real exhaustion
+  needs either a live account already at cap or a lot of real mock run
+  time, felt disproportionate against an already-thorough unit/e2e pass.
+- Commit `6da3bcd`, pushed clean. Benchmark Pass 8: failure recovery
+  88->90, trust/control 91->92, **85.03 -> 85.29** (rounds to 85). Full
+  detail: `reports/frontend/frontend_report_v17.md`; comms:
+  `comms/2026-08-01/frontend.md`.
+- **Next, not yet started**: (2) templates/saved workflows. Deliberately
+  paused before building — several reasonable shapes (brief text only vs.
+  brief+project+model config; a management UI to rename/edit/delete vs.
+  just save-and-reuse; per-project vs. account-wide) and picking wrong
+  burns real effort. Scope it with the owner (or make a clearly-reasoned
+  default choice and state it) before writing code.
+
+## Change note
+
+Two lessons worth carrying forward. First: "test the failed state" led
+naturally to "does the composer even know about budget exhaustion," which
+led to a real cross-file consistency bug (sidebar knew, composer didn't) and
+a real backend-response-parsing bug (structured 402 silently dropped) —
+neither was the literal ask, both were directly downstream of it and worth
+fixing in the same pass rather than filing separately. Second, harder-won:
+`git checkout --` is not a safe way to undo a small experimental edit when
+there's real uncommitted work in the same file — it reverts to HEAD, full
+stop, with no concept of "just that one line." Diff first, or use a scoped
+tool, before ever running it again on a file with anything worth keeping.
+
+## Previous checkpoint (same day, earlier still — third update)
+
+- Provider: Claude Code
 - Updated: 2026-08-01 (later still, same session — third update)
 - Task: owner asked to (1) browser-test v15's redesign myself, (2) continue
   the benchmark, (3) propose UX ideas and act on the one picked.

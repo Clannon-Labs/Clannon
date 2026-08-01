@@ -1,5 +1,37 @@
 # frontend — 2026-08-01
 
+## failed + quota-exceeded states closed, composer honors its budget (commit 6da3bcd, pushed)
+
+Gate-95's four required states are now all genuinely tested: added mock
+triggers for `status:"failed"` and `completionReason:"rate_limit"`
+(quota-exceeded's mid-run form). Went further into pre-run quota exhaustion
+too — the composer had zero awareness the account was out of tokens (sidebar
+had a card for it, Send just ignored it). Added `useBudgetExhausted()` +
+wired `Composer` to disable Send / block Enter / show an upgrade link when
+exhausted, at both call sites.
+
+Read `backend/api/billing.py`: real backend already enforces this
+server-side correctly, no proposal needed. But found `http.ts`'s error
+parser couldn't read the backend's structured 402 body at all (nested
+`detail.message`) — would've shown generic noise instead of the real reason.
+Fixed. Added the equivalent check to mock's `createRun` too.
+
+Own mistake, self-caught: `git checkout --` on composer.tsx to undo a
+one-line manual mutation (part of writing a real mutation-check for a new
+test) discarded the whole uncommitted feature instead. Caught immediately,
+reconstructed from the conversation record, re-verified everything.
+
+`tsc`/`eslint` clean, vitest 109/109, full mock-mode e2e 7/7 across the two
+affected spec files. Benchmark 85.03 → **85.29** (failure recovery 88→90,
+trust/control 91→92). Full detail: `reports/frontend/frontend_report_v17.md`.
+
+Also added a standing instruction to `frontend/CLAUDE.md` per owner ask:
+keep proposing UX work unprompted, don't stop at a small benchmark bump,
+sweat small details as real product work.
+
+Next: templates/saved workflows (owner-requested) — scoping before building,
+several reasonable shapes exist.
+
 ## browser-tested v15, benchmark to 85, pinned project goal (commit edfb7ec, pushed)
 
 Browser-tested the project-creation redesign against real backend — singular
