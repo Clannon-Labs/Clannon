@@ -5,7 +5,67 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
-- Updated: 2026-08-01
+- Updated: 2026-08-01 (later same day/session)
+- Task: owner asked where the benchmark stood; backend answered `:8000`
+  health-check live during the conversation, so switched to real HTTP
+  verification. Owner then asked about a missing project-creation
+  goal/references-files flow — confirmed via git history + backend source it
+  never existed (not a regression), then asked to add it anyway.
+- Implemented: New Project dialog gained optional goal + reference-files
+  fields alongside the existing client-context note, all three feeding the
+  project's wiki via the existing `saveMemoryEntry`/`uploadMemoryFiles`
+  contracts — no new endpoint.
+- **Found while browser-testing this against live backend as a fresh
+  free-tier signup: a real plan-tier bypass, not a frontend bug.**
+  `GET /memory`, `POST /projects` (`seedFacts`), `POST /memory`, and
+  `POST /memory/upload` in `backend/api/app.py` never check `user.plan`
+  anywhere — a locked-tier account's wiki shows as UI-locked but the full
+  content is already in the network response, and nothing stops writing to
+  it either (confirmed live: 3 wiki entries written and readable via the
+  count badge on an account whose plan doesn't include wiki).
+- Owner's instruction on hearing this: must not be reachable "no matter
+  what," must not be bypassable from the frontend, backend must enforce.
+  Rewrote the fix from "warn but allow" to "don't render at all" — the three
+  fields don't exist in the DOM when `!plan.memoryTiers.includes("wiki")`,
+  and `submitCreate` independently zeroes them so stale state can't slip a
+  write through either.
+- Filed `proposals/to-backend/2026-08-01_memory-plan-tier-not-enforced-serverside.md`
+  (Priority: high) covering both the read leak and all three open write
+  paths — explicit that frontend's fix is UX, the real boundary is
+  server-side and isn't frontend's tree to fix.
+- Verification: `tsc`/`eslint` clean, vitest 100/100 (new
+  `src/tests/project-switcher.test.tsx`, 3 tests — proves the field-visible
+  branch, the field-absent branch, and that a locked-plan submit sends
+  `seedFacts: undefined` and never calls the goal/file mutations). Live
+  browser click-through against the real backend for both branches, zero
+  console errors either time (used `http://192.168.18.84:3000` — plain
+  `localhost` trips a CSP mismatch in this dev config, noted, not chased).
+- Commit `ef76b2e`, pushed clean (fast-forward past two intervening backend
+  commits, no conflict). Full detail: `reports/frontend/frontend_report_v14.md`;
+  comms: `comms/2026-08-01/frontend.md`.
+- One unchased loose end: a hard `page.goto` to `/app/memory` once bounced
+  the session to `/login` mid-session even though `/app` survived the same
+  hard-navigation pattern moments before/after. Didn't reproduce deliberately
+  a second time; could be a `next dev --reload` artifact. Worth watching for,
+  not confirmed as a real bug.
+
+## Change note
+
+Added product UX, but browser-testing it against a live backend (a first for
+this session — backend hadn't been reachable earlier) surfaced that the
+plan-tier "lock" this feature writes into has never been enforced
+server-side, on read or write. Owner was explicit that a UI-only gate isn't
+acceptable once known — rewrote from disclosure-and-allow to
+absence-and-guard on the frontend side, and filed the server-side half as a
+high-priority proposal rather than trying to fix `api/` myself. The backend
+coming up mid-session is also why this checkpoint exists at all instead of
+staying mock-only: real HTTP testing catches classes of bug (contract-level,
+enforcement-level) that mock-mode and even RTL tests structurally cannot.
+
+## Previous checkpoint (same day, earlier)
+
+- Provider: Claude Code
+- Updated: 2026-08-01 (earlier same session)
 - Task: close `proposals/to-frontend/2026-07-30_memory-provenance-cards.md`
   (backend proposal: render curator provenance on Memory archive cards).
 - Found mid-flight: a prior uncommitted session had already done most of it
