@@ -51,6 +51,19 @@ change, new data in a response): write `../proposals/to-backend/
 YYYY-MM-DD_slug.md` and design around the gap until answered. Never edit
 backend code; never ask the owner to relay. Proposals are the ONLY channel.
 
+**The backend agent is a collaborator, not a dependency to escalate to only
+when blocked** (owner instruction, 2026-08-01). When a benchmark dimension is
+capped by something outside frontend's tree — pipeline latency, an
+under-enforced contract, missing telemetry — don't just note it as "not
+frontend's problem" and move on. Read enough of the relevant backend code to
+ground a real proposal (informational reads are fine; never edit), write up
+specific, evidenced ideas backend can evaluate, and send it. Backend will
+analyze and may execute what's good — that's the whole point of the channel.
+This is proactive, not just reactive: don't wait until frontend work is
+literally blocked to talk to backend; if closing a gap on their side would
+genuinely move the product forward (including the shared benchmark score),
+propose it unprompted.
+
 ## Preview Evidence
 
 Every user-visible frontend improvement must include representative preview
