@@ -59,11 +59,21 @@ class DecisionLogEntry(BaseModel):
     """
     One structured decision-log entry streamed to the user in real time. This is
     NOT prose — it is what the orchestrator is doing and why.
+
+    `message` (and `detail`) are the ONLY fields the live stream forwards to the
+    client (`api/run_state.py::on_log_entry` reads just `kind`/`message`/`detail`)
+    — so both must stay an EVENT description, never a payload (draft answer text,
+    expert finding, tool result). `full_content`, when set, is the real content
+    behind an event (e.g. the orchestrator's drafted answer) for the durable,
+    owner-scoped CB4 audit mirror (`derive_record`) to pick up — it is deliberately
+    NOT one of the fields the live mapper reads, so it never reaches the client
+    even though it survives on the in-memory `ctx.decision_log` entry.
     """
     kind: DecisionLogKind
     message: str
     turn: int = 0
     detail: dict[str, Any] = Field(default_factory=dict)
+    full_content: str = ""
 
 
 # --- CB4: the durable decision-record contract ------------------------------

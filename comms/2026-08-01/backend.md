@@ -50,3 +50,6 @@ not how uploads travel.
   Production survives only because a best-effort warmup wins the race; if that
   warmup times out it logs a warning and continues, and the first real request dies
   with the blank error above.
+
+## dispatched workers
+- `13:25` **orchestration** worker via **claude** — 2026-08-01_decision-log-events-not-payloads.md — exit 0, 495s — output: `.agents/runs/20260801-131709-orchestration.out`

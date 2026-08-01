@@ -230,9 +230,12 @@ def test_referenced_artifact_resolves_only_for_report_presentation():
     # the full artifact ships without transiting the model's answer...
     assert report_resp.presentation == "report"
     assert report_resp.text == "THE FULL REPORT"
-    # ...while the decision log carries the lean summary
-    answers = [e.message for e in report_ctx.decision_log if e.kind == "answer"]
-    assert answers == ["lean summary"]
+    # ...while the live decision-log message is an EVENT, never the payload --
+    # the actual lean summary lives in `full_content` (read by the durable audit
+    # mirror, never by the live SSE mapper), not in `message`.
+    answer_entries = [e for e in report_ctx.decision_log if e.kind == "answer"]
+    assert [e.message for e in answer_entries] == ["answer drafted"]
+    assert [e.full_content for e in answer_entries] == ["lean summary"]
 
     # A separately generated file does not replace the filtered chat summary.
     chat_ctx = VrakshaContext.new("s-chat-file")

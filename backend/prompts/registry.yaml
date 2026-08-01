@@ -42,9 +42,14 @@ orchestrator:
   about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
 
 batch_orchestrator.engineering:
-  version: 1
+  version: 2
   file: batches/engineering/orchestrator/system.md
   locked: false   # internal scoped behavior; overlay-aware, not a security boundary
+  about: true     # a batch orchestrator IS Clannon working in one domain, not a
+                  # separate agent working for Clannon — it gets the same identity
+                  # block as the central orchestrator so it speaks as "I", not "the
+                  # assistant". Deliberately NOT set on verifier/filter: those are
+                  # security gates that judge text, they do not speak as Clannon.
   # one batch orchestrator per field -- this batch's prompt carries engineering's
   # own domain knowledge and is NOT shared with any other batch's prompt
 

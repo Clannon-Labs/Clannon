@@ -87,7 +87,12 @@ def derive_record(entry: DecisionLogEntry, ctx: VrakshaContext) -> DecisionRecor
                     # belongs to a DIFFERENT decision, don't misattribute it
 
     return DecisionRecord(
-        decision=entry.message,
+        # `full_content`, when set, is the real content behind the event (e.g. the
+        # orchestrator's actual drafted answer) — the live `message` is just the
+        # event description on that path (see DecisionLogEntry's docstring). The
+        # durable audit mirror wants the real content; fall back to `message` for
+        # entries that never carried a separate payload (tool_call, ...).
+        decision=entry.full_content or entry.message,
         participants=participants,
         reasoning=reasoning,
         ts=time.time(),

@@ -80,7 +80,17 @@ async def run_loop(normalized: NormalizedInput, ports: Ports, ctx: VrakshaContex
         conversation=ctx.conversation,
     )
 
-    await ports.log.emit(DecisionLogEntry(kind="answer", message=answer.answer_text))
+    # EVENT, never payload: the live decision log streams to the user BEFORE the
+    # output filter runs (core/pipeline.py's ACTIVE_STAGES puts "orchestrator"
+    # ahead of "filter"), so a filter-blocked draft's actual text must never sit
+    # in `message`/`detail` — those are the only fields the live SSE mapper reads
+    # (api/run_state.py::on_log_entry). The real text goes in `full_content`,
+    # which the durable CB4 audit mirror (derive_record) reads but the live
+    # mapper does not — so a block is still auditable without ever reaching the
+    # client on the path the filter was supposed to gate.
+    await ports.log.emit(
+        DecisionLogEntry(kind="answer", message="answer drafted", full_content=answer.answer_text)
+    )
     return OrchestratorResponse(
         text=_resolve_response_text(answer, ctx),
         presentation=answer.presentation,

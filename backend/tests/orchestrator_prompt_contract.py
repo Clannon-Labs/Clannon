@@ -117,16 +117,57 @@ def test_registry_declares_central_v6_and_batch_v1_prompts():
         "locked": False,
         "about": True,
     }
+    # v2 + about:true (2026-08-01) — a batch orchestrator IS Clannon working in one
+    # domain, so it composes the same identity block as the central orchestrator
+    # instead of speaking as a separate agent. Deliberately NOT set on
+    # verifier/filter: those judge text, they do not speak as Clannon.
     assert manifest["batch_orchestrator.engineering"] == {
-        "version": 1,
+        "version": 2,
         "file": "batches/engineering/orchestrator/system.md",
         "locked": False,
+        "about": True,
     }
 
 
 def test_active_local_overlays_match_committed_prompt_behavior_when_present():
+    """The overlay may differ in WORDING from the committed baseline — that is the
+    whole point of a hardened overlay, and the production copy is deliberately
+    stronger. What it may never do is drop an identity invariant the baseline
+    establishes.
+
+    This asserted byte-equality until 2026-08-01, which contradicted its own name:
+    any real hardening turned it red, so the only way to keep it green was to stop
+    hardening. Same shape as the CB5 over-claim — a check that does not test what it
+    says it tests. It now pins the BEHAVIOUR, so a stronger overlay passes and a
+    WEAKER one (one that forgets it is Clannon, or starts naming a provider) fails.
+    """
+    forbidden_providers = ("anthropic", "openai", "google deepmind")
     for relative in ("orchestrator/system.md", "batches/engineering/orchestrator/system.md"):
         baseline = PROMPTS / relative
         overlay = OVERLAY / relative
-        if overlay.exists():
-            assert _read(overlay) == _read(baseline)
+        if not overlay.exists():
+            continue
+        text = _read(overlay)
+        lowered = text.lower()
+
+        base = _read(baseline).lower()
+
+        assert "clannon" in lowered, f"{relative}: overlay lost the Clannon identity"
+
+        # Each invariant is DERIVED from the baseline rather than hardcoded here: if
+        # the committed prompt establishes a rule, the overlay must still establish
+        # it. A prompt that never made a claim is not required to start making it, so
+        # this stays honest for the batch prompt, which takes its identity from the
+        # composed `about` block rather than from its own file.
+        for invariant in ("underlying model", "answer as clannon"):
+            if invariant in base:
+                assert invariant in lowered, (
+                    f"{relative}: overlay dropped the baseline rule {invariant!r}"
+                )
+
+        # An overlay must never NAME a provider as the builder. Mentioning one inside
+        # a denial is fine, so this looks for the affirmative shape only.
+        for provider in forbidden_providers:
+            assert f"built by {provider}" not in lowered, (
+                f"{relative}: overlay claims it is built by {provider}"
+            )
