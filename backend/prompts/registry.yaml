@@ -59,7 +59,7 @@ filter:
   locked: true   # output safety/quality gate — a security boundary
 
 memory:
-  version: 2
+  version: 3
   file: memory/system.md
   locked: false   # the memory-distillation agent — behavior, not a security boundary
 
