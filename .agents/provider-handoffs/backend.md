@@ -63,7 +63,40 @@ finished something.
 
 ---
 
-## Current checkpoint — owner proposals triaged; Pydantic AI 2.22 proven (2026-08-01)
+## Current checkpoint — proposal inbox sweep complete (2026-08-02)
+
+Resolved every completed specialist proposal and archived it with evidence. Expert
+inboxes are empty. One combined owner proposal remains in `proposals/to-backend/` as
+PARTIAL: measured cheaper-model routing and live A/B quality/latency evidence remain.
+ROADMAP §2.4–§2.5 owns those gaps; no duplicate dispatch needed.
+
+Current backend diff contains four verified units:
+
+- exact two-user HTTP memory-archive isolation proof;
+- discriminating identity filter plus over-block/under-block live mutations;
+- deep central and engineering batch prompts with dynamic runtime-surface contracts;
+- conditional post-verifier deep-memory reader behind Manager. Model never receives
+  tenant/tier controls, selects only opaque tool-returned ids, and deterministic
+  hydration remains default. Real synthetic Haiku proof succeeded in 9.45s. A measured
+  5s timeout failure caused a separate 15s reader deadline; embedding stays at 5s.
+
+Frontend billing proposal was completed and committed separately as `e53197f`.
+Untracked frontend template files belong to interactive frontend work; do not add them.
+Standing rule now requires coordinator to sweep all specialist proposal inboxes at
+session start and after each unit, without owner reminder.
+
+Coordinator integration: 301 passed. Full suite was stopped for owner pack-up after
+101 passes / 66s, not a failure. Component evidence: memory 348, orchestration 270,
+security 62 plus mutations, API 25. Invariant checker: 7 PASS, one existing NETWORK
+warning. Commit only listed backend/docs/rule paths, then push. Preserve unrelated
+template files.
+
+## Change note
+
+Rewritten after full proposal sweep and independent real-model memory check. Records
+archival decisions, remaining evidence gap, and unrelated frontend work to preserve.
+
+## Previous checkpoint — owner proposals triaged; Pydantic AI 2.22 proven (2026-08-01)
 
 Pushed `d608e18` for cache-token observability and `39094fc` for fixed billing
 anniversaries, mock settlement/add-ons/upgrades, and coarse 402 run admission. Memory

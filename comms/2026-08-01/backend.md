@@ -174,3 +174,6 @@ passed**, one existing RestrictedPython warning.
 - Resolved: dependency version and prompt layout. Partial: fixed billing, prompt
   depth, token efficiency. Open: exact per-call budget broker and scoped deep-memory
   retrieval. No arbitrary prompt-length target or every-version compatibility tax.
+- `23:42` **api** worker via **codex** — 2026-07-31_memory-archive-cross-user-http-proof.md — exit 0, 353s — output: `.agents/runs/20260801-233609-api.out`
+- `23:52` **security** worker via **codex** — 2026-08-01_guard-false-positive-depth.md — exit 0, 836s — output: `.agents/runs/20260801-233901-security.out`
+- `23:58` **orchestration** worker via **codex** — 2026-08-01_prompt-depth-and-call-efficiency.md — exit 0, 1134s — output: `.agents/runs/20260801-233908-orchestration.out`

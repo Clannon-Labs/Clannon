@@ -153,6 +153,7 @@ class MemoryConfig(BaseModel):
     graph_max_hops_ceiling: int = Field(ge=1)
     # D1 move — migrating out of foundation/vocab/constants.py (MEMORY_* group).
     read_timeout_s: float = Field(gt=0.0)
+    deep_reader_timeout_s: float = Field(gt=0.0)
     write_timeout_s: float = Field(gt=0.0)
     search_top_k: int = Field(gt=0)
     relevance_floor: float = Field(ge=0.0, le=1.0)

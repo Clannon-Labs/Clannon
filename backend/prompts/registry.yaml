@@ -36,13 +36,13 @@ verifier:
   locked: true
 
 orchestrator:
-  version: 6
+  version: 7
   file: orchestrator/system.md
   locked: false   # persona/behavior is customizable later; not a security boundary
   about: true     # compose the shared org/identity block (prompts/about_clannon.md) in
 
 batch_orchestrator.engineering:
-  version: 2
+  version: 3
   file: batches/engineering/orchestrator/system.md
   locked: false   # internal scoped behavior; overlay-aware, not a security boundary
   about: true     # a batch orchestrator IS Clannon working in one domain, not a
@@ -59,9 +59,14 @@ filter:
   locked: true   # output safety/quality gate — a security boundary
 
 memory:
-  version: 3
+  version: 4
   file: memory/system.md
   locked: false   # the memory-distillation agent — behavior, not a security boundary
+
+memory_reader:
+  version: 1
+  file: memory/read.md
+  locked: false   # scoped deep retrieval; separate tools/authority from write curation
 
 memory_supersession:
   version: 1

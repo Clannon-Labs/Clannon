@@ -188,6 +188,14 @@ So when you hit something outside your tree:
 3. **Review the diff, run the suite, commit and push it yourself.** You are the
    sole pusher and the integration authority; the worker never commits.
 
+**Coordinator inbox sweep is automatic, not owner-triggered.** At session start and
+after each completed unit, inspect every `proposals/to-{backend,memory,orchestration,
+security,api,frontend}/` inbox—not only your own. For each item: verify the acceptance
+criteria against code/tests; if proven complete, append `## Response`, update Status,
+and archive it; if unfinished, immediately dispatch its owning specialist and carry
+the result through review, suite, commit, and push. A status label or plausible commit
+is not proof. Do this without waiting for the owner to ask.
+
 Choosing the shape (`docs/architecture/CREW_WORKFLOW.md` §4.4):
 - **headless (`run`)** — bounded task, brief fully specifies it, no judgement
   call the owner or a specialist must make. This is the default.

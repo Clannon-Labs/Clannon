@@ -29,7 +29,16 @@ from foundation import (
     MemoryWriteProposal,
 )
 
-from . import batch_awareness_manager, curator, graph_manager, hydration, items, store, write_policy
+from . import (
+    batch_awareness_manager,
+    curator,
+    deep_reader,
+    graph_manager,
+    hydration,
+    items,
+    store,
+    write_policy,
+)
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +47,19 @@ class MemoryManager:
     """Qdrant-backed implementer of foundation.MemoryPort."""
 
     async def hydrate(self, request: HydrationRequest) -> HydrationPackage:
+        """Return deterministic scoped hydration; never add a model call here."""
         return await hydration.hydrate(request)
+
+    async def deepen(
+        self,
+        request: HydrationRequest,
+        fast: HydrationPackage,
+    ) -> HydrationPackage:
+        """Post-verifier internal read: enrich hard queries through bounded tools."""
+        if fast.degraded or not deep_reader.needs_deep_retrieval(request):
+            return fast
+        deep = await deep_reader.retrieve(request)
+        return deep_reader.merge(request, fast, deep)
 
     async def process_turn(self, turn: MemoryTurn) -> list[MemoryItem]:
         return await curator.process_turn(turn)

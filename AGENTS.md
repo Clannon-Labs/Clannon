@@ -123,6 +123,11 @@ Keep status current — `docs/ROADMAP.md` is the entry point, read at session st
 - Brief must let worker disagree: verify premise first, change nothing if false.
   Worker "fixing" doc to match wrong claim = worse than leaving alone.
 - Coordinator job = work gets DONE, not correctly assigned.
+- Coordinator sweeps EVERY `proposals/to-{backend,memory,orchestration,security,api,frontend}/`
+  inbox at session start and after each finished unit, without waiting for owner.
+  Verify acceptance against code/tests. Proven done → append Response, update Status,
+  archive. Unfinished → dispatch owner specialist, review, suite, commit+push. Status
+  text or a plausible commit alone is not proof.
 
 Owner's thinking — `drafts/owner_thoughts/`:
 - Owner talks about what they think/prefer/are considering → read that folder first.

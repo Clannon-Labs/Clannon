@@ -27,6 +27,7 @@ _TODAY = dict(
     qdrant_request_timeout_s=5,
     graph_max_hops_ceiling=20,
     read_timeout_s=5.0,
+    deep_reader_timeout_s=15.0,
     write_timeout_s=10.0,
     search_top_k=10,
     relevance_floor=0.30,
@@ -61,6 +62,7 @@ def test_d1_migrated_memory_knobs_are_present_and_at_todays_values():
     # foundation constants are removed; settings.MEMORY is now the single source. Lock the values.
     m = settings.MEMORY
     assert m.read_timeout_s == 5.0
+    assert m.deep_reader_timeout_s == 15.0
     assert m.write_timeout_s == 10.0
     assert m.search_top_k == 10
     assert m.relevance_floor == 0.30

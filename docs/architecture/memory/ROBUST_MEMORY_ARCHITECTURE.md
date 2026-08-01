@@ -469,15 +469,12 @@ just a tool-driving agent (its role today — orchestrator `CLAUDE.md`).
   the on-demand search and hands results back. The expert still never touches the
   port. This keeps "orchestrator = central authority" true without starving experts
   that genuinely need to discover.
-  *Built form (2026-07-03): the orchestrator brokers recall PRE-SPAWN (prompt
-  §"Brokering memory for experts"; it keeps `memory.search` natively), and a
-  MID-TASK `need_context(query)` channel now exists as a tool-shaped callback:
-  the expert requests, the handler-built broker executes (user-scoped searcher,
-  code-only curation — cap + dedup vs the pushed bundle), non-NETWORK experts
-  only, audit-recorded on `ctx.tool_calls`. The expert still never touches the
-  port. The variant where the ORCHESTRATOR LLM reviews the request in the
-  expert's RETURN channel is NOT built — it needs an `ExpertOutput` contract
-  change (report_v6).*
+  *Built form (2026-08-02): proactive scoped hydration is pushed before spawn.
+  Conditional deep retrieval for hard queries runs Manager-internally after the
+  verifier through a scope-captured tool; selected evidence joins that same prepared
+  bundle before orchestration. No model-visible `memory.search`, `MemorySearcher`, or
+  MID-TASK `need_context` channel exists. A future expert return-channel request still
+  needs an `ExpertOutput` contract change.*
 - **Central reasoning, lean context — the tension, resolved.** The existing
   invariant "the orchestrator never receives raw expert output, only brief
   summaries" (orchestrator `CLAUDE.md`) seems to fight "central reasoner." It does
@@ -501,10 +498,10 @@ just a tool-driving agent (its role today — orchestrator `CLAUDE.md`).
   today's untyped / agent-inference).
 - `HydrationRequest` may gain optional `as_of` (for "what did we know in March")
   and `query_hints`.
-- **Read methods stay code-only:** `hydrate` (proactive) and an explicit
-  first-class **`search(query, …)`** read capability the orchestrator calls on
-  demand (today this is the `memory.search` *tool* wrapping `MemorySearcher` →
-  `hydrate`; promote it to a named port read so the broker path in 7.3 is clean).
+- **Read methods stay code-only at the port:** `hydrate` is shipped. Conditional
+  post-verifier deep retrieval is Manager-internal and tool-scoped; it does not widen
+  `MemoryPort` or give orchestration raw browse access. A future first-class
+  **`search(query, …)`** port method remains proposed, not built.
 - **Write door stays async:** `record_write_proposals` / `learn` keep their
   signatures and run fire-and-forget; the Curator's consolidation/forget/reconcile
   passes are internal **scheduled** entry points behind the door, not turn-driven
@@ -517,17 +514,17 @@ Invariant §V.20 holds.
 ### 7.5 Readiness — the minimal scaffolding to build toward this now
 
 To make the codebase *ready* for the model above without a big-bang refactor:
-1. Promote on-demand `search` to a named `MemoryPort` read (wrap today's
-   `MemorySearcher`); keep `hydrate` code-only.
+1. If an on-demand orchestrator broker becomes necessary, add a named `MemoryPort`
+   `search` read; no `MemorySearcher` implementation exists today. Keep `hydrate`
+   deterministic and tenant-scoped.
 2. Add the additive `type`/`source`/`valid_at` fields (7.4) — they unblock L1.
 3. Move hydration launch to **post-normalize, concurrent with verify**; await at
    orchestrator entry (a small pipeline/`loop.py` change, Flow-safe per 7.2).
-4. Remove `memory.search` from expert grants; add a per-expert **context-bundle**
+4. Keep general memory search absent from expert grants; add a per-expert **context-bundle**
    input and an expert→orchestrator **need-context** request path (orchestrator
-   domain — land with the loop change). ✅ *Grants removed + turn-level context
-   push (non-NETWORK experts only) + the need-context channel (tool-shaped,
-   broker-executed, code-only curation) all built 2026-07-03. Per-expert bundle
-   SLICING and the orchestrator-LLM-review variant remain open.*
+   domain — land with the loop change). ✅ *Grants remain absent and turn-level
+   context push is built. Per-expert bundle slicing, MID-TASK need-context, and an
+   orchestrator-LLM-review variant remain open.*
 5. Keep `learn()`/distillation async (already is); add the scheduled maintenance
    entry point as a no-op stub the Curator (L4) will fill.
 

@@ -4,7 +4,7 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-07-31**.
+Last reconciled: **2026-08-02**.
 
 **pydantic-ai is UNPINNED at 2.18.0** (2026-07-31). The July pin blamed a broken
 bounded-loop money guard; the real cause was our classifier inferring a permanent
@@ -88,22 +88,30 @@ PARTIAL.**
    far more detailed system prompts following their guide
    (`Vault/projects/System_prompt_style_guides/PROPMT_TO_GET_INTELLIGENCE_LIKE_CLAUDE-FABLE-5.md`
    — read its OUTLINE, it is 123KB). Structure is READY: per-batch prompt
-   directories landed 2026-07-31. Order: **memory read/write prompts first** (the
-   memory system prompt is 39 lines, while the secure overlay took filter to 518
-   and verifier to 219 — the moat has the thinnest prompt in the system), then the
-   central orchestrator, then experts and batch orchestrators. Owner: backend +
-   memory + orchestration.
+   directories landed 2026-07-31. First slices landed 2026-08-02: memory read/write,
+   central orchestrator, and engineering batch prompts now describe exact authority,
+   tools, failure modes, completion rules, and model-visible surfaces; dynamic
+   contracts fail when runtime capability and prompt drift. Remaining: expert
+   prompts, other batches as they exist, and real A/B quality/latency evidence.
+   Owner: backend + memory + orchestration.
 5. **Memory read-side LLM (owner-ratified 2026-07-31).** Keep vector search; add a
    lightweight LLM that retrieves exactly what the orchestrator needs. It must
    reach memory ONLY through powerful, precise tools — it must not be able to open
    and read memory directly. That constraint is also what keeps tenant isolation
-   enforceable. Owner: memory.
+   enforceable. First conditional slice landed 2026-08-02 behind Manager after
+   verifier success: tenant/tier scope stays outside model schema, returned candidates
+   use opaque run-local ids, and deterministic hydration remains default. Real
+   synthetic Haiku proof completed in 9.45s inside a separate 15s bound; real
+   user-memory relevance/quality remains unproven. Owner: memory.
 6. **Guard false positives (owner-ratified 2026-07-31, option 1 only).** Cut false
    positives by making the guards MORE DISCRIMINATING — better examples, sharper
    instructions per the guide. **NOT by lowering the bar**: owner chose this
    explicitly over compromising detection. `verifier`/`filter` are `locked: true`
    and CB5 is PARTIAL *because detection already evades on paraphrase*, so any
-   change runs against `tests/benchmarks/cb5_verdict_honesty.py`. Owner: security.
+   change runs against `tests/benchmarks/cb5_verdict_honesty.py`. Identity handling
+   now distinguishes denial, quotation, comparison, and questions from direct or
+   indirect provider attribution, with over-block and under-block mutations. Broader
+   CB5 remains PARTIAL. Owner: security.
 7. **Budget enforcement go-live.** Fixed anniversary periods, confirmed mock
    add-on/upgrade settlement, and coarse server-side run admission landed
    2026-08-01. Admission honestly checks completed current-period usage before

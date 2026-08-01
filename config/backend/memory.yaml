@@ -87,6 +87,7 @@ graph_max_hops_ceiling: 20
 # The foundation MEMORY_* constants stay until core/memory repoints, then are removed — equal
 # values throughout, behavior-preserving.)
 read_timeout_s: 5.0            # hard read deadline (embed the query) — was MEMORY_READ_TIMEOUT_S. > 0
+deep_reader_timeout_s: 15.0    # post-verifier reader LLM deadline; real synthetic proof completed in 7.6s. > 0
 write_timeout_s: 10.0          # hard per-proposal write deadline — was MEMORY_WRITE_TIMEOUT_S. > 0
 search_top_k: 10              # candidates fetched per inferred tier at hydration — was MEMORY_SEARCH_TOP_K. > 0
 relevance_floor: 0.30         # drop hits below this raw cosine before ranking — was MEMORY_RELEVANCE_FLOOR. 0<=f<=1

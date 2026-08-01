@@ -1,8 +1,10 @@
 """
 Memory hydration prefetch — a pipeline stage that starts hydration RIGHT AFTER
 normalization so it overlaps the verifier's LLM call instead of being awaited serially
-by the orchestrator. Net effect: by the time the orchestrator runs, memory is already
-hydrated, and the turn pays max(verify, hydrate) instead of verify + hydrate.
+by the orchestrator. Net effect for ordinary turns: by the time the orchestrator runs,
+memory is already hydrated, and the turn pays max(verify, hydrate) instead of verify +
+hydrate. Explicitly hard continuity questions may then pay one bounded deep-reader call
+after verification; blocked and simple turns never do.
 
 It is NON-BLOCKING and INVISIBLE:
   * it kicks hydration off as a background future on the context and returns immediately,
@@ -10,7 +12,8 @@ It is NON-BLOCKING and INVISIBLE:
   * it emits NOTHING to the decision log — memory should feel like the assistant simply
     knowing things, never like it is "fetching memory".
 
-Best-effort: a fault yields empty prepared context and never fails the turn.
+Best-effort: a fast-path fault yields honest empty context; a deep-reader fault keeps
+already-ready fast context. Neither fails the turn.
 """
 
 from __future__ import annotations
@@ -44,21 +47,49 @@ async def run(flow: Flow[Any]) -> Flow[Any]:
 
 
 async def collect(flow: Flow[Any]) -> Flow[Any]:
-    """Resolve prepared context before orchestration, behind the memory boundary."""
+    """Resolve fast context, then deepen hard verified queries before orchestration."""
     started = time.monotonic()
     ctx = flow.ctx
     payload = await flow.load()
     hydration = HydrationPackage()
     try:
+        request = None
         future = ctx.hydration_future
         if future is not None:
             hydration = await future
         elif ctx.normalized_input is not None and ctx.user_id:
             from . import manager
 
-            hydration = await manager.hydrate(
-                HydrationRequest.for_turn(ctx, ctx.normalized_input)
-            )
+            request = HydrationRequest.for_turn(ctx, ctx.normalized_input)
+            hydration = await manager.hydrate(request)
+        verdict = ctx.verifier_result
+        verified = bool(
+            verdict is not None
+            and getattr(verdict, "proceed", False)
+            and not getattr(verdict, "dangerous", False)
+            and not getattr(getattr(verdict, "threat_level", None), "should_block", False)
+        )
+        if verified and ctx.normalized_input is not None and ctx.user_id:
+            from . import manager
+
+            request = request or HydrationRequest.for_turn(ctx, ctx.normalized_input)
+            # collect runs only after verifier passes. Keeping the generative reader
+            # here prevents unsafe/blocked input from buying a model call during the
+            # pre-verifier overlap while preserving fast deterministic prefetch.
+            try:
+                hydration = await manager.deepen(request, hydration)
+            except Exception as exc:  # noqa: BLE001 — preserve already-ready fast context
+                log.warning(
+                    "deep memory retrieval degraded; using fast context: %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                hydration = HydrationPackage(
+                    items=list(hydration.items),
+                    token_budget=hydration.token_budget,
+                    degraded=True,
+                    notes="deep memory retrieval temporarily unavailable; using fast context",
+                )
     except Exception as exc:  # noqa: BLE001 — augmentation never gates a turn
         log.warning("memory hydration degraded: %s", exc)
         hydration = HydrationPackage(

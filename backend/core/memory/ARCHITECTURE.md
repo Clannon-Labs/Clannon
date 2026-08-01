@@ -76,8 +76,8 @@ first use.
 
 ## 4. Hydration (read path)
 
-`hydrate(HydrationRequest)` → `HydrationPackage`, called by the orchestrator
-loop before planning. Steps:
+`hydrate(HydrationRequest)` → `HydrationPackage` is the deterministic fast path,
+started before verification and resolved before planning. Steps:
 
 1. **Scope check** — no `user_id` → empty package with a note. Fail closed.
 2. **Embed** the normalized query text (one embedding call, cached model).
@@ -100,6 +100,26 @@ loop before planning. Steps:
    prompt renders wiki → semantic → episodic/procedural.
 
 Default token budget: 2000 when the request doesn't set one.
+
+### Conditional deep retrieval
+
+Fast hydration remains the `MemoryPort.hydrate()` contract and never calls a
+generative model. After the verifier passes, memory's `prefetch.collect` may call the
+Manager-internal `deepen(request, fast)` for explicit decision-history, provenance,
+supersession, trade-off, risk, or multi-facet continuity questions.
+
+The bounded reader can reach memory only through its per-run `search_memory` closure.
+That tool captures authenticated `user_id` and server-decided `allowed_tiers`; neither
+appears in the model schema. It searches only those tiers, normalizes store hits into
+safe provenance-bearing candidates, drops mismatched tenant payloads, and gives each
+candidate an opaque run-local id. Final structured output may select only ids the tool
+returned. Generated prose never becomes hydration context.
+
+Reader limits: four searches, six candidates per search, six final selections, five
+agent turns, 350 output tokens, and the memory read wall-clock timeout. Reader/tool/
+prompt/store failure preserves fast context and marks the package honestly degraded.
+Clearly simple hydration and any fast-path store degradation add zero reader calls.
+The original token budget still caps the merged package.
 
 ## 5. Manager-owned curation and write policy
 
@@ -149,6 +169,7 @@ Memory is augmentation, not a gate. Every failure degrades, none block:
 |---|---|
 | Qdrant unreachable | Hydration: empty package + note. Writes: dropped with a logged warning. Pipeline proceeds. |
 | Embedding model unavailable | Same degradation; the model loads lazily and is retried next call. |
+| Deep reader/model unavailable | Keep deterministic fast context; mark deep retrieval unavailable. |
 | Collection missing | Auto-created on first use (idempotent ensure). |
 | Oversized/empty content | Truncated / skipped at the policy layer. |
 
@@ -183,6 +204,7 @@ core/memory/
   ARCHITECTURE.md   ← this document
   manager.py        ← MemoryPort implementer; the only door (thin adapter)
   hydration.py      ← read-side: ranking, recency decay, Lagrangian budgeting
+  deep_reader.py    ← post-verifier, hard-query LLM retrieval through scoped tools
   curator.py        ← Manager LLM + typed scope-captured search/save tools
   write_policy.py   ← write-side: dedup, EB1 supersession, sync_wiki
   items.py          ← store payload → MemoryItem provenance translator
