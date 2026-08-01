@@ -20,11 +20,26 @@ backend/assets/whisper_cache/
 
 # Production prompt overlay (auto-discovered, or VRAKSHA_PROMPTS_DIR). The real,
 # hardened prompts for EVERY llm call (verifier/filter/orchestrator/memory +
-# experts' system.md and skills) live here and must never be committed. The
-# committed prompts/ and experts/*/ files are the dev/CI baselines.
+# experts' system.md and skills) live here.
+#
+# NOW COMMITTED (owner decision, 2026-08-01). It was ignored to keep prompts out of
+# a leak, but the repo is private and a leak of it exposes security/, core/, and
+# every invariant anyway -- the prompts were the least sensitive thing in here. The
+# cost of ignoring them was concrete and daily: no backup (one copy on one disk), no
+# history, no rollback, no reviewable diff for security-relevant prompt edits, and
+# CI validating prompts/ while production ran prompts.secure/ -- a green suite
+# proving things about a prompt nobody runs.
+#
+# They still are NOT baked into the image (see backend/.dockerignore and
+# backend/Dockerfile) and are supplied at deploy time. Nothing about the runtime
+# overlay contract changed; only their provenance did.
+#
+# Keep them free of credentials and of any individual's name or location -- they are
+# instructions, not secrets. Anything that IS a secret belongs in .env, never here.
 *.secure/
 secure.*/
-prompts.secure/
+!prompts.secure/
+!prompts.secure/**
 
 security/vendors/
 
