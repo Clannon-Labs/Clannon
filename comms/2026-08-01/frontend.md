@@ -1,5 +1,42 @@
 # frontend — 2026-08-01
 
+## project creation moves behind a click; shared-dialog bug + a11y gap found (commit 89670fc, pushed)
+
+Owner correction on the project-creation fields added earlier today: they'd
+landed in two places — the New Project dialog (correct) and also
+`FirstRunGuide`, an older flow that auto-showed decision/context/deliverable
+fields as the default home screen for any zero-run account, no click
+required. Deleted `FirstRunGuide`; home screen is now identical for
+first-time and returning users. Added a "Start with a project" CTA gated on
+**zero projects** (not zero runs — an account with one project shouldn't be
+told to make its "first" one again), opening the same New Project dialog.
+
+Lifting that dialog's open state into shared context (so both the sidebar
+and the new CTA can open it) surfaced a real bug: `sidebar.tsx` renders its
+content twice in the DOM (desktop rail + mobile drawer), so a shared open
+flag meant both `ProjectSwitcher` instances' dialogs opened at once. Caught
+via e2e (`getByLabel('Project name')` resolved to 4 elements), not by
+inspection. Fixed by extracting the dialog into its own component, mounted
+once in `AppShell` instead of per-`ProjectSwitcher`-instance.
+
+Also found and fixed while chasing that: `components/ui/dialog.tsx` never
+wired an accessible name to the `<dialog>` element (no `aria-labelledby`) —
+a real, pre-existing a11y gap affecting every dialog in the app, not just
+this one. Fixed with `useId()`.
+
+Rewrote the three e2e specs that drove `FirstRunGuide`'s removed UI. Ran
+`first-value.spec.ts` + `completion-status.spec.ts` for real against a mock
+production build on port 3100 — 5/5 passing. `real-backend.spec.ts` fixed
+for the same selectors but not executed (10-min timeouts, needs live
+backend — flagged, not claimed verified).
+
+**Own mistake, corrected**: cleaning up the 3100 test server, ran `pkill -9
+-f "next-server"` — too broad, killed the shared `:3000` dev server too
+(running since before this session, possibly serving the owner's own
+browser). Caught immediately, restarted in the same config, verified real
+traffic resumed before continuing. Full detail in
+`reports/frontend/frontend_report_v15.md`.
+
 ## memory provenance cards + honest inferred-tier delete (commit 6531b29, pushed)
 
 Closed `proposals/to-frontend/2026-07-30_memory-provenance-cards.md` (backend's

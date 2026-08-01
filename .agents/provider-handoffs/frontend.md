@@ -5,7 +5,67 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
-- Updated: 2026-08-01 (later same day/session)
+- Updated: 2026-08-01 (later still, same session)
+- Task: owner correction — the goal/context/reference-files fields (added
+  moments earlier, see Previous checkpoint) had landed in TWO places: the
+  New Project dialog (correct) and `FirstRunGuide`, an older flow that
+  auto-showed decision/context/deliverable fields as the default home screen
+  for any zero-run account, no click required. Owner: those fields belong
+  behind an explicit "create project" click, never ambient. Asked one
+  clarifying question (plain composer vs. composer + CTA); owner picked CTA.
+- Implemented: deleted `FirstRunGuide`. Home screen is now identical for
+  first-time and returning users. Added a "Start with a project" CTA gated
+  on zero PROJECTS (not zero runs — caught via live testing that "zero runs"
+  wrongly re-nudged an account that already had one project from the prior
+  checkpoint's testing). Opens the same New Project dialog.
+- **Found via e2e, not inspection**: lifting the dialog's open state into
+  shared context caused BOTH `ProjectSwitcher` instances (sidebar duplicates
+  its content for desktop rail vs. mobile drawer, always both mounted) to
+  open their own dialog at once off one shared flag —
+  `getByLabel('Project name')` resolved to 4 elements in Playwright. Fixed
+  by extracting the dialog into `new-project-dialog.tsx`, mounted once in
+  `AppShell` (not duplicated) instead of per-switcher-instance.
+- **Found chasing that**: `components/ui/dialog.tsx` never wired an
+  accessible name to the `<dialog>` element (no `aria-labelledby`) — a real,
+  pre-existing a11y gap on every dialog in the app, invisible until
+  something finally tried `getByRole("dialog", {name: ...})`. Fixed with
+  `useId()`.
+- Rewrote the 3 e2e specs that drove `FirstRunGuide`'s removed UI. Built +
+  served a mock production bundle on :3100, ran `first-value.spec.ts` +
+  `completion-status.spec.ts` for real — 5/5 passing. `real-backend.spec.ts`
+  fixed for the same selectors, not executed (10-min timeouts, live backend
+  needed — said so plainly, not claimed verified).
+- **Own mistake mid-session**: `pkill -9 -f "next-server"` while cleaning up
+  the :3100 test server was too broad and killed the shared `:3000` dev
+  server too (running since before this session). Caught immediately via a
+  failed curl, restarted in the same config, confirmed real traffic resumed
+  before continuing. Repeated a milder version of the same pattern-matching
+  mistake once more a few minutes later; that one didn't hit anything live,
+  but that was luck, not care — said so in the report rather than only
+  flagging the one with a consequence.
+- Verification: `tsc`/`eslint` clean, vitest 100/100. Commit `89670fc`,
+  pushed clean. Full detail: `reports/frontend/frontend_report_v15.md`;
+  comms: `comms/2026-08-01/frontend.md`.
+
+## Change note
+
+Shared-state and shared-UI are not the same lift: sharing the OPEN FLAG
+across triggers was correct (that's the whole point — one dialog, multiple
+entry points), but the sidebar's desktop/mobile DOM duplication meant
+sharing the DIALOG ITSELF too would have been wrong even before this bug —
+it just took a globally-shared boolean to make the pre-existing duplication
+observable. The fix (dialog owned by one always-single-mounted component,
+open flag owned by context) is the right shape going forward: don't let a
+component that might be duplicated in the DOM also own something that must
+be a singleton. Separately: e2e caught two real, generically-useful bugs
+(the duplication, the missing `aria-labelledby`) that unit tests and manual
+click-through both missed — worth remembering when "the RTL test already
+covers this" starts to feel like enough.
+
+## Previous checkpoint (same day, earlier still)
+
+- Provider: Claude Code
+- Updated: 2026-08-01 (earlier same session)
 - Task: owner asked where the benchmark stood; backend answered `:8000`
   health-check live during the conversation, so switched to real HTTP
   verification. Owner then asked about a missing project-creation
