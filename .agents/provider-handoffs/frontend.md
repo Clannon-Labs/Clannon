@@ -5,6 +5,92 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Claude Code
+- Updated: 2026-08-02 (session end)
+- Task: owner ordered the extreme-priority billing proposal executed, then
+  asked to wrap for the day. Along the way: wrote a normal-priority proposal
+  to backend on Time to First Value latency (grounded in reading
+  `core/orchestrator/loop.py`/`experts/`/`models.yaml`, not speculation),
+  and prepped (not yet wired in) templates/saved-workflows.
+- **Real collision, resolved cleanly**: backend-coordinator dispatched a
+  headless `frontend-worker` onto the exact same billing proposal, into the
+  exact same working directory, concurrently with this interactive session
+  — despite the proposal saying it wouldn't (my tree was already dirty).
+  Caught via unexpected file changes mid-edit. Stopped touching the shared
+  files immediately, waited ~40 min for the worker to exit (didn't fight it
+  for the same lines), then independently verified its full output
+  (`tsc`/`eslint` clean, vitest 129/129 — matched its own claimed numbers)
+  before committing it as frontend's own work. Backend-coordinator had
+  *also* independently reviewed and archived the proposal by the time I
+  checked — two independent reviews converged on the same verdict without
+  seeing each other. Commit `e53197f`, pushed clean.
+- **If you're picking this up next**: watch for this pattern again. A
+  proposal marked "no worker dispatched, tree is dirty" is not a guarantee
+  — check `ps aux | grep crew.sh` / `.agents/runs/*.log` before assuming
+  you have a file to yourself, especially on anything marked extreme
+  priority (which seems to be exactly when the coordinator is most likely
+  to dispatch redundantly, probably because extreme-priority items get
+  swept faster).
+- **Templates/saved-workflows — foundation done, UI not wired in yet**:
+  `src/lib/templates.ts` (storage: brief + model overrides + projectId,
+  account-wide, localStorage — NOT backend-synced, that would need a
+  proposal, noted as a future upgrade not an oversight),
+  `src/lib/use-templates.ts` (reactive hook, same `useSyncExternalStore`
+  pattern as `use-browser-draft.ts`), `src/components/app/template-card.tsx`
+  (matches the starter-example card style exactly). `src/tests/
+  templates.test.ts`, 7/7 passing. Deliberately left UNCOMMITTED and NOT
+  wired into `page.tsx`/`composer.tsx` — that wiring needs the now-settled
+  billing composer changes as its base, and doing it concurrently with the
+  billing collision would have been reckless. **Next session's first task**:
+  wire the "Save as template" trigger into `Composer` (near Attach files)
+  capturing brief+session.models+projectId, and render `TemplateCard`s
+  alongside the starter-example cards in `page.tsx`, account-wide, per the
+  owner's own scoping answers (full setup; alongside starter cards;
+  account-wide for v1, per-project noted as the owner's actual preference
+  if it's ever cheap to add).
+- Proposal to backend on Time to First Value:
+  `proposals/to-backend/2026-08-01_time-to-first-value-latency-ideas.md`
+  (normal priority, not yet answered) — three grounded, falsifiable
+  questions (sequential-round latency, whether progressive report streaming
+  is architecturally plausible, whether research-role model tier has
+  headroom), explicitly NOT asking about Performance/mobile (that's
+  frontend's own framework-level problem, said so plainly).
+- Two new standing `frontend/CLAUDE.md` instructions today, both owner
+  instructions: don't stop at a small benchmark bump, keep proposing UX
+  work unprompted, sweat small details as real product work; and the
+  backend agent is a collaborator to propose real, evidenced ideas to, not
+  only a dependency to escalate to when blocked.
+- Verification (billing work): independently ran `tsc --noEmit`, `eslint`,
+  full `vitest run` myself rather than trusting the worker's own report —
+  129/129, clean, matched exactly. Spot-checked `composer.tsx`'s diff
+  (extends this session's earlier `budgetExhausted` work with a *reactive*
+  402-triggered block, doesn't replace it),
+  `budget-exhausted-notice.tsx` (real action buttons from the structured
+  402 detail), and the settings-page atomic-enforcement-claim removal, all
+  good. Reviewed the worker's own live preview captures
+  (`previews/2026-08-01_fixed-billing-contract/`) against a real backend
+  account — genuine evidence, not fabricated.
+- Full detail of the collision + billing review:
+  `comms/2026-08-02/frontend.md`. Yesterday's Pass 6/7/8 benchmark work
+  (84.16 → 85.29) and the failed/quota-state closure:
+  `comms/2026-08-01/frontend.md`,
+  `reports/frontend/frontend_report_v13.md` through `v17.md`.
+
+## Change note
+
+The collision is the thing worth remembering, not the billing feature
+itself: a proposal explicitly stating "no worker will be dispatched because
+the tree is dirty" was wrong by the time I got to it — coordination state
+described in a proposal's text is a snapshot, not a guarantee, and the only
+reliable check is looking at what's actually running (`ps aux`,
+`.agents/runs/`) before assuming exclusive ownership of a file. The
+recovery worked because the response to "someone else might be writing
+this" was to stop and verify, not to assume and continue — same shape as
+the `git checkout --` lesson from earlier today (v17), different mistake,
+same fix: check before you trust your own model of the current state.
+
+## Previous checkpoint (2026-08-01, fourth update)
+
+- Provider: Claude Code
 - Updated: 2026-08-01 (fourth update, same session)
 - Task: owner ordered three things — (1) failed/quota-exceeded mock states,
   (2) templates/saved workflows next, (3) add a standing CLAUDE.md
