@@ -101,11 +101,12 @@ automatically); unauthenticated calls to protected routes return **401**.
 | PUT | `/memory/:id` | `{tier, title, content}` | `MemoryEntry` | 404 if not found. |
 | POST | `/memory/upload` | **multipart** `files` (.md/.txt) | `MemoryEntry[]` | ≤10 files, ≤512 KB each. Already wired. |
 | DELETE | `/memory/:id` | — | 204 | 404 if not found. |
-| GET | `/usage` | — | `UsageSummary` | token metering placeholder (zeros until Redis budgets land). |
+| GET | `/usage` | — | `UsageSummary` | Fixed UTC anniversary period; `periodEnd` is the exclusive reset boundary. Base budget, confirmed current-period add-ons, used tokens, and cache diagnostics stay separate. |
 | GET | `/settings/models` | — | `RoleModelConfig[]` | PER-ROLE catalog (see §11): 5 selectable roles + verifier/filter read-only. Each entry: `layer` (role), `label`, `description`, `locked`, `model` (workspace choice or default), `default`, `options`, `experts` (what the role drives). |
 | PUT | `/settings/models` | `{layer, model}` | 204 | sets the user's WORKSPACE default for a role. 403 locked, 404 unknown role, 422 model not in that role's `options`. (No more `"expert:<key>"` — it's per-role now.) |
-| POST | `/billing/checkout` | `{planId}` | **501** today | Stripe lands with cloud. |
-| POST | `/billing/portal` | — | **501** today | same. |
+| POST | `/billing/checkout` | `{kind:"upgrade",planId}` or `{kind:"add_on",creditAmount}` | `CheckoutStatus` (201) | Creates a pending mock checkout. Old bare `{planId}` is rejected. Browser never confirms settlement. |
+| GET | `/billing/checkouts/:id` | — | `CheckoutStatus` | Owner-scoped polling; 404 for foreign/missing checkout. |
+| POST | `/billing/portal` | — | `BillingPortalInfo` | `{mode:"mock",planId,maxAddOnCredits,checkouts}`. |
 
 ---
 
@@ -193,7 +194,35 @@ interface MemoryEntry {
 }
 
 interface User { id: string; name: string; email: string; plan: PlanId; }
-interface UsageSummary { periodStart: string; periodEnd: string; budget: number; used: number; byDay: { date: string; tokens: number }[]; }
+interface UsageSummary {
+  periodStart: string;
+  periodEnd: string;              // exclusive next reset boundary
+  periodEndExclusive: true;
+  baseBudget: number;
+  additionalCredits: number;
+  budget: number;                 // base + confirmed current-period credits
+  used: number;
+  cacheReadTokens: number;        // diagnostic; never add to used
+  cacheWriteTokens: number;       // diagnostic; never add to used
+  byDay: { date: string; tokens: number }[];
+}
+
+type CheckoutStatus = {
+  id: string;
+  kind: "upgrade" | "add_on";
+  status: "pending" | "confirmed" | "failed";
+  planId: PlanId | null;
+  creditAmount: number | null;
+  createdAt: string;
+  settledAt: string | null;
+};
+
+interface BillingPortalInfo {
+  mode: "mock";
+  planId: PlanId;
+  maxAddOnCredits: number;
+  checkouts: CheckoutStatus[];
+}
 
 type PipelineLayer = "verifier" | "orchestrator" | "experts" | "filter";
 interface LayerModelConfig {
@@ -497,6 +526,29 @@ any new fetch (the multipart createRun/upload/download bypass the JSON `request(
 helper, so they must call `errorMessage` themselves, as shown in §5/§6). Network
 failure / timeout → `ApiError(message, 0)`. A 401 anywhere means the session expired
 — `me()` returning null drives the logged-out UI.
+
+Root, follow-up, and revision creation may return 402 with structured detail:
+
+```json
+{
+  "code": "token_budget_exhausted",
+  "message": "Token budget exhausted for this billing period.",
+  "used": 120000,
+  "budget": 100000,
+  "periodEnd": "2026-08-31",
+  "periodEndExclusive": true,
+  "actions": [
+    {"kind": "add_on", "endpoint": "/billing/checkout"},
+    {"kind": "upgrade", "endpoint": "/billing/checkout"}
+  ]
+}
+```
+
+Preserve those fields on `ApiError` and render reset date plus returned actions.
+Admission checks completed current-period usage before persistence. One admitted run
+may overshoot and concurrent/per-call hard stops are not live; never claim atomic
+enforcement. `/billing/mock/confirm` is deployment-secret/server-only and must not
+exist in browser client routes.
 
 ---
 

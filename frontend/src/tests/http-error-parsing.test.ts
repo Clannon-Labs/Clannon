@@ -16,13 +16,23 @@ describe("HttpClient error parsing — structured HTTPException detail", () => {
     vi.unstubAllGlobals();
   });
 
-  it("surfaces the real message from a structured 402 detail, not a generic fallback", async () => {
+  it.each([
+    ["root", (client: HttpClient) => client.createRun("Some brief")],
+    ["follow-up", (client: HttpClient) => client.createFollowUp("run_1", "Some brief")],
+    ["revision", (client: HttpClient) => client.reviseRun("run_1", "Some brief")],
+  ])("preserves actionable 402 detail for %s run admission", async (_kind, invoke) => {
     const body = {
       detail: {
         code: "token_budget_exhausted",
         message: "Token budget exhausted for this billing period.",
         used: 312_000,
         budget: 100_000,
+        periodEnd: "2026-08-31",
+        periodEndExclusive: true,
+        actions: [
+          { kind: "add_on", endpoint: "/billing/checkout" },
+          { kind: "upgrade", endpoint: "/billing/checkout" },
+        ],
       },
     };
     vi.stubGlobal(
@@ -36,9 +46,15 @@ describe("HttpClient error parsing — structured HTTPException detail", () => {
     );
 
     const client = new HttpClient();
-    await expect(client.createRun("Some brief")).rejects.toMatchObject({
+    await expect(invoke(client)).rejects.toMatchObject({
       message: "Token budget exhausted for this billing period.",
       status: 402,
+      code: "token_budget_exhausted",
+      used: 312_000,
+      budget: 100_000,
+      periodEnd: "2026-08-31",
+      periodEndExclusive: true,
+      actions: body.detail.actions,
     });
   });
 

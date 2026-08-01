@@ -10,6 +10,7 @@ import {
 import { getClient } from "./index";
 import { PLANS, planById, type Plan, type PlanId } from "@/config/plans";
 import type {
+  CheckoutRequest,
   DecisionLogEntry,
   ExpertState,
   MemoryEntry,
@@ -35,6 +36,8 @@ export const queryKeys = {
   memoryList: (projectId?: string) => ["memory", projectId ?? null] as const,
   usage: ["usage"] as const,
   models: ["models"] as const,
+  billingPortal: ["billing", "portal"] as const,
+  checkout: (id: string) => ["billing", "checkout", id] as const,
 };
 
 export function useProjects() {
@@ -282,16 +285,35 @@ export function useSetModelLayer() {
 export function useStartCheckout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (planId: PlanId) => getClient().startCheckout(planId),
-    onSuccess: (res) => {
-      if (res.url) {
-        // real backend: hand the browser to Stripe Checkout
-        window.location.assign(res.url);
-        return;
-      }
-      // mock: plan changed in place
-      qc.invalidateQueries({ queryKey: queryKeys.me });
+    mutationFn: (input: CheckoutRequest) => getClient().startCheckout(input),
+    onSuccess: (checkout) => {
+      qc.setQueryData(queryKeys.checkout(checkout.id), checkout);
+      qc.invalidateQueries({ queryKey: queryKeys.billingPortal });
     },
+  });
+}
+
+/** Owner-visible checkout status. Pending rows poll; confirmed settlement
+ * invalidates account + usage from the server-owned truth. */
+export function useCheckoutStatus(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.checkout(id ?? ""),
+    queryFn: () => getClient().getCheckoutStatus(id ?? ""),
+    enabled: Boolean(id),
+    refetchInterval: (query) => query.state.data?.status === "pending" ? 3_000 : false,
+  });
+}
+
+/** Mock billing overview. Poll while any operator-confirmed checkout is still
+ * pending; browser code never calls the secret confirmation endpoint. */
+export function useBillingPortal() {
+  return useQuery({
+    queryKey: queryKeys.billingPortal,
+    queryFn: () => getClient().openBillingPortal(),
+    refetchInterval: (query) =>
+      query.state.data?.checkouts.some((checkout) => checkout.status === "pending")
+        ? 3_000
+        : false,
   });
 }
 

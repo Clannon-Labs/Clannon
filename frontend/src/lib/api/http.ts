@@ -1,9 +1,12 @@
 import { appConfig } from "@/config/app.config";
 import type { OAuthProvider } from "@/config/site.config";
-import type { PlanId } from "@/config/plans";
 import type { ClannonClient } from "./client";
 import {
   ApiError,
+  type ApiErrorAction,
+  type BillingPortalInfo,
+  type CheckoutRequest,
+  type CheckoutStatus,
   type Credentials,
   type LayerModelConfig,
   type HydrationPreviewEntry,
@@ -62,20 +65,62 @@ function errorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-/** The structured-detail shape's machine-readable `code` (e.g.
- *  "token_budget_exhausted"), wherever FastAPI actually put it — top-level
- *  for a plain dict body, or nested one level inside `detail` for a raised
- *  HTTPException, which is how every real endpoint sends one. */
-function errorCode(body: unknown): string | undefined {
+/** Unwraps the structured-detail object wherever FastAPI actually put it —
+ *  top-level for a plain dict body, nested one level inside `detail` for a
+ *  raised HTTPException (every real endpoint). Returns undefined for the
+ *  plain-string/array detail shapes, which carry no structured fields. */
+function structuredDetail(body: unknown): Record<string, unknown> | undefined {
   if (typeof body !== "object" || body === null) return undefined;
-  const top = (body as { code?: unknown }).code;
-  if (typeof top === "string") return top;
-  const detail = (body as { detail?: unknown }).detail;
-  if (typeof detail === "object" && detail !== null) {
-    const nested = (detail as { code?: unknown }).code;
-    if (typeof nested === "string") return nested;
+  const record = body as Record<string, unknown>;
+  if (typeof record.code === "string") return record;
+  const detail = record.detail;
+  if (typeof detail === "object" && detail !== null && !Array.isArray(detail)) {
+    return detail as Record<string, unknown>;
   }
   return undefined;
+}
+
+function errorCode(body: unknown): string | undefined {
+  const code = structuredDetail(body)?.code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/** Builds a fully-populated ApiError from a failed response body in one
+ *  place, so every call site (the generic JSON path and the bespoke
+ *  multipart ones — createRun, createFollowUp, reviseRun — all of which can
+ *  hit billing.admit_run's 402) surfaces the same message/code/action
+ *  detail instead of each re-implementing a subset. */
+function buildApiError(body: unknown, status: number, fallback: string): ApiError {
+  const message = errorMessage(body, fallback);
+  const code = errorCode(body);
+  const detail = structuredDetail(body);
+  const used = typeof detail?.used === "number" ? detail.used : undefined;
+  const budget = typeof detail?.budget === "number" ? detail.budget : undefined;
+  const periodEnd = typeof detail?.periodEnd === "string" ? detail.periodEnd : undefined;
+  const actions = Array.isArray(detail?.actions)
+    ? detail.actions.flatMap((action): ApiErrorAction[] => {
+        if (typeof action !== "object" || action === null) return [];
+        const candidate = action as Record<string, unknown>;
+        if (
+          (candidate.kind === "add_on" || candidate.kind === "upgrade")
+          && candidate.endpoint === "/billing/checkout"
+        ) {
+          return [{ kind: candidate.kind, endpoint: candidate.endpoint }];
+        }
+        return [];
+      })
+    : undefined;
+  const periodEndExclusive = detail?.periodEndExclusive === true ? true : undefined;
+  return new ApiError(
+    message,
+    status,
+    code,
+    used,
+    budget,
+    periodEnd,
+    actions,
+    periodEndExclusive,
+  );
 }
 
 async function request<T>(
@@ -96,16 +141,13 @@ async function request<T>(
       },
     });
     if (!res.ok) {
-      let message = res.statusText;
-      let code: string | undefined;
+      let apiError = new ApiError(res.statusText, res.status);
       try {
-        const body = await res.json();
-        message = errorMessage(body, message);
-        code = errorCode(body);
+        apiError = buildApiError(await res.json(), res.status, res.statusText);
       } catch {
-        // non-JSON error body; keep statusText
+        // non-JSON error body; keep the bare statusText error above
       }
-      throw new ApiError(message, res.status, code);
+      throw apiError;
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -227,13 +269,13 @@ export class HttpClient implements ClannonClient {
       body: form,
     });
     if (!res.ok) {
-      let message = res.statusText;
+      let apiError = new ApiError(res.statusText, res.status); // 422 detail names the rejected file
       try {
-        message = errorMessage(await res.json(), message);
+        apiError = buildApiError(await res.json(), res.status, res.statusText);
       } catch {
         // non-JSON error body
       }
-      throw new ApiError(message, res.status); // 422 detail names the rejected file
+      throw apiError;
     }
     return (await res.json()) as { id: string };
   }
@@ -277,13 +319,13 @@ export class HttpClient implements ClannonClient {
       body: form,
     });
     if (!res.ok) {
-      let message = res.statusText;
+      let apiError = new ApiError(res.statusText, res.status); // 422 detail names the rejected file
       try {
-        message = errorMessage(await res.json(), message);
+        apiError = buildApiError(await res.json(), res.status, res.statusText);
       } catch {
         // non-JSON error body
       }
-      throw new ApiError(message, res.status); // 422 detail names the rejected file
+      throw apiError;
     }
     return (await res.json()) as { id: string };
   }
@@ -308,13 +350,13 @@ export class HttpClient implements ClannonClient {
       body: form,
     });
     if (!res.ok) {
-      let message = res.statusText;
+      let apiError = new ApiError(res.statusText, res.status);
       try {
-        message = errorMessage(await res.json(), message);
+        apiError = buildApiError(await res.json(), res.status, res.statusText);
       } catch {
         // non-JSON error body
       }
-      throw new ApiError(message, res.status);
+      throw apiError;
     }
     return (await res.json()) as { id: string };
   }
@@ -424,13 +466,13 @@ export class HttpClient implements ClannonClient {
       body: form,
     });
     if (!res.ok) {
-      let message = res.statusText;
+      let apiError = new ApiError(res.statusText, res.status);
       try {
-        message = errorMessage(await res.json(), message);
+        apiError = buildApiError(await res.json(), res.status, res.statusText);
       } catch {
         // non-JSON error body
       }
-      throw new ApiError(message, res.status);
+      throw apiError;
     }
     return (await res.json()) as MemoryEntry[];
   }
@@ -442,14 +484,18 @@ export class HttpClient implements ClannonClient {
     });
   }
 
-  startCheckout(planId: PlanId): Promise<{ url?: string }> {
+  startCheckout(input: CheckoutRequest): Promise<CheckoutStatus> {
     return request(appConfig.endpoints.checkout, {
       method: "POST",
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify(input),
     });
   }
 
-  openBillingPortal(): Promise<{ url?: string }> {
+  getCheckoutStatus(id: string): Promise<CheckoutStatus> {
+    return request(appConfig.endpoints.checkoutStatus, { params: { id } });
+  }
+
+  openBillingPortal(): Promise<BillingPortalInfo> {
     return request(appConfig.endpoints.billingPortal, { method: "POST" });
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TurnPrompt } from "@/components/app/turn-prompt";
-import type { Run } from "@/lib/api";
+import { ApiError, type Run } from "@/lib/api";
 
 const copyText = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/copy-text", () => ({
@@ -77,5 +77,30 @@ describe("TurnPrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: /Research the original market question/ }));
     expect(screen.getByRole("button", { name: "Copy sent prompt" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit sent prompt" })).not.toBeInTheDocument();
+  });
+
+  it("surfaces revision admission 402 with both billing actions and reset date", async () => {
+    const revise = vi.fn().mockRejectedValue(new ApiError(
+      "Token budget exhausted for this billing period.",
+      402,
+      "token_budget_exhausted",
+      110_000,
+      100_000,
+      "2026-08-31",
+      [
+        { kind: "add_on", endpoint: "/billing/checkout" },
+        { kind: "upgrade", endpoint: "/billing/checkout" },
+      ],
+      true,
+    ));
+    render(<TurnPrompt turn={turn()} onRevise={revise} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Research the original market question/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit sent prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restart from here" }));
+
+    expect(await screen.findByText(/reset on August 31, 2026/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add token credits" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See upgrade plans" })).toBeInTheDocument();
   });
 });

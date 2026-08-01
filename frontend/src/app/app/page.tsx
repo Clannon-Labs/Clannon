@@ -10,6 +10,7 @@ import {
   useMemoryEntries,
   useProjects,
   useRuns,
+  useUsage,
 } from "@/lib/api/hooks";
 import {
   useCreateProjectDialog,
@@ -105,8 +106,9 @@ export default function WorkspacePage() {
   const goal = findGoalEntry(memoryEntries);
   const createRun = useCreateRun();
   const budgetExhausted = useBudgetExhausted();
+  const { data: budgetUsage } = useUsage();
   const { openDialog: openCreateProject } = useCreateProjectDialog();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ApiError | null>(null);
   const draftKey = user?.id ? workspaceDraftKey(user.id, projectId) : null;
   const [brief, setBrief] = useBrowserTextDraft(draftKey);
   // pick a greeting once per load (re-rendering on every keystroke must not reshuffle it)
@@ -243,6 +245,7 @@ export default function WorkspacePage() {
             pending={createRun.isPending}
             submitError={error}
             budgetExhausted={budgetExhausted}
+            budgetUsage={budgetUsage}
             rows={1}
             placeholder="How can I help you today?"
             onSubmit={(files, models) => {
@@ -254,10 +257,9 @@ export default function WorkspacePage() {
                     setBrief("");
                     router.push(`/app/runs/${id}`);
                   },
-                  onError: (err) =>
-                    setError(
-                      err instanceof ApiError ? err.message : "Could not start the run — try again.",
-                    ),
+                  onError: (err) => setError(
+                    err instanceof ApiError ? err : "Could not start the run — try again.",
+                  ),
                 },
               );
             }}

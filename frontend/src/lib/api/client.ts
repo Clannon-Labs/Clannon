@@ -1,6 +1,8 @@
 import type { OAuthProvider } from "@/config/site.config";
-import type { PlanId } from "@/config/plans";
 import type {
+  BillingPortalInfo,
+  CheckoutRequest,
+  CheckoutStatus,
   Credentials,
   LayerModelConfig,
   HydrationPreviewEntry,
@@ -117,11 +119,16 @@ export interface ClannonClient {
   setModelLayer(layer: string, model: string): Promise<void>;
 
   /**
-   * Start a plan change. Real backend returns a Stripe Checkout URL
-   * for the browser to redirect to; the mock applies the change
-   * directly and returns no URL.
+   * Start a checkout — "upgrade" (move to a higher plan) or "add_on" (buy
+   * extra credits on the current plan). There is no real payment processor
+   * live yet (private alpha): this returns a PENDING checkout that the
+   * backend confirms server-side (webhook/operator, never the browser —
+   * `POST /billing/mock/confirm` must never be called from here). Poll
+   * `getCheckoutStatus` or refetch usage/plan to observe confirmation.
    */
-  startCheckout(planId: PlanId): Promise<{ url?: string }>;
-  /** Stripe customer portal (manage/cancel). Same url contract. */
-  openBillingPortal(): Promise<{ url?: string }>;
+  startCheckout(input: CheckoutRequest): Promise<CheckoutStatus>;
+  /** Poll a checkout's status after starting it. */
+  getCheckoutStatus(id: string): Promise<CheckoutStatus>;
+  /** Mock-mode billing overview — no real Stripe portal yet. */
+  openBillingPortal(): Promise<BillingPortalInfo>;
 }

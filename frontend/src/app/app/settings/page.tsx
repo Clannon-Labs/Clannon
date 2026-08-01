@@ -1,123 +1,25 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import Link from "next/link";
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import type { PlanId } from "@/config/plans";
-import { Check } from "lucide-react";
 import {
-  useEffectivePlan,
-  useEffectivePlans,
   useMe,
   useModelConfig,
-  useStartCheckout,
   useSetModelLayer,
   useUsage,
 } from "@/lib/api/hooks";
 import { ModelRoleList, prettyModel } from "@/components/app/model-picker";
+import { UsageSummaryPanel } from "@/components/app/usage-summary";
+import { BillingSettings } from "@/components/app/billing-settings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeSegment } from "@/components/theme";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatTokens } from "@/lib/utils";
-
-// "2026-07-01" → "Jul 1" for the bar labels (parsed at local midnight so the
-// day never shifts across timezones)
-const dayLabel = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 function UsageChart() {
   const { data: usage } = useUsage();
   if (!usage) return <Skeleton className="h-48" />;
-
-  const max = Math.max(...usage.byDay.map((d) => d.tokens), 1);
-  const pct = Math.min(100, Math.round((usage.used / usage.budget) * 100));
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-border bg-surface p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm text-muted-foreground">
-            Billing period {usage.periodStart} → {usage.periodEnd}
-          </p>
-          <p className="text-sm tabular">
-            <span className="font-semibold text-foreground">{formatTokens(usage.used)}</span>
-            <span className="text-faint"> of {formatTokens(usage.budget)} tokens</span>
-          </p>
-        </div>
-        <div
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Token budget used this period"
-          className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted"
-        >
-          <div
-            className={cn(
-              "h-full rounded-full transition-[width] duration-700",
-              pct > 90 ? "bg-destructive" : pct > 75 ? "bg-memory" : "bg-primary",
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <p className="mt-2 text-[12px] text-faint">
-          Budgets are enforced atomically per call — runs stop cleanly at the
-          limit, never mid-charge.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-5">
-        <div className="flex items-baseline justify-between">
-          <h3 className="tag-label text-muted-foreground">Daily spend — last 14 days</h3>
-          {/* the instrument states its scale — bars mean nothing without it */}
-          <p className="font-mono text-[10px] text-faint tabular">peak {formatTokens(max)}</p>
-        </div>
-        <div className="relative mt-4 flex h-36 items-end gap-1.5 border-b border-border">
-          {/* half-scale gridline so the eye can read proportion */}
-          <span aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-border/50" />
-          {usage.byDay.map((day) => (
-            // each bar is a Tab stop with the day+value as its label, so the
-            // per-day numbers aren't hover-only
-            <div
-              key={day.date}
-              tabIndex={0}
-              role="img"
-              aria-label={`${dayLabel(day.date)} — ${formatTokens(day.tokens)} tokens`}
-              className="group relative flex-1"
-            >
-              {/* zero is a flat tick seated ON the baseline — a rounded stub
-                  reads as "small spend", and an instrument can't lie */}
-              <div
-                className={cn(
-                  "w-full transition-colors",
-                  day.tokens === 0
-                    ? "h-[2px] bg-border-strong"
-                    : "rounded-t-sm bg-primary/70 group-hover:bg-primary group-focus-within:bg-primary",
-                )}
-                style={
-                  day.tokens === 0
-                    ? undefined
-                    : { height: `${Math.max(4, (day.tokens / max) * 128)}px` }
-                }
-              />
-              <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[11px] tabular group-hover:block group-focus-within:block">
-                {formatTokens(day.tokens)}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex justify-between text-[10px] text-faint tabular">
-          <span>{usage.byDay[0]?.date.slice(5)}</span>
-          <span>{usage.byDay.at(-1)?.date.slice(5)}</span>
-        </div>
-        <p className="sr-only">
-          Daily token usage for the last 14 days, totalling {formatTokens(usage.used)}.
-        </p>
-      </div>
-    </div>
-  );
+  return <UsageSummaryPanel usage={usage} />;
 }
 
 function ModelsTab() {
@@ -153,126 +55,6 @@ function ModelsTab() {
           )
         }
       />
-    </div>
-  );
-}
-
-function BillingTab() {
-  const { data: user } = useMe();
-  const PLANS = useEffectivePlans();
-  const currentPlan = useEffectivePlan(user?.plan);
-  const checkout = useStartCheckout();
-  const toast = useToast();
-  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
-
-  function changePlan(planId: PlanId, planName: string, isUpgrade: boolean) {
-    setPendingPlan(planId);
-    checkout.mutate(planId, {
-      onSuccess: (res) => {
-        setPendingPlan(null);
-        // with a Stripe URL the browser is already navigating away
-        if (!res.url) {
-          toast({
-            title: isUpgrade ? `Welcome to ${planName}` : `Switched to ${planName}`,
-            description: isUpgrade
-              ? "Your new budget and memory tiers are active now."
-              : "The change applies — downgrades keep your paid period intact.",
-            tone: "success",
-          });
-        }
-      },
-      onError: () => {
-        setPendingPlan(null);
-        toast({
-          title: "Plan change failed",
-          description: "Nothing was charged. Try again or contact support.",
-          tone: "warning",
-        });
-      },
-    });
-  }
-
-  return (
-    <div>
-      <p className="max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-        You&apos;re on <span className="font-semibold text-foreground">{currentPlan?.name}</span>.
-        Budgets reset on each billing date. Cancellation and refunds work the
-        way the{" "}
-        <Link
-          href="/legal/refunds"
-          className="text-primary underline underline-offset-2"
-        >
-          refund policy
-        </Link>{" "}
-        says they do — no fine print.
-      </p>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {PLANS.map((plan) => {
-          const isCurrent = plan.id === user?.plan;
-          return (
-            <div
-              key={plan.id}
-              className={cn(
-                "rounded-lg border p-5",
-                isCurrent ? "border-primary bg-primary-soft/40" : "border-border bg-surface",
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold">{plan.name}</h3>
-                {isCurrent && (
-                  <span className="tag-label flex items-center gap-1 text-primary">
-                    <Check className="size-3.5" aria-hidden /> Current
-                  </span>
-                )}
-              </div>
-              {/* a zero price wearing a per-month unit is filler — "Free" is
-                  the honest figure */}
-              <p className="display-soft mt-2 text-2xl tabular">
-                {plan.monthlyUsd === 0 ? (
-                  "Free"
-                ) : (
-                  <>
-                    ${plan.monthlyUsd}
-                    <span className="font-sans text-sm text-muted-foreground">/mo</span>
-                  </>
-                )}
-              </p>
-              <p className="mt-1 text-[12px] text-faint">
-                {formatTokens(plan.tokenBudget)} tokens ·{" "}
-                <span className="tabular">{plan.memoryTiers.length}/4</span> memory tiers
-              </p>
-              {isCurrent ? (
-                /* the same footer slot as its siblings, so the grid keeps
-                   one rhythm — a statement instead of a button */
-                <p className="mt-4 flex h-8 items-center justify-center rounded-md border border-primary/30 text-[12px] text-primary">
-                  Your plan — resets with your billing date
-                </p>
-              ) : (
-                <Button
-                  variant={plan.monthlyUsd > (currentPlan?.monthlyUsd ?? 0) ? "primary" : "outline"}
-                  size="sm"
-                  className="mt-4 w-full"
-                  loading={pendingPlan === plan.id}
-                  disabled={pendingPlan !== null}
-                  onClick={() =>
-                    changePlan(
-                      plan.id,
-                      plan.name,
-                      plan.monthlyUsd > (currentPlan?.monthlyUsd ?? 0),
-                    )
-                  }
-                >
-                  {pendingPlan === plan.id
-                    ? "Processing…"
-                    : plan.monthlyUsd > (currentPlan?.monthlyUsd ?? 0)
-                      ? `Upgrade to ${plan.name}`
-                      : `Switch to ${plan.name}`}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -354,7 +136,7 @@ function SettingsInner() {
         </TabsContent>
 
         <TabsContent value="billing" className="mt-6">
-          <BillingTab />
+          <BillingSettings />
         </TabsContent>
       </Tabs>
     </div>

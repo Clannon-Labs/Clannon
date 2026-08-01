@@ -32,19 +32,18 @@ export default function TermsPage() {
       <h2>3. Plans, token budgets, and billing</h2>
       <ul>
         <li>
-          Paid plans bill monthly through Stripe and include a monthly token
-          budget. Budgets reset on your billing date; unused tokens do not
-          roll over.
+          Paid plans include a token budget for each fixed billing period.
+          Budgets reset on your billing anniversary; unused tokens do not roll over.
         </li>
         <li>
-          Budget enforcement is atomic: when your budget is exhausted, runs
-          stop cleanly. Runs blocked by the security pipeline before model
-          work begins do not consume your budget.
+          Before creating a root, follow-up, or revision run, the server checks
+          completed usage against confirmed entitlement. One already-admitted
+          run may overshoot; exact concurrent and per-call hard stops are not live.
+          Runs blocked before model work begins do not consume your budget.
         </li>
         <li>
-          Plan upgrades take effect immediately with prorated billing;
-          downgrades take effect at the next billing date. Cancellation and
-          refunds are covered by the{" "}
+          During private alpha, billing changes remain pending until server-side
+          operator confirmation. Cancellation and refunds are covered by the{" "}
           <Link href="/legal/refunds">Refund &amp; Cancellation Policy</Link>.
         </li>
         <li>We will give at least 30 days&apos; notice before any price increase affects you.</li>

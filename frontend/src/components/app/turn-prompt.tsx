@@ -6,6 +6,7 @@ import { appConfig } from "@/config/app.config";
 import { ApiError, type Run } from "@/lib/api";
 import { copyText } from "@/lib/copy-text";
 import { Button } from "@/components/ui/button";
+import { BudgetExhaustedNotice } from "@/components/app/budget-exhausted-notice";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export function TurnPrompt({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(turn.brief);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ApiError | null>(null);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,11 +76,9 @@ export function TurnPrompt({
     try {
       await onRevise(turn.id, brief);
     } catch (cause) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : "Could not restart from this prompt. Your original conversation is unchanged.",
-      );
+      setError(cause instanceof ApiError
+        ? cause
+        : "Could not restart from this prompt. Your original conversation is unchanged.");
       setPending(false);
     }
   }
@@ -122,11 +121,15 @@ export function TurnPrompt({
               } will also be removed from this conversation. Saved memory remains available.`
             : "Submitting removes this turn and its response, then replaces them with your edit. Saved memory remains available."}
         </p>
-        {error && (
+        {error instanceof ApiError
+          && error.status === 402
+          && error.code === "token_budget_exhausted" ? (
+          <BudgetExhaustedNotice error={error} />
+        ) : error ? (
           <p role="alert" className="mt-2 text-[12px] leading-relaxed text-destructive">
-            {error}
+            {error instanceof ApiError ? error.message : error}
           </p>
-        )}
+        ) : null}
         <div className="mt-3 flex justify-end gap-2">
           <Button
             type="button"
@@ -198,7 +201,7 @@ export function TurnPrompt({
 
       {error && !editing && (
         <p role="alert" className="mt-1 max-w-[85%] text-[12px] text-destructive">
-          {error}
+          {error instanceof ApiError ? error.message : error}
         </p>
       )}
     </div>

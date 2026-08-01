@@ -1,10 +1,14 @@
 import { appConfig } from "@/config/app.config";
 import { DEMO_BRIEFS } from "@/config/demo.config";
 import type { OAuthProvider } from "@/config/site.config";
-import { planById, type PlanId } from "@/config/plans";
+import { PLANS, planById } from "@/config/plans";
+import { fixedBillingPeriod } from "@/lib/billing-period";
 import type { ClannonClient } from "./client";
 import {
   ApiError,
+  type BillingPortalInfo,
+  type CheckoutRequest,
+  type CheckoutStatus,
   type Credentials,
   type DecisionLogEntry,
   type LayerModelConfig,
@@ -21,7 +25,6 @@ import {
 } from "./types";
 import {
   buildRunScript,
-  buildSeedUsage,
   SAMPLE_REPORT,
   SEED_MEMORY,
   SEED_MODEL_CONFIG,
@@ -51,22 +54,6 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     );
   });
 
-/** A genuinely empty 14-day usage window for a freshly-signed-up account —
- *  no fabricated history, matching MockClient's empty-account state. */
-function emptyUsage(): UsageSummary {
-  const today = new Date();
-  return {
-    periodStart: today.toISOString().slice(0, 10),
-    periodEnd: new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10),
-    budget: planById("free").tokenBudget,
-    used: 0,
-    byDay: Array.from({ length: 14 }, (_, i) => ({
-      date: new Date(today.getTime() - (13 - i) * 86_400_000).toISOString().slice(0, 10),
-      tokens: 0,
-    })),
-  };
-}
-
 let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${++counter}`;
 
@@ -91,7 +78,11 @@ export class MockClient implements ClannonClient {
   private projects: Project[];
   private runs: Map<string, Run>;
   private memory: MemoryEntry[];
-  private usage: UsageSummary;
+  private additionalCredits = 0;
+  private checkouts: CheckoutStatus[] = [];
+  /** Jan-31 deliberately exercises clamp-without-drift in the mock. Signup
+   *  replaces this with that account's real UTC signup date. */
+  private billingAnchor = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 31));
   private models: LayerModelConfig[] = structuredClone(SEED_MODEL_CONFIG);
   /** Run ids the user asked to stop — the live stream notices and unwinds. */
   private cancelRequested = new Set<string>();
@@ -106,7 +97,6 @@ export class MockClient implements ClannonClient {
     this.projects = [];
     this.runs = new Map();
     this.memory = [];
-    this.usage = emptyUsage();
     if (empty) this.clearToEmptyAccount();
     else this.seedDemoData();
   }
@@ -120,7 +110,8 @@ export class MockClient implements ClannonClient {
     this.projects = structuredClone(SEED_PROJECTS);
     this.runs = new Map(SEED_RUNS.map((r) => [r.id, structuredClone(r)]));
     this.memory = structuredClone(SEED_MEMORY);
-    this.usage = buildSeedUsage();
+    this.additionalCredits = 0;
+    this.checkouts = [];
   }
 
   /** First-user story: nothing yet. Mirrors seedDemoData() for the empty case
@@ -130,7 +121,8 @@ export class MockClient implements ClannonClient {
     this.projects = [];
     this.runs.clear();
     this.memory = [];
-    this.usage = emptyUsage();
+    this.additionalCredits = 0;
+    this.checkouts = [];
   }
 
   /* ---------- remote config (mock echoes the local defaults) ---------- */
@@ -173,6 +165,7 @@ export class MockClient implements ClannonClient {
       throw new ApiError("Password must be at least 8 characters.", 422);
     }
     const user: User = { id: "u_demo", name, email, plan: "free" };
+    this.billingAnchor = new Date();
     // Signup must exercise a truthful first-user state. Seeded agency data is
     // useful for returning-user screenshots, but showing it to a new account
     // makes onboarding untestable and reads like a privacy breach. Persisted
@@ -326,12 +319,24 @@ export class MockClient implements ClannonClient {
     // means either a stale usage fetch or a bypassed UI — the mock should
     // refuse it the same way the real backend does either way, not silently
     // accept it.
-    const { used, budget } = await this.usedAndBudget();
-    if (used >= budget) {
+    const { used, budget, periodEnd } = await this.usedAndBudget();
+    // QA-only trigger, matching the simulator's existing blocked/failed/rate-limit
+    // triggers. It makes the pre-persistence 402 state reachable in browser tests
+    // without burning through a long mock run; it is never offered as starter copy.
+    const forceExhausted = trimmed.toLowerCase().includes("force budget exhausted admission for e2e");
+    if (used >= budget || forceExhausted) {
       throw new ApiError(
         "Token budget exhausted for this billing period.",
         402,
         "token_budget_exhausted",
+        forceExhausted ? budget : used,
+        budget,
+        periodEnd,
+        [
+          { kind: "add_on", endpoint: "/billing/checkout" },
+          { kind: "upgrade", endpoint: "/billing/checkout" },
+        ],
+        true,
       );
     }
     const id = nextId("run");
@@ -662,22 +667,67 @@ export class MockClient implements ClannonClient {
       runId: run.id,
       projectId: run.projectId,
     });
-    this.usage.used += run.tokensUsed;
   }
 
-  /* ---------- billing (mock: applies the change directly) ---------- */
+  /* ---------- billing (pending checkouts; settlement is server-only) ---------- */
 
-  async startCheckout(planId: PlanId): Promise<{ url?: string }> {
-    await sleep(1100); // simulated payment round-trip
+  async startCheckout(input: CheckoutRequest): Promise<CheckoutStatus> {
+    await sleep(500);
     const user = await this.me();
     if (!user) throw new ApiError("Sign in to change plans.", 401);
-    this.persistSession({ ...user, plan: planId });
-    return {};
+    const current = planById(user.plan);
+    const maxAddOnCredits = Math.max(...PLANS.map((plan) => plan.tokenBudget));
+
+    if (input.kind === "upgrade") {
+      const target = PLANS.find((plan) => plan.id === input.planId);
+      if (
+        !target
+        || target.monthlyUsd <= 0
+        || target.tokenBudget <= current.tokenBudget
+      ) {
+        throw new ApiError("Selected plan is not an upgrade.", 422);
+      }
+    } else if (
+      !Number.isInteger(input.creditAmount)
+      || input.creditAmount <= 0
+      || input.creditAmount > maxAddOnCredits
+    ) {
+      throw new ApiError(
+        `creditAmount must be between 1 and ${maxAddOnCredits}.`,
+        422,
+      );
+    }
+
+    const checkout: CheckoutStatus = {
+      id: nextId("chk"),
+      kind: input.kind,
+      status: "pending",
+      planId: input.kind === "upgrade" ? input.planId : null,
+      creditAmount: input.kind === "add_on" ? input.creditAmount : null,
+      createdAt: new Date().toISOString(),
+      settledAt: null,
+    };
+    this.checkouts.unshift(checkout);
+    return structuredClone(checkout);
   }
 
-  async openBillingPortal(): Promise<{ url?: string }> {
-    await sleep(400);
-    return {};
+  async getCheckoutStatus(id: string): Promise<CheckoutStatus> {
+    await sleep(180);
+    const checkout = this.checkouts.find((candidate) => candidate.id === id);
+    if (!checkout) throw new ApiError("Checkout not found.", 404);
+    return structuredClone(checkout);
+  }
+
+  async openBillingPortal(): Promise<BillingPortalInfo> {
+    await sleep(240);
+    const user = await this.me();
+    if (!user) throw new ApiError("Sign in to view billing.", 401);
+    return {
+      mode: "mock",
+      planId: user.plan,
+      maxAddOnCredits: Math.max(...PLANS.map((plan) => plan.tokenBudget)),
+      checkouts: structuredClone(this.checkouts),
+    };
   }
 
   /* ---------- memory ---------- */
@@ -776,44 +826,65 @@ export class MockClient implements ClannonClient {
 
   /** Shared by getUsage() and createRun()'s admission check — one place
    *  computing spend, so the two can't silently drift apart. */
-  private async usedAndBudget(): Promise<{ used: number; budget: number }> {
+  private async usedAndBudget(): Promise<{
+    used: number;
+    budget: number;
+    baseBudget: number;
+    periodStart: string;
+    periodEnd: string;
+  }> {
     const user = await this.me();
     const plan = planById(user?.plan ?? "free");
-    const used = [...this.runs.values()].reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
-    return { used, budget: plan.tokenBudget };
+    const { periodStart, periodEnd } = fixedBillingPeriod(this.billingAnchor);
+    const used = [...this.runs.values()]
+      .filter((run) => {
+        const day = run.createdAt.slice(0, 10);
+        return day >= periodStart && day < periodEnd;
+      })
+      .reduce((sum, run) => sum + (run.tokensUsed ?? 0), 0);
+    return {
+      used,
+      baseBudget: plan.tokenBudget,
+      budget: plan.tokenBudget + this.additionalCredits,
+      periodStart,
+      periodEnd,
+    };
   }
 
   async getUsage(): Promise<UsageSummary> {
     await sleep(240);
-    // computed live: spend is the sum of real run tokens, budget is the user's
-    // plan — not a static seed. Mirrors how the backend meters per call.
-    const { used, budget } = await this.usedAndBudget();
+    // Computed live over the fixed [start,end) period. Confirmed add-ons would
+    // join `additionalCredits`; browser-created checkouts stay pending until a
+    // server/operator confirmation, exactly like the real mock billing API.
+    const { used, budget, baseBudget, periodStart, periodEnd } = await this.usedAndBudget();
     const runs = [...this.runs.values()];
 
-    const days = 14;
-    // Returning demo accounts get a plausible history. A genuinely empty
-    // signup must stay empty; fabricated usage there breaks user trust.
-    const BASELINE = [
-      88_000, 0, 142_000, 205_000, 64_000, 0, 176_000,
-      238_000, 121_000, 96_000, 31_000, 158_000, 297_000, 184_000,
-    ];
+    const start = new Date(`${periodStart}T00:00:00Z`);
+    const today = new Date();
+    const days = Math.floor((Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate(),
+    ) - start.getTime()) / 86_400_000) + 1;
     const byDay = Array.from({ length: days }, (_, i) => {
-      const date = new Date(Date.now() - (days - 1 - i) * 86_400_000)
-        .toISOString()
-        .slice(0, 10);
+      const date = new Date(start.getTime() + i * 86_400_000).toISOString().slice(0, 10);
       const fromRuns = runs
         .filter((r) => r.createdAt.slice(0, 10) === date)
         .reduce((sum, r) => sum + (r.tokensUsed ?? 0), 0);
-      return { date, tokens: fromRuns + (runs.length > 0 ? (BASELINE[i] ?? 0) : 0) };
+      return { date, tokens: fromRuns };
     });
 
     return {
-      periodStart: byDay[0].date,
-      periodEnd: new Date(new Date(byDay[0].date).getTime() + 30 * 86_400_000)
-        .toISOString()
-        .slice(0, 10),
+      periodStart,
+      periodEnd,
+      periodEndExclusive: true,
+      baseBudget,
+      additionalCredits: this.additionalCredits,
       budget,
       used,
+      // Cost diagnostics only. They are intentionally separate from `used`.
+      cacheReadTokens: Math.round(used * 0.12),
+      cacheWriteTokens: Math.round(used * 0.03),
       byDay,
     };
   }

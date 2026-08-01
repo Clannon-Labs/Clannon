@@ -5,7 +5,6 @@ import type {
   Project,
   Run,
   Source,
-  UsageSummary,
 } from "./types";
 
 /** Seed projects (clients / bodies of work). Runs + memory below are tagged to these. */
@@ -343,29 +342,6 @@ export const SEED_MEMORY: MemoryEntry[] = [
     kind: "assumption",
   },
 ];
-
-export function buildSeedUsage(): UsageSummary {
-  const days = 14;
-  const byDay = Array.from({ length: days }, (_, i) => {
-    const date = new Date(Date.now() - (days - 1 - i) * 86_400_000);
-    // deterministic pseudo-random daily spend
-    const seed = (i * 2654435761) % 97;
-    return {
-      date: date.toISOString().slice(0, 10),
-      tokens: 60_000 + seed * 3_100,
-    };
-  });
-  const used = byDay.reduce((a, d) => a + d.tokens, 0);
-  return {
-    periodStart: byDay[0].date,
-    periodEnd: new Date(new Date(byDay[0].date).getTime() + 30 * 86_400_000)
-      .toISOString()
-      .slice(0, 10),
-    budget: 6_000_000,
-    used,
-    byDay,
-  };
-}
 
 /** Mirrors the backend MODEL_CATALOG (verified June 2026). */
 const SELECTABLE_MODELS = [

@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, type FormEvent } from "react";
-import Link from "next/link";
 import { ArrowUp, Plus, Square } from "lucide-react";
+import { ApiError, type UsageSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { BudgetExhaustedNotice } from "@/components/app/budget-exhausted-notice";
 import {
   useFileAttachments,
   AttachmentChips,
@@ -38,12 +39,13 @@ export function Composer({
   onStop,
   className,
   budgetExhausted = false,
+  budgetUsage,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: (files: File[], models: Record<string, string>) => void;
   pending?: boolean;
-  submitError?: string | null;
+  submitError?: string | ApiError | null;
   placeholder?: string;
   autoFocus?: boolean;
   rows?: number;
@@ -57,6 +59,7 @@ export function Composer({
    *  this existed, a real gap since the sidebar isn't always in view
    *  (collapsed rail, mobile). Typing still works; only sending is gated. */
   budgetExhausted?: boolean;
+  budgetUsage?: UsageSummary;
 }) {
   const attach = useFileAttachments();
   const session = useSessionModels();
@@ -64,7 +67,10 @@ export function Composer({
   const taRef = useAutoResize(value, 280);
 
   const tooShort = value.trim().length < appConfig.limits.briefMinChars;
-  const blocked = tooShort || budgetExhausted;
+  const admissionExhausted = submitError instanceof ApiError
+    && submitError.status === 402
+    && submitError.code === "token_budget_exhausted";
+  const blocked = tooShort || budgetExhausted || admissionExhausted;
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -174,18 +180,16 @@ export function Composer({
           </div>
         </div>
       </div>
-      {budgetExhausted ? (
-        <p role="status" className="mt-2 px-1 text-sm text-muted-foreground">
-          You&apos;re out of tokens this period — write freely, Send unlocks once you{" "}
-          <Link href="/app/settings?tab=billing" className="text-primary hover:underline">
-            upgrade
-          </Link>{" "}
-          or the period resets.
-        </p>
+      {(budgetExhausted || admissionExhausted) ? (
+        <BudgetExhaustedNotice
+          error={submitError instanceof ApiError ? submitError : undefined}
+          usage={budgetUsage}
+          forced={budgetExhausted}
+        />
       ) : (
         (submitError || attach.error) && (
           <p role="alert" className="mt-2 px-1 text-sm text-destructive">
-            {submitError || attach.error}
+            {submitError instanceof ApiError ? submitError.message : submitError || attach.error}
           </p>
         )
       )}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MockClient } from "@/lib/api/mock";
 import { planById } from "@/config/plans";
 import {
@@ -7,6 +7,8 @@ import {
   workspaceDraftKey,
   writeTextDraft,
 } from "@/lib/browser-drafts";
+
+afterEach(() => window.localStorage.clear());
 
 describe("mock signup first-user state", () => {
   it("does not expose seeded projects, runs, memory, or usage", async () => {
@@ -29,8 +31,38 @@ describe("mock signup first-user state", () => {
     expect(runs).toEqual([]);
     expect(memory).toEqual([]);
     expect(usage.used).toBe(0);
+    expect(usage.periodEndExclusive).toBe(true);
+    expect(usage.baseBudget).toBe(planById("free").tokenBudget);
+    expect(usage.additionalCredits).toBe(0);
     expect(usage.budget).toBe(planById("free").tokenBudget);
+    expect(usage.cacheReadTokens).toBe(0);
+    expect(usage.cacheWriteTokens).toBe(0);
     expect(usage.byDay.every((day) => day.tokens === 0)).toBe(true);
+  });
+
+  it("creates a pending mock upgrade without applying entitlement in the browser", async () => {
+    const client = new MockClient();
+    await client.signup({
+      name: "New Operator",
+      email: "new@example.com",
+      password: "correct-horse",
+    });
+
+    const checkout = await client.startCheckout({ kind: "upgrade", planId: "starter" });
+    expect(checkout).toMatchObject({
+      kind: "upgrade",
+      status: "pending",
+      planId: "starter",
+      creditAmount: null,
+      settledAt: null,
+    });
+    await expect(client.getCheckoutStatus(checkout.id)).resolves.toEqual(checkout);
+    await expect(client.openBillingPortal()).resolves.toMatchObject({
+      mode: "mock",
+      planId: "free",
+      checkouts: [checkout],
+    });
+    await expect(client.me()).resolves.toMatchObject({ plan: "free" });
   });
 });
 

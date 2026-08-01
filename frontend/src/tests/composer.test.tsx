@@ -8,6 +8,7 @@ vi.mock("@/lib/api/hooks", () => ({
 }));
 
 import { Composer } from "@/components/app/composer";
+import { ApiError } from "@/lib/api";
 
 function noop() {}
 
@@ -17,7 +18,7 @@ describe("Composer — budgetExhausted", () => {
       <Composer value="A long enough brief to pass validation" onChange={noop} onSubmit={vi.fn()} />,
     );
     expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
-    expect(screen.queryByText(/out of tokens/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/billing period is out of tokens/i)).not.toBeInTheDocument();
   });
 
   it("disables Send and explains why once the budget is exhausted, without blocking typing", () => {
@@ -31,8 +32,8 @@ describe("Composer — budgetExhausted", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
-    expect(screen.getByText(/out of tokens this period/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "upgrade" })).toHaveAttribute(
+    expect(screen.getByText(/billing period is out of tokens/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review billing options" })).toHaveAttribute(
       "href",
       "/app/settings?tab=billing",
     );
@@ -89,5 +90,41 @@ describe("Composer — budgetExhausted", () => {
       fireEvent.keyDown(screen.getByRole("textbox", { name: "Message" }), { key: "Enter" });
       expect(onSubmit).not.toHaveBeenCalled();
     });
+  });
+
+  it("turns a stale structured 402 into reset-date, add-on, and upgrade actions", () => {
+    const error = new ApiError(
+      "Token budget exhausted for this billing period.",
+      402,
+      "token_budget_exhausted",
+      120_000,
+      100_000,
+      "2026-08-31",
+      [
+        { kind: "add_on", endpoint: "/billing/checkout" },
+        { kind: "upgrade", endpoint: "/billing/checkout" },
+      ],
+      true,
+    );
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        submitError={error}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByText(/120k used of 100k/)).toBeInTheDocument();
+    expect(screen.getByText(/reset on August 31, 2026/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add token credits" })).toHaveAttribute(
+      "href",
+      "/app/settings?tab=billing&action=add_on",
+    );
+    expect(screen.getByRole("link", { name: "See upgrade plans" })).toHaveAttribute(
+      "href",
+      "/app/settings?tab=billing&action=upgrade",
+    );
   });
 });

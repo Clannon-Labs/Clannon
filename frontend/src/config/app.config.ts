@@ -85,11 +85,14 @@ export const appConfig = {
     usage: "/usage",
     modelConfig: "/settings/models",
     /**
-     * Billing. checkout returns { url } (Stripe Checkout session) for
-     * the browser to redirect to; portal returns { url } (Stripe
-     * customer portal). The mock applies plan changes directly.
+     * Billing — mock-mode checkout (no real payment processor live yet).
+     * checkout starts a pending upgrade/add-on that the backend confirms
+     * server-side; checkoutStatus polls it; portal returns the mock
+     * account overview. Never call /billing/mock/confirm from here — it's
+     * server/webhook-only.
      */
     checkout: "/billing/checkout",
+    checkoutStatus: "/billing/checkouts/:id",
     billingPortal: "/billing/portal",
   },
 

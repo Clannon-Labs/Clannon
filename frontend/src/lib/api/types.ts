@@ -232,9 +232,23 @@ export interface UsageDay {
 
 export interface UsageSummary {
   periodStart: string;
+  /** The reset boundary — EXCLUSIVE. Usage resets AT this instant, not on
+   *  this calendar day; display it as "resets <periodEnd>", never as the
+   *  last day still counted. See `periodEndExclusive`. */
   periodEnd: string;
+  periodEndExclusive: true;
+  /** The plan's own allowance, before any add-on credits. */
+  baseBudget: number;
+  /** Confirmed add-on credits purchased this period (0 if none). */
+  additionalCredits: number;
+  /** baseBudget + additionalCredits — the number every "X left" display
+   *  should use, not baseBudget alone. */
   budget: number;
   used: number;
+  /** Diagnostic cost context — priced differently from `used` and NEVER
+   *  added into it (backend keeps them deliberately separate). */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   byDay: UsageDay[];
 }
 
@@ -311,13 +325,61 @@ export interface SignupInput extends Credentials {
   name: string;
 }
 
+/** The concrete "what can I do about it" options a 402 offers — rendered as
+ *  real action buttons per the backend contract ("do not collapse this to
+ *  generic failure"), not just read off `message` as plain text. */
+export interface ApiErrorAction {
+  kind: "add_on" | "upgrade";
+  endpoint: "/billing/checkout";
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
     public code?: string,
+    /** Present on a 402 token_budget_exhausted response — the exact
+     *  numbers and reset date so the UI can say something concrete instead
+     *  of re-deriving them from a stale usage fetch. */
+    public used?: number,
+    public budget?: number,
+    public periodEnd?: string,
+    public actions?: ApiErrorAction[],
+    public periodEndExclusive?: true,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/* ---------- billing / checkout ---------- */
+
+/** "upgrade" moves to a higher plan; "add_on" buys extra credits on the
+ *  current plan. There is no downgrade kind in this contract — see the
+ *  frontend↔backend proposal thread for why (flagged, not guessed). */
+export type CheckoutKind = "upgrade" | "add_on";
+
+export type CheckoutRequest =
+  | { kind: "upgrade"; planId: PlanId }
+  | { kind: "add_on"; creditAmount: number };
+
+/** Mock/real checkout shape returned on creation and status polling. */
+export interface CheckoutStatus {
+  id: string;
+  kind: CheckoutKind;
+  status: "pending" | "confirmed" | "failed";
+  planId: PlanId | null;
+  creditAmount: number | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+/** POST /billing/portal's mock-mode response. There is no real Stripe
+ *  portal yet (private alpha) — this describes the mock's own state
+ *  instead of a redirect URL. */
+export interface BillingPortalInfo {
+  mode: "mock";
+  planId: PlanId;
+  maxAddOnCredits: number;
+  checkouts: CheckoutStatus[];
 }
