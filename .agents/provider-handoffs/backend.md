@@ -78,15 +78,44 @@ they come to own the system. Do not re-litigate it — I raised the moving-targe
 objection and they answered it (a couple of agent-hours a day is not 100x, and they
 are deliberately trading agent velocity for comprehension). The answer holds.
 
-- **Awaiting owner ratification:**
-  `proposals/to-owner/2026-08-02_rust-core-contract-ratification.md` — three specifics:
-  does the frontend contract change (recommend no), contract-first vs Rust-first
-  (recommend contract-first), who holds provider keys (recommend the runtime).
-  `proposals/` is **gitignored** — that file is local-only, don't try to commit it.
+**All owner rulings so far, settled:** frontend contract does NOT change (identical
+HTTP/SSE surface, so `sse_contract_drift.py` keeps CB6 green through the migration);
+**contract-first**, boundary built inside today's Python before any Rust; **Python owns
+provider keys**; document structure approved; drift-detection correction accepted.
+
+**The five-doc set is written and pushed** (`docs/architecture/rust/`, all `[PROPOSED]`):
+`README` (index) · `PROTOCOL` (wire, tables only) · `API_SPECIFICATION` (all 38 routes) ·
+`BUILD_ORDER` (4 phases, checkable done) · `CONFORMANCE_HARNESS` · `DECISIONS` (D1–D9,
+all rationale) · `RUST_IDIOMS_AND_CRATES`. Owner's rule: points and tables, **not
+essays** — rationale is quarantined in DECISIONS so the rest stay skimmable. Respect
+that when editing.
+
+- **ONE OPEN GATE:** `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md`.
+  Presidio has no Rust equivalent — local ML, no network call, so the one-clause rule
+  says "port it" and that is impossible. Proposed second clause: "or a Python-only ML
+  ecosystem → Python". Carried as `DECISIONS.md` D3a *pending owner confirmation*.
+  Does **not** block Phase 0. Same question due later for `detect-secrets`,
+  `faster-whisper`, `RestrictedPython`.
 - **Division of labour: the owner writes the Rust; agents build the harness.** Do not
-  write Rust. New backend behaviour still lands in Python.
+  write Rust. New backend behaviour still lands in Python until a subsystem cuts over.
+- **Next agent work is `BUILD_ORDER.md` Phase 0** — it contains no Rust deliberately:
+  stand up `services/ai-runtime/` per PROTOCOL, make `core/llm/` a client of it, prove
+  the product runs unchanged with model calls across an HTTP boundary.
+- `proposals/` is **gitignored** — those files are local-only, don't try to commit them.
 - Corrected two docs the ruling falsified: `RUST_MIGRATION_STRATEGY.md` had Rust
   staying *behind* Python-owned contracts (reversed), ROADMAP §1/§3 said deferred.
+
+### Commit identity is now ENFORCED IN CODE (owner instruction)
+
+`scripts/crew.sh` stamps `GIT_AUTHOR_*`/`GIT_COMMITTER_*` on every agent it launches,
+both providers, both modes. `.githooks/pre-commit` refuses a wrong-identity commit in
+both directions; `scripts/setup-hooks.sh` installs `core.hooksPath` and is called from
+crew.sh and dev.sh. Escape hatch `CLANNON_IDENTITY_OVERRIDE=1`.
+
+**Why it exists:** removing the repo's local `user.name` fixed the owner's commits and
+silently broke Codex agents, which read nothing from `~/.claude/settings.json` and fell
+back to the owner's global identity. A convention that depends on which tool you
+launched is not an invariant.
 
 ### Repo moved to the Clannon-Labs org — two traps, both live
 

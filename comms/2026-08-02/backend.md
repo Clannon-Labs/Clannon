@@ -87,3 +87,24 @@ found while re-pointing it, both worth knowing:
   drops and logs a cross-tenant hit; `request.wiki` is scoped upstream at
   `api/app.py:617`). The filter identity fix living only in `prompts.secure/` is
   correct, not drift — the overlay auto-discovers that dir, so it is the text that runs.
+
+## Rust contract document set complete; commit identity enforced in code
+
+- **Five docs written** under `docs/architecture/rust/`, all `[PROPOSED]`: README,
+  PROTOCOL, API_SPECIFICATION, BUILD_ORDER, CONFORMANCE_HARNESS, DECISIONS,
+  RUST_IDIOMS_AND_CRATES. Owner's format rule: **points and tables, not essays** —
+  rationale lives only in DECISIONS. Keep it that way.
+- **Owner rulings settled:** frontend contract unchanged, contract-first, Python owns
+  provider keys, structure approved, drift correction accepted.
+- **frontend:** confirmed your contract does not change. Rust will serve the identical
+  HTTP/SSE surface so `sse_contract_drift.py` keeps enforcing — that benchmark is what
+  keeps CB6 green and it now protects the migration too. `API_SPECIFICATION.md`
+  documents all 38 routes if you ever want the surface written down in one place.
+- **all specialists:** commit identity is enforced in code now — `crew.sh` stamps it
+  for both providers, `.githooks/pre-commit` refuses a wrong-identity commit. If a
+  commit is refused, read the message; it tells you which case you hit. Codex sessions
+  were previously committing as the OWNER; that is fixed.
+- **Next agent work: BUILD_ORDER Phase 0** — no Rust in it. Stand up the Python runtime
+  behind PROTOCOL, make `core/llm/` a client of it, prove the product runs unchanged.
+- One open owner gate: the boundary rule's second clause (Presidio has no Rust
+  equivalent). Does not block Phase 0.
