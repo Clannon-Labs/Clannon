@@ -67,7 +67,7 @@ code wins and this file is the bug — say so rather than building to the prose.
 |---|---|---|---|
 | GET | `/runs` | yes | Summaries, newest first. Optional `?projectId=` filter; omitted = all. |
 | POST | `/runs` | yes | **Create and start.** `multipart/form-data`. → **201** `{"id": "..."}` |
-| GET | `/runs/{id}` | yes | Full run JSON (`run.full_json()`). |
+| GET | `/runs/{id}` | yes | Full run JSON (`run.full_json()`), incl. nullable `startedAt`/`firstMessageAt`/`completedAt` timing stamps — see `api/README.md`. |
 | GET | `/runs/{id}/stream` | yes | **SSE.** See §2. |
 | GET | `/runs/{id}/thread` | yes | Conversation turns for the effective thread. |
 | GET | `/runs/{id}/decisions` | yes | Decision log — **events, never payloads**. |
@@ -96,7 +96,7 @@ code wins and this file is the bug — say so rather than building to the prose.
 |---|---|---|---|
 | GET | `/settings/models` | yes | Available models for this plan. |
 | PUT | `/settings/models` | yes | Set preferred model. → 204 |
-| GET | `/usage` | yes | Token/cost usage incl. **cache read/write tokens**. |
+| GET | `/usage` | yes | Token/cost usage incl. **cache read/write tokens** and a `latency` block (`sampleSize`, `excluded`, `timeToFirstMessageMs`/`totalDurationMs` p50/p95 — `null` on an empty sample, never `0`). REST-only; no `usage` SSE event. See `api/README.md`. |
 | POST | `/billing/checkout` | yes | Start checkout. |
 | GET | `/billing/checkouts/{checkout_id}` | yes | Checkout status. |
 | POST | `/billing/portal` | yes | Billing portal link. |

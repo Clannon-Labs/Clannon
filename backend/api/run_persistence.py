@@ -20,8 +20,8 @@ def write_run(
         "report,message,memory_writes_json,feedback_rating,feedback_comment,"
         "parent_run_id,session_id,lineage_prefix_json,block_stage,artifacts_json,"
         "inputs_json,project_id,sources_json,verification_state,completion_state,"
-        "completion_reason,superseded) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "completion_reason,superseded,started_at,first_message_at,completed_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             run.id, run.user_id, run.title, run.brief, run.status,
             run.created_at, run.tokens_used, run.cache_read_tokens,
@@ -34,5 +34,6 @@ def write_run(
             json.dumps(run.sources), run.verification_state,
             run.completion_state, run.completion_reason,
             int(run.superseded if superseded is None else superseded),
+            run.started_at, run.first_message_at, run.completed_at,
         ),
     )

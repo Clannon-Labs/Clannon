@@ -391,6 +391,11 @@ class RunStore:
         run.completion_state = (("completion_state" in keys and row["completion_state"]) or "complete")
         run.completion_reason = row["completion_reason"] if "completion_reason" in keys else None
         run.superseded = bool(row["superseded"]) if "superseded" in keys else False
+        # pre-migration rows have no timing columns at all — NULL, never 0 (a 0 would
+        # read as "instant" and drag every latency percentile down dishonestly).
+        run.started_at = row["started_at"] if "started_at" in keys else None
+        run.first_message_at = row["first_message_at"] if "first_message_at" in keys else None
+        run.completed_at = row["completed_at"] if "completed_at" in keys else None
         return run
 
     @_synchronized

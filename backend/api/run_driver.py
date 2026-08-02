@@ -232,6 +232,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
             usage_scope() as run_usage,
             budget_user_scope(run.user_id),
         ):
+            run.started_at = _now()
             flow: Flow[Any] = await pipeline.run(
                 run.brief,
                 session_id=run.session_id or run.id,
@@ -414,6 +415,7 @@ async def execute(run: RunState, input_files: list | None = None) -> None:
         # by this finally — that would resurrect the row the delete just removed.
         publish_terminal = run.status in TERMINAL_STATUSES and not run.deleted
         if publish_terminal:
+            run.completed_at = _now()
             # CB4 institutional decision memory mirrors decisions captured before
             # EVERY terminal outcome. A crash/cancellation has no returned Flow, so
             # derive against a minimal context carrying the live observing sink.

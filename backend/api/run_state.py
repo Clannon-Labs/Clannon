@@ -72,6 +72,14 @@ class RunState:
     brief: str
     status: str = "queued"
     created_at: str = field(default_factory=_now)
+    # Execution timing, all nullable — a run that never reaches a stage (e.g. an
+    # admission failure before `execute()` starts) or produces no live narration
+    # simply lacks the corresponding stamp; that absence is itself meaningful and
+    # must never be papered over with 0 (see `billing.usage_summary`'s latency
+    # aggregate, which excludes runs missing any of the three).
+    started_at: str | None = None        # execute() begins the pipeline stage chain
+    first_message_at: str | None = None  # first live `say()` narration (on_log_entry only)
+    completed_at: str | None = None      # run reached a terminal status
     events: list[dict] = field(default_factory=list)     # buffered for replay
     log: list[dict] = field(default_factory=list)
     experts: dict[str, dict] = field(default_factory=dict)
@@ -177,6 +185,8 @@ class RunState:
             # turn's chat bubble; it does not go into the decision log.
             text = str(getattr(entry, "message", ""))
             if text:
+                if self.first_message_at is None:
+                    self.first_message_at = _now()
                 self.message = (self.message or "") + text
                 self.emit({"type": "message_delta", "text": text})
             return
@@ -245,6 +255,9 @@ class RunState:
             "title": self.title,
             "status": self.status,
             "createdAt": self.created_at,
+            "startedAt": self.started_at,
+            "firstMessageAt": self.first_message_at,
+            "completedAt": self.completed_at,
             "tokensUsed": self.tokens_used,
             "cacheReadTokens": self.cache_read_tokens,
             "cacheWriteTokens": self.cache_write_tokens,

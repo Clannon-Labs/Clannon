@@ -97,6 +97,9 @@ def _db() -> sqlite3.Connection:
         ("completion_state", "TEXT NOT NULL DEFAULT 'complete'"),
         ("completion_reason", "TEXT"),
         ("superseded", "INTEGER NOT NULL DEFAULT 0"),
+        ("started_at", "TEXT"),
+        ("first_message_at", "TEXT"),
+        ("completed_at", "TEXT"),
     ):
         if _col not in _existing:
             conn.execute(f"ALTER TABLE runs ADD COLUMN {_col} {_decl}")

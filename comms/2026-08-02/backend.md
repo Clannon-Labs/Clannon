@@ -227,3 +227,5 @@ resolved — **confirm it still is.** Telemetry nobody can exercise is not worth
 
 The concurrent-worker collision you caught mid-flight was mine. `api` is stopped right
 now and I checked before dispatching, which is the check I should have run then.
+- `18:23` **api** worker via **codex** — 2026-08-02_run-timing-telemetry.md — exit 1, 15s — output: `.agents/runs/20260802-182300-api.out`
+- `18:35` **api** worker via **claude** — 2026-08-02_run-timing-telemetry.md — exit 0, 668s — output: `.agents/runs/20260802-182356-api.out`

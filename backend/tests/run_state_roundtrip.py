@@ -64,6 +64,9 @@ PERSISTED = {
     "completion_reason",
     "lineage_prefix",
     "superseded",
+    "started_at",
+    "first_message_at",
+    "completed_at",
 }
 
 # Required positional fields (no default) — always set by any caller, so they can
@@ -132,6 +135,9 @@ def _fully_populated_run() -> RunState:
     run.completion_reason = "timeout"
     run.lineage_prefix = ["run_prefix01", "run_prefix02"]
     run.superseded = True
+    run.started_at = "2026-06-20T12:34:57+00:00"
+    run.first_message_at = "2026-06-20T12:34:58+00:00"
+    run.completed_at = "2026-06-20T12:35:10+00:00"
     return run
 
 

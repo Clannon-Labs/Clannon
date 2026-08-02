@@ -181,6 +181,36 @@ def _period_state(user_id: str, now: datetime | None = None) -> dict:
     }
 
 
+def _parse_iso_ms(value: str | None) -> int | None:
+    """Milliseconds since epoch for one of RunState's ISO timestamp fields, or
+    None if unset/unparseable — callers must treat that as "no data", never 0."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp() * 1000)
+
+
+def _percentile(sorted_values: list[int], pct: float) -> int | None:
+    """Linear-interpolation percentile over an already-sorted list. None on an
+    empty sample — an empty sample is not a fast one."""
+    if not sorted_values:
+        return None
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    rank = (len(sorted_values) - 1) * pct
+    lo = int(rank)
+    hi = min(lo + 1, len(sorted_values) - 1)
+    if lo == hi:
+        return sorted_values[lo]
+    frac = rank - lo
+    return int(sorted_values[lo] * (1 - frac) + sorted_values[hi] * frac)
+
+
 def usage_summary(user_id: str) -> dict:
     """Current server-anchored period usage; period end is exclusive."""
     state = _period_state(user_id)
@@ -192,15 +222,33 @@ def usage_summary(user_id: str) -> dict:
     }
     cache_read = 0
     cache_write = 0
+    in_period = 0
+    first_message_ms: list[int] = []
+    total_duration_ms: list[int] = []
     for run in runs.STORE.list_for(user_id, include_superseded=True):
         day = _run_date(run.created_at)
         if day is None or not (start <= day < end):
             continue
+        in_period += 1
         key = day.isoformat()
         by_day.setdefault(key, 0)
         by_day[key] += int(getattr(run, "tokens_used", 0) or 0)
         cache_read += int(getattr(run, "cache_read_tokens", 0) or 0)
         cache_write += int(getattr(run, "cache_write_tokens", 0) or 0)
+        # A "timing pair" requires ALL THREE stamps — a run that never produced
+        # live output (blocked/failed/cancelled, or predates the migration) is
+        # not a measurement of time-to-value at all, so it is excluded from BOTH
+        # percentiles rather than half-counted.
+        started_ms = _parse_iso_ms(run.started_at)
+        first_ms = _parse_iso_ms(run.first_message_at)
+        completed_ms = _parse_iso_ms(run.completed_at)
+        if started_ms is None or first_ms is None or completed_ms is None:
+            continue
+        first_message_ms.append(first_ms - started_ms)
+        total_duration_ms.append(completed_ms - started_ms)
+    sample_size = len(total_duration_ms)
+    first_message_ms.sort()
+    total_duration_ms.sort()
     return {
         "periodStart": start.isoformat(),
         "periodEnd": end.isoformat(),
@@ -212,6 +260,18 @@ def usage_summary(user_id: str) -> dict:
         "cacheReadTokens": cache_read,
         "cacheWriteTokens": cache_write,
         "byDay": [{"date": day, "tokens": tokens} for day, tokens in by_day.items()],
+        "latency": {
+            "sampleSize": sample_size,
+            "excluded": in_period - sample_size,
+            "timeToFirstMessageMs": {
+                "p50": _percentile(first_message_ms, 0.50),
+                "p95": _percentile(first_message_ms, 0.95),
+            },
+            "totalDurationMs": {
+                "p50": _percentile(total_duration_ms, 0.50),
+                "p95": _percentile(total_duration_ms, 0.95),
+            },
+        },
     }
 
 
