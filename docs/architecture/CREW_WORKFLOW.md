@@ -174,7 +174,7 @@ role's working depth:
 
 | File | What it is |
 |---|---|
-| `INTEGRATION_CONTRACT.md` | the shared backend↔frontend contract — the one **tracked** file here |
+| — | the shared backend↔frontend contract moved to `specification/api/` on 2026-08-02; `reports/` is per-role folders only |
 
 Reports are information-only. Nothing under `reports/` requests action or
 implies a reply; owner decisions use `proposals/to-owner/`.

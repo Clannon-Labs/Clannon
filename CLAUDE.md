@@ -269,7 +269,8 @@ reports/{api,memory,orchestration,security,frontend,release}/
 ```
 
 Only shared information belongs at `reports/` root:
-`INTEGRATION_CONTRACT.md` is the tracked backend↔frontend contract. Reports are
+the backend↔frontend contract now lives in `specification/api/` (moved 2026-08-02;
+`SEMANTICS.md` is the former `INTEGRATION_CONTRACT.md`). Reports are
 information-only; no report name or location implies a reply.
 
 **Owner decisions live in `proposals/to-owner/`, one decision per proposal.**
@@ -312,9 +313,12 @@ That split exists because the backend is being rewritten in Rust — a doc tied 
 Python implementation dies at the rewrite, a contract survives it and is what the Rust
 gets checked against.
 
-- **`specification/api/`** — the frontend-facing HTTP surface. **This supersedes
-  `frontend/BACKEND_INTEGRATION.md` for routes and response shapes** (that file still
-  owns frontend-internal architecture, and stays the frontend's to edit).
+- **`specification/api/ROUTES.md`** — the frontend-facing HTTP surface. **This
+  supersedes `frontend/BACKEND_INTEGRATION.md` for routes and response shapes** (that
+  file still owns frontend-internal architecture, and stays the frontend's to edit).
+- **`specification/api/SEMANTICS.md`** — what those surfaces *mean* and what the UI may
+  never claim. Was `reports/INTEGRATION_CONTRACT.md`; merged here 2026-08-02. Every
+  rule in it is a real incident, so keep it when editing.
 - **`specification/api/requests/`** — the frontend's write channel. They file a needed
   route; **you build it, add it to `ROUTES.md`, append `## Response`, archive.**
   Sweep it with the proposal inboxes. Frontend never edits a route table; a route

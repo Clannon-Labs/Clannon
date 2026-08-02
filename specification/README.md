@@ -34,7 +34,7 @@ Order of authority, highest first:
 | 1 | `backend/tests/benchmarks/sse_contract_drift.py` + its fixture | **executable.** Fails the suite on real divergence |
 | 2 | `backend/api/README.md` | cross-checked against emitted events by that same test |
 | 3 | `specification/api/` | reviewed prose, verified against code by date |
-| 4 | `frontend/BACKEND_INTEGRATION.md`, `reports/INTEGRATION_CONTRACT.md` | older, partially superseded |
+| 4 | `frontend/BACKEND_INTEGRATION.md` | older, superseded for routes and shapes |
 
 A machine-checked source always beats a written one. Where this directory would
 duplicate something the suite already checks, it **links instead of copying** — an

@@ -6,7 +6,8 @@ pause, wait, or guess.
 
 | File | What |
 |---|---|
-| [`ROUTES.md`](ROUTES.md) | All 38 routes — method, path, auth, purpose, and the semantics you cannot infer from a signature |
+| [`ROUTES.md`](ROUTES.md) | All 38 routes — method, path, auth, purpose, and the gotchas |
+| [`SEMANTICS.md`](SEMANTICS.md) | What the surfaces **mean**, and what the UI may never claim. Read before rendering a seal, a memory hit, or an empty state |
 | [`requests/`](requests/) | **Your write channel.** Need a route that does not exist? File it here |
 
 ## What is authoritative, and what is not
@@ -15,7 +16,7 @@ pause, wait, or guess.
 |---|---|
 | Does route X exist, what does it return, what breaks it? | `ROUTES.md` |
 | What SSE events exist and what keys do they carry? | `backend/api/README.md` + `backend/tests/benchmarks/fixtures/sse_contract.json` — machine-checked, see below |
-| What does the ledger/hydration/seal *mean* in the UI? | `reports/INTEGRATION_CONTRACT.md` (being merged into here) |
+| What does the ledger/hydration/seal *mean* in the UI? | [`SEMANTICS.md`](SEMANTICS.md) |
 | How does the frontend client itself work? | `frontend/BACKEND_INTEGRATION.md` §0 — still correct, still the frontend's own file |
 
 **SSE is deliberately not restated here.** `sse_contract_drift.py` already forces the

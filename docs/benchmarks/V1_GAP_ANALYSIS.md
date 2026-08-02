@@ -168,7 +168,8 @@ classes (extend `scripts/prompt_regression.py`), or accept detect stays
 PARTIAL and stop advertising hermetic proof it doesn't have.
 
 ### CB6 — Multi-Agent Architectural Consistency — PASS (updated 2026-07-28)
-**BUILT:** pull-based proposal workflow, `reports/INTEGRATION_CONTRACT.md`, and
+**BUILT:** pull-based proposal workflow, `specification/api/SEMANTICS.md` (was
+`reports/INTEGRATION_CONTRACT.md`, moved 2026-08-02), and
 `tests/benchmarks/sse_contract_drift.py`. The harness exercises real backend
 mappers, parses frontend TypeScript, compares event/payload/vocabulary shapes,
 and fails on material shared-contract drift. `scripts/check_invariants.py` and

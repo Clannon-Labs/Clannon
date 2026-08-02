@@ -81,9 +81,11 @@ Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent
 `specification/` (root) — the contract, not documentation (owner instruction, 2026-08-02):
 - `docs/` = how it works + why. `specification/` = what must be true. Split exists because
   Rust rewrite kills implementation docs but not contracts.
-- `specification/api/` = frontend-facing HTTP surface. SUPERSEDES
+- `specification/api/ROUTES.md` = frontend-facing HTTP surface. SUPERSEDES
   `frontend/BACKEND_INTEGRATION.md` for routes + response shapes. That file still owns
   frontend-internal architecture and stays frontend's to edit.
+- `specification/api/SEMANTICS.md` = what surfaces MEAN + what UI may never claim.
+  Was `reports/INTEGRATION_CONTRACT.md`, merged 2026-08-02. Every rule is a real incident.
 - `specification/api/requests/` = frontend's ONLY write path. Frontend files needed route;
   backend builds it, adds to `ROUTES.md`, appends `## Response`, archives. Backend sweeps
   it alongside proposal inboxes. Frontend never edits a route table — route lands there
@@ -169,7 +171,8 @@ Messaging — PULL, never push:
 - `proposals/to-<role>/` — decisions needing ruling. Owner decisions go to
   `proposals/to-owner/`. `reports/<role>/` — information/depth; never a reply channel.
 - `reports/` = one folder per role, coordinator included (`reports/backend/`).
-  Root of `reports/` holds ONLY shared files such as `INTEGRATION_CONTRACT.md`.
+  `reports/` holds ONLY per-role folders now — the shared backend/frontend contract
+  moved to `specification/api/` (2026-08-02).
   Never drop your own report_vN.md at the root.
 - Test before writing owner proposal: can I resolve this myself (do work or make
   allowed judgement)? Yes → use ROADMAP, comms, or report. Only genuine

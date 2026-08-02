@@ -56,7 +56,8 @@ migration, and a half-built Rust core is not a reason to stop fixing it.
 **Shipped since v0.2.0** (gap-analysis verdicts reconciled 2026-07-28):
 
 - **CB6 — multi-agent consistency → PASS.** The only Critical benchmark that
-  passes. `reports/INTEGRATION_CONTRACT.md` exists; the SSE contract-drift
+  passes. `specification/api/SEMANTICS.md` exists (was
+  `reports/INTEGRATION_CONTRACT.md`); the SSE contract-drift
   benchmark is green and enforcing.
 - **CB5 — security validation**: earned-seal state flows end-to-end; prevent,
   classify, explain and audit are honestly proven. **Stays PARTIAL** — a PASS
