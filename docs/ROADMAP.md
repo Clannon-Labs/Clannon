@@ -196,6 +196,14 @@ Pilot is still the Redis budget broker (485 lines, off in production). Its defin
 of done is deliberately *not* "the Rust works" — it is "the harness is proven to catch
 a wrong implementation."
 
+**Validation split, settled 2026-08-02.** The owner writes Rust *and* wants agents
+writing Rust-native tests from it, with the Python tests as reference. That stands,
+with one correction: **mirrored per-language tests cannot detect drift** — an agent
+writing a Rust test reads the Rust, so a self-consistent Rust bug produces a green
+test. Drift detection requires **one shared scenario file run against both languages**.
+Rust-native tests keep their own job (panics, ownership, concurrency); they are simply
+not the drift detector.
+
 The 2026-07-28 boundary ruling (separate process + versioned API, FFI only for bounded
 pure computation) still stands and this follows it.
 
@@ -213,11 +221,14 @@ pure computation) still stands and this follows it.
 
 ## 5. Needs the owner, not us
 
-**One open gate:** ratify the Rust core ↔ Python runtime contract and the
-conformance-harness design —
-`proposals/to-owner/2026-08-02_rust-core-contract-ratification.md`. Nothing gets
-built against the boundary until this is settled, and three specifics inside it
-change the shape of the work materially.
+**One open gate:** approve the document structure for the Rust contract —
+`proposals/to-owner/2026-08-02_rust-contract-document-structure.md`. Owner asked to
+approve the structure before any of it is written, so nothing is written until they do.
+
+Ruled 2026-08-02 (contract ratification, now archived): frontend contract does **not**
+change but the existing 33-route API must be specified before the owner can build
+against it; **contract-first**, with the contract in points and tables rather than
+prose and a dedicated protocol document; **Python owns provider keys**.
 
 Settled by the 2026-07-28 rulings, still standing:
 
