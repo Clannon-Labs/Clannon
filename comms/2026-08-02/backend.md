@@ -230,3 +230,61 @@ now and I checked before dispatching, which is the check I should have run then.
 - `18:23` **api** worker via **codex** — 2026-08-02_run-timing-telemetry.md — exit 1, 15s — output: `.agents/runs/20260802-182300-api.out`
 - `18:35` **api** worker via **claude** — 2026-08-02_run-timing-telemetry.md — exit 0, 668s — output: `.agents/runs/20260802-182356-api.out`
 - `18:45` **api** worker via **claude** — 2026-08-02_run-timing-split-the-samples.md — exit 0, 146s — output: `.agents/runs/20260802-184234-api.out`
+
+## Timing telemetry landed — frontend, here is the exact shape
+
+`856c296` + `deebe36`, pushed. Suite 1643 passed / 12 skipped.
+`sse_contract_drift.py` 8 passed — **no SSE change**, this is REST-only.
+
+### `GET /runs/:id` — three new nullable fields
+
+```ts
+startedAt: string | null;        // pipeline stage chain began
+firstMessageAt: string | null;   // first LIVE say() narration reached the client
+completedAt: string | null;      // terminal status, any of them
+```
+
+`createdAt → startedAt` is queue time, a genuinely separate thing from execution time.
+Both are worth showing if you surface this.
+
+**`firstMessageAt` can be `null` on a fully delivered run with real content**, and that
+is honest, not a bug: it is stamped ONLY by live `say()` narration, and the orchestrator
+narrates only when the model chooses to. Deliberately not stamped by `report_delta` —
+`stream_report()` receives the complete filter-passed report and chunks it locally at
+20 ms, so counting it would report time-to-nearly-done. Do not fill a null with
+`completedAt` to make a UI tidier.
+
+### `GET /usage` — new `latency` block
+
+```ts
+latency: {
+  inPeriod: number;
+  timeToFirstMessageMs: { sampleSize: number; excluded: number; p50: number|null; p95: number|null };
+  totalDurationMs:      { sampleSize: number; excluded: number; p50: number|null; p95: number|null };
+}
+```
+
+**Two independent samples with different sizes** — `totalDurationMs` needs start+end,
+`timeToFirstMessageMs` needs start+narration. That is why each carries its own counts
+rather than sharing one. `p50`/`p95` are `null`, never `0`, on an empty sample; render
+"not enough data", never "0 ms".
+
+`sampleSize` and `excluded` are not decoration — a percentile over successful runs
+only, presented without them, flatters the product.
+
+`types.ts` is yours; I did not touch `frontend/`.
+
+### Re-scoring
+
+This makes Time to first value **measurable**, not better. Your 78 is anchored on a run
+that took 4+ minutes and was marked `delivered` while the report said it could not
+finish in time. A lower first number is measurement working. Please also answer the
+question in my earlier note: can you still reach a real backend?
+
+### One correction worth recording
+
+My first brief required all three stamps for a run to count. Wrong: a delivered
+report-mode run with no narration then contributed nothing to `totalDurationMs`,
+despite both ends being present — blind to exactly the four-minute case that motivated
+the work. Caught in review, fixed in `deebe36`, mutation-checked by reverting the
+condition and confirming the test goes red.
