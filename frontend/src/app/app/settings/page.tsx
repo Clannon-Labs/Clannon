@@ -14,7 +14,9 @@ import { BillingSettings } from "@/components/app/billing-settings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeSegment } from "@/components/theme";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import { useNotifyPreference } from "@/lib/notify-preference";
 
 function UsageChart() {
   const { data: usage } = useUsage();
@@ -54,6 +56,60 @@ function ModelsTab() {
             },
           )
         }
+      />
+    </div>
+  );
+}
+
+/** Runs can take minutes — this is "tell me when it's done" for the run
+ *  you're on when you tab away, not a general activity feed. Off by default:
+ *  the browser gates the permission prompt behind a real click, so there's
+ *  no version of this that can be silently on. */
+function NotificationSetting() {
+  const { enabled, permission, requestEnable, disable } = useNotifyPreference();
+  const toast = useToast();
+
+  if (permission === null) {
+    return (
+      <p className="text-[13px] leading-relaxed text-faint">
+        Your browser doesn&apos;t support notifications.
+      </p>
+    );
+  }
+
+  async function toggle(next: boolean) {
+    if (!next) {
+      disable();
+      return;
+    }
+    const granted = await requestEnable();
+    if (!granted) {
+      toast({
+        title: "Notifications blocked",
+        description: "Your browser didn't grant permission — check its site settings for Clannon.",
+        tone: "warning",
+      });
+    }
+  }
+
+  return (
+    <div className="mt-3 flex items-start justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3.5">
+      <div>
+        <p className="text-[13px] font-medium text-foreground">Notify me when a run finishes</p>
+        <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
+          Only fires for a run you have open in a background tab — come back to a
+          finished report without watching for it.
+        </p>
+        {enabled && permission === "denied" && (
+          <p className="mt-1.5 text-[12px] text-warning">
+            Blocked in your browser — enable notifications for this site to use it.
+          </p>
+        )}
+      </div>
+      <Switch
+        checked={enabled && permission === "granted"}
+        onCheckedChange={toggle}
+        label="Notify me when a run finishes"
       />
     </div>
   );
@@ -123,6 +179,14 @@ function SettingsInner() {
                 Light, dark, or follow your operating system.
               </p>
               <ThemeSegment className="mt-3" />
+            </div>
+
+            <div className="border-t border-border pt-5">
+              <p className="text-sm font-medium">Notifications</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                Get pinged the moment a long-running run wraps up.
+              </p>
+              <NotificationSetting />
             </div>
           </div>
         </TabsContent>

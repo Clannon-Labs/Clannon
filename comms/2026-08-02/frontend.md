@@ -1,5 +1,50 @@
 # frontend — 2026-08-02
 
+## Run-completion notifications shipped; a share-link feature filed to backend instead of built (commits pending push — see below)
+
+Owner asked frontend to find a genuine premium-vs-normal UX differentiator
+nobody had discussed and build it. Surveyed the app against
+`benchmark/PAID_PRODUCT_BENCHMARK.md`'s own Gate 90 checklist via an
+`Explore` agent (10 concrete code-grounded questions, not memory) — command
+palette and theming turned out already premium-grade.
+
+Sharing looked like the answer first, and an **advisor review caught a real
+misread**: my strongest citation (`REAL_JOURNEY.md`'s "no claim-level
+correction/share/version workflow") scopes to per-claim affordances inside a
+report, not a whole-run public link — not independent confirmation of what
+I thought it confirmed. More importantly, a one-click public share link is
+real new attack surface on a private alpha whose seed data is a named
+client's confidential business context — exactly the kind of thing the
+owner's stated bar ("a tester should not find any vulnerabilities") is
+about. **Filed the contract instead of building it this session**:
+`specification/api/requests/2026-08-02_run-share-link-create-revoke.md` and
+`..._public-share-page-fetch.md`, non-disclosure and token-unguessability
+spelled out as requirements. No frontend UI/route for this exists yet —
+genuinely not coping with a stub, just not started.
+
+**What shipped**: nothing tells you when a run finishes if you're not
+watching the tab, and runs take minutes (the same sequential-orchestrator
+latency this session's earlier proposal named). Added tab-title flash (no
+permission needed) + an opt-in real OS `Notification` (new Settings →
+Account → Notifications toggle, a new `Switch` primitive — nothing
+binary-and-inline existed in the design system before). Fires only on a
+genuine live→terminal transition while the tab is backgrounded; skips
+`cancelled`; scoped honestly to "this run's page open in a background tab,"
+not app-wide (documented why in the benchmark entry, not hidden). Zero new
+backend API needed.
+
+Verified: `tsc`/`eslint` clean, vitest 149/149 (15 new tests). Then a live,
+real-browser, end-to-end run against mock — forced `document.hidden`,
+waited out the real ~38s run script, Playwright's own page-title readout
+after: `"✓ Report ready · Clannon"`, then confirmed restore-on-visibility.
+Zero console errors. Both real Chromium permission paths (denied/granted)
+verified live too. `previews/2026-08-02_run-notifications/`.
+
+**Benchmark**: Pass 9, core workflow 87→88, **85.29 → 85.47** (rounds to
+85). Full writeup incl. why trust/control and continuity are NOT claimed:
+`benchmark/PAID_PRODUCT_BENCHMARK.md`. Report: `reports/frontend/
+frontend_report_v18.md`.
+
 ## Templates wired into composer + home screen; real useSyncExternalStore bug caught live (commit e9c4e4a, pushed)
 
 Finished what yesterday's session deliberately left uncommitted: the

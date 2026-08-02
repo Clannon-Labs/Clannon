@@ -5,13 +5,14 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **85.29 -> 85/100**  
+Current verified score: **85.47 -> 85/100**  
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
 `benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`,
 `previews/2026-08-01_project-creation-redesign/`,
 `previews/2026-08-01_project-goal-pinned/`,
-`previews/2026-08-01_failed-and-quota-states/`, and
-`reports/frontend/frontend_report_v8.md` through `frontend_report_v17.md`
+`previews/2026-08-01_failed-and-quota-states/`,
+`previews/2026-08-02_run-notifications/`, and
+`reports/frontend/frontend_report_v8.md` through the latest
 
 **90 is not reachable without backend/framework-level work, independent of
 further frontend UX passes.** The gate-90 checklist requires mobile
@@ -70,7 +71,7 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 |---|---:|---:|---:|
 | Outcome clarity | 15 | 89 | 13.35 |
 | Time to first value | 12 | 78 | 9.36 |
-| Core workflow | 18 | 87 | 15.66 |
+| Core workflow | 18 | 88 | 15.84 |
 | Trust and control | 12 | 92 | 11.04 |
 | Continuity and retention | 10 | 89 | 8.90 |
 | Performance and smoothness | 12 | 64 | 7.68 |
@@ -78,7 +79,7 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 | Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **85.29 -> 85** |
+| **Total** | **100** |  | **85.47 -> 85** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -385,6 +386,75 @@ now prevents a failure proactively instead of only explaining one after the
 fact. Trust and control 91 -> 92 — the composer finally honors the spend
 limit it displays; that contradiction (sidebar says stop, composer says go)
 was a real trust gap, now closed and verified end to end, not just typed.
+
+## Pass 9 — run-completion notifications, and a real feature deliberately not built (2026-08-02)
+
+Owner asked frontend to find a genuine premium-vs-normal differentiator that
+had never come up, and build it. Surveyed the app against this file's own
+Gate 90 checklist ("sharing" and "delivered work supports review... next
+step") via an `Explore` agent's 10-question audit, not from memory —
+confirmed command palette and theming are already premium-grade
+(`command-palette.tsx`, `theme.tsx`), and that nothing anywhere sets
+`document.title`, uses the `Notification` API, or offers a share link.
+
+**Sharing was the first instinct and the wrong one this session.** An
+advisor review caught that the strongest-looking citation for "share is
+missing" — `REAL_JOURNEY.md`'s "no claim-level correction/share/version
+workflow" — actually scopes all three words to *claims inside a report*, not
+a whole-run public link; it isn't independent confirmation of the same gap.
+More importantly: a one-click public link is real new attack surface on a
+private alpha whose seed data is a named client's confidential business
+context, and building it in the same session it was conceived, unreviewed,
+would have been the wrong call regardless of the citation. **Filed instead of
+built**: `specification/api/requests/2026-08-02_run-share-link-create-
+revoke.md` and `..._public-share-page-fetch.md` — the create/revoke contract
+and the public read-only fetch, with the non-disclosure and token-
+unguessability requirements spelled out as non-negotiable, for backend to
+prioritize or push back on. No frontend UI or route exists for this yet.
+
+**What shipped instead**: runs take minutes (sequential orchestrator rounds
+— the same latency this session's earlier proposal to backend named as the
+real cost), and nothing told you when one finished if you weren't watching
+the tab. Added `src/lib/use-run-completion-notice.ts`, wired into `RunPage`:
+a tab-title flash (no permission needed, always on) plus an opt-in real OS
+`Notification` (Settings → Account → Notifications, a new `Switch` primitive
+— `src/components/ui/switch.tsx`, nothing binary-and-inline existed in the
+design system before). Both trigger only on a genuine live→terminal
+transition while `document.hidden`, skip `cancelled` (user-initiated, not
+worth interrupting for), and restore the title on `visibilitychange` or
+unmount. Explicitly scoped to "this run's page is open in a background tab"
+— the SSE stream only runs while `RunPage` is mounted, so navigating
+elsewhere *within* Clannon stops tracking a run same as it already stops
+rendering it live; app-wide tracking regardless of open page would need a
+second, parallel subscription mechanism and was deliberately left as a
+separate, real follow-on rather than folded in here (LAW 1).
+
+**Verification, in order of strength**: `tsc`/`eslint` clean, vitest
+149/149 (15 new tests — `notify-preference.test.tsx`,
+`use-run-completion-notice.test.tsx` — covering permission-gated persistence
+and every transition edge case). Then, because this benchmark's own protocol
+says static screenshots can't prove task completion: a **live, real-browser,
+end-to-end run** against the mock backend — submitted a real brief, forced
+`document.hidden = true` via Playwright, waited out the full ~38s mock run
+script, and read the actual page title afterward: `"✓ Report ready ·
+Clannon"`. Flipped visibility back and dispatched `visibilitychange`: title
+read back exactly `"Workspace · Clannon"`. Zero console errors across the
+sequence. Separately verified both real permission paths live (Chromium's
+actual default-denied response correctly left the toggle off and
+unpersisted; a stubbed granted permission correctly persisted it and turned
+the switch on). `previews/2026-08-02_run-notifications/`.
+
+**Score moves 85.29 -> 85.47.** Core workflow 87 -> 88 — this dimension
+names "review" as part of the coherent brief→run→review→reuse loop, and not
+knowing when the run half of that loop finished was a real gap in it,
+closed and proven live. **Not** claiming Trust and control or Continuity —
+Gate 90's "every live-run state answers... next step" is a hard-gate
+phrase, not one of the ten scored dimensions, and this closes it partially
+(one run, one tab) rather than fully; inflating a scored dimension to match
+gate language would be exactly the vacuous-pass shape this file's own
+scoring rules warn against. Accessibility not re-scored: the new `Switch` is
+a real `role="switch"` with `aria-checked` and a labelled accessible name,
+but wasn't separately screen-reader-tested this pass.
 
 ## 3. Hard gates
 

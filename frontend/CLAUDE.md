@@ -2,6 +2,13 @@
 
 > Small note: We are moving towards private alpha deployment on a real domain, so make product so that a tester i hire can test it and not find any vulnerabilities and should want to use it daily in their daily life by asking me to allow them (cuz it would be private alpha then)
 
+# SPECIFICATION
+> See the root specification, and especially specification/api to know what apis already exist and
+> what they provide etc.
+> It tells you everything about what is where, where you are supposed to write the apis you want to have
+> The api/requests is where you are allowed to write btw, so go check it out if you have any questions
+> regarding the apis
+
 # Important directories
 - frontend/proposals — proposals from the OWNER to you
 - ../proposals — the cross-agent channel (you ↔ backend agent); format spec in ../proposals/README.md

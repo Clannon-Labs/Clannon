@@ -40,6 +40,7 @@ import { ArtifactPreview } from "@/components/app/artifact-preview";
 import { Mark } from "@/components/brand/logo";
 import { VerificationStatus } from "@/components/app/verification-status";
 import { CompletionBadge, CompletionBanner } from "@/components/app/completion-status";
+import { useRunCompletionNotice } from "@/lib/use-run-completion-notice";
 import type { Run, Artifact } from "@/lib/api";
 import { formatBytes, formatTokens } from "@/lib/utils";
 
@@ -124,6 +125,19 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     }
   }, [live.reportDone, reduce]);
 
+  // called unconditionally (before the loading/not-found early returns below)
+  // — `run` may still be undefined here, same as `useLiveRun(run)` above.
+  const isTerminal =
+    live.status === "delivered" ||
+    live.status === "blocked" ||
+    live.status === "failed" ||
+    live.status === "cancelled";
+  // completionState is a THIRD axis, never derived from status or
+  // verificationState (INTEGRATION_CONTRACT.md) — a delivered, grounded run
+  // can still be partial. Only meaningful once the run has actually delivered.
+  const isPartial = live.status === "delivered" && run?.completionState === "partial";
+  useRunCompletionNotice(run?.id, run?.title, live.status, isTerminal, isPartial);
+
   // turns of this session that came before the one on screen — the chat history.
   // thread is oldest-first; take everything up to the current turn.
   const orderedThread = thread ?? [];
@@ -199,11 +213,6 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
   const isFailure = live.status === "blocked" || live.status === "failed";
   const isCancelled = live.status === "cancelled";
-  const isTerminal = live.status === "delivered" || isFailure || isCancelled;
-  // completionState is a THIRD axis, never derived from status or
-  // verificationState (INTEGRATION_CONTRACT.md) — a delivered, grounded run
-  // can still be partial. Only meaningful once the run has actually delivered.
-  const isPartial = live.status === "delivered" && run.completionState === "partial";
   const showReport = live.reportText.length > 0;
 
   return (
