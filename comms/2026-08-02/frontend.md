@@ -1,5 +1,46 @@
 # frontend — 2026-08-02
 
+## Real cancel/downgrade/invoices shipped — owner set a standing mock-first policy
+
+Owner clarified how to treat backend gaps going forward: build the UI fully
+against mock, file the exact contract, ship now — the filed contract IS the
+unblock, not a reason to wait. Saved as a feedback memory so it persists.
+
+Reopened the billing-depth gap from two builds ago (filed propose-only,
+`2026-08-02_billing-cancel-downgrade-invoices.md`) and built the real thing:
+scheduled cancellation (always period-end, never immediate — this product
+bills fixed budgets, not metered), immediate paid-to-paid downgrade (Free
+deliberately excluded as a target — Cancel already gets you there, one path
+not two), and a real Invoices section distinct from the existing checkout-
+event log. `MockClient` simulates all three honestly; `HttpClient` calls the
+exact filed routes and will work once backend builds them.
+
+Resolved a design question the filed spec had explicitly left open (does
+"scheduled" even make sense for this billing model) instead of leaving it
+for backend to guess — updated the spec file with the resolution and a
+fourth route (`/billing/cancel/undo`) the first draft hadn't anticipated.
+
+**Real bug caught live**: the downgrade dialog read "2Mtokens" — JSX ate a
+space across a line-wrapped paragraph. Confirmed via the accessibility tree
+(not just the screenshot) it was a real DOM issue, not a rendering artifact.
+Fixed with `{" "}`.
+
+`tsc`/`eslint` clean, vitest 198/198 (13 new). Live-verified full flow:
+downgrade → cancel → undo → fresh signup confirms no inherited stale flags.
+Zero console errors. `previews/2026-08-02_billing-cancel-downgrade-invoices/`.
+
+**Benchmark: Trust and control 92 -> 93** — its own definition names
+"cancellation" explicitly; there was no cancellation path at all before this.
+85.75 -> 85.87, stays at rounded 86. Full detail:
+`benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 14,
+`reports/frontend/frontend_report_v23.md`.
+
+**What mode 1 does and doesn't reopen**: billing was a mock-data problem, so
+it reopened cleanly. The notification-center and offline/service-worker
+deferrals are architecture/design decisions, not missing mock data — mode 1
+doesn't retroactively unblock those, said so plainly rather than treating
+"build more mock UI" as a universal next move.
+
 ## Real PWA icon set shipped; stopped the build loop deliberately
 
 Fifth build this session. Last round I deferred the PWA icon gap (one

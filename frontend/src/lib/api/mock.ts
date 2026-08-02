@@ -1,18 +1,22 @@
 import { appConfig } from "@/config/app.config";
 import { DEMO_BRIEFS } from "@/config/demo.config";
 import type { OAuthProvider } from "@/config/site.config";
-import { PLANS, planById } from "@/config/plans";
+import { PLANS, planById, type PlanId } from "@/config/plans";
 import { fixedBillingPeriod } from "@/lib/billing-period";
 import type { ClannonClient } from "./client";
 import {
   ApiError,
   type BillingPortalInfo,
+  type CancelSubscriptionResponse,
   type CheckoutRequest,
   type CheckoutStatus,
   type Credentials,
   type DecisionLogEntry,
+  type DowngradeResponse,
   type LayerModelConfig,
   type HydrationPreviewEntry,
+  type Invoice,
+  type InvoicesResponse,
   type MemoryEntry,
   type Project,
   type Run,
@@ -20,6 +24,7 @@ import {
   type RemoteConfig,
   type RunSummary,
   type SignupInput,
+  type SubscriptionStatus,
   type UsageSummary,
   type User,
 } from "./types";
@@ -40,6 +45,10 @@ const SESSION_KEY = "clannon.mock.session";
 // promised was a blank account — the empty-signup fix only held until the
 // next navigation. Persisted so it survives exactly the reload that broke it.
 const EMPTY_ACCOUNT_KEY = "clannon.mock.emptyAccount";
+// A scheduled cancellation's effective date (ISO), or absent if none is
+// scheduled. Persisted (not instance state) for the same reason SESSION_KEY
+// is — a full page reload rebuilds MockClient from scratch.
+const CANCEL_EFFECTIVE_AT_KEY = "clannon.mock.cancelEffectiveAt";
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -184,6 +193,7 @@ export class MockClient implements ClannonClient {
     // an earlier signup's persisted flag) and clear the flag for future loads.
     this.seedDemoData();
     this.setEmptyAccount(false);
+    this.clearCancelSchedule();
     this.persistSession(user);
     return user;
   }
@@ -203,6 +213,7 @@ export class MockClient implements ClannonClient {
     this.clearToEmptyAccount();
     this.cancelRequested.clear();
     this.setEmptyAccount(true);
+    this.clearCancelSchedule();
     this.persistSession(user);
     return user;
   }
@@ -212,6 +223,7 @@ export class MockClient implements ClannonClient {
     await sleep(900);
     this.seedDemoData();
     this.setEmptyAccount(false);
+    this.clearCancelSchedule();
     const user: User = {
       id: "u_demo",
       name: `${provider} user`,
@@ -223,7 +235,9 @@ export class MockClient implements ClannonClient {
   }
 
   async logout(): Promise<void> {
-    if (typeof window !== "undefined") window.localStorage.removeItem(SESSION_KEY);
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(SESSION_KEY);
+    this.clearCancelSchedule();
   }
 
   async me(): Promise<User | null> {
@@ -247,6 +261,15 @@ export class MockClient implements ClannonClient {
     if (typeof window === "undefined") return;
     if (empty) window.localStorage.setItem(EMPTY_ACCOUNT_KEY, "1");
     else window.localStorage.removeItem(EMPTY_ACCOUNT_KEY);
+  }
+
+  private getCancelEffectiveAt(): string | null {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(CANCEL_EFFECTIVE_AT_KEY);
+  }
+
+  private clearCancelSchedule() {
+    if (typeof window !== "undefined") window.localStorage.removeItem(CANCEL_EFFECTIVE_AT_KEY);
   }
 
   /* ---------- projects (clients / bodies of work) ---------- */
@@ -774,7 +797,114 @@ export class MockClient implements ClannonClient {
       planId: user.plan,
       maxAddOnCredits: Math.max(...PLANS.map((plan) => plan.tokenBudget)),
       checkouts: structuredClone(this.checkouts),
+      subscription: this.subscriptionStatus(),
     };
+  }
+
+  private subscriptionStatus(): SubscriptionStatus {
+    const cancelEffectiveAt = this.getCancelEffectiveAt();
+    return cancelEffectiveAt
+      ? { status: "cancel_scheduled", cancelEffectiveAt }
+      : { status: "active", cancelEffectiveAt: null };
+  }
+
+  async getInvoices(): Promise<InvoicesResponse> {
+    await sleep(220);
+    const user = await this.me();
+    if (!user) throw new ApiError("Sign in to view billing.", 401);
+    const invoices: Invoice[] = [];
+
+    // one synthetic row per confirmed checkout — real money-shaped events
+    // this session actually produced, not fabricated unrelated history
+    for (const checkout of this.checkouts) {
+      if (checkout.status !== "confirmed" || !checkout.settledAt) continue;
+      const plan = checkout.planId ? planById(checkout.planId) : null;
+      invoices.push({
+        id: `inv_${checkout.id}`,
+        issuedAt: checkout.settledAt,
+        amountCents:
+          checkout.kind === "upgrade" && plan
+            ? plan.monthlyUsd * 100
+            : // add-on credits: mock has no real per-token price, so this
+              // is a placeholder the UI must not treat as a real charge
+              // amount without a priced backend contract
+              0,
+        currency: "usd",
+        status: "paid",
+        description:
+          checkout.kind === "upgrade" && plan
+            ? `Upgrade to ${plan.name}`
+            : `${(checkout.creditAmount ?? 0).toLocaleString()} add-on tokens`,
+      });
+    }
+
+    // the recurring plan charge itself, one row for the current period —
+    // only for a paid plan; Free has nothing to invoice
+    const plan = planById(user.plan);
+    if (plan.monthlyUsd > 0) {
+      const { periodStart } = fixedBillingPeriod(this.billingAnchor);
+      invoices.push({
+        id: `inv_period_${periodStart}`,
+        issuedAt: `${periodStart}T00:00:00.000Z`,
+        amountCents: plan.monthlyUsd * 100,
+        currency: "usd",
+        status: "paid",
+        description: `${plan.name} plan — ${periodStart.slice(0, 7)}`,
+      });
+    }
+
+    invoices.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+    return { invoices };
+  }
+
+  // reason is real backend telemetry (churn signal) — the mock has nowhere
+  // to send it, so it's accepted for interface compatibility and unused
+  async cancelSubscription(reason?: string): Promise<CancelSubscriptionResponse> {
+    void reason;
+    await sleep(400);
+    const user = await this.me();
+    if (!user) throw new ApiError("Sign in to change billing.", 401);
+    if (this.getCancelEffectiveAt()) {
+      throw new ApiError("Cancellation is already scheduled.", 409, "already_scheduled");
+    }
+    const { periodEnd } = fixedBillingPeriod(this.billingAnchor);
+    const effectiveAt = `${periodEnd}T00:00:00.000Z`;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CANCEL_EFFECTIVE_AT_KEY, effectiveAt);
+    }
+    return { status: "cancel_scheduled", cancelEffectiveAt: effectiveAt };
+  }
+
+  async undoCancelSubscription(): Promise<void> {
+    await sleep(300);
+    const user = await this.me();
+    if (!user) throw new ApiError("Sign in to change billing.", 401);
+    this.clearCancelSchedule();
+  }
+
+  async downgradePlan(targetPlanId: PlanId): Promise<DowngradeResponse> {
+    await sleep(450);
+    const user = await this.me();
+    if (!user) throw new ApiError("Sign in to change plans.", 401);
+    const current = planById(user.plan);
+    const target = PLANS.find((plan) => plan.id === targetPlanId);
+    if (!target || target.tokenBudget >= current.tokenBudget) {
+      throw new ApiError("Selected plan is not a downgrade.", 422);
+    }
+    const { used } = await this.usedAndBudget();
+    if (used > target.tokenBudget) {
+      // blocked, not scheduled — this mock doesn't simulate a future-period
+      // apply; the honest failure is telling the user why, not pretending
+      // a "takes effect next period" mechanism exists
+      throw new ApiError(
+        `This period's usage (${used.toLocaleString()} tokens) already exceeds ${target.name}'s budget (${target.tokenBudget.toLocaleString()}). Downgrade once the next period starts.`,
+        409,
+        "usage_exceeds_target_budget",
+      );
+    }
+    const effectiveAt = new Date().toISOString();
+    this.persistSession({ ...user, plan: target.id });
+    return { status: "applied", effectiveAt, newPlanId: target.id };
   }
 
   /* ---------- memory ---------- */

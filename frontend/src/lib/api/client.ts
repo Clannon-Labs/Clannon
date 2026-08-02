@@ -1,11 +1,15 @@
 import type { OAuthProvider } from "@/config/site.config";
+import type { PlanId } from "@/config/plans";
 import type {
   BillingPortalInfo,
+  CancelSubscriptionResponse,
   CheckoutRequest,
   CheckoutStatus,
   Credentials,
+  DowngradeResponse,
   LayerModelConfig,
   HydrationPreviewEntry,
+  InvoicesResponse,
   MemoryEntry,
   Project,
   RemoteConfig,
@@ -131,4 +135,18 @@ export interface ClannonClient {
   getCheckoutStatus(id: string): Promise<CheckoutStatus>;
   /** Mock-mode billing overview — no real Stripe portal yet. */
   openBillingPortal(): Promise<BillingPortalInfo>;
+  /** The account's real billing history — distinct from `getCheckoutStatus`,
+   *  which is a single pending checkout's status. */
+  getInvoices(): Promise<InvoicesResponse>;
+  /** Schedule the account to drop to Free at the current period's end.
+   *  Access continues through `cancelEffectiveAt` — this product bills fixed
+   *  monthly budgets, not a metered subscription, so cancel never revokes
+   *  access immediately. Idempotent on an already-scheduled account. */
+  cancelSubscription(reason?: string): Promise<CancelSubscriptionResponse>;
+  /** Reverse a scheduled cancellation. No-op if the account isn't scheduled. */
+  undoCancelSubscription(): Promise<void>;
+  /** Move to a lower plan, effective immediately. Blocked (409) if the
+   *  account's current-period usage already exceeds the target plan's
+   *  budget — the caller can't silently go over budget on downgrade. */
+  downgradePlan(targetPlanId: PlanId): Promise<DowngradeResponse>;
 }

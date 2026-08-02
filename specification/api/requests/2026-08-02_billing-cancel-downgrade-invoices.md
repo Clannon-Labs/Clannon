@@ -30,7 +30,27 @@ leave.
 
 ## Proposed route
 
-Three separate concerns, likely three routes (naming is backend's call):
+**Update 2026-08-02 (frontend, same day):** built the full UI against this
+contract in mock mode rather than waiting (owner: file the contract, ship the
+frontend now, the real route lands when it lands). That forced a real answer
+to the "does scheduled cancellation even make sense" question below —
+recorded here, not left open, but still backend's call to confirm or
+override:
+
+- **Cancel is always scheduled**, never immediate. Access continues through
+  `cancelEffectiveAt` (the current period's end). This product bills fixed
+  monthly budgets, not metered usage, so there's no partial-period proration
+  question to solve either way.
+- **Downgrade is always immediate**, and only offered between paid tiers.
+  Free is deliberately NOT a downgrade target — that's what Cancel does, on
+  its own schedule. One path to "end up on Free," not two with different
+  timing semantics competing in the same UI. Blocked (409) if current usage
+  already exceeds the target's budget — mock does not implement a "scheduled
+  downgrade for next period" fallback; that's a real design question if
+  backend wants it (see the failure-case table).
+
+Four routes now (a fourth added — undo didn't exist in the first draft, and a
+scheduled action needs one):
 
 | | |
 |---|---|
@@ -38,6 +58,13 @@ Three separate concerns, likely three routes (naming is backend's call):
 | Path | `/billing/cancel` |
 | Auth | required |
 | Body | `{ reason?: string }` — optional, for churn signal |
+
+| | |
+|---|---|
+| Method | `POST` |
+| Path | `/billing/cancel/undo` |
+| Auth | required |
+| Body | none |
 
 | | |
 |---|---|
@@ -66,13 +93,20 @@ type DowngradeRequest = { targetPlanId: string };
 ## Response
 
 ```ts
+// always "scheduled" per the decision above — "cancelled" dropped from the
+// union since the mock never produces it and the UI has nothing to render
+// for an immediate-revoke state
 type CancelSubscriptionResponse = {
-  status: "cancelled" | "scheduled"; // scheduled = takes effect at period end
-  effectiveAt: string; // ISO — when access actually changes
+  status: "cancel_scheduled";
+  cancelEffectiveAt: string; // ISO — ALWAYS the current period's end
 };
 
+// POST /billing/cancel/undo response: same shape, status: "active" +
+// cancelEffectiveAt: null
+
+// always "applied" — no "scheduled" downgrade path implemented, see above
 type DowngradeResponse = {
-  status: "applied" | "scheduled";
+  status: "applied";
   effectiveAt: string;
   newPlanId: string;
 };
@@ -98,16 +132,23 @@ type InvoicesResponse = { invoices: Invoice[] };
 | No invoices yet (brand-new account) | `{ invoices: [] }` + 200 | renders "nothing billed yet", not an error |
 | Not authenticated | 401 | existing session-expiry handling covers this |
 
-Say explicitly if "scheduled" cancellation/downgrade even makes sense for this
-product's billing model (fixed-period budgets, not a metered subscription per
-`billing.py`) — the UI's copy depends on whether "cancel" means "stop future renewal"
-or "revoke access now," and those need different confirmation language.
-
 ## How the frontend is coping meanwhile
 
-No UI attempts any of these three actions. `billing-settings.tsx` keeps the existing
-disabled-downgrade card and the refund-policy link as-is. Nothing is stubbed against a
-contract that doesn't exist yet — this is a real gap, not a coping mechanism.
+**No longer coping — built.** `billing-settings.tsx` has real cancel/undo/downgrade/
+invoices UI, fully wired and working against `MockClient`. `HttpClient` calls the
+exact routes/payloads above and will work unmodified once backend builds them (three
+tests in `src/tests/billing-client.test.ts` pin the exact request shape so drift gets
+caught). `POST /billing/mock/confirm`-style server-only endpoints were not needed here
+— unlike checkout, these three don't have an async settlement step in the mock's
+design (open question below for whether the real backend needs one).
+
+**Open question for backend**: should downgrade or cancel actually need async
+settlement (pending → confirmed, like checkout does), or can they resolve
+synchronously? The mock made them synchronous because there's no real payment
+processor to round-trip with yet, but a real Stripe-backed cancel/downgrade might
+genuinely need to wait on a webhook. If so, the response shapes above need a
+`"pending"` status added and the frontend needs to poll it — flag back here if that's
+the case rather than assuming synchronous.
 
 ---
 

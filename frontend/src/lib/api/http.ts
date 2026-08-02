@@ -1,15 +1,19 @@
 import { appConfig } from "@/config/app.config";
 import type { OAuthProvider } from "@/config/site.config";
 import type { ClannonClient } from "./client";
+import type { PlanId } from "@/config/plans";
 import {
   ApiError,
   type ApiErrorAction,
   type BillingPortalInfo,
+  type CancelSubscriptionResponse,
   type CheckoutRequest,
   type CheckoutStatus,
   type Credentials,
+  type DowngradeResponse,
   type LayerModelConfig,
   type HydrationPreviewEntry,
+  type InvoicesResponse,
   type MemoryEntry,
   type Project,
   type RemoteConfig,
@@ -497,6 +501,28 @@ export class HttpClient implements ClannonClient {
 
   openBillingPortal(): Promise<BillingPortalInfo> {
     return request(appConfig.endpoints.billingPortal, { method: "POST" });
+  }
+
+  getInvoices(): Promise<InvoicesResponse> {
+    return request(appConfig.endpoints.invoices);
+  }
+
+  cancelSubscription(reason?: string): Promise<CancelSubscriptionResponse> {
+    return request(appConfig.endpoints.cancelSubscription, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  undoCancelSubscription(): Promise<void> {
+    return request(appConfig.endpoints.undoCancelSubscription, { method: "POST" });
+  }
+
+  downgradePlan(targetPlanId: PlanId): Promise<DowngradeResponse> {
+    return request(appConfig.endpoints.downgrade, {
+      method: "POST",
+      body: JSON.stringify({ targetPlanId }),
+    });
   }
 
   getUsage(): Promise<UsageSummary> {

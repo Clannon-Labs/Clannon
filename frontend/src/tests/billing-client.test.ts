@@ -59,6 +59,7 @@ describe("HttpClient billing contract", () => {
       planId: "starter" as const,
       maxAddOnCredits: 20_000_000,
       checkouts: [checkout],
+      subscription: { status: "active" as const, cancelEffectiveAt: null },
     };
     const fetch = vi.fn()
       .mockResolvedValueOnce(okJson(checkout))
@@ -72,5 +73,42 @@ describe("HttpClient billing contract", () => {
     expect(requestedUrls[0]).toMatch(/\/billing\/checkouts\/chk_1$/);
     expect(requestedUrls[1]).toMatch(/\/billing\/portal$/);
     expect(requestedUrls.join(" ")).not.toContain("/billing/mock/confirm");
+  });
+
+  // These three hit specification/api/requests/2026-08-02_billing-cancel-
+  // downgrade-invoices.md — filed, not yet built server-side. Frontend is
+  // built and live against the mock regardless (owner: the filed contract
+  // is the unblock, not a reason to wait) — these tests just prove
+  // HttpClient calls the exact routes/payloads that contract promises, so
+  // the swap to a real backend is mechanical once it lands.
+  it("calls the filed invoices route with no body", async () => {
+    const fetch = vi.fn().mockResolvedValue(okJson({ invoices: [] }));
+    vi.stubGlobal("fetch", fetch);
+    await new HttpClient().getInvoices();
+    expect(String(fetch.mock.calls[0][0])).toMatch(/\/billing\/invoices$/);
+  });
+
+  it("posts an optional reason to the filed cancel route", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      okJson({ status: "cancel_scheduled", cancelEffectiveAt: "2026-09-01T00:00:00.000Z" }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await new HttpClient().cancelSubscription("too expensive");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/billing\/cancel$/),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "too expensive" }) }),
+    );
+  });
+
+  it("posts the target plan to the filed downgrade route", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      okJson({ status: "applied", effectiveAt: "2026-08-03T00:00:00.000Z", newPlanId: "starter" }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await new HttpClient().downgradePlan("starter");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/billing\/downgrade$/),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ targetPlanId: "starter" }) }),
+    );
   });
 });

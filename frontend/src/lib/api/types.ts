@@ -389,6 +389,16 @@ export interface CheckoutStatus {
   settledAt: string | null;
 }
 
+/** Whether the account is scheduled to drop to Free at the current period's
+ *  end. This product bills fixed monthly budgets, not a metered
+ *  subscription, so "cancel" means "don't renew," never "revoke access
+ *  now" — access continues through `cancelEffectiveAt`. */
+export interface SubscriptionStatus {
+  status: "active" | "cancel_scheduled";
+  /** ISO, null when `status` is "active". */
+  cancelEffectiveAt: string | null;
+}
+
 /** POST /billing/portal's mock-mode response. There is no real Stripe
  *  portal yet (private alpha) — this describes the mock's own state
  *  instead of a redirect URL. */
@@ -397,4 +407,29 @@ export interface BillingPortalInfo {
   planId: PlanId;
   maxAddOnCredits: number;
   checkouts: CheckoutStatus[];
+  subscription: SubscriptionStatus;
 }
+
+/** One line item a user can point to and say "that's what I was charged."
+ *  Distinct from `CheckoutStatus`, which is a checkout *event* log — this is
+ *  the account's billing history proper. */
+export interface Invoice {
+  id: string;
+  issuedAt: string;
+  amountCents: number;
+  currency: string;
+  status: "paid" | "open" | "void" | "refunded";
+  description: string;
+}
+
+export interface InvoicesResponse {
+  invoices: Invoice[];
+}
+
+export type CancelSubscriptionResponse = SubscriptionStatus;
+
+export type DowngradeResponse = {
+  status: "applied";
+  effectiveAt: string;
+  newPlanId: PlanId;
+};

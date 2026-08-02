@@ -4,19 +4,29 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Check, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { PlanId } from "@/config/plans";
+import { planById, type PlanId } from "@/config/plans";
 import { ApiError } from "@/lib/api";
 import {
   queryKeys,
   useBillingPortal,
+  useCancelSubscription,
+  useDowngradePlan,
   useEffectivePlan,
   useEffectivePlans,
+  useInvoices,
   useMe,
   useStartCheckout,
+  useUndoCancelSubscription,
 } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatTokens } from "@/lib/utils";
+
+const dateLabel = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+const money = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "usd" });
 
 export function BillingSettings() {
   const { data: user } = useMe();
@@ -24,10 +34,16 @@ export function BillingSettings() {
   const currentPlan = useEffectivePlan(user?.plan);
   const checkout = useStartCheckout();
   const portal = useBillingPortal();
+  const invoices = useInvoices();
+  const downgrade = useDowngradePlan();
+  const cancelSub = useCancelSubscription();
+  const undoCancelSub = useUndoCancelSubscription();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [pendingPlan, setPendingPlan] = useState<PlanId | null>(null);
   const [creditAmount, setCreditAmount] = useState("100000");
+  const [confirmDowngrade, setConfirmDowngrade] = useState<PlanId | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const handledSettlements = useRef(new Set<string>());
 
   useEffect(() => {
@@ -100,15 +116,83 @@ export function BillingSettings() {
     );
   }
 
+  function confirmDowngradePlan() {
+    if (!confirmDowngrade) return;
+    const planId = confirmDowngrade;
+    downgrade.mutate(planId, {
+      onSuccess: (result) => {
+        setConfirmDowngrade(null);
+        toast({
+          title: `Moved to ${planById(result.newPlanId).name}`,
+          description: "Your new budget applies immediately.",
+          tone: "success",
+        });
+      },
+      onError: (error) => {
+        setConfirmDowngrade(null);
+        toast({
+          title: "Could not downgrade",
+          description: error instanceof ApiError ? error.message : "Try again.",
+          tone: "warning",
+        });
+      },
+    });
+  }
+
+  function confirmCancelSubscription() {
+    cancelSub.mutate(undefined, {
+      onSuccess: (result) => {
+        setConfirmCancel(false);
+        toast({
+          title: "Cancellation scheduled",
+          description: result.cancelEffectiveAt
+            ? `Your plan reverts to Free on ${dateLabel(result.cancelEffectiveAt)}. You keep full access until then.`
+            : undefined,
+          tone: "success",
+        });
+      },
+      onError: (error) => {
+        setConfirmCancel(false);
+        toast({
+          title: "Could not schedule cancellation",
+          description: error instanceof ApiError ? error.message : "Try again.",
+          tone: "warning",
+        });
+      },
+    });
+  }
+
+  function keepPlan() {
+    undoCancelSub.mutate(undefined, {
+      onSuccess: () => toast({ title: "Cancellation undone", tone: "success" }),
+    });
+  }
+
   return (
     <div>
       <p className="max-w-xl text-[13px] leading-relaxed text-muted-foreground">
         You&apos;re on <span className="font-semibold text-foreground">{currentPlan?.name}</span>.
-        Budgets reset on each fixed billing anniversary. Cancellation and refunds follow the{" "}
+        Budgets reset on each fixed billing anniversary. Refunds follow the{" "}
         <Link href="/legal/refunds" className="text-primary underline underline-offset-2">
           refund policy
         </Link>.
       </p>
+
+      {portal.data?.subscription.status === "cancel_scheduled" && portal.data.subscription.cancelEffectiveAt && (
+        <div
+          role="status"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-memory-soft px-4 py-3"
+        >
+          <p className="text-[13px] leading-relaxed text-memory">
+            Your plan reverts to Free on{" "}
+            <span className="font-semibold">{dateLabel(portal.data.subscription.cancelEffectiveAt)}</span>.
+            You keep full access until then.
+          </p>
+          <Button variant="outline" size="sm" onClick={keepPlan} loading={undoCancelSub.isPending}>
+            Keep my plan
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={startAddOn} className="mt-5 rounded-lg border border-border bg-surface p-5">
         <h3 className="text-[15px] font-semibold">Add tokens this period</h3>
@@ -143,6 +227,13 @@ export function BillingSettings() {
         {plans.map((plan) => {
           const isCurrent = plan.id === user?.plan;
           const isUpgrade = plan.tokenBudget > (currentPlan?.tokenBudget ?? 0) && plan.monthlyUsd > 0;
+          // Free isn't offered here as a downgrade target — that's what
+          // "Cancel subscription" below does (scheduled, at period end).
+          // Downgrade is immediate and only moves between paid tiers, so
+          // there's exactly one path to "go to Free," not two with
+          // different timing semantics.
+          const isDowngrade =
+            plan.tokenBudget < (currentPlan?.tokenBudget ?? 0) && plan.monthlyUsd > 0;
           return (
             <div
               key={plan.id}
@@ -179,15 +270,47 @@ export function BillingSettings() {
                 >
                   Upgrade to {plan.name}
                 </Button>
+              ) : isDowngrade ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full"
+                  loading={downgrade.isPending && confirmDowngrade === plan.id}
+                  disabled={downgrade.isPending}
+                  onClick={() => setConfirmDowngrade(plan.id)}
+                >
+                  Move to {plan.name}
+                </Button>
               ) : (
                 <p className="mt-4 flex h-8 items-center justify-center text-center text-[12px] text-faint">
-                  Downgrades are not available through mock checkout
+                  Cancel below to move here
                 </p>
               )}
             </div>
           );
         })}
       </div>
+
+      <section className="mt-6" aria-labelledby="invoices-title">
+        <h3 id="invoices-title" className="tag-label text-muted-foreground">Invoices</h3>
+        {invoices.data?.invoices.length ? (
+          <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-surface px-4">
+            {invoices.data.invoices.map((invoice) => (
+              <li key={invoice.id} className="flex items-center justify-between gap-3 py-3 text-[12px]">
+                <div>
+                  <p className="text-foreground">{invoice.description}</p>
+                  <p className="mt-0.5 text-faint">{dateLabel(invoice.issuedAt)}</p>
+                </div>
+                <span className="tabular text-muted-foreground">{money(invoice.amountCents)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-[12px] text-faint">
+            Nothing billed yet — invoices appear here once a plan or add-on purchase settles.
+          </p>
+        )}
+      </section>
 
       <section className="mt-6" aria-labelledby="checkout-history-title">
         <div className="flex items-center justify-between gap-3">
@@ -196,6 +319,9 @@ export function BillingSettings() {
             <RefreshCw className="size-3.5" aria-hidden /> Refresh
           </Button>
         </div>
+        <p className="mt-1 text-[11px] text-faint">
+          Every checkout you started, pending or settled — not the same as the invoices above.
+        </p>
         {portal.data?.checkouts.length ? (
           <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-surface px-4">
             {portal.data.checkouts.map((item) => (
@@ -216,6 +342,73 @@ export function BillingSettings() {
           <p className="mt-2 text-[12px] text-faint">No checkouts yet.</p>
         )}
       </section>
+
+      {currentPlan && currentPlan.monthlyUsd > 0 && portal.data?.subscription.status === "active" && (
+        <section className="mt-6 rounded-lg border border-border bg-surface p-5" aria-labelledby="cancel-title">
+          <h3 id="cancel-title" className="text-[15px] font-semibold">Cancel subscription</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            You keep {currentPlan.name} and full access through the end of this billing period,
+            then revert to the free plan. No partial-period refund — see the{" "}
+            <Link href="/legal/refunds" className="text-primary underline underline-offset-2">
+              refund policy
+            </Link>.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => setConfirmCancel(true)}
+          >
+            Cancel subscription
+          </Button>
+        </section>
+      )}
+
+      <Dialog
+        open={confirmDowngrade !== null}
+        onClose={() => setConfirmDowngrade(null)}
+        title={confirmDowngrade ? `Move to ${planById(confirmDowngrade).name}?` : ""}
+      >
+        {confirmDowngrade && (
+          <div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Your budget changes to {formatTokens(planById(confirmDowngrade).tokenBudget)}{" "}
+              tokens immediately. If this period&apos;s usage already exceeds that, the move is
+              blocked until next period.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setConfirmDowngrade(null)}>
+                Stay on {currentPlan?.name}
+              </Button>
+              <Button loading={downgrade.isPending} onClick={confirmDowngradePlan}>
+                Move to {planById(confirmDowngrade).name}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title="Cancel your subscription?"
+      >
+        <div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            You keep {currentPlan?.name} and full access through the end of this billing period.
+            After that, your account reverts to the free plan. You can undo this any time before
+            then.
+          </p>
+          <div className="mt-5 flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmCancel(false)}>
+              Keep my plan
+            </Button>
+            <Button variant="destructive" loading={cancelSub.isPending} onClick={confirmCancelSubscription}>
+              Cancel subscription
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

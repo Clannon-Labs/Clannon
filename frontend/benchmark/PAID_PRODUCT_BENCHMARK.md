@@ -74,14 +74,14 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 | Outcome clarity | 15 | 89 | 13.35 |
 | Time to first value | 12 | 78 | 9.36 |
 | Core workflow | 18 | 89 | 16.02 |
-| Trust and control | 12 | 92 | 11.04 |
+| Trust and control | 12 | 93 | 11.16 |
 | Continuity and retention | 10 | 90 | 9.00 |
 | Performance and smoothness | 12 | 64 | 7.68 |
 | Failure recovery | 7 | 90 | 6.30 |
 | Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **85.75 -> 86** |
+| **Total** | **100** |  | **85.87 -> 86** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -668,6 +668,57 @@ page-content screenshots — this doesn't render inside a page, it renders in
 browser chrome / OS home screen; recorded why in
 `previews/2026-08-02_pwa-icons/README.md` per this file's own escape hatch
 for genuinely nonvisual work.
+
+## Pass 14 — real cancel/downgrade/invoices, built ahead of the backend (2026-08-03)
+
+Owner set a standing policy this session: build the UI fully against mock, file the
+exact contract to backend, ship now — filing the contract IS the unblock, not a
+reason to wait. `specification/api/requests/2026-08-02_billing-cancel-downgrade-
+invoices.md` was filed propose-only two passes ago (billing depth was real but
+"backend-shaped"); this pass builds the real thing against that same contract.
+
+`ClannonClient` gained `getInvoices`/`cancelSubscription`/`undoCancelSubscription`/
+`downgradePlan`, implemented honestly in `MockClient` (real working simulation,
+persisted via localStorage the same way `EMPTY_ACCOUNT_KEY` already was, so it
+survives a reload) and as thin passthroughs in `HttpClient` (will 404 until backend
+builds the routes — same as any other pending-contract call, and three tests pin the
+exact request shape so drift gets caught when it lands).
+
+Resolved a real design question the filed contract had explicitly left open (whether
+"scheduled" cancellation/downgrade makes sense for this product's fixed-budget
+billing model): cancel is always scheduled for the current period's end, never
+immediate; downgrade is always immediate and only offered between paid tiers — Free
+isn't a downgrade target, since Cancel already gets you there on its own schedule,
+and two paths to the same state with different timing was the wrong design. Updated
+the spec file with the resolution rather than leaving it as an open question backend
+would have to guess at.
+
+**A real bug, caught live, not by the type system**: the downgrade confirm dialog
+read "Your budget changes to 2Mtokens immediately" — missing space. Source had a
+literal space on the same line as the interpolated value; JSX's whitespace-collapsing
+rule ate it because the surrounding paragraph wrapped across a line break further
+down. Confirmed via the accessibility tree (not just the screenshot) that the DOM
+text really was missing the space, not a rendering artifact. Fixed with an explicit
+`{" "}`.
+
+Verified end-to-end live, not just per-mutation: downgrade Pro→Starter (plan card,
+sidebar budget, usage widget, and the Cancel section's own copy all reactively
+updated together) → cancel subscription (scheduled banner names the real period-end
+date) → undo via "Keep my plan" (banner clears, Cancel section reappears) → a fresh
+signup confirms genuinely empty invoices and no inherited stale cancellation flag
+from browser storage (the same bug class as `EMPTY_ACCOUNT_KEY` once was, checked
+deliberately this time). Zero console errors throughout.
+
+`tsc`/`eslint` clean, vitest 198/198 (13 new: 10 in `billing-cancel-downgrade-
+invoices-mock.test.ts`, 3 extending `billing-client.test.ts`).
+`previews/2026-08-02_billing-cancel-downgrade-invoices/`.
+
+**Score moves 85.75 -> 85.87 (86 stays 86).** Trust and control 92 -> 93 — this
+dimension's own definition names *"cancellation"* explicitly among what must be
+"understandable and controllable" (§2 table, word for word), and there was
+previously zero cancellation path in the product beyond a static link to the refund
+policy. Not claiming a second dimension — downgrade/invoices are real value but
+don't match any other dimension's own listed criteria this precisely.
 
 ## 3. Hard gates
 

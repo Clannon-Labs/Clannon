@@ -94,6 +94,16 @@ export const appConfig = {
     checkout: "/billing/checkout",
     checkoutStatus: "/billing/checkouts/:id",
     billingPortal: "/billing/portal",
+    /**
+     * Filed, not yet built server-side:
+     * specification/api/requests/2026-08-02_billing-cancel-downgrade-invoices.md.
+     * Frontend is built and live against the mock now (owner: build ahead of
+     * the backend, the filed contract is the unblock, not a reason to wait).
+     */
+    invoices: "/billing/invoices",
+    cancelSubscription: "/billing/cancel",
+    undoCancelSubscription: "/billing/cancel/undo",
+    downgrade: "/billing/downgrade",
   },
 
   /** Request defaults for the http client. */

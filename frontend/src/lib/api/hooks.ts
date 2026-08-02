@@ -38,6 +38,7 @@ export const queryKeys = {
   models: ["models"] as const,
   billingPortal: ["billing", "portal"] as const,
   checkout: (id: string) => ["billing", "checkout", id] as const,
+  invoices: ["billing", "invoices"] as const,
 };
 
 export function useProjects() {
@@ -314,6 +315,41 @@ export function useBillingPortal() {
       query.state.data?.checkouts.some((checkout) => checkout.status === "pending")
         ? 3_000
         : false,
+  });
+}
+
+export function useInvoices() {
+  return useQuery({
+    queryKey: queryKeys.invoices,
+    queryFn: () => getClient().getInvoices(),
+  });
+}
+
+export function useCancelSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reason?: string) => getClient().cancelSubscription(reason),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.billingPortal }),
+  });
+}
+
+export function useUndoCancelSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => getClient().undoCancelSubscription(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.billingPortal }),
+  });
+}
+
+export function useDowngradePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (targetPlanId: PlanId) => getClient().downgradePlan(targetPlanId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.me });
+      qc.invalidateQueries({ queryKey: queryKeys.usage });
+      qc.invalidateQueries({ queryKey: queryKeys.billingPortal });
+    },
   });
 }
 
