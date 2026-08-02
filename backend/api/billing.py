@@ -235,18 +235,18 @@ def usage_summary(user_id: str) -> dict:
         by_day[key] += int(getattr(run, "tokens_used", 0) or 0)
         cache_read += int(getattr(run, "cache_read_tokens", 0) or 0)
         cache_write += int(getattr(run, "cache_write_tokens", 0) or 0)
-        # A "timing pair" requires ALL THREE stamps — a run that never produced
-        # live output (blocked/failed/cancelled, or predates the migration) is
-        # not a measurement of time-to-value at all, so it is excluded from BOTH
-        # percentiles rather than half-counted.
+        # Two independent samples, each needing only its own pair of stamps. A
+        # report-mode run with no live narration can be `delivered` with real
+        # content and still have `first_message_at is None` — that absence is
+        # honest, not a bug, and must not disqualify its (perfectly good)
+        # totalDurationMs measurement.
         started_ms = _parse_iso_ms(run.started_at)
         first_ms = _parse_iso_ms(run.first_message_at)
         completed_ms = _parse_iso_ms(run.completed_at)
-        if started_ms is None or first_ms is None or completed_ms is None:
-            continue
-        first_message_ms.append(first_ms - started_ms)
-        total_duration_ms.append(completed_ms - started_ms)
-    sample_size = len(total_duration_ms)
+        if started_ms is not None and first_ms is not None:
+            first_message_ms.append(first_ms - started_ms)
+        if started_ms is not None and completed_ms is not None:
+            total_duration_ms.append(completed_ms - started_ms)
     first_message_ms.sort()
     total_duration_ms.sort()
     return {
@@ -261,13 +261,16 @@ def usage_summary(user_id: str) -> dict:
         "cacheWriteTokens": cache_write,
         "byDay": [{"date": day, "tokens": tokens} for day, tokens in by_day.items()],
         "latency": {
-            "sampleSize": sample_size,
-            "excluded": in_period - sample_size,
+            "inPeriod": in_period,
             "timeToFirstMessageMs": {
+                "sampleSize": len(first_message_ms),
+                "excluded": in_period - len(first_message_ms),
                 "p50": _percentile(first_message_ms, 0.50),
                 "p95": _percentile(first_message_ms, 0.95),
             },
             "totalDurationMs": {
+                "sampleSize": len(total_duration_ms),
+                "excluded": in_period - len(total_duration_ms),
                 "p50": _percentile(total_duration_ms, 0.50),
                 "p95": _percentile(total_duration_ms, 0.95),
             },

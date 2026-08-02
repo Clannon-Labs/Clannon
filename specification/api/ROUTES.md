@@ -96,7 +96,7 @@ code wins and this file is the bug — say so rather than building to the prose.
 |---|---|---|---|
 | GET | `/settings/models` | yes | Available models for this plan. |
 | PUT | `/settings/models` | yes | Set preferred model. → 204 |
-| GET | `/usage` | yes | Token/cost usage incl. **cache read/write tokens** and a `latency` block (`sampleSize`, `excluded`, `timeToFirstMessageMs`/`totalDurationMs` p50/p95 — `null` on an empty sample, never `0`). REST-only; no `usage` SSE event. See `api/README.md`. |
+| GET | `/usage` | yes | Token/cost usage incl. **cache read/write tokens** and a `latency` block (`inPeriod`, plus two independent samples `timeToFirstMessageMs`/`totalDurationMs`, each its own `{sampleSize, excluded, p50, p95}` — `null` on an empty sample, never `0`; a report-mode run with no live narration still counts toward `totalDurationMs`). REST-only; no `usage` SSE event. See `api/README.md`. |
 | POST | `/billing/checkout` | yes | Start checkout. |
 | GET | `/billing/checkouts/{checkout_id}` | yes | Checkout status. |
 | POST | `/billing/portal` | yes | Billing portal link. |

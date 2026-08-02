@@ -13,10 +13,14 @@ Two layers:
    Driven through `run_driver.execute()` with a faked `pipeline.run` — same
    hermetic pattern as `tests/completion_state.py`.
 
-2. `billing.usage_summary`'s `latency` aggregate — a "timing pair" requires ALL
-   THREE stamps; a run missing any one (blocked/failed/cancelled, or a
-   pre-migration row) is excluded from BOTH percentiles, not half-counted, and
-   an empty sample reports `null`, never `0`.
+2. `billing.usage_summary`'s `latency` aggregate — TWO independent samples,
+   each requiring only its own pair of stamps: `totalDurationMs` needs
+   `started_at`+`completed_at`; `timeToFirstMessageMs` needs `started_at`+
+   `first_message_at`. A report-mode run with no live narration can be
+   `delivered` with real content and still miss `first_message_at` — that must
+   not disqualify its (perfectly good) `totalDurationMs` measurement. Each
+   sample carries its own `sampleSize`/`excluded`; an empty sample reports
+   `null`, never `0`.
 """
 
 from __future__ import annotations
@@ -248,15 +252,15 @@ def _timed_run(store, *, rid, status, started=None, first=None, completed=None):
     return run
 
 
-def test_only_full_triples_enter_the_sample(store_env):
+def test_full_triple_enters_both_samples(store_env):
     _timed_run(
         store_env.store, rid="run_a", status="delivered",
         started="2026-01-01T00:00:00+00:00",
         first="2026-01-01T00:00:01+00:00",
         completed="2026-01-01T00:00:05+00:00",
     )
-    # blocked: started + completed present, no live output — excluded entirely,
-    # NOT half-counted into totalDurationMs
+    # blocked: started + completed present, no live output — excluded from
+    # timeToFirstMessageMs only, still counts toward totalDurationMs
     _timed_run(
         store_env.store, rid="run_b", status="blocked",
         started="2026-01-01T00:00:00+00:00",
@@ -268,10 +272,32 @@ def test_only_full_triples_enter_the_sample(store_env):
 
     usage = store_env.billing.usage_summary("u1")
     latency = usage["latency"]
-    assert latency["sampleSize"] == 1
-    assert latency["excluded"] == 2
+    assert latency["inPeriod"] == 3
+    assert latency["timeToFirstMessageMs"]["sampleSize"] == 1
+    assert latency["timeToFirstMessageMs"]["excluded"] == 2
     assert latency["timeToFirstMessageMs"]["p50"] == 1000
-    assert latency["totalDurationMs"]["p50"] == 5000
+    assert latency["totalDurationMs"]["sampleSize"] == 2
+    assert latency["totalDurationMs"]["excluded"] == 1
+    assert latency["totalDurationMs"]["p50"] == 3500
+
+
+def test_report_mode_run_without_narration_counts_duration_not_first_message(store_env):
+    """The discriminating case: started_at + completed_at present, first_message_at
+    absent (a report-mode delivery with no live `say()`). Must appear in
+    totalDurationMs and must NOT appear in timeToFirstMessageMs — this is exactly
+    the case the all-three rule silently discarded."""
+    _timed_run(
+        store_env.store, rid="run_report", status="delivered",
+        started="2026-01-01T00:00:00+00:00",
+        first=None,
+        completed="2026-01-01T00:04:00+00:00",
+    )
+    latency = store_env.billing.usage_summary("u1")["latency"]
+    assert latency["timeToFirstMessageMs"]["sampleSize"] == 0
+    assert latency["timeToFirstMessageMs"]["excluded"] == 1
+    assert latency["totalDurationMs"]["sampleSize"] == 1
+    assert latency["totalDurationMs"]["excluded"] == 0
+    assert latency["totalDurationMs"]["p50"] == 240000
 
 
 def test_excluded_runs_never_move_the_percentiles(store_env):
@@ -283,26 +309,34 @@ def test_excluded_runs_never_move_the_percentiles(store_env):
     )
     before = store_env.billing.usage_summary("u1")["latency"]
 
+    # missing started_at entirely — excluded from both samples
     _timed_run(
         store_env.store, rid="run_d", status="cancelled",
-        started="2026-01-01T00:00:00+00:00",
+        started=None,
         first=None, completed="2026-01-01T00:01:00+00:00",
     )
     after = store_env.billing.usage_summary("u1")["latency"]
 
-    assert after["sampleSize"] == before["sampleSize"] == 1
-    assert after["timeToFirstMessageMs"] == before["timeToFirstMessageMs"]
-    assert after["totalDurationMs"] == before["totalDurationMs"]
-    assert after["excluded"] == before["excluded"] + 1
+    assert after["timeToFirstMessageMs"]["sampleSize"] == before["timeToFirstMessageMs"]["sampleSize"] == 1
+    assert after["totalDurationMs"]["sampleSize"] == before["totalDurationMs"]["sampleSize"] == 1
+    assert after["timeToFirstMessageMs"]["p50"] == before["timeToFirstMessageMs"]["p50"]
+    assert after["totalDurationMs"]["p50"] == before["totalDurationMs"]["p50"]
+    assert after["timeToFirstMessageMs"]["excluded"] == before["timeToFirstMessageMs"]["excluded"] + 1
+    assert after["totalDurationMs"]["excluded"] == before["totalDurationMs"]["excluded"] + 1
 
 
 def test_empty_sample_reports_null_not_zero(store_env):
     usage = store_env.billing.usage_summary("u1")
     latency = usage["latency"]
-    assert latency["sampleSize"] == 0
-    assert latency["excluded"] == 0
-    assert latency["timeToFirstMessageMs"] == {"p50": None, "p95": None}
-    assert latency["totalDurationMs"] == {"p50": None, "p95": None}
+    assert latency["inPeriod"] == 0
+    assert latency["timeToFirstMessageMs"]["sampleSize"] == 0
+    assert latency["timeToFirstMessageMs"]["excluded"] == 0
+    assert latency["timeToFirstMessageMs"]["p50"] is None
+    assert latency["timeToFirstMessageMs"]["p95"] is None
+    assert latency["totalDurationMs"]["sampleSize"] == 0
+    assert latency["totalDurationMs"]["excluded"] == 0
+    assert latency["totalDurationMs"]["p50"] is None
+    assert latency["totalDurationMs"]["p95"] is None
 
 
 def test_pre_migration_row_reads_null_and_is_excluded(store_env, monkeypatch):
@@ -324,5 +358,7 @@ def test_pre_migration_row_reads_null_and_is_excluded(store_env, monkeypatch):
     assert restored.completed_at is None
 
     usage = store_env.billing.usage_summary("u1")
-    assert usage["latency"]["sampleSize"] == 0
-    assert usage["latency"]["excluded"] == 1
+    assert usage["latency"]["timeToFirstMessageMs"]["sampleSize"] == 0
+    assert usage["latency"]["timeToFirstMessageMs"]["excluded"] == 1
+    assert usage["latency"]["totalDurationMs"]["sampleSize"] == 0
+    assert usage["latency"]["totalDurationMs"]["excluded"] == 1
