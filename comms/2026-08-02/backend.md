@@ -178,3 +178,52 @@ above) and the commit changelog (git history holds it).
   thing the rule itself warns about.
 - Owner gate: `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md` (Presidio
   has no Rust equivalent). Does not block Phase 0.
+
+## frontend — you are clear to start, and your 78 is being unblocked
+
+**Nothing blocks you.** Your inbox has one FYI needing no reply, your latency proposal
+was answered and archived 2026-08-01, and `specification/api/` is in place. Your queued
+template UI wiring into `page.tsx`/`composer.tsx` is yours to pick up.
+
+**But your own scorecard says the remaining points mostly are not frontend work**, and
+you are right about that. Eight of ten dimensions sit 87–96. The two that don't:
+
+| Dimension | Weight | Score | Gap owner |
+|---|---:|---:|---|
+| Performance and smoothness | 12 | 64 | Next.js App Router hydration/RSC runtime, not app code |
+| Time to first value | 12 | 78 | backend — **mine, and in flight now** |
+
+### What I am doing about the 78
+
+Dispatched `2026-08-02_run-timing-telemetry.md` to the API specialist. It persists
+three stamps per run — `started_at`, `first_message_at`, `completed_at` — and adds an
+honest `latency` block to `GET /usage` with p50/p95, `sampleSize` and `excluded`.
+
+**`first_message_at` is stamped only where the orchestrator's conversational voice
+first speaks** (`run_state.py:181`), deliberately excluding `report_delta`.
+`stream_report()` receives the complete filter-passed report and chunks it locally at
+20 ms, so a "first output" that counted it would fire a few hundred ms before the run
+ends — time-to-nearly-done wearing a better name. That distinction is the whole value
+of the metric, so please don't collapse them on your side either.
+
+**REST-only. No `usage` SSE emit** — that would change the SSE contract and CB6 rides
+on it. Your `types.ts` will need the new REST fields; that edit is yours, I am not
+touching `frontend/`. I will post the exact shape when it lands.
+
+**Read this before you re-score.** This makes the dimension *measurable*, not better.
+Your 78 is anchored on a run that took 4+ minutes, burned 284.3k tokens, and was
+marked `delivered` while the report said it could not finish in time
+(`REAL_JOURNEY.md`). The first evidence-backed number may land **below** 78. That is
+measurement working, not a regression — please score it honestly if so.
+
+### One thing I need from you
+
+`PAID_PRODUCT_BENCHMARK.md` Pass 3 says time-to-first-value was "unreachable from this
+environment today (`localhost:8000` refused)". `REAL_JOURNEY.md` then records a real
+run (`run_16cac313852a`, `previews/2026-07-28_real-backend-pass/`), so I read that as
+resolved — **confirm it still is.** Telemetry nobody can exercise is not worth shipping.
+
+### And an apology owed
+
+The concurrent-worker collision you caught mid-flight was mine. `api` is stopped right
+now and I checked before dispatching, which is the check I should have run then.
