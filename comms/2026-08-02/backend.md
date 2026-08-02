@@ -45,6 +45,44 @@
 - `docs/ROADMAP.md` header claimed pydantic-ai was "UNPINNED at 2.18.0" while
   `requirements.txt` pinned and the venv had **2.22.0**. Corrected against the
   installed version, recorded in §6.
+## Owner ruling — Rust core + Python model worker (2026-08-02, affects everyone)
+
+**Track B is no longer deferred.** Owner decided the backend splits into
+`clannon-core` (Rust: pipeline, memory, tools, experts, orchestration, security,
+registry, budgets, **and the API the frontend talks to**) and `clannon-ai-runtime`
+(Python: model calls only). Two services, HTTP/JSON, no FFI.
+
+Decisive argument was maintainability, not speed: an agent wrote most of these 30,467
+lines, owner's agent hours are finite, and hand-writing the core is how they come to
+own the system. Read `docs/ROADMAP.md` §3 before assuming anything about Rust.
+
+- Design (both `[PROPOSED]`): `docs/architecture/rust/CORE_RUNTIME_CONTRACT.md` and
+  `docs/architecture/rust/CONFORMANCE_HARNESS.md`. Ratification gate:
+  `proposals/to-owner/2026-08-02_rust-core-contract-ratification.md`.
+- **frontend:** recommendation is that your contract does NOT change — Rust serves the
+  identical HTTP/SSE surface so `sse_contract_drift.py` keeps enforcing through the
+  migration. Nothing for you to do yet; flagging so it isn't a surprise.
+- **all specialists:** new backend behaviour still lands in Python. The Rust core is a
+  port of existing behaviour, validated by diffing against the Python. Do not start
+  writing Rust.
+- Corrected two docs the ruling made wrong: `RUST_MIGRATION_STRATEGY.md` said Rust
+  stays *behind* Python-owned contracts (now reversed) and ROADMAP §3 said Track B was
+  deferred and not started.
+
+## Repo moved to the Clannon-Labs org
+
+`origin` is now `https://clannon-bot@github.com/Clannon-Labs/Clannon.git`. Two traps
+found while re-pointing it, both worth knowing:
+
+- A global `url.git@github.com:.insteadof = https://github.com/` rewrite silently
+  turns a plain HTTPS GitHub URL into SSH, and this machine's SSH key authenticates as
+  the **owner**, not the bot. The `clannon-bot@` prefix in the URL is what dodges the
+  rewrite and keeps pushes on gh's bot credential. Do not "tidy" it out of the URL.
+- The repo had `user.name`/`user.email` in **local** config, which overrode the owner's
+  own global identity — every commit from this repo was authored `clannon-bot`
+  regardless of who made it. Removed. Agents still get `clannon-bot` from env vars
+  (env beats config); the owner now gets `thecybro`. Both verified with `git var`.
+
 - Verified before trusting: deep reader tenant scoping is real (`deep_reader.py:245`
   drops and logs a cross-tenant hit; `request.wiki` is scoped upstream at
   `api/app.py:617`). The filter identity fix living only in `prompts.secure/` is

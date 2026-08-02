@@ -1,9 +1,21 @@
 # Rust migration strategy — how we port, and what we refuse to do
 
-**Status: CANONICAL.** Owner-set 2026-07-27; process boundary settled
-2026-07-28. Any Rust work in this repo follows this. Related:
-`LAW/README.md` LAW 6 (replaceability) — this doc is *how* we exercise the
-property that law requires us to keep.
+**Status: CANONICAL for HOW a port happens.** Owner-set 2026-07-27; process
+boundary settled 2026-07-28. Related: `LAW/README.md` LAW 6 (replaceability) —
+this doc is *how* we exercise the property that law requires us to keep.
+
+> **Superseded on WHEN and WHAT, by owner ruling 2026-08-02.** This document was
+> written when Rust was a deferred experiment on isolated components. The owner
+> has since decided to split the backend into a Rust core (`clannon-core`) and a
+> Python model-calling worker (`clannon-ai-runtime`), starting now rather than
+> after V1 — the argument being that migration cost is superlinear in codebase
+> size, that post-V1 stability makes a rewrite impossible, and that the owner
+> needs to hand-write the core to understand a system an agent largely wrote.
+>
+> **Everything in this doc about process still holds** — parallel implementation,
+> port-boundary cutover, conformance tests before any port, no big-bang. What has
+> changed is the scope and the direction of the API boundary. See
+> `rust/CORE_RUNTIME_CONTRACT.md` and `rust/CONFORMANCE_HARNESS.md`.
 
 ---
 
@@ -159,9 +171,16 @@ output, no lifecycle ownership, no complicated persistent state, and profiling
 showing service serialization/call overhead matters. Native code shares
 Python's crash and memory boundary, so FFI is not the default for a subsystem.
 
-TypeScript continues to call the Python API over HTTP/WebSocket. Rust stays
+~~TypeScript continues to call the Python API over HTTP/WebSocket. Rust stays
 behind Python-owned application contracts unless a specific architecture
-proposal proves another route necessary.
+proposal proves another route necessary.~~
+
+**Reversed by owner ruling 2026-08-02.** Rust owns the API the frontend talks to;
+Python sits *behind* Rust as a model-calling worker, not in front of it. The
+frontend's contract should not change — the recommendation in
+`rust/CORE_RUNTIME_CONTRACT.md` §10 is that Rust serves the identical HTTP/SSE
+surface, so the frontend never learns which language answered and
+`sse_contract_drift.py` keeps enforcing.
 
 Language choice follows ownership, failure boundary, testability, and measured
 benefit — not “everything non-ML goes to Rust” or “everything slow goes to

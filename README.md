@@ -149,12 +149,12 @@ intake -> sanitizer -> normalizer -> verifier -> orchestrator -> output filter -
 
 Useful docs:
 
-- [foundation/README.md](https://github.com/vraksha/Clannon/blob/main/backend/foundation/README.md)
-- [foundation/FLOW_GUIDE.md](https://github.com/vraksha/Clannon/blob/main/backend/foundation/FLOW_GUIDE.md)
-- [core/README.md](https://github.com/vraksha/Clannon/tree/main/backend/core)
-- [security/sanitizers/README.md](https://github.com/vraksha/Clannon/tree/main/backend/security/sanitizers)
-- [api/README.md](https://github.com/vraksha/Clannon/blob/main/backend/api/README.md)
-- [frontend/README.md](https://github.com/vraksha/Clannon/blob/main/frontend/README.md)
+- [foundation/README.md](https://github.com/Clannon-Labs/Clannon/blob/main/backend/foundation/README.md)
+- [foundation/FLOW_GUIDE.md](https://github.com/Clannon-Labs/Clannon/blob/main/backend/foundation/FLOW_GUIDE.md)
+- [core/README.md](https://github.com/Clannon-Labs/Clannon/tree/main/backend/core)
+- [security/sanitizers/README.md](https://github.com/Clannon-Labs/Clannon/tree/main/backend/security/sanitizers)
+- [api/README.md](https://github.com/Clannon-Labs/Clannon/blob/main/backend/api/README.md)
+- [frontend/README.md](https://github.com/Clannon-Labs/Clannon/blob/main/frontend/README.md)
 
 ---
 
@@ -174,7 +174,7 @@ development has one canonical entry point: root `dev.sh`.
 Clone the repo, create a virtual environment, and install dependencies:
 
 ```bash
-git clone https://github.com/vraksha/Clannon
+git clone https://github.com/Clannon-Labs/Clannon
 cd Clannon/backend
 python -m venv .venv
 source .venv/bin/activate

@@ -40,13 +40,15 @@ and has no real-user feedback yet. Owner is arranging a small friends/family
 cohort in parallel; engineering keeps closing capability gaps and does not wait
 on that outreach.
 
-**Track B — Rust, by addition only.** An experiment run alongside components
-that already work; nothing is rewritten for its own sake, and new work stays
-Python. See §3. **Nothing has started** — owner deferred it while Python V1
-advances.
+**Track B — Rust core + Python model worker.** No longer an isolated experiment:
+owner ruled 2026-08-02 that the backend splits into `clannon-core` (Rust) and
+`clannon-ai-runtime` (Python), starting now. See §3. **Design proposed, nothing
+built.** The owner writes the Rust; agents build the conformance harness.
 
 Track A does not pause for Track B. If they ever conflict, **Track A wins** —
-shipping a working product beats architectural progress.
+shipping a working product beats architectural progress. That ordering matters
+more now, not less: the Python backend stays the live product for the whole
+migration, and a half-built Rust core is not a reason to stop fixing it.
 
 ## 2. Track A — V1 capability
 
@@ -133,23 +135,21 @@ Dependabot residual.
 
 **The rule, in two halves. Both matter:**
 
-### 3a. New code → Python
+### 3a. New backend behaviour → still Python, until its port is ported
 
-**New work is written in Python. Including new infrastructure.** V1 is not done
-and has never faced a user; a second toolchain per new component is a tax we do
-not pay yet.
+**New work still lands in Python first.** Not because Python is preferred, but
+because §3b's method requires it: a Rust implementation is validated by diffing it
+against a working Python one, so writing new behaviour directly in Rust is a
+different strategy — greenfield, no safety net — smuggled in under the same heading.
 
-An earlier version of this section said the opposite ("new infrastructural code
-prefers Rust"). It was wrong and it contradicted §3b: **parallel implementation
-with deferred cutover requires an existing implementation to validate against.**
-New code has no Python counterpart and no reference behaviour, so writing it in
-Rust is a different strategy — greenfield, no safety net — not the one we chose.
+The exception is the Rust core itself, which is a *port* of behaviour that already
+exists, not new behaviour. When a subsystem has completed cutover (§3b step 5), new
+behaviour for that subsystem is written in Rust, because by then Rust is where it
+lives.
 
-**Stays TypeScript:** the whole frontend. Not up for discussion right now.
-
-If a new component genuinely needs Rust-level guarantees Python cannot give,
-that is a **proposal with a specific argument** — never a default. Revisit this
-after V1 ships.
+**Stays TypeScript:** the whole frontend. Not up for discussion, and the ruling makes
+this more important — the frontend's contract should not notice the migration at all
+(`rust/CORE_RUNTIME_CONTRACT.md` §10).
 
 ### 3b. Existing code → port only by addition
 
@@ -171,12 +171,33 @@ Rust implementation, so this is real work, not a formality.
 **Agreed pilot: the Redis budget broker** (`core/budget/`) — port ratified,
 ~485 lines, off in production, zero ML, already has a process boundary.
 
-**Status: deferred, not started.** Owner settled the general boundary on
-2026-07-28: stateful/system components use a separate supervised process with a
-versioned API; FFI is only for bounded pure computation where profiling
-justifies it. Component-specific conformance, failure, dev, and deploy design
-remains required. Python V1 advances first; Rust starts only from a specific
-benefit-backed proposal.
+**Status: NO LONGER DEFERRED — owner ruling 2026-08-02.** The backend splits into
+a Rust core (`clannon-core`: pipeline, memory, tools, experts, orchestration,
+security, registry, budgets, **and the API the frontend talks to**) and a Python
+worker (`clannon-ai-runtime`: model calls only). Two services, HTTP/JSON, no FFI.
+
+The owner's decisive argument was maintainability, not performance: an agent wrote
+most of these 30,467 lines, agent hours are finite, and hand-writing the core is how
+the owner comes to own the system. Migration cost is also superlinear in codebase
+size, and post-V1 the stability promise makes a rewrite impossible — so "wait for V1"
+does not make this cheaper, it makes it never happen.
+
+Design, both `[PROPOSED]` and awaiting ratification:
+`docs/architecture/rust/CORE_RUNTIME_CONTRACT.md` (wire contract, boundary rule,
+error/timeout semantics) and `docs/architecture/rust/CONFORMANCE_HARNESS.md`
+(how either language is proven correct).
+
+**Division of labour:** the owner writes the Rust. Agents build the conformance
+harness — the 33,420 lines of existing tests import Python modules directly and
+cannot validate Rust, so the core would otherwise start with zero validation. Agent
+hours go to the harness, not to more Python the owner has to understand.
+
+Pilot is still the Redis budget broker (485 lines, off in production). Its definition
+of done is deliberately *not* "the Rust works" — it is "the harness is proven to catch
+a wrong implementation."
+
+The 2026-07-28 boundary ruling (separate process + versioned API, FFI only for bounded
+pure computation) still stands and this follows it.
 
 ## 4. Lanes by role
 
@@ -192,13 +213,18 @@ benefit-backed proposal.
 
 ## 5. Needs the owner, not us
 
-**No actionable owner decision is open.** `proposals/to-owner/` is empty after
-the 2026-07-28 rulings:
+**One open gate:** ratify the Rust core ↔ Python runtime contract and the
+conformance-harness design —
+`proposals/to-owner/2026-08-02_rust-core-contract-ratification.md`. Nothing gets
+built against the boundary until this is settled, and three specifics inside it
+change the shape of the work materially.
+
+Settled by the 2026-07-28 rulings, still standing:
 
 - shared 50 MiB upload/archive cap plus bomb guards ratified;
 - Python capability work continues while owner recruits a small real-user
   cohort in parallel;
-- Rust Track B deferred; separate-process/FFI boundary settled;
+- separate-process/FFI boundary settled — the 2026-08-02 Rust ruling follows it;
 - official model-price verification and infrastructure measurement assigned to
   engineering. Final budget-enforcement go-live remains owner authority, but no
   proposal is created until engineering gates are green.
