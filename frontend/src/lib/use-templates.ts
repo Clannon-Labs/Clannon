@@ -14,6 +14,9 @@ const listeners = new Map<string, Set<() => void>>();
 // otherwise loops the render forever. Cache one snapshot per user, dropped
 // whenever save/delete actually touches storage.
 const snapshotCache = new Map<string, SavedTemplate[]>();
+// same reasoning applies to the no-user case below: a fresh `[]` literal on
+// every call is a fresh reference too, and loops just the same.
+const EMPTY_TEMPLATES: SavedTemplate[] = [];
 
 function emit(userId: string) {
   snapshotCache.delete(userId);
@@ -44,7 +47,7 @@ export function useTemplates(userId: string | undefined | null) {
     [key],
   );
   const getSnapshot = useCallback(() => {
-    if (!key) return [] as SavedTemplate[];
+    if (!key) return EMPTY_TEMPLATES;
     const cached = snapshotCache.get(key);
     if (cached) return cached;
     let fresh: SavedTemplate[];
@@ -56,7 +59,7 @@ export function useTemplates(userId: string | undefined | null) {
     snapshotCache.set(key, fresh);
     return fresh;
   }, [key]);
-  const templates = useSyncExternalStore(subscribeToKey, getSnapshot, () => [] as SavedTemplate[]);
+  const templates = useSyncExternalStore(subscribeToKey, getSnapshot, () => EMPTY_TEMPLATES);
 
   const save = useCallback(
     (input: { brief: string; name?: string; models?: Record<string, string>; projectId?: string }) => {

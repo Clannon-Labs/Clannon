@@ -647,3 +647,53 @@ body {
   animation-duration: 0.34s;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Printing a run: only the report is the deliverable — nav rail, composer,
+   activity log, action buttons, and the sheet's decorative shadow/backdrop
+   are all screen chrome, not the document. #printable-report is the one
+   opt-in target; everything else hides by default.
+   `visibility: hidden` (not `display: none`) on the broad rule is deliberate
+   — it's the only mechanism that lets a deeply-nested descendant opt back
+   in without every ancestor needing its own exception. But visibility
+   preserves layout space, so `.no-print` (display: none, removes space
+   too) does the real work on the specific chrome blocks that would
+   otherwise leave a tall blank gap above the report. Do NOT give
+   #printable-report `position: absolute` to "lift" it instead — a
+   paginated print context's containing block for an absolutely positioned
+   element is the single page box, not the whole multi-page document, so
+   the element's painted background stops at the first page break and the
+   next page falls back to the app's own (dark) background underneath. */
+@media print {
+  html,
+  body {
+    background: white;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-report,
+  #printable-report * {
+    visibility: visible;
+  }
+  #printable-report {
+    max-width: none;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: white;
+    color: black;
+    /* the report's own markdown (table headers, blockquote rule) reads
+       these theme tokens via var(--muted) etc., which stay at the user's
+       live dark-mode values otherwise — print always renders on paper, so
+       force the light-theme values regardless of the on-screen theme
+       (light values copied from src/config/theme.config.ts). */
+    --muted: #e3dcc8;
+    --muted-foreground: #39432f;
+    --border: #d1c8b2;
+    --border-strong: #a3987b;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

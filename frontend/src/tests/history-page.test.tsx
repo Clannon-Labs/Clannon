@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import type { RunSummary } from "@/lib/api/types";
 import type { Project } from "@/lib/api/types";
 
@@ -43,14 +43,29 @@ const project: Project = {
 let mockRuns: RunSummary[] | undefined = runs;
 let mockLoading = false;
 
+const deleteMutateAsync = vi.fn<(sessionId: string) => Promise<void>>(() => Promise.resolve());
+const routerPush = vi.fn();
+const toastSpy = vi.fn();
+let mockPathname = "/app/history";
+
 vi.mock("@/lib/api/hooks", () => ({
   useRuns: () => ({ data: mockRuns, isLoading: mockLoading }),
+  useDeleteSession: () => ({ mutateAsync: deleteMutateAsync, isPending: false }),
 }));
 
 vi.mock("@/components/app/project-provider", () => ({
   useCurrentProject: () => project,
   useCurrentProjectId: () => project.id,
   useIsAllProjects: () => false,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPush }),
+  usePathname: () => mockPathname,
+}));
+
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => toastSpy,
 }));
 
 import HistoryPage from "@/app/app/history/page";
@@ -128,5 +143,84 @@ describe("HistoryPage", () => {
 
     expect(screen.queryByText("Nothing here yet")).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("shows a selection toolbar only once a row is checked, and Cancel clears it", () => {
+    mockRuns = runs;
+    mockLoading = false;
+    render(<HistoryPage />);
+
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Source and profile leads" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+  });
+
+  it("bulk-deletes every checked session and reports a clean success", async () => {
+    mockRuns = runs;
+    mockLoading = false;
+    mockPathname = "/app/history";
+    deleteMutateAsync.mockImplementation(() => Promise.resolve());
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Source and profile leads" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Competitor teardown — recent US entrants" }));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    expect(screen.getByText("Delete 2 conversations?")).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => {
+      expect(deleteMutateAsync).toHaveBeenCalledWith("sess_3");
+      expect(deleteMutateAsync).toHaveBeenCalledWith("sess_2");
+    });
+    await vi.waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith({ title: "2 conversations deleted", tone: "success" });
+    });
+    // selection clears after the batch finishes
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+  });
+
+  it("reports an honest partial-failure tally instead of a false clean success", async () => {
+    mockRuns = runs;
+    mockLoading = false;
+    mockPathname = "/app/history";
+    deleteMutateAsync.mockImplementation((sessionId: string) =>
+      sessionId === "sess_2" ? Promise.reject(new Error("network")) : Promise.resolve(),
+    );
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Source and profile leads" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Competitor teardown — recent US entrants" }));
+    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith({
+        title: "Deleted 1 of 2 — 1 failed",
+        tone: "warning",
+      });
+    });
+  });
+
+  it("redirects to the workspace if the currently-open run was among the deleted", async () => {
+    mockRuns = runs;
+    mockLoading = false;
+    mockPathname = "/app/runs/run_3"; // viewing the run that belongs to sess_3
+    deleteMutateAsync.mockImplementation(() => Promise.resolve());
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Source and profile leads" }));
+    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith("/app");
+    });
   });
 });

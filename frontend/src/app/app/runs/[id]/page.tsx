@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Copy,
   Download,
+  Printer,
   Square,
   File,
   FileText,
@@ -152,6 +153,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     toast({ title: "Report copied as markdown", tone: "success" });
   }
 
+  function printReport() {
+    window.print();
+  }
+
   function downloadReport() {
     const blob = new Blob([live.reportText], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -219,7 +224,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col md:min-h-[calc(100dvh-4rem)]">
       <Link
         href="/app"
-        className="inline-flex items-center gap-1.5 py-2 text-[13px] text-faint transition-colors hover:text-foreground"
+        className="no-print inline-flex items-center gap-1.5 py-2 text-[13px] text-faint transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" aria-hidden /> Workspace
       </Link>
@@ -227,14 +232,18 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
       {/* the conversation — prior turns, then the current turn, as one thread */}
       <div className="mt-3 flex flex-1 flex-col gap-6 pb-10">
-        <PriorTurns turns={priorTurns} onRevise={revisePrompt} />
+        <div className="no-print">
+          <PriorTurns turns={priorTurns} onRevise={revisePrompt} />
+        </div>
 
         {/* current turn — your ask, then Clannon's response. The brief bubble
             carries the shared view-transition-name, so the clicked run row in
             the rail MORPHS into it on navigation (the run opening from the
-            list into the page). Keyed per run id; paired with the row. */}
+            list into the page). Keyed per run id; paired with the row.
+            no-print: the ask isn't the deliverable — printing a run should
+            print the report, not the chat transcript around it. */}
         <div
-          className="flex flex-col items-end gap-1.5"
+          className="no-print flex flex-col items-end gap-1.5"
           style={{ viewTransitionName: `run-open-${id.replace(/[^a-zA-Z0-9]/g, "-")}` }}
         >
           <TurnPrompt
@@ -262,6 +271,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
         {/* the assistant turn — full width so the report reads as the result */}
         <div>
+          {/* everything here down to RunActivity is live-run chrome — status,
+              commentary, banners, the activity log — not the deliverable.
+              no-print as one block: printing a run should print the report. */}
+          <div className="no-print">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="flex items-center gap-2">
               <Mark className="size-5 text-primary" aria-hidden />
@@ -361,6 +374,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
             resetKey={run.id}
             runId={run.id}
           />
+          </div>
 
           {/* report — the hero */}
           {showReport && (
@@ -369,8 +383,11 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                   the thread so the desk shows around it (a page of paper, not a
                   full-bleed panel), with its own warm-cast surface, edge-light,
                   and a real shadow. The measure fills the sheet — no dead gutter. */}
-              <Reveal className="mx-auto max-w-[40rem] rounded-lg border border-border-strong bg-sheet [box-shadow:inset_0_1px_0_0_rgb(255_255_255/0.9),0_16px_38px_-14px_rgb(45_38_18/0.3)] dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]">
-                <header className="sticky top-0 z-10 flex items-center justify-between rounded-t-lg border-b border-border bg-sheet/95 px-5 py-3.5 backdrop-blur-md sm:px-8">
+              <Reveal
+                id="printable-report"
+                className="mx-auto max-w-[40rem] rounded-lg border border-border-strong bg-sheet [box-shadow:inset_0_1px_0_0_rgb(255_255_255/0.9),0_16px_38px_-14px_rgb(45_38_18/0.3)] dark:[box-shadow:inset_0_1px_0_0_var(--edge-light),0_18px_44px_-16px_rgb(0_0_0/0.7)]"
+              >
+                <header className="no-print sticky top-0 z-10 flex items-center justify-between rounded-t-lg border-b border-border bg-sheet/95 px-5 py-3.5 backdrop-blur-md sm:px-8">
                   {/* a tag-label never wraps — below sm the gate suffix goes, not the line */}
                   <h2 className="tag-label text-muted-foreground">
                     Report
@@ -417,6 +434,16 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                           <Download className="size-4" />
                         </button>
                       </Tooltip>
+                      <Tooltip label="Print or save as PDF" align="end">
+                        <button
+                          type="button"
+                          onClick={printReport}
+                          aria-label="Print report or save as PDF"
+                          className="flex size-10 cursor-pointer items-center justify-center rounded-md text-faint transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <Printer className="size-4" />
+                        </button>
+                      </Tooltip>
                     </motion.span>
                   )}
                 </header>
@@ -433,7 +460,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
           {/* files this run delivered — the canonical download UI */}
           {run.artifacts && run.artifacts.length > 0 && (
-            <section aria-label="Files" className="mt-6">
+            <section aria-label="Files" className="no-print mt-6">
               <h2 className="tag-label text-faint">Files</h2>
               <ul className="mt-3 flex flex-col gap-2">
                 {run.artifacts.map((artifact) => {
@@ -479,7 +506,9 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
           {/* per-report rating — only when there's a delivered report to rate */}
           {live.reportDone && (
-            <ReportRating runId={run.id} initialRating={run.feedbackRating} />
+            <div className="no-print">
+              <ReportRating runId={run.id} initialRating={run.feedbackRating} />
+            </div>
           )}
         </div>
       </div>
@@ -487,7 +516,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       {/* docked composer — ALWAYS visible, like every chat app. While the run is
           in flight the send button becomes Stop and you can type your next
           message; on mobile the bottom nav steps aside (see Sidebar). */}
-      <div className="composer-scrim sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+      <div className="composer-scrim no-print sticky bottom-0 z-30 border-t border-border bg-background pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
         <RunComposer
           runId={run.id}
           busy={!isTerminal}

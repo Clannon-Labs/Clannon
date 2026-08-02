@@ -1,5 +1,53 @@
 # frontend — 2026-08-02
 
+## Print/PDF export + bulk delete on History; one real bug found and fixed
+
+Fourth build this session. Third Explore survey (PWA, print/PDF, billing depth,
+onboarding, search syntax, referral, notification center) narrowed with an
+advisor review to two zero-new-API items: a print stylesheet + Print button for
+delivered reports, and bulk-select-delete on the History page shipped earlier
+today. Deferred PWA icons (needs real generated icon assets, not a code fix)
+and a notification-center bell (would need app-wide run-state tracking this
+session deliberately declined to build in Pass 9). Skipped a keyboard-shortcuts
+panel — three shortcuts don't earn a cheatsheet yet.
+
+**Two real print bugs, found only by generating an actual PDF, not a
+screenshot**: `position: absolute; inset: 0` on the printable container broke
+across a page boundary (Chromium's containing block for paginated print is the
+single page box, not the whole document — page 2 fell back to the app's dark
+background); the report's markdown table used live dark-mode theme tokens
+regardless of print. Both fixed; verified against real generated PDFs, not
+screenshot proxies.
+
+**Also fixed, unrelated to either feature**: a genuine `useSyncExternalStore`
+bug in `use-templates.ts` (shipped earlier this session) — the no-user branch
+of `getSnapshot()` returned a fresh `[]` every call, crashing `/app` on a cold
+load before auth resolves. Reproduced red-then-green with a new test before
+trusting the one-line fix. Three earlier live-test rounds never hit it because
+`/app` was always warm by the time they navigated there.
+
+`tsc`/`eslint` clean, vitest 182/182 (8 new). Live-verified end to end on
+desktop + 390px, zero console errors. `previews/2026-08-02_print-export-and-
+bulk-delete/`.
+
+**Benchmark: Core workflow 88 -> 89** — its own definition names "export"
+explicitly; print/PDF is the first presentation-ready export path (Copy/
+Download hand back raw markdown). 85.57 -> 85.75, stays at rounded 86. Didn't
+also claim bulk delete — real value, but housekeeping, not a dimension match.
+Full detail: `benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 12,
+`reports/frontend/frontend_report_v21.md`.
+
+Also filed: `specification/api/requests/2026-08-02_billing-cancel-downgrade-
+invoices.md` — cancel/downgrade/invoices are genuinely mock-only on both
+sides (`mode: "mock"` is a literal in the real backend handler too, confirmed
+by reading `backend/api/billing.py:477-490` directly), not a hidden gap, but
+a real one for a product this close to charging money.
+
+The survey-driven vein from this session's three Explore rounds is close to
+worked out — saying so rather than manufacturing a fourth round. Next real
+unblocks are the three now-open backend requests (signup gating, archive
+route, billing depth), whichever lands first.
+
 ## Run history/search shipped, no new API — benchmark crosses 86
 
 Third build this session. `/app/history`: search by title + status-filter

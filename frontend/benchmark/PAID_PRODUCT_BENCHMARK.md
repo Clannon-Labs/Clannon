@@ -73,7 +73,7 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 |---|---:|---:|---:|
 | Outcome clarity | 15 | 89 | 13.35 |
 | Time to first value | 12 | 78 | 9.36 |
-| Core workflow | 18 | 88 | 15.84 |
+| Core workflow | 18 | 89 | 16.02 |
 | Trust and control | 12 | 92 | 11.04 |
 | Continuity and retention | 10 | 90 | 9.00 |
 | Performance and smoothness | 12 | 64 | 7.68 |
@@ -81,7 +81,7 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 | Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **85.57 -> 86** |
+| **Total** | **100** |  | **85.75 -> 86** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -558,6 +558,75 @@ empty-account/loading states kept distinct). Live browser: real seeded
 demo account, search and status-filter pills both exercised live, zero
 console errors, desktop and 390px.
 `previews/2026-08-02_history-page/`.
+
+## Pass 12 — print/PDF export for delivered reports, bulk delete on History (2026-08-02, same day)
+
+Fourth build this session, from a third Explore survey plus two already-flagged
+backlog items, narrowed with an advisor review to the two with real premium
+value and zero new backend surface. Full reasoning: `reports/frontend/frontend_report_v21.md`.
+
+**Print/PDF export.** No `@media print` rules existed anywhere in the app —
+printing a delivered report today would print the full sidebar, composer, and
+activity log around it. Added a `#printable-report` target on the report card
+and a Print button next to the existing Copy/Download row. Deliberately used
+the browser's native print engine (`window.print()`), not a client-side PDF
+library — the standard path for HTML/CSS content, and how Notion/Linear/GitHub
+all do it.
+
+Two real, non-obvious bugs surfaced only by generating an actual multi-page PDF
+(not a single-page screenshot, which looked fine and hid both):
+`position: absolute; inset: 0` on the printable container breaks across a page
+boundary (Chromium's containing block for paginated print is the single page
+box, not the whole document — the white background stopped at page 1 and page
+2 fell back to the app's dark theme), and the report's markdown table used
+theme tokens (`bg-muted`, `border-border`) that stayed at their live dark-mode
+values regardless of print, so a printed table header rendered dark-on-dark.
+Both fixed; verified against a real generated PDF, not a screenshot proxy.
+Detail in `previews/2026-08-02_print-export-and-bulk-delete/`.
+
+**Bulk delete on History.** Natural extension of the History page (Pass 11) —
+`DELETE /sessions/{id}` already existed and was already used by the sidebar's
+per-row delete. Added checkboxes, a selection toolbar, and a confirm dialog
+that names the count (never a generic "delete selected?"). Deletes run
+sequentially against the one shared mutation and tally the result honestly —
+"3 of 4 deleted" on a partial failure, never a false clean-success toast.
+
+**Also fixed while testing, unrelated to either feature above**: a genuine,
+previously-undetected bug in `use-templates.ts` (shipped in Pass "wire
+templates," earlier this session) — the no-user branch of `getSnapshot()`
+returned a fresh `[]` literal every call, the same `useSyncExternalStore`
+defect already fixed for the keyed case but missed for the null-key one. Only
+manifests on a cold `/app` load where `userId` is briefly `undefined` before
+auth resolves, which is why three earlier rounds of live testing never hit
+it. One-line fix, reproduced red-then-green with a new regression test
+(`src/tests/use-templates.test.ts`) before trusting it fixed.
+
+**Score moves 85.57 -> 85.75 (86 stays 86).** Core workflow 88 -> 89 — this
+dimension's own stated definition names *"review, refinement, **export**, and
+reuse"* as part of the one coherent loop (§2 table, word for word); print/PDF
+is the first complete export path the product has (Copy/Download hand back
+raw markdown, not a presentation-ready document). **Not** claiming a second
+dimension for bulk delete — it's real housekeeping value but doesn't match any
+dimension's own listed criteria as directly as the History page itself already
+did in Pass 11, and claiming it again would be the double-dipping this file's
+rules exist to prevent.
+
+Verified: `tsc`/`eslint` clean, vitest 182/182 (8 new tests: 3 in
+`use-templates.test.ts` — the regression test above — and 5 extending
+`history-page.test.tsx` for selection, clean bulk delete, partial-failure
+tally, and redirect-if-viewing-a-deleted-run). Live browser: print output
+verified via a real generated PDF after finding and fixing both bugs above;
+bulk delete exercised end-to-end against the mock backend on desktop and
+390px, zero console errors throughout — including confirming the `/app`
+cold-load crash is gone after the templates fix.
+`previews/2026-08-02_print-export-and-bulk-delete/`.
+
+Also filed, not built (real gap, needs actual Stripe-shaped backend design
+before any frontend UI would mean anything):
+`specification/api/requests/2026-08-02_billing-cancel-downgrade-invoices.md` —
+no cancel-subscription, downgrade, or real invoice/receipt history exists
+anywhere (`billing-settings.tsx` explicitly disables downgrade through mock
+checkout, and `useBillingPortal` returns a checkout-event log, not invoices).
 
 ## 3. Hard gates
 

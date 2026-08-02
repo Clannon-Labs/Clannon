@@ -151,6 +151,7 @@ export function Reveal({
   y = 18,
   as = "div",
   immediate = false,
+  id,
 }: {
   children: ReactNode;
   className?: string;
@@ -158,6 +159,7 @@ export function Reveal({
   y?: number;
   as?: "div" | "section";
   immediate?: boolean;
+  id?: string;
 }) {
   const reduce = useReducedMotion();
   const Comp = as === "section" ? motion.section : motion.div;
@@ -167,6 +169,7 @@ export function Reveal({
     : { whileInView: shown, viewport: VIEWPORT };
   return (
     <Comp
+      id={id}
       className={className}
       initial={reduce ? false : { opacity: 0, y }}
       {...trigger}

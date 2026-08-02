@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { History as HistoryIcon, Search } from "lucide-react";
-import { useRuns } from "@/lib/api/hooks";
+import { useRouter, usePathname } from "next/navigation";
+import { History as HistoryIcon, Search, Trash2 } from "lucide-react";
+import { useRuns, useDeleteSession } from "@/lib/api/hooks";
 import {
   useCurrentProject,
   useCurrentProjectId,
@@ -12,6 +13,9 @@ import {
 import { groupBySession } from "@/lib/sessions";
 import { RunStatusBadge } from "@/components/app/run-status";
 import { Skeleton, EmptyState } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import type { RunStatus } from "@/lib/api";
 import { cn, formatRelativeTime, formatTokens } from "@/lib/utils";
 
@@ -37,9 +41,16 @@ export default function HistoryPage() {
   const isAllProjects = useIsAllProjects();
   const { data: runs, isLoading } = useRuns(projectId);
   const sessions = useMemo(() => groupBySession(runs), [runs]);
+  const router = useRouter();
+  const pathname = usePathname();
+  const toast = useToast();
+  const del = useDeleteSession();
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<RunStatus | "all">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -49,6 +60,49 @@ export default function HistoryPage() {
       return true;
     });
   }, [sessions, query, status]);
+
+  function toggleSelected(sessionId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
+
+  async function bulkDelete() {
+    const targets = filtered.filter((s) => selected.has(s.sessionId));
+    setDeleting(true);
+    let succeeded = 0;
+    let viewingDeletedRun = false;
+    // sequential, not Promise.all — one shared mutation instance, and a
+    // partial failure needs an honest tally rather than an all-or-nothing
+    // report of what the backend actually did.
+    for (const session of targets) {
+      try {
+        await del.mutateAsync(session.sessionId);
+        succeeded++;
+        if (pathname === `/app/runs/${session.latestId}`) viewingDeletedRun = true;
+      } catch {
+        // tallied below — continue deleting the rest of the batch
+      }
+    }
+    setDeleting(false);
+    setConfirmBulkDelete(false);
+    setSelected(new Set());
+    if (succeeded === targets.length) {
+      toast({
+        title: `${succeeded} ${succeeded === 1 ? "conversation" : "conversations"} deleted`,
+        tone: "success",
+      });
+    } else {
+      toast({
+        title: `Deleted ${succeeded} of ${targets.length} — ${targets.length - succeeded} failed`,
+        tone: "warning",
+      });
+    }
+    if (viewingDeletedRun) router.push("/app");
+  }
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -100,6 +154,24 @@ export default function HistoryPage() {
         ))}
       </div>
 
+      {/* selection toolbar — only takes space once something is checked, so
+          the common read-only path never sees it */}
+      {selected.size > 0 && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border-strong bg-surface-raised px-4 py-2.5">
+          <p className="text-sm font-medium text-foreground">
+            {selected.size} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => setConfirmBulkDelete(true)}>
+              <Trash2 className="size-3.5" aria-hidden /> Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-6">
         {isLoading ? (
           <div className="flex flex-col gap-2">
@@ -120,10 +192,17 @@ export default function HistoryPage() {
         ) : (
           <ul className="flex flex-col gap-2">
             {filtered.map((session) => (
-              <li key={session.sessionId}>
+              <li key={session.sessionId} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selected.has(session.sessionId)}
+                  onChange={() => toggleSelected(session.sessionId)}
+                  aria-label={`Select ${session.title}`}
+                  className="size-4 shrink-0 cursor-pointer rounded border-border-strong text-primary focus:ring-2 focus:ring-ring/25"
+                />
                 <Link
                   href={`/app/runs/${session.latestId}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-muted"
+                  className="flex flex-1 items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-muted"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{session.title}</p>
@@ -139,6 +218,28 @@ export default function HistoryPage() {
           </ul>
         )}
       </div>
+
+      <Dialog
+        open={confirmBulkDelete}
+        onClose={() => !deleting && setConfirmBulkDelete(false)}
+        title={`Delete ${selected.size} ${selected.size === 1 ? "conversation" : "conversations"}?`}
+      >
+        <div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {selected.size === 1 ? "It" : "They"} will be permanently removed, along
+            with every turn in {selected.size === 1 ? "it" : "them"}. This can&apos;t
+            be undone.
+          </p>
+          <div className="mt-5 flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)} disabled={deleting}>
+              Keep {selected.size === 1 ? "it" : "them"}
+            </Button>
+            <Button variant="destructive" loading={deleting} onClick={bulkDelete}>
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
