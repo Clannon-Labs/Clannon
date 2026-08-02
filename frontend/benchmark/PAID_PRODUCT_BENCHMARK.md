@@ -628,6 +628,47 @@ no cancel-subscription, downgrade, or real invoice/receipt history exists
 anywhere (`billing-settings.tsx` explicitly disables downgrade through mock
 checkout, and `useBillingPortal` returns a checkout-event log, not invoices).
 
+## Pass 13 — real PWA icon set + iOS home-screen metadata, no score claimed (2026-08-02, same day)
+
+Fifth build this session. The manifest shipped one 305×305 icon, no 192/512
+pair, no `purpose: "maskable"`, no apple-touch-icon — flagged in the same
+Pass-12 survey and deferred at the time as a design-asset problem (upscaling a
+305px source badly). That call was wrong: read the actual source
+(`public/brand/clannon-logo-symbol.png`) instead of assuming — it's a flat,
+high-contrast geometric mark with no fine detail, exactly what a 1.68×
+Lanczos upscale handles cleanly. Verified visually (all four generated files)
+before shipping, not assumed.
+
+Generated `icon-192.png`/`icon-512.png` (transparent, "any"),
+`icon-maskable-512.png` (solid brand-color background, mark padded to the
+safe zone so a circular OS mask doesn't clip it), and `apple-touch-icon.png`
+(180×180, solid background). Wired into `manifest.ts`'s icons array and
+`layout.tsx`'s `metadata.icons`/`appleWebApp`, neither of which existed
+before.
+
+**Not claiming a score move.** The honest home for this would be Mobile
+completeness ("core paid workflow remains usable and legible on phone, not
+merely responsive"), but a correct home-screen icon is thin evidence for
+that, and the stronger claim — "the app is now installable" — was
+deliberately NOT verified: recent Chrome can still gate the automatic install
+prompt behind a registered service worker, which this app doesn't have (a
+real, separate decision — a naive offline cache on a live-SSE-streaming app
+would show stale run state as current, worse than no offline support at
+all). What's actually verified is narrower: iOS Safari's Add-to-Home-Screen
+doesn't need a service worker and now reads the right metadata. Filing the
+score-worthy claim honestly means filing no claim this pass.
+
+Verified: `tsc`/`eslint` clean, vitest 185/185 (3 new —
+`src/tests/manifest.test.ts`, mutation-checked: reverted `manifest.ts` alone,
+watched 2 of 3 tests fail with the exact defect this fixes, restored, watched
+all 3 pass). Direct `curl` against a production build on :3100: manifest JSON
+valid with all three icon entries, all four icon URLs `200 image/png`, and
+the real HTML head carries the `icon`/`apple-touch-icon` `<link>` tags. No
+page-content screenshots — this doesn't render inside a page, it renders in
+browser chrome / OS home screen; recorded why in
+`previews/2026-08-02_pwa-icons/README.md` per this file's own escape hatch
+for genuinely nonvisual work.
+
 ## 3. Hard gates
 
 Weighted score alone cannot hide critical failure.

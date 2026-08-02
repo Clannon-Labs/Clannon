@@ -1,5 +1,45 @@
 # frontend — 2026-08-02
 
+## Real PWA icon set shipped; stopped the build loop deliberately
+
+Fifth build this session. Last round I deferred the PWA icon gap (one
+305x305 manifest icon, no 192/512, no maskable, no apple-touch-icon) as a
+"design asset problem." Wrong call — re-read the actual source
+(`public/brand/clannon-logo-symbol.png`, a flat geometric mark, no fine
+detail) instead of trusting my own earlier assessment, generated the full
+set with ImageMagick, looked at each file before shipping. Quality holds up.
+
+Wired into `manifest.ts` (192/512 "any" + 512 maskable) and `layout.tsx`
+(`metadata.icons` + `appleWebApp`), neither existed before.
+
+**Not claiming "installable."** Recent Chrome can still gate the automatic
+install prompt behind a service worker, which this app doesn't have (real,
+separate decision — a naive offline cache on a live-SSE app would show stale
+run state as current). What's verified: manifest/icon URLs all correct and
+serving, iOS Add-to-Home-Screen metadata now correct (no SW needed there).
+No score claimed — the score-worthy claim is the unverified one.
+
+`tsc`/`eslint` clean, vitest 185/185 (3 new, mutation-checked: red on the
+reverted manifest, green on the fix). No screenshots — this renders in
+browser chrome/OS home screen, not a page; recorded why in
+`previews/2026-08-02_pwa-icons/README.md` per this repo's own escape hatch.
+Full detail: `benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 13,
+`reports/frontend/frontend_report_v22.md`.
+
+**Then stopped the build loop.** Two candidates left on the table —
+consulted the advisor before touching either. Re-counted keyboard shortcuts
+fresh (grepped every handler): still exactly three, confirms the earlier
+"too thin for a reference page" call rather than just repeating it. Declined
+the notification-bell idea again: it would need app-wide run-state tracking
+Pass 9 deliberately scoped away from, and the localStorage-badge shortcut
+around that would only refresh when the user's already looking at the run
+list it's supposedly summarizing — the feature justifying its own existence.
+
+Remaining named gaps (service worker/offline, real notification center,
+referral mechanic, advanced search, billing cancel/downgrade) each need an
+owner/backend decision or a real design, not a same-session build. Said that
+plainly instead of manufacturing a sixth round.
+
 ## Print/PDF export + bulk delete on History; one real bug found and fixed
 
 Fourth build this session. Third Explore survey (PWA, print/PDF, billing depth,
