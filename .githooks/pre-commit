@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# Enforce commit attribution: agents commit as clannon-bot, the owner commits as
+# themselves. Neither side has to remember anything, and getting it wrong is a
+# hard failure rather than a silent mis-attribution discovered months later in
+# `git log`.
+#
+# WHY THIS EXISTS AS CODE AND NOT A NOTE IN A DOC (owner instruction, 2026-08-02):
+# the previous mechanism was `user.name` in this repo's LOCAL git config, which
+# "worked" by forcing clannon-bot on EVERYONE — including the owner's own
+# commits. Removing it fixed the owner and silently broke Codex agents, which
+# read nothing from ~/.claude/settings.json and so fell back to the owner's
+# global identity. A convention that depends on which tool you launched is not
+# an invariant; this hook is.
+#
+# Installed by scripts/setup-hooks.sh (called from crew.sh and dev.sh).
+# Bypass for a genuine edge case: CLANNON_IDENTITY_OVERRIDE=1 git commit ...
+
+set -uo pipefail
+
+BOT_NAME="clannon-bot"
+BOT_EMAIL="293251899+clannon-bot@users.noreply.github.com"
+
+[ -n "${CLANNON_IDENTITY_OVERRIDE:-}" ] && exit 0
+
+# The identity git will actually stamp on this commit — env vars beat config,
+# so asking git is the only answer that cannot drift from what really happens.
+ident=$(git var GIT_AUTHOR_IDENT) || exit 0
+name=${ident%% <*}
+email=${ident#*<}; email=${email%%>*}
+
+# An agent session, by any launcher. CLANNON_AGENT is set by crew.sh for both
+# providers and both modes, so it is the reliable one; the rest catch a session
+# started outside crew.sh.
+is_agent=no
+for marker in CLANNON_AGENT CLAUDECODE CLAUDE_CODE_ENTRYPOINT CODEX_SANDBOX CODEX_HOME; do
+  if [ -n "${!marker:-}" ]; then is_agent=yes; break; fi
+done
+
+fail() {
+  echo "commit refused — wrong identity for this session" >&2
+  echo >&2
+  echo "  session : $1" >&2
+  echo "  author  : $name <$email>" >&2
+  echo "  expected: $2" >&2
+  echo >&2
+  echo "$3" >&2
+  echo >&2
+  echo "Genuinely an exception? CLANNON_IDENTITY_OVERRIDE=1 git commit ..." >&2
+  exit 1
+}
+
+if [ "$is_agent" = yes ]; then
+  if [ "$name" != "$BOT_NAME" ] || [ "$email" != "$BOT_EMAIL" ]; then
+    fail "agent (${CLANNON_AGENT:-detected by environment})" \
+         "$BOT_NAME <$BOT_EMAIL>" \
+         "Agent work must not be attributed to the owner. Launch through
+  ./scripts/crew.sh, which exports the identity for both Claude and Codex, or
+  export GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL and the matching GIT_COMMITTER_* vars."
+  fi
+elif [ "$name" = "$BOT_NAME" ]; then
+  fail "human terminal" \
+       "your own git identity (git config user.name / user.email)" \
+       "This shell is committing as the bot. That usually means a stale
+  GIT_AUTHOR_NAME is exported here, or user.name was set in this repo's local
+  config — check: git config --local --get-regexp '^user\.'"
+fi
+
+exit 0

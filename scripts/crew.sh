@@ -36,6 +36,24 @@ ROLES="backend frontend memory orchestration security api release"
 
 die() { echo "crew: $*" >&2; exit 2; }
 
+# --- commit identity -------------------------------------------------------
+# Every agent this script launches commits as clannon-bot, whichever provider it
+# runs on. This MUST live here rather than in a provider's own settings: Claude
+# Code reads ~/.claude/settings.json, Codex reads nothing of the sort, and the
+# repo's old local `user.name` "solved" that by forcing the bot identity onto the
+# owner's own commits too. Exporting at the launcher is the only place that is
+# both provider-agnostic and cannot touch a human's terminal.
+# `.githooks/pre-commit` independently refuses a commit that gets this wrong.
+BOT_NAME="clannon-bot"
+BOT_EMAIL="293251899+clannon-bot@users.noreply.github.com"
+
+agent_env() {   # role -> the `env` prefix that stamps an agent's commits
+  printf 'env CLANNON_AGENT=%q GIT_AUTHOR_NAME=%q GIT_AUTHOR_EMAIL=%q GIT_COMMITTER_NAME=%q GIT_COMMITTER_EMAIL=%q ' \
+    "$1" "$BOT_NAME" "$BOT_EMAIL" "$BOT_NAME" "$BOT_EMAIL"
+}
+
+"$(cd "$(dirname "$0")" && pwd)/setup-hooks.sh" 2>/dev/null || true
+
 dir_for() {
   case "$1" in
     backend)       echo "$ROOT" ;;
@@ -132,6 +150,10 @@ launch_command() {   # role provider fresh dir -> the shell command the session 
       cmd="codex --no-alt-screen --sandbox danger-full-access --ask-for-approval never"
       ;;
   esac
+  # Prefix with the agent identity so the commits this session makes are the
+  # bot's, on either provider. The trailing `exec bash` is deliberately NOT
+  # wrapped: once the agent exits, the leftover shell is a human's again.
+  cmd="$(agent_env "$role")$cmd"
   # Keep the session alive after the agent exits so its scrollback stays
   # inspectable; `crew.sh start` will recycle the dead shell on the next run.
   echo "$cmd; echo; echo '[crew] agent exited — session kept for inspection. Ctrl-b d to detach.'; exec bash"
@@ -377,6 +399,12 @@ EOF
   # with "lock: unbound variable" after every otherwise-successful dispatch.
   # The trap then never runs, which is the opposite of what it exists to do.
   trap "rm -f '$lock'" EXIT INT TERM
+  # Headless workers are not supposed to commit at all — the coordinator reviews
+  # and commits their diff. Stamped anyway: "shouldn't" is not an enforcement,
+  # and a worker that does commit must not do it under the owner's name.
+  export CLANNON_AGENT="$role-worker"
+  export GIT_AUTHOR_NAME="$BOT_NAME" GIT_AUTHOR_EMAIL="$BOT_EMAIL"
+  export GIT_COMMITTER_NAME="$BOT_NAME" GIT_COMMITTER_EMAIL="$BOT_EMAIL"
   case "$provider" in
     claude)
       # </dev/null is REQUIRED, not tidiness: both CLIs read stdin in addition to

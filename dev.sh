@@ -15,6 +15,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 
+# core.hooksPath is local config and so cannot be tracked; installing it from the
+# two entry points everyone already runs is what stops commit-identity
+# enforcement from being "enabled on whichever machine remembered".
+"$ROOT_DIR/scripts/setup-hooks.sh" || true
+
 FRONTEND_PORT="${CLANNON_FRONTEND_PORT:-3000}"
 BACKEND_PORT="${CLANNON_BACKEND_PORT:-8000}"
 CLAMAV_PORT="${CLAMAV_PORT:-3310}"
