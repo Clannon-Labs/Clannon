@@ -63,11 +63,49 @@ finished something.
 
 ---
 
-## Current checkpoint — `0748bbc` verified green; empty failure reason closed (2026-08-02)
+## Current checkpoint — Rust ruling landed; repo moved org (2026-08-02, late)
 
-**Owner is about to open a serious discussion and will say where to look. Do not
-start new work.** They asked for a readiness assessment, got it, approved exactly
-one fix, and asked for a clean stop. Honour that.
+**THE BIG ONE: Track B is no longer deferred.** Owner ruled the backend splits into
+`clannon-core` (Rust — pipeline, memory, tools, experts, orchestration, security,
+registry, budgets, **and the frontend-facing API**) and `clannon-ai-runtime` (Python —
+model calls only). Starting now, not after V1. If you read one thing before acting on
+Rust, read `docs/ROADMAP.md` §3, then
+`docs/architecture/rust/CORE_RUNTIME_CONTRACT.md` + `CONFORMANCE_HARNESS.md`.
+
+Their decisive argument was **maintainability, not performance**: an agent wrote most
+of these 30,467 lines, their agent hours are finite, and hand-writing the core is how
+they come to own the system. Do not re-litigate it — I raised the moving-target
+objection and they answered it (a couple of agent-hours a day is not 100x, and they
+are deliberately trading agent velocity for comprehension). The answer holds.
+
+- **Awaiting owner ratification:**
+  `proposals/to-owner/2026-08-02_rust-core-contract-ratification.md` — three specifics:
+  does the frontend contract change (recommend no), contract-first vs Rust-first
+  (recommend contract-first), who holds provider keys (recommend the runtime).
+  `proposals/` is **gitignored** — that file is local-only, don't try to commit it.
+- **Division of labour: the owner writes the Rust; agents build the harness.** Do not
+  write Rust. New backend behaviour still lands in Python.
+- Corrected two docs the ruling falsified: `RUST_MIGRATION_STRATEGY.md` had Rust
+  staying *behind* Python-owned contracts (reversed), ROADMAP §1/§3 said deferred.
+
+### Repo moved to the Clannon-Labs org — two traps, both live
+
+`origin` = `https://clannon-bot@github.com/Clannon-Labs/Clannon.git`. Push verified
+(`c42f8f4`).
+
+1. A global `url.git@github.com:.insteadof = https://github.com/` rewrite turns a
+   plain HTTPS GitHub URL into SSH, and this machine's SSH key authenticates as the
+   **owner**, not the bot. The `clannon-bot@` prefix is what dodges the rewrite. **Do
+   not remove it** — pushes would silently go out under the owner's account.
+2. The repo had `user.name`/`user.email` in **local** config, overriding the owner's
+   global identity, so every commit from this repo was authored `clannon-bot`
+   regardless of author. Removed. Agents get `clannon-bot` from env vars (env beats
+   config), owner gets `thecybro`. Verified both ways with `git var GIT_AUTHOR_IDENT`.
+
+Push auth still resolves to clannon-bot for everyone via gh — that is the owner's
+global setup and I deliberately did not touch it.
+
+## Previous checkpoint — `0748bbc` verified green; empty failure reason closed (2026-08-02)
 
 ### What this session actually did
 
