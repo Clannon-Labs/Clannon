@@ -63,7 +63,77 @@ finished something.
 
 ---
 
-## Current checkpoint — proposal inbox sweep complete (2026-08-02)
+## Current checkpoint — `0748bbc` verified green; empty failure reason closed (2026-08-02)
+
+**Owner is about to open a serious discussion and will say where to look. Do not
+start new work.** They asked for a readiness assessment, got it, approved exactly
+one fix, and asked for a clean stop. Honour that.
+
+### What this session actually did
+
+1. **Ran the full suite `0748bbc` never got.** The previous checkpoint recorded
+   "full suite stopped for owner pack-up after 101 passes / 66s" — so that commit
+   was pushed-pending on unverified evidence. Result: **1 failed / 1636 passed.**
+2. **That one failure was environmental, and it kills a long-running false lead.**
+   `orchestrator_ports.py::test_memory_store_and_recall_for_user` has been carried
+   since 2026-07-31 as the flaky test pointing at `hydration.py` ranking, and as the
+   leading suspect for the owner's "memory doesn't work much at all". It is neither.
+   The captured log shows the run spent **2m21s downloading the nomic embedding model
+   from HuggingFace inside the test**, so the 5s embed deadline and 10s write deadline
+   both expired. Warm cache: the same file passes in 11s. **Warm embeddings before any
+   suite run that judges memory**, and stop attributing this to ranking.
+3. **Fixed `flow.fail()` recording an empty reason** (`foundation/transport/flow.py`).
+   `str(exc)` is `''` for every message-less exception; the live path is a sanitizer
+   worker timeout (`security/sanitizers/runner.py:128`), so a fail-CLOSED gate was
+   refusing runs while the journal, the context and the API error field all said
+   nothing. New `_describe_error()` falls back to the type name and keeps a real
+   message verbatim — deliberately minimal, because every existing assertion reads
+   that string. Four tests in `tests/foundation_contracts.py`, mutation-checked both
+   ways (old code fails all three blank cases; the verbatim case passes unchanged).
+4. **Corrected a version claim in `docs/ROADMAP.md`.** Header said pydantic-ai was
+   "UNPINNED at 2.18.0"; `requirements.txt` pins **2.22.0** and the venv has 2.22.0
+   installed. Verified from venv metadata, not assumed. Logged in §6.
+
+**Proof:** full suite **1641 passed, 0 failed, 0 skipped** (3m38s, live Qdrant +
+ClamAV). Invariant checker 7 PASS / 1 pre-existing NETWORK WARN.
+
+### Verified-not-trusted while auditing `0748bbc`
+
+- Deep reader tenant scoping is real: `store.search` takes `request.user_id`, and
+  `deep_reader.py:245` drops **and logs** any cross-tenant hit. `request.wiki` has no
+  recheck but is scoped upstream at `api/app.py:617` (`auth.wiki_list(user.id, ...)`).
+- The filter identity fix living only in `prompts.secure/filter/system.md` (542 lines)
+  while the baseline stays 64 lines is the documented overlay design, **not drift** —
+  `registry/config/prompts.py:65` auto-discovers `prompts.secure/`, so the hardened
+  text is what runs and what the benchmark exercises.
+
+### Open, in priority order
+
+1. **Same empty-reason defect, second site, memory's tree:**
+   `core/memory/hydration.py:86` logs `memory embed degraded (%s)` and printed
+   literally `memory embed degraded ()`. One-word fix; flagged, not edited.
+2. **Cold sanitize measured 10.1s against a 10.0s cap**, saved only by a best-effort
+   warmup that logs a warning and continues on failure. This is "the hired tester's
+   first request on a cold deploy fails closed" and it is still open.
+3. **Expert identity wiring unproven at runtime** — expert prompts load through the
+   expert handler, not `registry.yaml`, so nothing composes the shared identity block
+   into them and no test covers it.
+4. Readiness headline for the owner, unchanged: outreach gate is 6 Critical PASS +
+   ≥1 Exceptional; today **1 PASS / 5 PARTIAL** (`docs/benchmarks/V1_GAP_ANALYSIS.md`).
+
+### Preserve
+
+Four untracked `frontend/src/**` template files are the frontend session's in-flight
+work (`templates.ts`, `use-templates.ts`, `template-card.tsx`, `tests/templates.test.ts`).
+Do not add them. Always `git commit -- <explicit paths>`.
+
+## Change note
+
+Rewritten after re-verifying the previous session's unpushed commit rather than
+trusting its partial suite run. Records the one fix the owner approved, the false
+lead that the cold-cache diagnosis retires, and the explicit instruction to stop.
+
+## Previous checkpoint — proposal inbox sweep complete (2026-08-02)
 
 Resolved every completed specialist proposal and archived it with evidence. Expert
 inboxes are empty. One combined owner proposal remains in `proposals/to-backend/` as

@@ -1,4 +1,5 @@
 import ast
+import asyncio
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -35,6 +36,36 @@ def _names_bound_by_import_block():
 def test_flow_truncates_long_error():
     out = Flow.new("x", "s").fail(Exception("E" * 5000), Origin.INTAKE)
     assert len(out.error) <= constants.MAX_ERROR_LENGTH + 1  # +1 for the ellipsis
+
+
+@pytest.mark.parametrize("blank", [TimeoutError(), asyncio.CancelledError(), Exception("")])
+def test_flow_fail_never_records_an_empty_reason(blank):
+    """A fail-closed stage must always be able to say what closed it.
+
+    `str(exc)` is empty for exceptions raised without a message, and the live
+    path is a sanitizer worker timeout (`security/sanitizers/runner.py:128`):
+    the run was correctly refused and the journal recorded `''`. An operator
+    reading that cannot tell a timeout from a crash from a bug in the recorder
+    itself, which is the "degrade honestly" law failing exactly where it counts.
+
+    Asserted on all three surfaces the fault travels through, because recording
+    it in one and losing it in another is the same outage for whoever is reading.
+    """
+    out = Flow.new("x", "s").fail(blank, Origin.SANITIZER)
+    assert out.error == type(blank).__name__
+    assert out.journal[-1].error == type(blank).__name__
+    assert out.ctx.failure_error == type(blank).__name__
+
+
+def test_flow_fail_keeps_an_exception_message_verbatim():
+    """The floor must not become a rewrite.
+
+    Every existing journal entry, API error field and assertion reads this
+    string, so a message-carrying exception has to survive unchanged — the
+    empty case is the only behaviour that was allowed to change.
+    """
+    out = Flow.new("x", "s").fail(InfrastructureError("qdrant refused the connection"), Origin.INTAKE)
+    assert out.error == "qdrant refused the connection"
 
 
 def test_flow_truncates_long_warn_reason():

@@ -401,7 +401,7 @@ class Flow(Generic[T]):
             except ModelUnavailableError as e:
                 return flow.fail(e, Origin.VERIFIER)
         """
-        error_str = _truncate(str(error), constants.MAX_ERROR_LENGTH)
+        error_str = _truncate(_describe_error(error), constants.MAX_ERROR_LENGTH)
         new_meta, duration = self._advance(origin, started_at)
 
         self.ctx.mark_failed(error_str)
@@ -645,6 +645,25 @@ def _duration(started_at: float | None) -> float | None:
     if started_at is None:
         return None
     return round((time.monotonic() - started_at) * 1000, 2)
+
+
+def _describe_error(error: BaseException) -> str:
+    """A never-empty description of the fault that closed a stage.
+
+    `str(exc)` is empty for the whole family of exceptions raised without a
+    message — `asyncio.TimeoutError()` and `CancelledError()` are the ones we
+    actually hit, and a sanitizer worker timeout is the live path. That produced
+    a fail-CLOSED gate whose recorded reason was `''`: the run was correctly
+    refused and the journal could not say why, which is the "degrade honestly"
+    law failing at the exact moment it matters (LAW 5).
+
+    So the type name is the floor, and ONLY the floor. When the exception carries
+    a message we keep it verbatim — every existing journal entry, API error field
+    and test assertion reads that string, and reformatting all of them to buy
+    nothing is churn. This changes exactly the case that was broken: empty.
+    """
+    message = str(error).strip()
+    return message or type(error).__name__
 
 
 def _truncate(text: str, limit: int) -> str:

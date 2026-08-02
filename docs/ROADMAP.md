@@ -6,11 +6,13 @@ own areas.
 
 Last reconciled: **2026-08-02**.
 
-**pydantic-ai is UNPINNED at 2.18.0** (2026-07-31). The July pin blamed a broken
-bounded-loop money guard; the real cause was our classifier inferring a permanent
-failure from the dependency's error *text*, which 2.18 changed by adding a docs
-link. Fixed by matching on type. Upgrade procedure:
-`docs/architecture/DEPENDENCY_VERSION_STRATEGY.md`.
+**pydantic-ai is pinned at 2.22.0** (upgraded 2026-08-01; installed version
+verified 2026-08-02). The July pin at 2.4.0 blamed a broken bounded-loop money
+guard; the real cause was our classifier inferring a permanent failure from the
+dependency's error *text*, which 2.18 changed by adding a docs link. Fixed by
+matching on the exception type, so the pin is now for reproducibility, not fear.
+Upgrade procedure and what must stay true:
+`docs/architecture/DEPENDENCY_VERSION_STRATEGY.md`. Re-check by 2026-08-31.
 
 > **Standing rule:** if you finish your lane and nothing here is assigned to you,
 > **that is a valid state.** Write your handoff and stop. Do not invent work
@@ -207,6 +209,12 @@ owner can act now; future gates stay in their engineering plan until ready.
 ## 6. Stale things worth fixing
 
 Nothing currently known-stale.
+
+Fixed 2026-08-02: this file's header still said pydantic-ai was "UNPINNED at
+2.18.0" while `requirements.txt` pinned 2.22.0 and the venv had 2.22.0 installed.
+A version claim is exactly the kind of line an agent trusts without checking, so
+it now names the pin and records that the installed version was verified, not
+assumed.
 
 Fixed 2026-07-28: `docs/RESUME.md`'s duplicated config snapshot. It named the
 ORCHESTRATOR_*/EXPERT_*/TOOL_* constant removal as next work; those constants no
