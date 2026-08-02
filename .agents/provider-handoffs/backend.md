@@ -63,7 +63,72 @@ finished something.
 
 ---
 
-## Current checkpoint — `specification/` created; contract channel is open (2026-08-02, latest)
+## Current checkpoint — run-timing telemetry shipped (2026-08-02, latest)
+
+**`GET /usage` now carries a `latency` block and every run carries three timing
+stamps.** `856c296` (feature) + `deebe36` (sample split) + `1246b45` (comms).
+Suite 1643 passed / 12 skipped. Full shape is in `comms/2026-08-02/backend.md`;
+`backend/api/README.md` and `specification/api/ROUTES.md` are the durable version.
+
+**Why it existed:** the frontend's paid-product benchmark scores Time to first value at
+78/100, weight 12, unmoved across five passes — not because they stalled, but because
+`RunState` persisted only `created_at` and nothing measured latency. This closes the
+answer I gave them on 2026-08-01.
+
+### The design trap, so nobody re-opens it
+
+`first_message_at` is stamped at **one** site: `run_state.py`'s `on_log_entry`,
+`kind == "message"`. Not `emit()`, not `report_delta`, not `run_driver`'s `_final_msg`.
+`stream_report()` receives the **complete, already filter-passed** report and chunks it
+locally at 20 ms, so a "first output" counting it fires a few hundred ms before the run
+ends — time-to-nearly-done under a better name. There is a test that fails if either
+site starts stamping. **Do not consolidate these into `emit()` for tidiness.**
+
+`first_message_at` is legitimately NULL on a delivered run: `on_message` fires only when
+the model calls `say()` (`core/orchestrator/loop.py:59-66`). Never backfill it.
+
+### The mistake I made, and how it was caught
+
+My first brief required all three stamps for a run to enter the aggregate. A delivered
+report-mode run with no narration then contributed nothing to `totalDurationMs` despite
+both ends being present — blind to exactly the four-minute case that motivated the work.
+The worker implemented my rule faithfully; **reading their README note is what exposed
+it.** Fixed by splitting into two independent samples, each with its own
+`sampleSize`/`excluded`. Mutation-checked by reverting the condition and confirming two
+tests go red. Lesson: a worker doing exactly what you asked is not evidence the ask was
+right.
+
+### Tooling: two latent `crew.sh` bugs fixed (`d36c76b`)
+
+`--dir` required every granted path to already exist, so you could never grant the test
+file a worker is meant to **create** — and the auto-appended mandate tells workers to
+stop on an unlisted path. Scoped dispatch of any test-writing task was impossible.
+Existing-parent is now the floor. Also, cwd took the first granted path verbatim and
+would have landed on a nonexistent file; falls back to its parent.
+
+**`crew.sh` refuses to dispatch into a dirty tree** (`exit 3`, "commit or stash them
+first"). That is correct and I tripped it by dispatching a follow-up before committing
+round one. Commit, then dispatch.
+
+### CODEX IS OUT OF QUOTA UNTIL 2026-08-08
+
+`ERROR: You've hit your usage limit... try again at Aug 8th, 2026 3:24 PM`.
+`resolve_provider` (`scripts/crew.sh:263`) defaults to **codex**, so every `run` and
+every `start` dies in ~15s unless it carries `--claude`. Fix is one line in
+`.agents/provider-policy` (`PROVIDER_DEFAULT=claude`) — **owner's quota, so I offered
+and did not do it.** Until then: always pass `--claude`.
+
+### Open
+
+- Frontend owes an answer: can they still reach a real backend? Telemetry nobody can
+  exercise is not worth much. `REAL_JOURNEY.md` suggests yes; unconfirmed.
+- Frontend owns the `types.ts` edit for the new REST fields. Not mine.
+- The `sse_contract_drift.py`-checks-the-spec-file idea is still open work.
+- Owner gate: `2026-08-02_boundary-rule-second-clause.md` (Presidio). Blocks nothing.
+- **Owner said they will do the Rust work when the agents are not working.** Phase 0
+  (`specification/rust/BUILD_ORDER.md`) is still unstarted and still agent work.
+
+## Previous checkpoint — `specification/` created; contract channel is open (2026-08-02)
 
 **Read `specification/README.md` before touching anything frontend-facing or Rust.**
 Owner created it this session. It is a root-level, tracked directory holding the
