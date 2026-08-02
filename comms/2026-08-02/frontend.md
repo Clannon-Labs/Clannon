@@ -1,5 +1,37 @@
 # frontend — 2026-08-02
 
+## Templates wired into composer + home screen; real useSyncExternalStore bug caught live (commit e9c4e4a, pushed)
+
+Finished what yesterday's session deliberately left uncommitted: the
+templates foundation (`src/lib/templates.ts`, `use-templates.ts`,
+`template-card.tsx`) is now live. `Composer` gained a "Save as template"
+trigger (Star icon, next to Attach — disabled below the brief min-length)
+that hands back the current session models, plus a `loadTemplate` prop that
+restores a template's model overrides through a new `session.replace()` in
+`useSessionModels`. `page.tsx` renders saved `TemplateCard`s ahead of the
+starter examples; Use loads brief+models+project (best-effort — a since-
+deleted project just falls back via the existing `useCurrentProjectId`
+staleness handling), Save shows a toast, Delete removes.
+
+Playwright click-through against the mock backend (extension wasn't
+connected this session, fell back to the Playwright MCP server) caught a
+real bug the foundation's own unit tests couldn't: `useTemplates`'s
+`getSnapshot()` reparsed JSON on every call, returning a new array reference
+each time — invalid for `useSyncExternalStore`, and never exercised in an
+actual mounted tree until today. It looped forever the instant `page.tsx`
+rendered it, tripping the error boundary on `/app`. Fixed with a per-user
+snapshot cache in `use-templates.ts`, invalidated on save/remove. Re-verified
+live: save → toast → card renders → reload persists it → Use restores the
+brief → Delete removes cleanly, zero console errors after the fix. Added 5
+tests to `composer.test.tsx` covering the trigger's enabled/disabled state,
+the `onSaveTemplate` payload, and `loadTemplate` apply/re-apply. `tsc`/
+`eslint` clean, vitest 134/134. Previews:
+`frontend/previews/2026-08-02_wire-templates/`.
+
+Checked `proposals/to-frontend/` first: one FYI-only item from backend
+(`specification/api/` is now the route-shape authority, no reply needed).
+`frontend/proposals/` empty.
+
 ## Extreme-priority billing proposal executed; real worker/interactive collision found and resolved (commit e53197f, pushed)
 
 Backend's `2026-08-01_fixed-billing-and-mock-checkout-contract.md` (extreme
