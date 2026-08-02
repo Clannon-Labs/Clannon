@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderPlus, Target } from "lucide-react";
 import {
   useBudgetExhausted,
@@ -15,17 +15,22 @@ import {
 import {
   useCreateProjectDialog,
   useCurrentProjectId,
+  useSelectProject,
 } from "@/components/app/project-provider";
 import { ApiError } from "@/lib/api";
 import { Mark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Composer } from "@/components/app/composer";
+import { TemplateCard } from "@/components/app/template-card";
 import { HydrationPanel } from "@/components/app/hydration-panel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 import { WORKSPACE_EXAMPLES as EXAMPLE_BRIEFS } from "@/config/demo.config";
 import { workspaceDraftKey } from "@/lib/browser-drafts";
 import { useBrowserTextDraft } from "@/lib/use-browser-draft";
 import { findGoalEntry } from "@/lib/project-goal";
+import { useTemplates } from "@/lib/use-templates";
+import type { SavedTemplate } from "@/lib/templates";
 import { cn } from "@/lib/utils";
 
 // Greetings that read fine in front of ", <name>" (and standalone, when there's
@@ -108,11 +113,32 @@ export default function WorkspacePage() {
   const budgetExhausted = useBudgetExhausted();
   const { data: budgetUsage } = useUsage();
   const { openDialog: openCreateProject } = useCreateProjectDialog();
+  const selectProject = useSelectProject();
+  const toast = useToast();
+  const templates = useTemplates(user?.id);
   const [error, setError] = useState<string | ApiError | null>(null);
   const draftKey = user?.id ? workspaceDraftKey(user.id, projectId) : null;
   const [brief, setBrief] = useBrowserTextDraft(draftKey);
+  const [loadTemplate, setLoadTemplate] = useState<
+    { token: string; models?: Record<string, string> } | null
+  >(null);
+  // bumped instead of read from Date.now() — the token only needs to change
+  // on every apply, including reusing the same template twice in a row
+  const loadCounter = useRef(0);
   // pick a greeting once per load (re-rendering on every keystroke must not reshuffle it)
   const [greet] = useState(pickGreeting);
+
+  function saveCurrentAsTemplate(models: Record<string, string>) {
+    const saved = templates.save({ brief, models, projectId });
+    if (saved) toast({ title: "Saved as template", description: saved.name, tone: "success" });
+  }
+
+  function loadSavedTemplate(template: SavedTemplate) {
+    setBrief(template.brief);
+    loadCounter.current += 1;
+    setLoadTemplate({ token: `${template.id}:${loadCounter.current}`, models: template.models });
+    if (template.projectId && template.projectId !== projectId) selectProject(template.projectId);
+  }
 
   const firstName = user?.name.split(" ")[0] ?? "";
   const isFirstRun = runs?.length === 0;
@@ -204,6 +230,21 @@ export default function WorkspacePage() {
               </div>
             )}
 
+            {/* saved templates — your own shortcuts, shown ahead of the built-in
+                starter examples since they're the ones you chose to keep. */}
+            {templates.templates.length > 0 && (
+              <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
+                {templates.templates.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onUse={() => loadSavedTemplate(template)}
+                    onDelete={() => templates.remove(template.id)}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* starter cards — clicking loads the full brief into the composer.
                 Compact rows on a phone, full cards on a wider screen. */}
             <div className="mt-7 grid gap-2.5 sm:mt-10 sm:grid-cols-3 sm:gap-3">
@@ -246,6 +287,8 @@ export default function WorkspacePage() {
             submitError={error}
             budgetExhausted={budgetExhausted}
             budgetUsage={budgetUsage}
+            onSaveTemplate={saveCurrentAsTemplate}
+            loadTemplate={loadTemplate}
             rows={1}
             placeholder="How can I help you today?"
             onSubmit={(files, models) => {

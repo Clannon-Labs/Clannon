@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, type FormEvent } from "react";
-import { ArrowUp, Plus, Square } from "lucide-react";
+import { useEffect, useRef, type FormEvent } from "react";
+import { ArrowUp, Plus, Square, Star } from "lucide-react";
 import { ApiError, type UsageSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BudgetExhaustedNotice } from "@/components/app/budget-exhausted-notice";
@@ -40,6 +40,8 @@ export function Composer({
   className,
   budgetExhausted = false,
   budgetUsage,
+  onSaveTemplate,
+  loadTemplate,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -60,11 +62,26 @@ export function Composer({
    *  (collapsed rail, mobile). Typing still works; only sending is gated. */
   budgetExhausted?: boolean;
   budgetUsage?: UsageSummary;
+  /** Present only where saved templates apply (the new-run composer, not a
+   *  run's reply box) — omit to hide the trigger entirely. Called with the
+   *  current session model overrides; the caller owns naming/storage. */
+  onSaveTemplate?: (models: Record<string, string>) => void;
+  /** Set when a saved template is "used" — applies its model overrides to
+   *  this session. `token` must change on every apply (even reusing the same
+   *  template twice in a row) since it's the effect's only trigger; the
+   *  brief text itself loads through the ordinary `value`/`onChange` pair. */
+  loadTemplate?: { token: string; models?: Record<string, string> } | null;
 }) {
   const attach = useFileAttachments();
   const session = useSessionModels();
   const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useAutoResize(value, 280);
+
+  useEffect(() => {
+    if (!loadTemplate) return;
+    session.replace(loadTemplate.models ?? {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadTemplate?.token]);
 
   const tooShort = value.trim().length < appConfig.limits.briefMinChars;
   const admissionExhausted = submitError instanceof ApiError
@@ -145,6 +162,19 @@ export function Composer({
             aria-label="Attach files — text, PDF, image, audio, or video"
             onChange={attach.handlePicked}
           />
+          {onSaveTemplate && (
+            <Tooltip label="Save as template" align="start">
+              <button
+                type="button"
+                onClick={() => onSaveTemplate(session.models)}
+                disabled={tooShort}
+                aria-label="Save as template"
+                className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground sm:size-9"
+              >
+                <Star className="size-4" aria-hidden />
+              </button>
+            </Tooltip>
+          )}
           {/* model selector + send/stop, grouped on the right */}
           <div className="flex items-center gap-1">
             <SessionModelPicker

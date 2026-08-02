@@ -309,6 +309,10 @@ export function useSessionModels() {
         return next;
       }),
     reset: () => update(() => ({})),
+    /** Replace the whole override map wholesale — used to load a saved
+     *  template's models back in, as opposed to `setRole`/`setAll` which
+     *  build on top of what's already picked. */
+    replace: (next: Record<string, string>) => update(() => next),
   };
 }
 

@@ -1,10 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 // SessionModelPicker (rendered inside Composer) calls useModelConfig — give
-// it an empty roster so the picker renders without needing react-query.
+// it a single unlocked role so the "customize" picker (and its selected-model
+// text) has something real to render.
+const ORCHESTRATOR_LAYER = {
+  layer: "orchestrator",
+  label: "Orchestrator",
+  model: "claude-opus-5",
+  default: "claude-opus-5",
+  options: ["claude-opus-5", "gpt-5.5"],
+  locked: false,
+};
 vi.mock("@/lib/api/hooks", () => ({
-  useModelConfig: () => ({ data: [] }),
+  useModelConfig: () => ({ data: [ORCHESTRATOR_LAYER] }),
 }));
 
 import { Composer } from "@/components/app/composer";
@@ -126,5 +135,82 @@ describe("Composer — budgetExhausted", () => {
       "href",
       "/app/settings?tab=billing&action=upgrade",
     );
+  });
+});
+
+describe("Composer — templates", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("hides the save trigger when the caller doesn't pass onSaveTemplate", () => {
+    render(<Composer value="A long enough brief to pass validation" onChange={noop} onSubmit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
+  });
+
+  it("disables the save trigger below the minimum brief length, enables it above", () => {
+    const { rerender } = render(
+      <Composer value="" onChange={noop} onSubmit={vi.fn()} onSaveTemplate={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: "Save as template" })).toBeDisabled();
+
+    rerender(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        onSaveTemplate={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Save as template" })).toBeEnabled();
+  });
+
+  it("calls onSaveTemplate with the current session models on click", () => {
+    const onSaveTemplate = vi.fn();
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        onSaveTemplate={onSaveTemplate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save as template" }));
+    expect(onSaveTemplate).toHaveBeenCalledWith({});
+  });
+
+  it("applies loadTemplate's models to the session, visible in the model picker trigger", () => {
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        loadTemplate={{ token: "tpl_1:1", models: { orchestrator: "gpt-5.5" } }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /GPT-5\.5/ })).toBeInTheDocument();
+  });
+
+  it("re-applies when the token changes, replacing a prior template's models", () => {
+    const { rerender } = render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        loadTemplate={{ token: "tpl_1:1", models: { orchestrator: "gpt-5.5" } }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /GPT-5\.5/ })).toBeInTheDocument();
+
+    rerender(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        loadTemplate={{ token: "tpl_2:1", models: {} }}
+      />,
+    );
+    // an empty override map falls back to the orchestrator's own default model
+    expect(screen.getByRole("button", { name: /Claude Opus 5/ })).toBeInTheDocument();
   });
 });
