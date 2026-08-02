@@ -76,6 +76,11 @@ The pipeline's internal entry is richer than what ships:
 
 ### Kinds
 
+> The **vocabulary** below is introspected from `DecisionLogKind` by
+> `sse_contract_drift.py`. If this list and the code disagree, **the code wins and this
+> is the bug.** The *render meaning* per kind is not in any test — that part lives here
+> and nowhere else.
+
 | Kind | Means |
 |---|---|
 | `hydration` | Memory/context hydration |
@@ -170,6 +175,9 @@ security/filter/schemas.py  FilterResult.groundedness
 
 **`proceed` and groundedness are independent.** A safe but partial draft can proceed;
 blocked output can still carry a verdict. Never infer one from the other.
+
+> Same rule: the **state vocabulary** is checked against the frontend fixture; the
+> **treatment** column is not, and is the reason this table exists.
 
 | Persisted state | Meaning | Treatment |
 |---|---|---|

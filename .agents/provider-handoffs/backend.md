@@ -79,11 +79,19 @@ specification/
   rust/              the build guide (was docs/architecture/rust/)
 ```
 
-**Paths moved — `git mv`, history intact, no stubs left (LAW 1).**
+**Paths moved — `git mv`, no stubs left (LAW 1).**
 `docs/architecture/rust/` → `specification/rust/`; `API_SPECIFICATION.md` →
 `specification/api/ROUTES.md`; `RUST_IDIOMS_AND_CRATES.md` → `IDIOMS_AND_CRATES.md`;
 `reports/INTEGRATION_CONTRACT.md` → `specification/api/SEMANTICS.md`. **`reports/` is
-now per-role folders only.** Dated records (`comms/2026-07-28`,
+now per-role folders only.**
+
+**Correction, checked with `git log --follow`:** the rust files keep their history
+(2–3 commits each) but **`SEMANTICS.md` does not** — it shows one commit. `git mv`
+staged the rename, then I rewrote the body far enough that `--follow` no longer links
+it to `INTEGRATION_CONTRACT.md`. Nothing is lost (`git show 5bffa37^:reports/INTEGRATION_CONTRACT.md`
+still has v1), but do not repeat my earlier claim that history is intact for that
+file. `git status` showing `R` is rename detection at staging time, not proof
+`--follow` will walk it. Dated records (`comms/2026-07-28`,
 `docs/benchmarks/reached/`) deliberately left naming the old paths — they were true
 when written.
 
