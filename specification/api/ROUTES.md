@@ -1,14 +1,19 @@
-# API specification — the 38 routes Rust must serve
+# The 38 routes — the HTTP surface any implementation must serve
 
-**Purpose:** you are building the Rust API surface and need to know what each route
-is for. This is reference, not rationale — the "why" lives in `DECISIONS.md`.
+**Read this if you are:** the frontend, deciding what you can call today · the backend,
+before adding a route · the owner, building the Rust API surface.
 
-**Source of truth is the code**, not this file: `backend/api/app.py` (33 routes),
-`billing.py` (4), `run_revision.py` (1). Verified against them 2026-08-02.
+This is reference, not rationale — the "why" lives in [`../rust/DECISIONS.md`](../rust/DECISIONS.md).
+Need a route that is not here? File it in [`requests/`](requests/); do not add it to
+this table yourself.
 
-> **Correction to an earlier count:** I said 33 routes in the structure proposal. It is
-> **38** — I had deduplicated by path and lost the routes that share a path with a
-> different method (`GET`/`POST /memory`, `GET`/`PUT /settings/models`, and others).
+**Verified against the code 2026-08-02:** `backend/api/app.py` (33 routes),
+`billing.py` (4), `run_revision.py` (1). Where this file and the code disagree, the
+code wins and this file is the bug — say so rather than building to the prose.
+
+> **Correction to an earlier count:** the structure proposal said 33 routes. It is
+> **38** — deduplicating by path lost the routes that share a path with a different
+> method (`GET`/`POST /memory`, `GET`/`PUT /settings/models`, and others).
 
 ## 0. Rules that apply to every route
 
@@ -107,17 +112,23 @@ SSE. `text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
 carries a `"type"` field. Do not "improve" this into named events — see the contract
 lock below.
 
-### Event types
+### Event types — deliberately NOT listed here
 
-| `type` | Meaning |
+The vocabulary lives in two places that a test keeps honest, and this file is not one
+of them:
+
+| Authority | What it is |
 |---|---|
-| `status` | Lifecycle transition |
-| `log` | Progress line |
-| `expert` | Expert started/finished |
-| `verification` | Filter/groundedness verdict |
-| `message_delta` | Chat answer chunk |
-| `report_delta` | Report chunk |
-| `report_done` | Report complete |
+| `backend/tests/benchmarks/fixtures/sse_contract.json` | the frontend's declared contract, pinned and machine-checked |
+| `backend/api/README.md` (SSE row) | the backend's declared frames, cross-checked against every emit site |
+
+`sse_contract_drift.py` fails if those two disagree with the code. A copy here would
+be a **fourth** source that nothing checks — it rots silently while the suite stays
+green, which is worse than no copy at all.
+
+> That is not hypothetical. The first draft of this file listed 7 event types. The
+> real set is 10 — it was missing `message_done`, `sources` and `usage`. The table was
+> wrong within a day of being written, and no test could have caught it.
 
 ### Replay-then-live — get this exactly right
 
@@ -133,8 +144,8 @@ lock below.
 **Terminal ordering is a pinned invariant:** `report_done` is emitted strictly
 **before** `status: delivered` (`tests/sse_terminal_order.py`).
 
-> **CONTRACT LOCK.** `backend/tests/sse_contract_drift.py:479` fails on any SSE event
-> the frontend has not declared, and `:518` blocks a new terminal `partial` status.
+> **CONTRACT LOCK.** `backend/tests/benchmarks/sse_contract_drift.py` fails on any SSE
+> event the frontend has not declared, and blocks a new terminal `partial` status.
 > That benchmark is what keeps **CB6 — the only Critical benchmark that passes** —
 > green. Rust must satisfy it unchanged. Do not add an event type to unblock yourself.
 

@@ -80,7 +80,7 @@ one.
 
 ### D3a — the rule needs a second clause (found 2026-08-02, pending owner confirmation)
 
-Crate research (`RUST_IDIOMS_AND_CRATES.md` Part 3) found the rule as written does not
+Crate research (`IDIOMS_AND_CRATES.md` Part 3) found the rule as written does not
 survive contact with `security/`. **Presidio has no Rust equivalent and will not get
 one.** PII detection is `presidio-analyzer` over spaCy's `en_core_web_lg` — local ML
 inference, no network call — so the rule as written says Rust, and that is impossible.

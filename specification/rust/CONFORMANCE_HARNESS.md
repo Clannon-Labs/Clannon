@@ -2,7 +2,7 @@
 
 **Status:** `[PROPOSED]` — design only, nothing built. Companion to
 `DECISIONS.md`. This is gate #2 of the four in
-`RUST_MIGRATION_STRATEGY.md` §"Before any port starts": *language-independent
+`docs/architecture/RUST_MIGRATION_STRATEGY.md` §"Before any port starts": *language-independent
 conformance tests through the port/API.*
 
 ---

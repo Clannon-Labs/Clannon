@@ -127,6 +127,7 @@ invariants are actually enforced. Conventions are subordinate to the Invariants.
 | What "good enough to show" means | `benchmarks/` |
 | Why a decision was made / what was rejected | `decisions/` |
 | What a term means | `glossary/TERMS.md` |
+| **What the API must serve / what the Rust core must satisfy** | **`../specification/`** — a contract, not documentation. Outside this tree on purpose |
 
 ## Attention Threshold pillars → architecture home
 

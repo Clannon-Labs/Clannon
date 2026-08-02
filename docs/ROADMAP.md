@@ -25,6 +25,7 @@ Upgrade procedure and what must stay true:
 | Source | Covers | Trust it? |
 |---|---|---|
 | **this file** | cross-role priorities, the Rust track, who owns what | current |
+| **`specification/`** | the API contract the frontend builds against, and the Rust build guide | current — created 2026-08-02 |
 | `docs/benchmarks/V1_GAP_ANALYSIS.md` | per-benchmark honest verdicts | current — reconciled 2026-07-28 |
 | `docs/benchmarks/mission/` | the V1 Premium-Parity phase plan | current — reconciled 2026-07-28; backend-only |
 | `docs/architecture/RUST_MIGRATION_STRATEGY.md` | how any Rust work happens | current, canonical |
@@ -182,10 +183,11 @@ the owner comes to own the system. Migration cost is also superlinear in codebas
 size, and post-V1 the stability promise makes a rewrite impossible — so "wait for V1"
 does not make this cheaper, it makes it never happen.
 
-Design, both `[PROPOSED]` and awaiting ratification:
-`docs/architecture/rust/DECISIONS.md` (wire contract, boundary rule,
-error/timeout semantics) and `docs/architecture/rust/CONFORMANCE_HARNESS.md`
-(how either language is proven correct).
+Design lives in **`specification/rust/`** (moved there 2026-08-02 from
+`docs/architecture/rust/` — a build contract is not documentation of what exists).
+All `[PROPOSED]`, awaiting ratification. Start at `specification/rust/README.md`;
+`DECISIONS.md` holds the boundary rule and every piece of rationale,
+`CONFORMANCE_HARNESS.md` holds how either language is proven correct.
 
 **Division of labour:** the owner writes the Rust. Agents build the conformance
 harness — the 33,420 lines of existing tests import Python modules directly and

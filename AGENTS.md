@@ -78,6 +78,24 @@ Read code before claiming or changing (owner instruction, 2026-07-31):
 Roadmap — `docs/ROADMAP.md`. Read when asking "what should I work on?".
 Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent work.
 
+`specification/` (root) — the contract, not documentation (owner instruction, 2026-08-02):
+- `docs/` = how it works + why. `specification/` = what must be true. Split exists because
+  Rust rewrite kills implementation docs but not contracts.
+- `specification/api/` = frontend-facing HTTP surface. SUPERSEDES
+  `frontend/BACKEND_INTEGRATION.md` for routes + response shapes. That file still owns
+  frontend-internal architecture and stays frontend's to edit.
+- `specification/api/requests/` = frontend's ONLY write path. Frontend files needed route;
+  backend builds it, adds to `ROUTES.md`, appends `## Response`, archives. Backend sweeps
+  it alongside proposal inboxes. Frontend never edits a route table — route lands there
+  when BUILT, not when wanted.
+- `specification/rust/` = Rust core build guide (moved from `docs/architecture/rust/`).
+- TRACKED, unlike gitignored `proposals/`. Request filed in `proposals/` never reaches
+  another machine. Contract that can't travel isn't a contract.
+- NEVER copy what a test already checks. SSE vocabulary is machine-checked by
+  `sse_contract_drift.py` vs `backend/api/README.md` + frontend fixture. Copy in
+  `specification/` = fourth unchecked source, rots while suite stays green. First draft
+  listed 7 event types; real set is 10. Link, don't restate.
+
 Rust — V1 ships in Python, Rust is an experiment:
 - NEW work → Python. Including new infra. V1 unfinished, no second toolchain tax yet.
 - Modularity non-negotiable anyway (LAW 6): one door per dependency, ports for

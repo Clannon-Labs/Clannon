@@ -108,3 +108,55 @@ found while re-pointing it, both worth knowing:
   behind PROTOCOL, make `core/llm/` a client of it, prove the product runs unchanged.
 - One open owner gate: the boundary rule's second clause (Presidio has no Rust
   equivalent). Does not block Phase 0.
+
+## `specification/` created at the root — frontend, this clears your road
+
+Owner instruction: the frontend must not stall because the backend is migrating to
+Rust. New root directory **`specification/`** is the answer, and it is TRACKED
+(`proposals/` is gitignored — a request filed there never reaches another machine, so
+it could never have carried a contract).
+
+**`docs/` = how it works and why. `specification/` = what must be true.** The split is
+there because the Rust rewrite kills implementation docs and leaves contracts standing.
+
+### frontend — the two things that matter to you
+
+1. **`specification/api/ROUTES.md` is now the authority on routes and response
+   shapes.** All 38, verified against `backend/api/app.py` on 2026-08-02.
+   `frontend/BACKEND_INTEGRATION.md` is **superseded for routes and shapes** — it says
+   of itself "complete, authoritative, do NOT read the backend code", and that is no
+   longer true for that one question. It remains correct and yours for
+   frontend-internal architecture (`ClannonClient`, mock/http split, `src/config/`).
+   I have not touched the file; it is your tree.
+2. **`specification/api/requests/` is your write channel.** Need a route that does not
+   exist? Copy `TEMPLATE.md`, one route per file, commit, drop a line in your comms
+   file. I answer **every** request — built, declined with a counter-shape, or blocked
+   with the reason. Mock it and keep building; do not idle waiting on me.
+
+**Your contract does not change under the migration** (`specification/rust/DECISIONS.md`
+D6). Rust serves the identical HTTP/SSE surface, which is what keeps CB6 green straight
+through the rewrite. Build normally.
+
+### everyone — paths moved
+
+`docs/architecture/rust/` → **`specification/rust/`**. `API_SPECIFICATION.md` →
+`specification/api/ROUTES.md`; `RUST_IDIOMS_AND_CRATES.md` → `IDIOMS_AND_CRATES.md`.
+`git mv`, history intact, no stub left behind (LAW 1). Earlier entries in this file
+still name the old paths — they were true when written; this line is the correction.
+
+### one finding worth keeping
+
+The SSE event table I wrote into the spec was **already wrong**: 7 types listed, 10
+real (missing `message_done`, `sources`, `usage`). It was a hand copy of something
+`sse_contract_drift.py` already checks — an unchecked fourth source that rots while the
+suite stays green. Removed and replaced with a pointer to the fixture and
+`backend/api/README.md`. **Rule now in CLAUDE.md: never restate what a test checks.**
+
+### still open
+
+- `reports/INTEGRATION_CONTRACT.md` is **not yet merged** into `specification/api/`.
+  Its four UI-surface semantics — especially the honesty notes like "an empty
+  hydration preview is indistinguishable from a backend failure" — encode real
+  incidents and must survive the merge. Next commit; not blocking the frontend.
+- Durable version of the SSE rule: extend `sse_contract_drift.py` to also check the
+  spec file, so a stale table fails the suite instead of relying on someone noticing.

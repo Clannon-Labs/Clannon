@@ -304,6 +304,34 @@ finished piece of work, never appended to an old one.
 > Important: YOU must be careful to not let any merge conflicts happen or,
 > Overwrite the work of the frontend agent !!
 
+## 📐 `specification/` — THE CONTRACT CHANNEL (owner instruction, 2026-08-02)
+
+**`specification/` at the repo root is what any implementation must be true to.**
+`docs/` says how the system works and why; `specification/` says what it must *do*.
+That split exists because the backend is being rewritten in Rust — a doc tied to the
+Python implementation dies at the rewrite, a contract survives it and is what the Rust
+gets checked against.
+
+- **`specification/api/`** — the frontend-facing HTTP surface. **This supersedes
+  `frontend/BACKEND_INTEGRATION.md` for routes and response shapes** (that file still
+  owns frontend-internal architecture, and stays the frontend's to edit).
+- **`specification/api/requests/`** — the frontend's write channel. They file a needed
+  route; **you build it, add it to `ROUTES.md`, append `## Response`, archive.**
+  Sweep it with the proposal inboxes. Frontend never edits a route table; a route
+  lands there when it is built, never when it is wanted.
+- **`specification/rust/`** — the Rust core build guide (moved from
+  `docs/architecture/rust/`).
+
+**Tracked, unlike `proposals/`.** `proposals/` is gitignored, so a request filed there
+never reaches another machine. A contract that cannot travel is not a contract — that
+is the whole reason this directory exists at the root and is committed.
+
+**Never copy something a test already checks.** The SSE vocabulary is machine-checked
+by `sse_contract_drift.py` against `backend/api/README.md` and the frontend fixture; a
+copy in `specification/` would be a fourth source nothing verifies, rotting silently
+while the suite stays green. It happened on the first draft — the copied table listed
+7 event types when the real set was 10. Link, do not restate.
+
 ## OWNER PROPOSAL CHANNEL
 
 When owner ruling is required, write one proposal under
