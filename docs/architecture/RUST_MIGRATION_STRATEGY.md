@@ -15,7 +15,7 @@ this doc is *how* we exercise the property that law requires us to keep.
 > **Everything in this doc about process still holds** — parallel implementation,
 > port-boundary cutover, conformance tests before any port, no big-bang. What has
 > changed is the scope and the direction of the API boundary. See
-> `rust/CORE_RUNTIME_CONTRACT.md` and `rust/CONFORMANCE_HARNESS.md`.
+> `rust/DECISIONS.md` and `rust/CONFORMANCE_HARNESS.md`.
 
 ---
 
@@ -178,7 +178,7 @@ proposal proves another route necessary.~~
 **Reversed by owner ruling 2026-08-02.** Rust owns the API the frontend talks to;
 Python sits *behind* Rust as a model-calling worker, not in front of it. The
 frontend's contract should not change — the recommendation in
-`rust/CORE_RUNTIME_CONTRACT.md` §10 is that Rust serves the identical HTTP/SSE
+`rust/DECISIONS.md` §10 is that Rust serves the identical HTTP/SSE
 surface, so the frontend never learns which language answered and
 `sse_contract_drift.py` keeps enforcing.
 

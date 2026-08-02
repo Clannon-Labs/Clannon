@@ -1,7 +1,7 @@
 # The conformance harness — proving Rust and Python behave identically
 
 **Status:** `[PROPOSED]` — design only, nothing built. Companion to
-`CORE_RUNTIME_CONTRACT.md`. This is gate #2 of the four in
+`DECISIONS.md`. This is gate #2 of the four in
 `RUST_MIGRATION_STRATEGY.md` §"Before any port starts": *language-independent
 conformance tests through the port/API.*
 
@@ -70,7 +70,7 @@ steps:
 Two target adapters, same scenarios, selected by `CLANNON_CONFORMANCE_TARGET`:
 
 - `python-inproc` — imports today's implementation. Fast; this is the **oracle**.
-- `rust-http` — speaks the §5 contract to the running Rust service.
+- `rust-http` — speaks `PROTOCOL.md` to the running Rust service.
 
 **Failure paths are first-class.** A scenario that asserts a broker-down reserve
 *fails closed* is worth more than ten happy-path scenarios, because fail-closed is the

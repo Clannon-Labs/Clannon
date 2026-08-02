@@ -149,7 +149,7 @@ lives.
 
 **Stays TypeScript:** the whole frontend. Not up for discussion, and the ruling makes
 this more important — the frontend's contract should not notice the migration at all
-(`rust/CORE_RUNTIME_CONTRACT.md` §10).
+(`rust/DECISIONS.md` §10).
 
 ### 3b. Existing code → port only by addition
 
@@ -183,7 +183,7 @@ size, and post-V1 the stability promise makes a rewrite impossible — so "wait 
 does not make this cheaper, it makes it never happen.
 
 Design, both `[PROPOSED]` and awaiting ratification:
-`docs/architecture/rust/CORE_RUNTIME_CONTRACT.md` (wire contract, boundary rule,
+`docs/architecture/rust/DECISIONS.md` (wire contract, boundary rule,
 error/timeout semantics) and `docs/architecture/rust/CONFORMANCE_HARNESS.md`
 (how either language is proven correct).
 
