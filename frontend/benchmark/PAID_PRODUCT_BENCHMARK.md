@@ -5,13 +5,15 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **85.47 -> 85/100**  
+Current verified score: **85.57 -> 86/100**  
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
 `benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`,
 `previews/2026-08-01_project-creation-redesign/`,
 `previews/2026-08-01_project-goal-pinned/`,
 `previews/2026-08-01_failed-and-quota-states/`,
-`previews/2026-08-02_run-notifications/`, and
+`previews/2026-08-02_run-notifications/`,
+`previews/2026-08-02_spend-awareness/`,
+`previews/2026-08-02_history-page/`, and
 `reports/frontend/frontend_report_v8.md` through the latest
 
 **90 is not reachable without backend/framework-level work, independent of
@@ -73,13 +75,13 @@ Score is weighted mean of ten dimensions. Each dimension receives 0-100.
 | Time to first value | 12 | 78 | 9.36 |
 | Core workflow | 18 | 88 | 15.84 |
 | Trust and control | 12 | 92 | 11.04 |
-| Continuity and retention | 10 | 89 | 8.90 |
+| Continuity and retention | 10 | 90 | 9.00 |
 | Performance and smoothness | 12 | 64 | 7.68 |
 | Failure recovery | 7 | 90 | 6.30 |
 | Accessibility | 5 | 96 | 4.80 |
 | Mobile completeness | 5 | 88 | 4.40 |
 | Visual and interaction craft | 4 | 95 | 3.80 |
-| **Total** | **100** |  | **85.47 -> 85** |
+| **Total** | **100** |  | **85.57 -> 86** |
 
 Pass 2 changed outcome clarity 82 -> 83, core workflow 82 -> 85,
 trust/control 84 -> 86, continuity 80 -> 86, performance 58 -> 64,
@@ -509,6 +511,53 @@ synthetic seed data). Live browser: logged into the mock demo account,
 confirmed the composer caption and the usage forecast both render with real
 seeded numbers (599k/6M used, two real daily-spend days → "about 18 days
 left"), zero console errors. `previews/2026-08-02_spend-awareness/`.
+
+## Pass 11 — a real History page, no new API, crosses 85 (2026-08-02, same day)
+
+Third build this session, closing the gap flagged at the end of v18's
+report and Pass 10: the sidebar's "Recent" list has no search, no status
+filter, and no dedicated view — just a flat, unlimited scroll in a narrow
+rail. `GET /runs` already returns full unfiltered summaries (confirmed by
+reading `client.ts`'s `listRuns` signature and both backends), and
+`groupBySession` (`lib/sessions.ts`, already shared by the sidebar) already
+gives title/status/createdAt/turnCount/tokensUsed per conversation — this
+needed zero new API, only a page that does something with data already
+being fetched.
+
+Added `src/app/app/history/page.tsx`: a real "Every run" view with a search
+box (title substring, client-side) and status-filter pills (All/Delivered/
+Blocked/Failed/Cancelled), scoped to whatever project the sidebar switcher
+currently has selected (including "All projects," which already existed as
+an option). Wired into `APP_NAV` (`nav.config.ts`) so it appears in the
+sidebar's Sections row next to Memory, and into the ⌘K command palette as a
+"Go to" jump. Distinguishes a genuinely-empty account ("Nothing here yet")
+from a filtered-to-nothing state ("No matches") — the two are different
+findings and read differently to a user.
+
+Explicitly did **not** wait on the two open backend requests from Pass 10
+(`2026-08-02_runs-archive-route-not-implemented.md`,
+`2026-08-02_signup-not-invite-gated.md`) — the archive-route question
+only affects whether a *separate*, superseded/revised-runs view could
+exist someday; the actual "search my past work" gap this closes needed
+none of that.
+
+**Score moves 85.47 -> 85.57 (85 -> 86).** Continuity and retention 89 -> 90
+— this dimension's own stated definition is *"Returning work becomes
+easier; projects, sessions, memory, **search**, and follow-ups preserve
+context"* (§2 table, word for word); a searchable/filterable history view is
+about as direct a match to a dimension's own listed criteria as this
+benchmark gets. **Not** separately moving Core workflow, even though
+"reuse" is one of its named criteria too — one precise match is honest
+evidence; claiming the same shipped feature against two dimensions at once
+is the kind of double-dipping this file's scoring rules exist to prevent.
+
+Verified: `tsc`/`eslint` clean, vitest 175/175 (6 new tests —
+`history-page.test.tsx`: newest-first ordering, search filtering, status
+filtering, combined filters producing a genuine no-matches state, and the
+empty-account/loading states kept distinct). Live browser: real seeded
+demo account, search and status-filter pills both exercised live, zero
+console errors, desktop and 390px.
+`previews/2026-08-02_history-page/`.
 
 ## 3. Hard gates
 

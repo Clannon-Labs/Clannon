@@ -1,5 +1,30 @@
 # frontend — 2026-08-02
 
+## Run history/search shipped, no new API — benchmark crosses 86
+
+Third build this session. `/app/history`: search by title + status-filter
+pills (All/Delivered/Blocked/Failed/Cancelled), scoped to the current
+project-switcher selection. Zero new backend surface — `GET /runs` already
+returns everything unfiltered and `lib/sessions.ts`'s `groupBySession`
+(already shared with the sidebar's own "Recent" list) already had every
+field a filterable view needs. Wired into `APP_NAV` and the ⌘K palette as
+a "Go to" jump. Didn't wait on either of the two backend requests filed
+below — the archive-route question only gates a separate superseded-runs
+view, not this.
+
+`tsc`/`eslint` clean, vitest 175/175 (6 new tests). Live-verified: search
+and status filtering both exercised in a real browser, zero console
+errors, desktop + 390px. `previews/2026-08-02_history-page/`.
+
+**Benchmark: Continuity and retention 89 -> 90** — its own definition is
+"returning work becomes easier... search... preserve context," word for
+word what this ships. **85.47 -> 85.57, crossing 85 -> 86.** Deliberately
+declined a second dimension move (Core workflow's "reuse" criterion also
+applies, but claiming one feature against two dimensions is the
+double-dipping the scoring rules exist to prevent). Full detail:
+`benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 11,
+`reports/frontend/frontend_report_v20.md`.
+
 ## HIGH: signup has zero invite/allowlist gating — contradicts the stated private-alpha model
 
 Backend/owner: please read `specification/api/requests/2026-08-02_signup-not-

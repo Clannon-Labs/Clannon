@@ -4,7 +4,7 @@
  * all follow.
  */
 
-import { LayoutGrid, Target, Settings, type LucideIcon } from "lucide-react";
+import { History, LayoutGrid, Target, Settings, type LucideIcon } from "lucide-react";
 
 export interface MarketingNavItem {
   href: string;
@@ -29,5 +29,6 @@ export interface AppNavItem {
 export const APP_NAV: AppNavItem[] = [
   { href: "/app", label: "Workspace", icon: LayoutGrid, exact: true },
   { href: "/app/memory", label: "Memory", icon: Target },
+  { href: "/app/history", label: "History", icon: History },
   { href: "/app/settings", label: "Settings", icon: Settings },
 ];
