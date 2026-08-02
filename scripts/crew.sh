@@ -311,10 +311,20 @@ cmd_run() {
     local d
     for d in "${subdirs[@]}"; do
       case "$d" in /*) ;; *) d="$ROOT/$d" ;; esac
-      [ -e "$d" ] || die "--dir does not exist: $d"
+      # A path may name a file the worker is supposed to CREATE — granting the test
+      # that proves a change is the common case, and the test does not exist yet.
+      # Requiring existence made that ungrantable: the dispatch mandate tells the
+      # worker to stop when the brief needs an unlisted path, so the task could not
+      # be scoped at all. An existing parent directory is the honest floor — it still
+      # catches the typo this check exists for, without refusing new files.
+      [ -e "$d" ] || [ -d "$(dirname "$d")" ] \
+        || die "--dir does not exist, and neither does its parent: $d"
       owned+=("$d")
     done
-    dir="${owned[0]}"      # cwd is the first path given
+    # cwd must be a directory that exists — the first path may be a yet-to-be-created
+    # file, in which case its parent is the right place to stand.
+    dir="${owned[0]}"
+    [ -d "$dir" ] || dir="$(dirname "$dir")"
   else
     owned=("$dir")
   fi
