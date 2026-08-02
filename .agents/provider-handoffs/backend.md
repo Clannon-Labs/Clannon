@@ -63,14 +63,96 @@ finished something.
 
 ---
 
-## Current checkpoint — Rust ruling landed; repo moved org (2026-08-02, late)
+## Current checkpoint — `specification/` created; contract channel is open (2026-08-02, latest)
+
+**Read `specification/README.md` before touching anything frontend-facing or Rust.**
+Owner created it this session. It is a root-level, tracked directory holding the
+contract — *what any implementation must be true to* — separate from `docs/`, which
+holds *how it works and why*. The split exists because the Rust rewrite expires
+implementation docs and leaves contracts standing.
+
+```
+specification/
+  api/ROUTES.md      38 routes, verified against backend/api/app.py 2026-08-02
+  api/SEMANTICS.md   what the surfaces MEAN (was reports/INTEGRATION_CONTRACT.md)
+  api/requests/      the FRONTEND writes here; you build it and answer
+  rust/              the build guide (was docs/architecture/rust/)
+```
+
+**Paths moved — `git mv`, history intact, no stubs left (LAW 1).**
+`docs/architecture/rust/` → `specification/rust/`; `API_SPECIFICATION.md` →
+`specification/api/ROUTES.md`; `RUST_IDIOMS_AND_CRATES.md` → `IDIOMS_AND_CRATES.md`;
+`reports/INTEGRATION_CONTRACT.md` → `specification/api/SEMANTICS.md`. **`reports/` is
+now per-role folders only.** Dated records (`comms/2026-07-28`,
+`docs/benchmarks/reached/`) deliberately left naming the old paths — they were true
+when written.
+
+**Your new standing job:** sweep `specification/api/requests/` alongside the proposal
+inboxes. The frontend files a needed route there; you build it, add it to `ROUTES.md`,
+append `## Response`, archive. **Answer every one** — silence is a bug. Frontend never
+edits a route table; a route lands there when built, never when wanted.
+
+**Why root and tracked, not `proposals/`:** `proposals/` is gitignored, so a request
+filed there never reaches another machine. A contract that cannot travel is not a
+contract.
+
+### The one lesson worth carrying
+
+**Never restate in `specification/` what a test already checks.** The SSE event table
+I wrote into the spec was wrong within a day — 7 types listed, 10 real (missing
+`message_done`, `sources`, `usage`). It was a hand copy of something
+`sse_contract_drift.py` verifies against the frontend fixture and `api/README.md`, so
+nothing could catch it: a fourth source rotting silently while the suite stays green.
+Removed, replaced with a pointer, rule now in CLAUDE.md and AGENTS.md.
+
+**The durable fix is not done.** The rule is prose, which is the weaker thing the rule
+itself warns about. Extending `sse_contract_drift.py` to also check the spec file is
+open work and it is worth doing.
+
+### A stale claim retired, by reading rather than trusting
+
+`INTEGRATION_CONTRACT.md` v1 closed with five "frontend alignment requested" items and
+a "current frontend mismatch" section. **All five are done.** Reducer handles
+`verification` (`frontend/src/lib/api/hooks.ts:408`), seal reads persisted state after
+terminal (`:527`), `VerifiedSeal` takes a `state` prop
+(`components/brand/verified-seal.tsx:26`), and `verification-status.tsx` renders all
+five states distinctly — including nothing at all for `null`. Recorded in
+`SEMANTICS.md` §7 so nobody redoes finished work.
+
+### Frontend boundary held
+
+The frontend agent is live (untracked template files, and a `frontend/CLAUDE.md` edit
+in flight). **I did not touch `frontend/`.** `frontend/BACKEND_INTEGRATION.md` claims
+to be the authoritative source and tells you not to read backend code — that is now
+superseded for routes and shapes, but **the supersession is stated in
+`specification/`, not by editing their file.** If it needs a note at its top, that
+edit is theirs. Told them via `comms/2026-08-02/backend.md` and
+`proposals/to-frontend/2026-08-02_specification-directory-is-your-channel.md`.
+
+### State
+
+Commits `b5afcc4` (directory + move) and `5bffa37` (semantics merge), both pushed,
+both `clannon-bot`. Suite **1628 passed / 13 skipped** before each — the 13 are qdrant
+and ClamAV being down locally, not regressions (they are the difference from the
+earlier 1641).
+
+**Next agent work is unchanged: `BUILD_ORDER.md` Phase 0** — no Rust in it. Stand up
+`services/ai-runtime/` per `specification/rust/PROTOCOL.md`, make `core/llm/` a client
+of it, prove the product runs unchanged with model calls across an HTTP boundary. Not
+started; it is substantial and worth confirming with the owner first.
+
+One open owner gate: `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md`
+(Presidio has no Rust equivalent, so the one-clause boundary rule says "port it" and
+that is impossible). Does not block Phase 0.
+
+## Previous checkpoint — Rust ruling landed; repo moved org (2026-08-02, late)
 
 **THE BIG ONE: Track B is no longer deferred.** Owner ruled the backend splits into
 `clannon-core` (Rust — pipeline, memory, tools, experts, orchestration, security,
 registry, budgets, **and the frontend-facing API**) and `clannon-ai-runtime` (Python —
 model calls only). Starting now, not after V1. If you read one thing before acting on
 Rust, read `docs/ROADMAP.md` §3, then
-`docs/architecture/rust/CORE_RUNTIME_CONTRACT.md` + `CONFORMANCE_HARNESS.md`.
+`specification/rust/DECISIONS.md` + `CONFORMANCE_HARNESS.md` (moved there 2026-08-02).
 
 Their decisive argument was **maintainability, not performance**: an agent wrote most
 of these 30,467 lines, their agent hours are finite, and hand-writing the core is how

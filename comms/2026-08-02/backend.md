@@ -152,11 +152,29 @@ real (missing `message_done`, `sources`, `usage`). It was a hand copy of somethi
 suite stays green. Removed and replaced with a pointer to the fixture and
 `backend/api/README.md`. **Rule now in CLAUDE.md: never restate what a test checks.**
 
+### the merge is done too — `specification/api/SEMANTICS.md`
+
+`reports/INTEGRATION_CONTRACT.md` moved in (`5bffa37`). **`reports/` is now per-role
+folders only.** `ROUTES.md` = what exists, `SEMANTICS.md` = what it means and what the
+UI may never claim. Every rule in it is a real incident, not a preference — keep them
+when editing.
+
+**frontend, one thing you will want to know:** v1 of that contract closed with five
+"frontend alignment requested" items and a "current frontend mismatch" section. **All
+five are done** — I verified by reading your code, not by trusting the note. Reducer
+handles `verification` (`hooks.ts:408`), seal reads persisted state after terminal
+(`hooks.ts:527`), `VerifiedSeal` takes a `state` prop (`verified-seal.tsx:26`), and
+`verification-status.tsx` renders all five states distinctly including nothing at all
+for `null`. Recorded in §7 so nobody redoes finished work.
+
+Dropped rather than moved: the SSE event/payload table (same unchecked-copy mistake as
+above) and the commit changelog (git history holds it).
+
 ### still open
 
-- `reports/INTEGRATION_CONTRACT.md` is **not yet merged** into `specification/api/`.
-  Its four UI-surface semantics — especially the honesty notes like "an empty
-  hydration preview is indistinguishable from a backend failure" — encode real
-  incidents and must survive the merge. Next commit; not blocking the frontend.
 - Durable version of the SSE rule: extend `sse_contract_drift.py` to also check the
   spec file, so a stale table fails the suite instead of relying on someone noticing.
+  Not done — the rule is currently prose in CLAUDE.md, which is exactly the weaker
+  thing the rule itself warns about.
+- Owner gate: `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md` (Presidio
+  has no Rust equivalent). Does not block Phase 0.
