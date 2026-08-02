@@ -18,6 +18,7 @@ vi.mock("@/lib/api/hooks", () => ({
 
 import { Composer } from "@/components/app/composer";
 import { ApiError } from "@/lib/api";
+import type { UsageSummary } from "@/lib/api/types";
 
 function noop() {}
 
@@ -135,6 +136,85 @@ describe("Composer — budgetExhausted", () => {
       "href",
       "/app/settings?tab=billing&action=upgrade",
     );
+  });
+});
+
+function usageWithDuration(totalMs: number): UsageSummary {
+  return {
+    periodStart: "2026-08-01",
+    periodEnd: "2026-08-31",
+    periodEndExclusive: true,
+    baseBudget: 1_000_000,
+    additionalCredits: 0,
+    budget: 1_000_000,
+    used: 10_000,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    byDay: [],
+    latency: {
+      inPeriod: 2,
+      timeToFirstMessageMs: { sampleSize: 2, excluded: 0, p50: 2000, p95: 2500 },
+      totalDurationMs: { sampleSize: 2, excluded: 0, p50: totalMs, p95: totalMs + 5000 },
+    },
+  };
+}
+
+describe("Composer — duration estimate", () => {
+  it("shows the estimate once there's a brief and account history to source it from", () => {
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        budgetUsage={usageWithDuration(4 * 60_000)}
+      />,
+    );
+    expect(screen.getByText(/Runs like this usually take about 4 minutes\./)).toBeInTheDocument();
+  });
+
+  it("says nothing when there's no latency history yet — never a fabricated number", () => {
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/Runs like this usually take/)).not.toBeInTheDocument();
+  });
+
+  it("stays quiet on an empty composer even with history available — not ambient chrome", () => {
+    render(
+      <Composer value="" onChange={noop} onSubmit={vi.fn()} budgetUsage={usageWithDuration(4 * 60_000)} />,
+    );
+    expect(screen.queryByText(/Runs like this usually take/)).not.toBeInTheDocument();
+  });
+
+  it("yields to the error message when both could show", () => {
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        budgetUsage={usageWithDuration(4 * 60_000)}
+        submitError="Something went wrong"
+      />,
+    );
+    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(screen.queryByText(/Runs like this usually take/)).not.toBeInTheDocument();
+  });
+
+  it("hides while a run is busy — the moment for this is before Send, not during", () => {
+    render(
+      <Composer
+        value="A long enough brief to pass validation"
+        onChange={noop}
+        onSubmit={vi.fn()}
+        budgetUsage={usageWithDuration(4 * 60_000)}
+        busy
+      />,
+    );
+    expect(screen.queryByText(/Runs like this usually take/)).not.toBeInTheDocument();
   });
 });
 

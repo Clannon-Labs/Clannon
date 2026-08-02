@@ -16,6 +16,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ACCEPTED_INPUT } from "@/lib/uploads";
 import { useAutoResize } from "@/lib/use-auto-resize";
 import { appConfig } from "@/config/app.config";
+import { formatDurationEstimate } from "@/lib/usage-forecast";
 import { cn, isFinePointer } from "@/lib/utils";
 
 /**
@@ -83,6 +84,7 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadTemplate?.token]);
 
+  const durationEstimate = formatDurationEstimate(budgetUsage);
   const tooShort = value.trim().length < appConfig.limits.briefMinChars;
   const admissionExhausted = submitError instanceof ApiError
     && submitError.status === 402
@@ -216,10 +218,20 @@ export function Composer({
           usage={budgetUsage}
           forced={budgetExhausted}
         />
+      ) : submitError || attach.error ? (
+        <p role="alert" className="mt-2 px-1 text-sm text-destructive">
+          {submitError instanceof ApiError ? submitError.message : submitError || attach.error}
+        </p>
       ) : (
-        (submitError || attach.error) && (
-          <p role="alert" className="mt-2 px-1 text-sm text-destructive">
-            {submitError instanceof ApiError ? submitError.message : submitError || attach.error}
+        // set expectations before Send, not just narrate progress after —
+        // sourced from the account's own recent runs (usage-forecast.ts),
+        // never shown while there's nothing to estimate from yet
+        !busy &&
+        !pending &&
+        value.trim().length > 0 &&
+        durationEstimate && (
+          <p className="mt-2 px-1 text-[12px] text-faint">
+            Runs like this usually take {durationEstimate}.
           </p>
         )
       )}

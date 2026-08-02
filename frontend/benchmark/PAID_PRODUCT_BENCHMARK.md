@@ -456,6 +456,60 @@ scoring rules warn against. Accessibility not re-scored: the new `Switch` is
 a real `role="switch"` with `aria-checked` and a labelled accessible name,
 but wasn't separately screen-reader-tested this pass.
 
+## Pass 10 — spend awareness: a duration estimate and a budget forecast, no score change claimed (2026-08-02)
+
+Second research pass this session, after run-completion notifications (Pass 9).
+Owner asked for more premium-vs-normal gaps; a fresh `Explore` audit (10 new
+questions, disjoint from the first pass) turned up ten candidates. The most
+consequential finding wasn't a UX gap at all: `backend/api/app.py:193-198` +
+`auth.py:177-190` show `POST /auth/signup` has zero invite/allowlist gating,
+contradicting root `CLAUDE.md`'s stated private-alpha model. Filed as
+`specification/api/requests/2026-08-02_signup-not-invite-gated.md`, HIGH
+priority, for the owner/backend to pick a contract (invite code / email
+allowlist / approval-gated login) — not frontend's call to make, and not
+something a client-side field could enforce anyway (the exact lesson the
+plan-tier bypass already taught).
+
+Also found, verifying before building: `GET /runs/archive` is listed in
+`ROUTES.md` but doesn't exist anywhere in `backend/api/*.py` — a real
+discrepancy in the route table, not a frontend gap. Filed as
+`2026-08-02_runs-archive-route-not-implemented.md` instead of building a
+history page against a route that would always be empty.
+
+**What shipped**: `GET /usage`'s real backend response has always included a
+`latency` block (p50/p95 duration samples — `backend/api/billing.py:263-277`)
+that the frontend never once read (`grep` across `types.ts`/`http.ts`/
+`mock.ts` — zero hits). Added the type, wired the mock to record real
+elapsed time per completed run (`mock.ts`'s `streamRun`, mirroring the
+backend's own percentile math), and built two small features from data
+that was already being fetched: a composer caption ("Runs like this usually
+take about 4 minutes") sourced from the account's own p50, and a budget
+forecast ("~N days left at this pace") in `usage-summary.tsx`, derived from
+the already-rendered daily-spend chart. Both degrade to nothing — never a
+fabricated `0` or an instant guess — when there isn't enough real history
+yet (`usage-forecast.ts`, `formatDurationEstimate`/`estimateDaysRemaining`).
+
+**No score change claimed, deliberately.** Both features are returning-user
+capabilities — they need the account's own run history to say anything at
+all, and stay silent otherwise. That means neither actually touches "Time to
+first value" (this dimension measures the first-ever signup-to-deliverable
+journey, and a brand-new account has no history to source an estimate from —
+checked this before scoring, not after). "Continuity and retention" is the
+closer fit conceptually, but the mock's seed data backing this pass's live
+verification was two data points, not a real usage history — thin grounds
+for a dimension move. Recording the capability honestly; a future pass with
+real accumulated usage (or real backend verification) is the right place to
+revisit whether this earns a score change.
+
+Verified: `tsc`/`eslint` clean, vitest 169/169 (18 new tests — pure
+duration/forecast-formatting logic, composer wiring across five states,
+usage-summary rendering, and a mock integration test proving `getUsage()`
+assembles real elapsed-time samples as runs actually complete, not just
+synthetic seed data). Live browser: logged into the mock demo account,
+confirmed the composer caption and the usage forecast both render with real
+seeded numbers (599k/6M used, two real daily-spend days → "about 18 days
+left"), zero console errors. `previews/2026-08-02_spend-awareness/`.
+
 ## 3. Hard gates
 
 Weighted score alone cannot hide critical failure.
@@ -475,7 +529,14 @@ Weighted score alone cannot hide critical failure.
 - First-run guidance demonstrates why project memory matters.
 - Every live-run state answers: what is happening, why, cost, control, and next step.
 - Delivered work supports review, source inspection, correction, refinement, sharing, and export.
-- Paid-plan differences are visible in workflow value, not only token counts and settings.
+- Paid-plan differences are visible in workflow value, not only token counts and
+  settings. **Verified PASS, 2026-08-02** — not just on the Billing tab: locked
+  wiki-tier fields disappear from project creation with a "not offered on your
+  plan" nudge (`new-project-dialog.tsx:39,137-139`), the Memory page shows a
+  locked-tier empty state per tier with a plans link (`memory/page.tsx:349,371-378`),
+  and locked model roles read "System managed" inline in the composer's own model
+  picker (`model-picker.tsx:194-198`). Recording this so a future session doesn't
+  re-flag it as an open gap.
 - Full browser E2E suite covers critical happy and failure paths.
 
 ### Gate for 95

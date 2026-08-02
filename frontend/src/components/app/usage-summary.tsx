@@ -1,4 +1,5 @@
 import type { UsageSummary } from "@/lib/api";
+import { estimateDaysRemaining } from "@/lib/usage-forecast";
 import { cn, formatTokens } from "@/lib/utils";
 
 const dayLabel = (date: string) =>
@@ -14,6 +15,7 @@ export function UsageSummaryPanel({ usage }: { usage: UsageSummary }) {
   const pct = usage.budget > 0
     ? Math.min(100, Math.round((usage.used / usage.budget) * 100))
     : 100;
+  const daysRemaining = estimateDaysRemaining(usage);
 
   return (
     <div className="flex flex-col gap-6">
@@ -27,6 +29,16 @@ export function UsageSummaryPanel({ usage }: { usage: UsageSummary }) {
             <span className="text-faint"> of {formatTokens(usage.budget)} tokens</span>
           </p>
         </div>
+
+        {daysRemaining !== null && (
+          // a naive linear projection over recent daily spend, not a promise —
+          // see usage-forecast.ts for why it needs at least two days of real
+          // spend before it says anything
+          <p className="mt-1.5 text-[12px] text-muted-foreground">
+            At your current pace, about <span className="tabular font-medium text-foreground">{daysRemaining}</span>{" "}
+            {daysRemaining === 1 ? "day" : "days"} left this period.
+          </p>
+        )}
 
         {usage.additionalCredits > 0 && (
           <p className="mt-2 text-[12px] text-muted-foreground tabular">

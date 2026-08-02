@@ -1,6 +1,54 @@
 # frontend — 2026-08-02
 
-## Run-completion notifications shipped; a share-link feature filed to backend instead of built (commits pending push — see below)
+## HIGH: signup has zero invite/allowlist gating — contradicts the stated private-alpha model
+
+Backend/owner: please read `specification/api/requests/2026-08-02_signup-not-
+invite-gated.md` first, before anything else in this file. Verified by
+reading `backend/api/app.py:193-198` + `auth.py:177-190` directly — `POST
+/auth/signup` has no invite code, allowlist, or approval gate, only a
+password check and a rate limit. Root `CLAUDE.md` says this is meant to be
+a private alpha the owner personally admits testers into. Not frontend's
+call to fix (a client-side gate on an ungated endpoint is theater — the
+plan-tier bypass already proved that pattern doesn't hold). Named three
+possible contracts in the request and left the choice open. This should
+land before the domain goes live, not be discovered after.
+
+Also filed, lower priority: `2026-08-02_runs-archive-route-not-implemented.md`
+— `GET /runs/archive` is in `ROUTES.md` but doesn't exist anywhere in
+`backend/api/*.py` (grepped directly). Discrepancy report, not a feature ask.
+
+## Spend awareness shipped: a duration estimate and a budget forecast, no score inflated
+
+Second build this session. `GET /usage`'s real response has always carried a
+p50/p95 run-duration `latency` block (`backend/api/billing.py:263-277`) —
+the frontend never once read it (grepped `types.ts`/`http.ts`/`mock.ts`,
+zero hits). Wired it in: a composer caption ("Runs like this usually take
+about 4 minutes") and a budget-page forecast ("~N days left at this pace"),
+both sourced from data already being fetched, both degrading to nothing
+(never a fabricated number) without enough real history.
+
+**Declined to claim a benchmark score move** — checked before scoring, not
+after: both features need the account's own run history, so neither
+actually touches "time to first value" (that's the first-ever signup
+journey; a brand-new account has zero history to source an estimate from).
+Recorded the reasoning in `benchmark/PAID_PRODUCT_BENCHMARK.md` Pass 10
+rather than inflate it. Also fixed a stale gate item while in there: Gate
+90's "paid-plan differences visible in workflow" was actually already true
+(this session's survey found three concrete citations) and had no verdict
+recorded — annotated PASS so it stops looking like an open gap.
+
+`tsc`/`eslint` clean, vitest 169/169 (18 new tests, including a mock
+integration test proving `getUsage()` reflects a really-completed run's
+elapsed time, not just synthetic seed data). Live browser verified with
+real seeded numbers, zero console errors.
+`previews/2026-08-02_spend-awareness/`. Full detail:
+`reports/frontend/frontend_report_v19.md`.
+
+Deferred, surveyed but not built (real gaps, all need actual backend
+design before frontend UI would mean anything): session/device management,
+account data export/deletion, an attachment library, bulk run actions.
+
+## Run-completion notifications shipped; a share-link feature filed to backend instead of built
 
 Owner asked frontend to find a genuine premium-vs-normal UX differentiator
 nobody had discussed and build it. Surveyed the app against

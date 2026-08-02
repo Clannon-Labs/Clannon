@@ -60,6 +60,21 @@ const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${++cou
 // Palette keys a new project cycles through (the UI maps these to a dot color).
 const PROJECT_COLORS = ["moss", "clay", "indigo", "amber", "rose", "slate"];
 
+/** Mirrors `backend/api/billing.py::_percentile` exactly (linear
+ *  interpolation between ranks) so the mock's latency numbers use the same
+ *  math the real backend does, not an approximation of it. `sorted` must
+ *  already be ascending. `null` on an empty sample — never `0`. */
+function percentile(sorted: number[], pct: number): number | null {
+  if (sorted.length === 0) return null;
+  if (sorted.length === 1) return sorted[0];
+  const rank = (sorted.length - 1) * pct;
+  const lo = Math.floor(rank);
+  const hi = Math.min(lo + 1, sorted.length - 1);
+  if (lo === hi) return sorted[lo];
+  const frac = rank - lo;
+  return Math.round(sorted[lo] * (1 - frac) + sorted[hi] * frac);
+}
+
 /** Map a picked file to its input modality, mirroring the backend's labels. */
 function modalityOf(file: File): string {
   if (file.type.startsWith("image/")) return "image";
@@ -86,6 +101,17 @@ export class MockClient implements ClannonClient {
   private models: LayerModelConfig[] = structuredClone(SEED_MODEL_CONFIG);
   /** Run ids the user asked to stop — the live stream notices and unwinds. */
   private cancelRequested = new Set<string>();
+  /** Real wall-clock elapsed ms, recorded as runs actually complete this
+   *  session — mirrors `backend/api/billing.py::usage_summary`'s two
+   *  independent samples. Seeded with one plausible value on a demo account
+   *  (matching `buildRunScript`'s own ~35s pacing) so a first-time viewer of
+   *  a returning account sees a real-feeling estimate immediately, not an
+   *  empty state; genuinely empty on a fresh signup, same as the real
+   *  backend would be for an account with zero history. */
+  private durationSamples: { totalMs: number[]; firstMessageMs: number[] } = {
+    totalMs: [],
+    firstMessageMs: [],
+  };
 
   constructor() {
     // A brand-new instance is constructed on every full page load (this is a
@@ -112,6 +138,8 @@ export class MockClient implements ClannonClient {
     this.memory = structuredClone(SEED_MEMORY);
     this.additionalCredits = 0;
     this.checkouts = [];
+    // synthetic, not measured — see the field comment above
+    this.durationSamples = { totalMs: [34_500, 31_200], firstMessageMs: [2_100, 1_800] };
   }
 
   /** First-user story: nothing yet. Mirrors seedDemoData() for the empty case
@@ -123,6 +151,7 @@ export class MockClient implements ClannonClient {
     this.memory = [];
     this.additionalCredits = 0;
     this.checkouts = [];
+    this.durationSamples = { totalMs: [], firstMessageMs: [] };
   }
 
   /* ---------- remote config (mock echoes the local defaults) ---------- */
@@ -520,10 +549,19 @@ export class MockClient implements ClannonClient {
       return { type: "status", status: "cancelled" };
     };
 
+    // real wall-clock elapsed time — feeds the usage/latency estimate the
+    // composer shows before Send, same two samples `usage_summary()` computes
+    // server-side (backend/api/billing.py), just measured live instead of
+    // read back from stored timestamps
+    const runStartedAt = Date.now();
+    let firstMessageRecorded = false;
+    const recordTotal = () => this.durationSamples.totalMs.push(Date.now() - runStartedAt);
+
     for (const step of buildRunScript()) {
       await sleep(step.delay, signal);
       const stopped = stopIfCancelled();
       if (stopped) {
+        recordTotal();
         yield stopped;
         return;
       }
@@ -569,10 +607,15 @@ export class MockClient implements ClannonClient {
           for (let i = 0; i < words.length; i += CHUNK_W) {
             const chunk = words.slice(i, i + CHUNK_W).join("");
             run.message = (run.message ?? "") + chunk;
+            if (!firstMessageRecorded) {
+              this.durationSamples.firstMessageMs.push(Date.now() - runStartedAt);
+              firstMessageRecorded = true;
+            }
             yield { type: "message_delta", text: chunk };
             await sleep(55, signal);
             const stopMid = stopIfCancelled();
             if (stopMid) {
+              recordTotal();
               yield stopMid;
               return;
             }
@@ -590,6 +633,7 @@ export class MockClient implements ClannonClient {
     if (run.brief.toLowerCase().includes("force a blocked output for e2e")) {
       run.status = "blocked";
       run.blockStage = "filter";
+      recordTotal();
       yield { type: "status", status: "blocked" };
       return;
     }
@@ -602,6 +646,7 @@ export class MockClient implements ClannonClient {
     // partial-verification states are tested").
     if (run.brief.toLowerCase().includes("force a failed run for e2e")) {
       run.status = "failed";
+      recordTotal();
       yield { type: "status", status: "failed" };
       return;
     }
@@ -619,6 +664,7 @@ export class MockClient implements ClannonClient {
       await sleep(34, signal);
       const stopped = stopIfCancelled();
       if (stopped) {
+        recordTotal();
         yield stopped;
         return;
       }
@@ -654,6 +700,7 @@ export class MockClient implements ClannonClient {
       run.completionState = "partial";
       run.completionReason = "rate_limit";
     }
+    recordTotal();
     yield { type: "report_done" };
     yield { type: "status", status: "delivered" };
 
@@ -886,6 +933,21 @@ export class MockClient implements ClannonClient {
       cacheReadTokens: Math.round(used * 0.12),
       cacheWriteTokens: Math.round(used * 0.03),
       byDay,
+      latency: {
+        inPeriod: runs.length,
+        timeToFirstMessageMs: {
+          sampleSize: this.durationSamples.firstMessageMs.length,
+          excluded: runs.length - this.durationSamples.firstMessageMs.length,
+          p50: percentile([...this.durationSamples.firstMessageMs].sort((a, b) => a - b), 0.5),
+          p95: percentile([...this.durationSamples.firstMessageMs].sort((a, b) => a - b), 0.95),
+        },
+        totalDurationMs: {
+          sampleSize: this.durationSamples.totalMs.length,
+          excluded: runs.length - this.durationSamples.totalMs.length,
+          p50: percentile([...this.durationSamples.totalMs].sort((a, b) => a - b), 0.5),
+          p95: percentile([...this.durationSamples.totalMs].sort((a, b) => a - b), 0.95),
+        },
+      },
     };
   }
 

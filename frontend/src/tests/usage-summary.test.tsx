@@ -47,4 +47,27 @@ describe("UsageSummaryPanel", () => {
     expect(screen.getByText(/per-call hard stops are not live/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/budget enforcement is atomic|stop cleanly/i);
   });
+
+  it("says nothing about days remaining with fewer than two completed days of spend", () => {
+    // the fixture above has one non-today day with real spend — below the
+    // forecast's own minimum, so it must stay silent rather than guess
+    render(<UsageSummaryPanel usage={usage} />);
+    expect(screen.queryByText(/left this period/)).not.toBeInTheDocument();
+  });
+
+  it("projects days remaining once there's enough real history", () => {
+    const withHistory: UsageSummary = {
+      ...usage,
+      used: 200_000,
+      budget: 1_000_000,
+      byDay: [
+        { date: "2026-07-30", tokens: 100_000 },
+        { date: "2026-07-31", tokens: 100_000 },
+        { date: "2026-08-01", tokens: 0 }, // today — excluded as partial
+      ],
+    };
+    render(<UsageSummaryPanel usage={withHistory} />);
+    expect(screen.getByText(/left this period/)).toBeInTheDocument();
+    expect(screen.getByText("8")).toBeInTheDocument();
+  });
 });

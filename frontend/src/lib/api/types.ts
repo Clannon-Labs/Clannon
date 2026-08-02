@@ -250,6 +250,21 @@ export interface UsageSummary {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   byDay: UsageDay[];
+  /** How long recent runs actually took, this period. `p50`/`p95` are
+   *  `null` on an empty sample — never `0`, an empty sample is not a fast
+   *  one. Absent entirely on accounts old enough to predate this field. */
+  latency?: {
+    inPeriod: number;
+    timeToFirstMessageMs: UsageLatencySample;
+    totalDurationMs: UsageLatencySample;
+  };
+}
+
+export interface UsageLatencySample {
+  sampleSize: number;
+  excluded: number;
+  p50: number | null;
+  p95: number | null;
 }
 
 /**
