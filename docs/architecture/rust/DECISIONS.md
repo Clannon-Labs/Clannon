@@ -78,6 +78,26 @@ answers by itself, and it produced two corrections to the original sketch:
 "Touches a model" is the wrong test. "Calls a provider over the network" is the right
 one.
 
+### D3a — the rule needs a second clause (found 2026-08-02, pending owner confirmation)
+
+Crate research (`RUST_IDIOMS_AND_CRATES.md` Part 3) found the rule as written does not
+survive contact with `security/`. **Presidio has no Rust equivalent and will not get
+one.** PII detection is `presidio-analyzer` over spaCy's `en_core_web_lg` — local ML
+inference, no network call — so the rule as written says Rust, and that is impossible.
+
+**Refined rule:** *does it need a network call to a provider, **or** a Python-only ML
+ecosystem? → Python. Everything else → Rust.*
+
+This keeps embeddings in Rust for the right reason (`fastembed-rs` genuinely exists)
+and puts Presidio in Python for the right reason (nothing equivalent exists), instead
+of a rule that quietly fails on the second subsystem it meets.
+
+**Consequence:** the Python side is not purely a model-call worker — it is a
+*Python-ecosystem worker* with two capabilities. `PROTOCOL.md` gains a PII endpoint
+when `security/` is ported (`BUILD_ORDER.md` Phase 3, item 3), not before. Same
+question will need answering for `detect-secrets`, `faster-whisper`, and
+`RestrictedPython` (which stays Python by definition — it sandboxes Python).
+
 ---
 
 ## D4 — HTTP/JSON, not gRPC, for v0

@@ -14,7 +14,8 @@ Version `1.0` · HTTP/1.1 · JSON · Rust is the client, Python is the server.
 | Reachability | public (frontend) | **internal network only** |
 | Auth | cookies, users | **none** — protected by unreachability |
 
-**Rule:** does it make a network call to a model provider? No → Rust.
+**Rule:** does it need a network call to a model provider, or a Python-only ML
+ecosystem? → Python. Everything else → Rust. (`DECISIONS.md` D3 + D3a.)
 
 | Capability | Side | Note |
 |---|---|---|

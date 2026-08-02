@@ -221,9 +221,14 @@ pure computation) still stands and this follows it.
 
 ## 5. Needs the owner, not us
 
-**One open gate:** approve the document structure for the Rust contract —
-`proposals/to-owner/2026-08-02_rust-contract-document-structure.md`. Owner asked to
-approve the structure before any of it is written, so nothing is written until they do.
+**One open gate:** confirm the boundary rule's second clause —
+`proposals/to-owner/2026-08-02_boundary-rule-second-clause.md`. Presidio has no Rust
+equivalent, so the one-clause rule says "port it" and that is impossible. Carried in
+`rust/DECISIONS.md` as D3a marked *pending owner confirmation*, so nothing is silently
+assumed. Does not block Phase 0.
+
+Closed 2026-08-02: contract ratification (all three ruled) and document structure
+(approved; the five-doc set is written).
 
 Ruled 2026-08-02 (contract ratification, now archived): frontend contract does **not**
 change but the existing 33-route API must be specified before the owner can build
