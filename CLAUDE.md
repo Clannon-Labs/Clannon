@@ -14,10 +14,23 @@ DIRECTORY UNDER ANY CONDITIONS."*
   not a typo fix, not a `Cargo.toml`.
 - **Never dispatch a worker into it.** `crew.sh` refuses a `--dir` that resolves there;
   that guard is enforcement, not decoration — do not route around it.
-- **Do not commit it.** It is untracked, and whether it becomes tracked is the owner's
-  decision, not a tidiness call.
+- **Do not commit anything into it.** The owner tracks what they choose to (`README.md`
+  is on `main`; the Cargo crates live on their own branch). What is tracked there is
+  their decision, never a tidiness call of yours.
 - You may **read** it when you genuinely need to (answering an architecture question,
   checking the contract holds). Reading is not editing.
+
+**The owner works from a SEPARATE machine profile and a separate clone** (2026-08-09).
+Consequences you will otherwise misread:
+
+- **Rust commits on `main` or any branch are theirs, not an agent's.** Do not "correct"
+  them, and do not assume a worker went rogue.
+- **They do not see `proposals/`, `drafts/` or `achievements/`** — those are gitignored
+  and never leave this disk. Never wait on a `proposals/to-owner/` reply. When something
+  genuinely needs them, it has to reach a TRACKED path: `comms/<today>/`,
+  `specification/`, or a doc.
+- Their branches are their own. Ours are ours. Coordination is through the remote, the
+  way it would be between two people.
 
 **You keep building the Python backend exactly as before.** The rewrite is not a reason
 to slow down, freeze a surface, or defer work — the owner said so explicitly: *"Python

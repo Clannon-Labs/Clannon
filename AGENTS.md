@@ -109,6 +109,10 @@ Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent
 - You keep building Python exactly as before. Owner: "Python backend can be kept developing
   to quickly build the prototype and validate the idea." Rewrite is NOT a reason to slow
   down, freeze a surface, or defer work.
+- Owner works from a SEPARATE profile + separate clone (2026-08-09). Rust commits on any
+  branch are THEIRS, not a rogue agent. They do NOT see `proposals/`, `drafts/`,
+  `achievements/` (gitignored, never leave this disk) — never wait on a to-owner reply;
+  reach them via a TRACKED path (`comms/<today>/`, `specification/`, a doc).
 
 Rust — agents write Python, owner writes the Rust:
 - ALL agent work → Python. You do not write Rust or port anything to Rust.

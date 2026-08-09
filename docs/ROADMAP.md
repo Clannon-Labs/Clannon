@@ -226,9 +226,18 @@ pure computation) still stands and this follows it.
 
 ## 5. Needs the owner, not us
 
-**Two open gates.**
+**One open gate.**
 
-**1. Signup is not gated, and we call this a private alpha** —
+**RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
+recommended: email + optional note → verify inbox → owner approves individually.
+Built and shipped (`97dfdb7`). Remaining is owner-side infrastructure, not a decision:
+a Resend account, `RESEND_API_KEY`, and `CLANNON_MAIL_FROM` on a domain with SPF/DKIM.
+`LogMailer` refuses to start in production until then. Superseded text below kept only
+for the finding that produced it:
+
+<details><summary>original gate (resolved)</summary>
+
+**Signup is not gated, and we call this a private alpha** —
 `proposals/to-owner/2026-08-09_signup-is-not-gated-for-private-alpha.md`. `POST
 /auth/signup` has no invite code, allowlist, or approval step (`api/app.py:193`,
 `api/auth.py:177`); anyone reaching the URL gets a full account. Found by the frontend,
@@ -236,7 +245,9 @@ verified by backend. Owner picks one of three shapes; recommendation is the emai
 allowlist. **Blocks going live on the domain**, nothing else. Enforcement and tests are
 engineering's once the shape is chosen.
 
-**2.** Confirm the boundary rule's second clause —
+</details>
+
+**Still open:** confirm the boundary rule's second clause —
 `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md`. Presidio has no Rust
 equivalent, so the one-clause rule says "port it" and that is impossible. Carried in
 `rust/DECISIONS.md` as D3a marked *pending owner confirmation*, so nothing is silently
