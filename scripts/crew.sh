@@ -319,6 +319,15 @@ cmd_run() {
       # catches the typo this check exists for, without refusing new files.
       [ -e "$d" ] || [ -d "$(dirname "$d")" ] \
         || die "--dir does not exist, and neither does its parent: $d"
+      # backend-rust/ is the OWNER's tree — they are hand-writing the Rust rewrite
+      # there and asked, in that directory's own README, that nothing else touch it.
+      # Enforced here rather than left as a note: a note is what an agent reads AFTER
+      # editing. The existing-parent relaxation directly above widened what --dir
+      # accepts, which makes this guard worth more, not less.
+      case "$d" in
+        "$ROOT"/backend-rust|"$ROOT"/backend-rust/*)
+          die "backend-rust/ is the owner's tree — never dispatch a worker into it" ;;
+      esac
       owned+=("$d")
     done
     # cwd must be a directory that exists — the first path may be a yet-to-be-created

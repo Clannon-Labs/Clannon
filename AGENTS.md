@@ -98,16 +98,29 @@ Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent
   `specification/` = fourth unchecked source, rots while suite stays green. First draft
   listed 7 event types; real set is 10. Link, don't restate.
 
-Rust — V1 ships in Python, Rust is an experiment:
-- NEW work → Python. Including new infra. V1 unfinished, no second toolchain tax yet.
+`backend-rust/` — OWNER'S TREE, NEVER TOUCH (owner instruction, 2026-08-09):
+- Owner hand-writes the Rust rewrite there. Their README: "DONOT EVEN THINK OF UPDATING
+  ANYTHING IN THIS DIRECTORY UNDER ANY CONDITIONS."
+- Never create/edit/move/delete anything under it. Not a README, not a typo, not a Cargo.toml.
+- Never dispatch a worker into it. `crew.sh` refuses `--dir` resolving there — enforcement,
+  not a note. Don't route around it.
+- Don't commit it. Untracked; whether it becomes tracked is owner's call.
+- READING it is fine. Reading != editing.
+- You keep building Python exactly as before. Owner: "Python backend can be kept developing
+  to quickly build the prototype and validate the idea." Rewrite is NOT a reason to slow
+  down, freeze a surface, or defer work.
+
+Rust — agents write Python, owner writes the Rust:
+- ALL agent work → Python. You do not write Rust or port anything to Rust.
 - Modularity non-negotiable anyway (LAW 6): one door per dependency, ports for
   subsystems, so ANY part could be swapped. Being able to != doing it.
 - Rust only on already-built working components, 1:1 alongside live Python.
   Parallel implementation NEEDS an existing impl to validate against — that's why
   new code is the wrong target.
-- Nothing is Rust yet. Owner settled boundary: separate process + versioned API
-  for stateful systems; FFI only for bounded pure computation when measured.
-  Track B is deferred while Python V1 advances.
+- Status 2026-08-09: owner reversed the 2026-07-28 deferral on 08-02 and created
+  `backend-rust/`. Design docs `specification/rust/`. Boundary ruling still holds for
+  anything split out: separate process + versioned API; FFI only for bounded pure
+  computation when measured.
 - New component genuinely needs Rust? Propose it with a specific argument, not default.
 
 Rust ports of EXISTING code — `docs/architecture/RUST_MIGRATION_STRATEGY.md` (canonical):

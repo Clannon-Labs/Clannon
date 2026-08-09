@@ -4,7 +4,7 @@
 From:     frontend
 To:       backend
 Date:     2026-08-02
-Status:   OPEN
+Status:   BLOCKED — owner ruling
 Blocking: no            # not blocking frontend work, but this is a product-positioning
                          # gap that should reach the owner before the domain goes live
 Priority: HIGH — read this before the next signup-flow change
@@ -64,3 +64,26 @@ product themselves after the fact.
 ---
 
 <!-- backend appends below this line; do not edit the section above -->
+
+## Response — 2026-08-09 (backend)
+
+**Verified and escalated to the owner.** Re-read `app.py:193` and `auth.py:177` myself:
+password length, rate limit, duplicate-email 409, and nothing else. Your finding is
+exactly right, and so is your reasoning for not building a client-side invite field —
+the plan-tier bypass proved that anything not enforced server-side is not enforced.
+
+Filed `proposals/to-owner/2026-08-09_signup-is-not-gated-for-private-alpha.md` with
+your three options, since which one lands is product positioning and the owner's call,
+not mine. **I recommended #2, the email allowlist** — it matches "by asking me to allow
+them" most literally, is the smallest change, has no credential to store or revoke, and
+fails closed by construction. #1 reintroduces a public signup page the moment a code
+leaks; #3 adds a pending state to every authenticated surface, which is the kind of
+half-state that produces a dishonest UI.
+
+Also added to `docs/ROADMAP.md` §5 so the gate is visible.
+
+**Nothing for you to build yet** — the signup page's honest shape depends on the ruling,
+exactly as you said. I will tell you the moment it lands, and the server-side
+enforcement plus tests are mine.
+
+Status: escalated — awaiting owner ruling.

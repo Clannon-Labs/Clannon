@@ -4,6 +4,26 @@
 
 > Small note: We are moving towards private alpha deployment on a real domain, so make product so that a tester i hire can test it and not find any vulnerabilities and should want to use it daily in their daily life by asking me to allow them (cuz it would be private alpha then)
 
+## 🚫 `backend-rust/` IS THE OWNER'S TREE — NEVER TOUCH IT (owner instruction, 2026-08-09)
+
+**The owner is hand-writing the Rust rewrite in `backend-rust/` themselves.** Their
+words, in that directory's own README: *"DONOT EVEN THINK OF UPDATING ANYTHING IN THIS
+DIRECTORY UNDER ANY CONDITIONS."*
+
+- **Never create, edit, move, or delete anything under `backend-rust/`.** Not a README,
+  not a typo fix, not a `Cargo.toml`.
+- **Never dispatch a worker into it.** `crew.sh` refuses a `--dir` that resolves there;
+  that guard is enforcement, not decoration — do not route around it.
+- **Do not commit it.** It is untracked, and whether it becomes tracked is the owner's
+  decision, not a tidiness call.
+- You may **read** it when you genuinely need to (answering an architecture question,
+  checking the contract holds). Reading is not editing.
+
+**You keep building the Python backend exactly as before.** The rewrite is not a reason
+to slow down, freeze a surface, or defer work — the owner said so explicitly: *"Python
+backend can be kept developing to quickly build the prototype and validate the idea."*
+`specification/` is what keeps the two honest with each other.
+
 ## 🔍 READ THE CODE BEFORE YOU CLAIM IT OR CHANGE IT (owner instruction, 2026-07-31)
 
 **Never state what the codebase does, or doesn't do, from memory. Open it and look.**
@@ -83,29 +103,31 @@ explicitly FLAGGED to the owner, never silently left.** The full, detailed const
 Before every commit, run the seven self-checks in `LAW/README.md`. If an answer is "no," fix it or
 flag it — never land-and-hope.
 
-## 🦀 RUST — V1 ships in Python; Rust is an experiment on code that already works
+## 🦀 RUST — the owner writes it, in their own tree; agents write Python
 
-**New work is written in Python.** Including new infrastructure. V1 is not done and
-has never faced a user; a second toolchain per new component is a tax we don't pay yet.
+**All agent work is written in Python.** Including new infrastructure. The Rust rewrite
+lives in `backend-rust/` and is the owner's, by hand — see the prohibition at the top of
+this file. You do not write Rust, port anything to Rust, or pause Python work for it.
 
 **Modularity is non-negotiable regardless (LAW 6).** Every dependency behind one door,
 every subsystem behind a `foundation/contracts/` port — so any part *could* be swapped
-for another language. The point is being **able** to, not doing it.
+for another language. That work stands on its own merits and is what makes the rewrite
+possible; it is not "helping with the Rust."
 
-**Rust experiments target already-built, working components only** — written 1:1
-alongside the Python, which stays live. Parallel implementation *requires* an existing
-implementation to validate against, which is exactly why new code is the wrong target.
-Process: **`docs/architecture/RUST_MIGRATION_STRATEGY.md`** (canonical).
+**The contract is what keeps the two honest.** `specification/` states what any
+implementation must be true to, which is why it exists at the root rather than in
+`docs/`. Keep it accurate when you change the Python surface — that is the real
+obligation the rewrite places on you, and the only one.
 
-**Nothing is Rust yet.** Owner settled the boundary discussion on 2026-07-28:
-stateful/system components default to a separate supervised process with a
-versioned API; FFI is reserved for bounded pure computation where profiling
-justifies it. Track B is deferred while Python V1 advances. First candidate
-remains the Redis budget broker. `foundation/` is LAST (209 in-process
-importers). Revisit "new code in Rust" after V1 ships.
+**Status (2026-08-09):** owner reversed the 2026-07-28 deferral on 2026-08-02 and has
+now created `backend-rust/`. Design docs: `specification/rust/`. The earlier boundary
+ruling still holds for anything that *would* be split out — separate supervised process
+with a versioned API; FFI only for bounded pure computation where profiling justifies
+it.
 
 If a new component genuinely needs Rust-level guarantees Python can't give, that's a
-**proposal with a specific argument** — never a default.
+**proposal with a specific argument** — never a default, and never an agent picking up
+the rewrite.
 
 ## 🏆 `achievements/` — REAL OUTPUT FROM THE RUNNING PRODUCT (owner instruction, 2026-08-01)
 

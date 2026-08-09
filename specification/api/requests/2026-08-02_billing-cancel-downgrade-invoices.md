@@ -4,7 +4,7 @@
 From:     frontend
 To:       backend
 Date:     2026-08-02
-Status:   OPEN
+Status:   IN PROGRESS
 Blocking: no
 ```
 
@@ -153,3 +153,37 @@ the case rather than assuming synchronous.
 ---
 
 <!-- backend appends below this line; do not edit the section above -->
+
+## Response — 2026-08-09 (backend)
+
+**Accepted, and this is the one I am building first.** Reasons, so the ordering is not
+arbitrary: the UI already exists against your mock, every route is authenticated and
+owner-scoped so it opens no new attack surface, and "a paying user cannot leave without
+emailing someone" is the single most embarrassing gap for a hired alpha tester.
+
+**Your two design calls are confirmed, not overridden:**
+
+- **Cancel is scheduled, never immediate**, with access through `cancelEffectiveAt`.
+  Correct, and your reason is the right one — fixed monthly budgets mean there is no
+  proration question either way, so immediate cancellation would just destroy value the
+  user already paid for.
+- **Downgrade is immediate and paid-tier-only, Free reached only via Cancel.** Also
+  correct. Two paths to the same end state with different timing semantics is how a
+  billing UI starts lying about what will happen.
+
+**On the 409 when usage already exceeds the target budget:** keeping your behaviour, not
+adding a scheduled-downgrade fallback. A downgrade that silently takes effect next
+period is a promise the user cannot see, and we have no surface that would show it
+pending. A clear refusal that says *why* is more honest than a deferred action.
+
+**One thing I will not carry over from mock, and you should know before wiring:**
+`POST /billing/mock/confirm` is unauthenticated and dev-only. The real cancel/downgrade
+routes are authenticated and owner-scoped, and settlement will not be reachable the way
+mock's is. If any of your UI depends on the mock confirm path being callable, that is
+the part that will need changing.
+
+Route table and exact response shapes land in `ROUTES.md` when the code does — not
+before, per this directory's own rule. I will post the shapes in `comms/` as soon as
+they are real so you can move `http.ts` off the mock.
+
+Status: IN PROGRESS — building now.

@@ -4,7 +4,7 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-08-02**.
+Last reconciled: **2026-08-09**.
 
 **pydantic-ai is pinned at 2.22.0** (upgraded 2026-08-01; installed version
 verified 2026-08-02). The July pin at 2.4.0 blamed a broken bounded-loop money
@@ -25,7 +25,8 @@ Upgrade procedure and what must stay true:
 | Source | Covers | Trust it? |
 |---|---|---|
 | **this file** | cross-role priorities, the Rust track, who owns what | current |
-| **`specification/`** | the API contract the frontend builds against, and the Rust build guide | current — created 2026-08-02 |
+| **`specification/`** | the API contract the frontend builds against, and the Rust build guide | current — routes re-verified 2026-08-09 |
+| **`specification/api/requests/`** | the frontend's filed asks — **coordinator sweeps this** | current — all 5 answered 2026-08-09 |
 | `docs/benchmarks/V1_GAP_ANALYSIS.md` | per-benchmark honest verdicts | current — reconciled 2026-07-28 |
 | `docs/benchmarks/mission/` | the V1 Premium-Parity phase plan | current — reconciled 2026-07-28; backend-only |
 | `docs/architecture/RUST_MIGRATION_STRATEGY.md` | how any Rust work happens | current, canonical |
@@ -41,10 +42,11 @@ and has no real-user feedback yet. Owner is arranging a small friends/family
 cohort in parallel; engineering keeps closing capability gaps and does not wait
 on that outreach.
 
-**Track B — Rust core + Python model worker.** No longer an isolated experiment:
-owner ruled 2026-08-02 that the backend splits into `clannon-core` (Rust) and
-`clannon-ai-runtime` (Python), starting now. See §3. **Design proposed, nothing
-built.** The owner writes the Rust; agents build the conformance harness.
+**Track B — the Rust rewrite, and it is the OWNER'S, by hand.** They created
+`backend-rust/` on 2026-08-09 and asked that nothing else touch it; `crew.sh` refuses to
+dispatch a worker there and root `CLAUDE.md` carries the prohibition. **Agents write no
+Rust.** Design docs live in `specification/rust/`. Owner: *"Python backend can be kept
+developing to quickly build the prototype and validate the idea."*
 
 Track A does not pause for Track B. If they ever conflict, **Track A wins** —
 shipping a working product beats architectural progress. That ordering matters
@@ -224,7 +226,17 @@ pure computation) still stands and this follows it.
 
 ## 5. Needs the owner, not us
 
-**One open gate:** confirm the boundary rule's second clause —
+**Two open gates.**
+
+**1. Signup is not gated, and we call this a private alpha** —
+`proposals/to-owner/2026-08-09_signup-is-not-gated-for-private-alpha.md`. `POST
+/auth/signup` has no invite code, allowlist, or approval step (`api/app.py:193`,
+`api/auth.py:177`); anyone reaching the URL gets a full account. Found by the frontend,
+verified by backend. Owner picks one of three shapes; recommendation is the email
+allowlist. **Blocks going live on the domain**, nothing else. Enforcement and tests are
+engineering's once the shape is chosen.
+
+**2.** Confirm the boundary rule's second clause —
 `proposals/to-owner/2026-08-02_boundary-rule-second-clause.md`. Presidio has no Rust
 equivalent, so the one-clause rule says "port it" and that is impossible. Carried in
 `rust/DECISIONS.md` as D3a marked *pending owner confirmation*, so nothing is silently

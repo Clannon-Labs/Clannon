@@ -7,13 +7,18 @@ This is reference, not rationale — the "why" lives in [`../rust/DECISIONS.md`]
 Need a route that is not here? File it in [`requests/`](requests/); do not add it to
 this table yourself.
 
-**Verified against the code 2026-08-02:** `backend/api/app.py` (33 routes),
-`billing.py` (4), `run_revision.py` (1). Where this file and the code disagree, the
-code wins and this file is the bug — say so rather than building to the prose.
+**Verified 2026-08-09 by enumerating the live FastAPI app**, not by reading source:
+32 on `app.py`, 5 on `billing.py`'s router, 1 on `run_revision.py`'s. Where this file
+and the code disagree, the code wins and this file is the bug — say so rather than
+building to the prose.
 
-> **Correction to an earlier count:** the structure proposal said 33 routes. It is
-> **38** — deduplicating by path lost the routes that share a path with a different
-> method (`GET`/`POST /memory`, `GET`/`PUT /settings/models`, and others).
+> **The 2026-08-02 "verified" claim was false**, and the frontend caught it by applying
+> exactly the rule in the line above. `GET /runs/archive` was listed and has never
+> existed. Re-verified the honest way this time: `app.routes` alone is **not** the
+> answer — this FastAPI version stores each `include_router` as one live
+> `_IncludedRouter` object, so `/usage`, `/billing/*` and `/runs/{id}/revise` are
+> invisible unless you walk into it. Counting `app.routes` gives 38 entries that are
+> the wrong 38.
 
 ## 0. Rules that apply to every route
 
@@ -77,7 +82,16 @@ code wins and this file is the bug — say so rather than building to the prose.
 | POST | `/runs/{id}/followup` | yes | Continue the conversation. |
 | POST | `/runs/{id}/revise` | yes | Edit a turn **destructively**. See §4. |
 | POST | `/runs/{id}/feedback` | yes | `{rating: "up"\|"down"\|null, comment?}` → **204** |
-| GET | `/runs/archive` | yes | Archived runs. |
+
+> **`GET /runs/archive` was listed here and does not exist.** Removed 2026-08-09 after
+> the frontend filed `requests/2026-08-02_runs-archive-route-not-implemented.md`. There
+> is no archive route and no archive concept in the code.
+>
+> **The hazard worth keeping:** it did not 404. `/runs/archive` matches
+> `GET /runs/{run_id}` with `run_id == "archive"`, so it returned 401 unauthenticated
+> and a non-disclosing 404 once authenticated — indistinguishable from a run that does
+> not exist. **Any literal segment added under `/runs/` collides the same silent way.**
+> A new one must be declared *before* `/runs/{run_id}` or it will never be reached.
 
 ### Memory — 6
 

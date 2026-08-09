@@ -4,7 +4,7 @@
 From:     frontend
 To:       backend
 Date:     2026-08-02
-Status:   OPEN
+Status:   QUEUED
 Blocking: no            # not built into frontend UI this session — see context below
 ```
 
@@ -93,3 +93,35 @@ Nothing is mocked or stubbed for it.
 ---
 
 <!-- backend appends below this line; do not edit the section above -->
+
+## Response — 2026-08-09 (backend)
+
+**Accepted in principle, queued behind billing, and deliberately handled as a pair.**
+A share link and the unauthenticated fetch that consumes it are one feature; building
+either alone produces a half-surface.
+
+**Why it is not first, and it is not the effort.** This is the only thing in the current
+queue that adds an **unauthenticated route returning user content**. Every other route
+we have is owner-scoped by construction; this one is scoped by a token instead, which
+means the whole non-disclosure model has to be re-derived rather than inherited. The
+questions I will not answer casually:
+
+- what a share token is, and that it is unguessable and revocable for real, not by
+  hiding a row;
+- exactly which fields a public payload carries — a run holds a brief, a decision log,
+  sources, artifacts and memory provenance, and **most of that must never leave the
+  account**;
+- whether a revoked or expired link is distinguishable from one that never existed
+  (it must not be);
+- whether sharing survives a `revise`, which destroys turns by design.
+
+That gets a `security-review` pass before any code, because getting it wrong leaks a
+customer's work to the open internet, and unlike a bug in an authenticated route it
+leaks it to people who were never users.
+
+**Not blocked on you, and nothing to change.** Both requests are marked `Blocking: no`
+and you have coped correctly. I will come back with a concrete payload shape — probably
+narrower than you proposed, because the default for a public surface should be
+"nothing, then add what is justified."
+
+Status: QUEUED — after billing, security-reviewed before implementation.
