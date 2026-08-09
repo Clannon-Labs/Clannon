@@ -8,15 +8,15 @@ Transfers live frontend work between Claude Code and Codex.
 - Updated: 2026-08-09 (state-reconciliation session)
 - Task: after state reconciliation, owner asked whether frontend could build without
   waiting for backend. Built missing History date filtering plus a browser-measured
-  mobile overflow repair. Product changes are committed locally at current `HEAD`.
+  mobile overflow repair. Product changes are committed and pushed as `db09332`.
 - **Identity:** this is Clannon's frontend specialist. Owns `frontend/**`, the
   paid-product UX benchmark, mock-first UI, preview evidence, and frontend API
   requests under `specification/api/requests/`. Never edits backend-owned code.
-- **Live state:** `main` is at the frontend commit at `HEAD`, two commits ahead of
-  `origin/main`: owner-authored `1630af0` (`backend-rust/README.md`) followed by
-  this frontend work. Push deliberately withheld because pushing frontend would
-  also publish the unrelated owner-authored Rust commit; owner must push/confirm
-  that commit first. Worktree otherwise clean. `backend-rust/` remains owner-only.
+- **Live state:** `origin/main` contains owner-authored `1630af0`, frontend
+  `db09332`, and later backend work. Owner explicitly authorized publishing their
+  commit; concurrent backend push published the chain, and a frontend push confirmed
+  `Everything up-to-date`. Active backend edits remain in the shared worktree; preserve
+  them. `backend-rust/` remains owner-only.
 - Seven frontend commits landed after the 2026-08-02 checkpoint below:
   templates wired (`e9c4e4a`); background-run completion notifications
   (`34192a8`); spend estimates + private-alpha signup finding (`dbc0d49`);

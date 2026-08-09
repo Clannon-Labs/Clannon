@@ -1,6 +1,6 @@
 # frontend — 2026-08-09
 
-## History date filtering shipped locally; browser pass caught mobile overflow
+## History date filtering shipped; browser pass caught mobile overflow
 
 Owner asked whether frontend had useful work independent of backend. Yes: Pass 11's
 own History gap still named date filtering, while shipped page only had title search
