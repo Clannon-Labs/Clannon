@@ -14,10 +14,34 @@ DIRECTORY UNDER ANY CONDITIONS."*
   not a typo fix, not a `Cargo.toml`.
 - **Never dispatch a worker into it.** `crew.sh` refuses a `--dir` that resolves there;
   that guard is enforcement, not decoration — do not route around it.
-- **Do not commit it.** It is untracked, and whether it becomes tracked is the owner's
-  decision, not a tidiness call.
+- **Do not commit anything into it.** The owner tracks what they choose to (`README.md`
+  is on `main`; the Cargo crates live on their own branch). What is tracked there is
+  their decision, never a tidiness call of yours.
 - You may **read** it when you genuinely need to (answering an architecture question,
   checking the contract holds). Reading is not editing.
+
+**A second machine profile exists for the Rust rewrite** (2026-08-09). Treat it as a
+DIFFERENT PERSON who only writes Rust — not as the owner relocating.
+
+- **The owner is still here, on this profile, exactly as before.** They read
+  `proposals/`, `reports/`, `comms/` and `drafts/` normally. **`proposals/to-owner/`
+  works — keep using it.** Nothing about the agent channels changed.
+- They switch to the other profile only when their Claude/Codex usage runs out, and they
+  do Rust there. That person does not read agent channels and is not expected to.
+- **Rust commits on any branch come from there, not from an agent.** Do not "correct"
+  them and do not assume a worker went rogue.
+- Their branches are their own; ours are ours. Coordination is through the remote.
+
+**PLANNED (2026-08-09): a machine profile dedicated to clannon-bot.** The whole agent
+workspace moves there — repo, `proposals/`, `drafts/`, `achievements/`, comms, tmux
+sessions. The owner logs into that profile whenever they want to work with agents, and
+drives everything exactly as today. Their personal profile is where they act as a
+separate developer writing Rust, and needs none of it.
+
+**Nothing about the agent channels changes**, because the channels and the agents stay
+in the same place. `proposals/to-owner/` keeps working. The gitignored directories are
+not in git, so whoever performs the move copies them by hand — that is a migration step,
+not a design problem.
 
 **You keep building the Python backend exactly as before.** The rewrite is not a reason
 to slow down, freeze a surface, or defer work — the owner said so explicitly: *"Python

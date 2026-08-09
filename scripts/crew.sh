@@ -121,6 +121,33 @@ claude_has_session() {
   compgen -G "$HOME/.claude/projects/$encoded/*.jsonl" >/dev/null 2>&1
 }
 
+# Codex stores the cwd and launch source in the first `session_meta` record.
+# Match both: cwd keeps roles isolated, while source=cli excludes headless
+# `codex exec` workers that happen to run inside the same module.
+codex_has_session() {
+  local dir="$1" sessions_dir file metadata
+  sessions_dir="${CODEX_HOME:-$HOME/.codex}/sessions"
+  [ -d "$sessions_dir" ] || return 1
+
+  while IFS= read -r -d '' file; do
+    IFS= read -r metadata < "$file" || continue
+    if [[ $metadata == *'"type":"session_meta"'* \
+      && $metadata == *'"cwd":"'"$dir"'"'* \
+      && $metadata == *'"source":"cli"'* ]]; then
+      return 0
+    fi
+  done < <(find "$sessions_dir" -type f -name '*.jsonl' -print0 2>/dev/null)
+  return 1
+}
+
+provider_has_session() {
+  case "$1" in
+    claude) claude_has_session "$2" ;;
+    codex)  codex_has_session "$2" ;;
+    *)      return 1 ;;
+  esac
+}
+
 launch_command() {   # role provider fresh dir -> the shell command the session runs
   local role="$1" provider="$2" fresh="$3" dir="$4" cmd
   case "$provider" in
@@ -132,22 +159,19 @@ launch_command() {   # role provider fresh dir -> the shell command the session 
       fi
       ;;
     codex)
-      # ALWAYS fresh, deliberately. `codex resume --last` picks the most recent
-      # Codex session GLOBALLY, not the most recent one for this directory — so
-      # starting the memory role could silently resume the api role's
-      # conversation. There is no per-cwd resume flag. A fresh Codex session
-      # re-orients from its charter + .agents/provider-handoffs/<role>.md +
-      # comms/, which is exactly the path CREW_WORKFLOW.md §5 designs for
-      # (Codex implements from a written brief, it does not need conversational
-      # continuity).
-      #
       # danger-full-access deliberately: workspace-write denied .git/index.lock
       # and .agents/ writes, which blocked a specialist from committing its own
       # work and updating its own handoff. Same unattended posture as Claude's
       # --dangerously-skip-permissions.
       # Inline mode matches Claude's terminal behavior: tmux owns scrollback,
       # while Codex keeps Up/Down and Ctrl-R available for prompt history.
-      cmd="codex --no-alt-screen --sandbox danger-full-access --ask-for-approval never"
+      cmd="codex"
+      if [ "$fresh" = no ] && codex_has_session "$dir"; then
+        # Current Codex scopes --last to cwd unless --all is passed. Running the
+        # command from the role directory therefore resumes only that role.
+        cmd="$cmd resume --last"
+      fi
+      cmd="$cmd --no-alt-screen --sandbox danger-full-access --ask-for-approval never"
       ;;
   esac
   # Prefix with the agent identity so the commits this session makes are the
@@ -187,9 +211,8 @@ cmd_start() {
   fi
 
   local mode
-  if [ "$provider" = codex ]; then mode="fresh (codex always starts fresh — see launch_command)"
-  elif [ "$fresh" = yes ]; then mode="fresh (forced)"
-  elif claude_has_session "$dir"; then mode="resuming prior conversation"
+  if [ "$fresh" = yes ]; then mode="fresh (forced)"
+  elif provider_has_session "$provider" "$dir"; then mode="resuming prior conversation"
   else mode="fresh (no prior conversation for this directory)"
   fi
 

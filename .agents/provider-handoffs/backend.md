@@ -63,7 +63,88 @@ finished something.
 
 ---
 
-## Current checkpoint — run-timing telemetry shipped (2026-08-02, latest)
+## Current checkpoint — waitlist shipped; owner now works from a separate clone (2026-08-09)
+
+**Read `CLAUDE.md`'s top two sections before anything.** Two boundaries changed today and
+both are the kind a cold session gets wrong.
+
+### A second profile exists for Rust — but the owner has NOT moved
+
+Corrected 2026-08-09, same day I first wrote it wrong. Treat the second machine profile
+as a **different person who only writes Rust**.
+
+- **The owner is still here on this profile and reads everything as before** —
+  `proposals/`, `reports/`, `comms/`, `drafts/`. **`proposals/to-owner/` is NOT a void;
+  keep using it.** I briefly documented the opposite and it would have made agents stop
+  using the owner channel for no reason.
+- They switch profiles only when their Claude/Codex usage runs out, and do Rust there.
+- **Rust commits on any branch come from there.** `backend-rust/README.md` is on `main`
+  (their commit `1630af0`); the Cargo crates are on `rust/init`. Neither is an agent
+  going rogue; do not "fix" either.
+- `crew.sh` refuses `--dir` into `backend-rust/`. Do not route around it.
+
+**Planned: a profile dedicated to clannon-bot.** The entire agent workspace moves —
+repo, `proposals/`, `drafts/`, `achievements/`, comms, tmux. The owner logs into that
+profile to work with agents, exactly as today; their personal profile is where they are
+a separate Rust developer. **No channel breaks** — agents and channels stay co-located.
+The gitignored directories are copied by hand as a migration step. I initially recorded
+this as blocked on a severed owner channel; that was my misreading, not a real
+constraint.
+
+### Git identity + remotes — settled, do not "tidy"
+
+- `origin` = plain `https://github.com/Clannon-Labs/Clannon.git`. A global
+  `url.git@github.com:.insteadOf` rewrite turns it into SSH; that is fine and intended.
+- `bot` = `https://clannon-bot@github.com/...` — **agents push here**; `gh` is
+  authenticated as clannon-bot so it needs no prompt.
+- The `clannon-bot@` prefix used to be on `origin`. That forced the OWNER onto bot HTTP
+  auth and produced a password prompt on their own push. Fixed by splitting the remotes.
+  **Push auth and commit authorship are independent** — authorship comes from
+  `GIT_AUTHOR_*` (crew.sh for agents, global config for the owner), so who transports a
+  commit changes nothing about who wrote it.
+- `fork` = `clannon-bot/Clannon`, **61 branches, alive and correctly re-parented.** I
+  called it stale without checking and was wrong. 16 local branches track it, 8 unmerged.
+  Do not remove it.
+
+### Shipped: the private-alpha waitlist (`97dfdb7`, `a64b7c2`)
+
+Owner ruled a waitlist over the allowlist I recommended, and their shape is better: a
+waitlist entry is **not a user**, so no `users` row exists until approval and no
+authenticated surface needs a pending half-state. Password is set at approval. Signup
+takes the address from the **approval token, not the request body**.
+
+- Provider is **Resend**, chosen on a blocker not a preference: SES sandboxes new
+  accounts to pre-verified recipients, and a waitlist exists to mail strangers.
+- **`core/mail.py` is the ONLY file allowed to name a provider**, and
+  `tests/mail_port.py` fails the suite otherwise. Verified non-vacuous by leaking
+  `RESEND_API_KEY` into `api/waitlist.py`. The bare word "resend" is excluded from the
+  pattern on purpose — it is also our own vocabulary (`POST /waitlist/resend`) and
+  matching it flagged nine innocent lines.
+- `config/backend/waitlist.yaml` ships `enabled: true` — **fail closed**. The suite opts
+  out in `conftest.py`; a test asserts the committed FILE ships closed, which a patched
+  module attribute cannot tell you.
+- **Blocked on the owner only:** Resend account, `RESEND_API_KEY`, `CLANNON_MAIL_FROM` on
+  a domain with SPF/DKIM. `resolve_mailer()` refuses to start in production without them.
+
+### The integration lesson from today
+
+The dispatched worker left the suite at **23 failed / 34 errors** and exited saying
+"verification is running in the background." It never reported. The breakage was
+structural — enabling the gate closes `POST /auth/signup`, which ~57 existing tests use,
+and those files were outside its grant — but it should have said so. **Run the suite
+yourself; a worker's verification claim is not evidence.**
+
+### Open
+
+- Frontend requests queued: billing cancel/downgrade/invoices (accepted, next), then the
+  two share-link requests **as a pair, behind a `security-review`** — the only
+  unauthenticated route returning user content in the queue.
+- Frontend owes: can they still reach a real backend? And they own `/waitlist/confirmed`
+  and `/waitlist/invalid-link`, which do not exist yet.
+- `sse_contract_drift.py` extended to check the spec file — still open.
+- Owner gate: `2026-08-02_boundary-rule-second-clause.md` (Presidio).
+
+## Previous checkpoint — run-timing telemetry shipped (2026-08-02)
 
 **`GET /usage` now carries a `latency` block and every run carries three timing
 stamps.** `856c296` (feature) + `deebe36` (sample split) + `1246b45` (comms).

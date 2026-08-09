@@ -50,3 +50,11 @@ vocabulary (`POST /waitlist/resend`), and matching it flagged nine innocent line
 A Resend account, `RESEND_API_KEY`, and `CLANNON_MAIL_FROM` on a domain with SPF/DKIM
 records. Until then `LogMailer` runs and **refuses to start in production**, so a real
 deployment cannot silently log its verification emails instead of sending them.
+
+## Codex interactive resume fixed
+
+`crew.sh start <role> --codex` now resumes latest interactive Codex session for that
+role's exact cwd. Current Codex scopes `resume --last` by cwd; old launcher assumption
+that selection was global was stale. `--fresh` still bypasses resume, and headless
+worker sessions are excluded. Hermetic launcher tests cover all seven roles plus
+cross-role isolation.

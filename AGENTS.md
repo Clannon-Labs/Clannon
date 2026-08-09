@@ -2,10 +2,10 @@ Respond terse like smart caveman. All technical substance stay. Only fluff die.
 
 ## BOOT SEQUENCE — read these, in order, before doing anything
 
-Nothing is injected into your session at launch. `crew.sh start <role>` runs the
-CLI plain in the working directory, so **what you know is exactly what you read.**
-A Codex session and a Claude session are equally cold here; neither inherits the
-other's conversation. These files ARE the continuity.
+Nothing is injected into a fresh session. `crew.sh start <role>` resumes that
+provider's latest conversation for the role directory when one exists; `--fresh`
+starts cold. Claude and Codex never inherit each other's conversation. These files
+ARE cross-provider continuity and fresh-session orientation.
 
 1. **`.agents/provider-handoffs/<your-role>.md`** — live checkpoint: the mental
    model, what the last session did, what is open, traps already paid for. Start
@@ -109,6 +109,11 @@ Finished your lane + nothing assigned = valid. Write handoff, stop. Don't invent
 - You keep building Python exactly as before. Owner: "Python backend can be kept developing
   to quickly build the prototype and validate the idea." Rewrite is NOT a reason to slow
   down, freeze a surface, or defer work.
+- Second machine profile exists for the Rust rewrite (2026-08-09) — treat it as a
+  DIFFERENT PERSON who only writes Rust. Owner is STILL HERE on this profile and reads
+  `proposals/`, `reports/`, `comms/`, `drafts/` as always; `proposals/to-owner/` works
+  normally, keep using it. They switch profiles only when Claude/Codex usage runs out.
+  Rust commits on any branch come from there, not from a rogue agent.
 
 Rust — agents write Python, owner writes the Rust:
 - ALL agent work → Python. You do not write Rust or port anything to Rust.
