@@ -34,6 +34,11 @@ cd ~/Vault/projects/Clannon
 ./scripts/crew.sh stop backend      # a live SQLite copy can tear; stop agents first
 ./scripts/crew.sh stop frontend
 
+# rsync creates the FINAL directory but not its parents — make them first, and own
+# them, because parents created by --mkpath would land owned by root
+sudo mkdir -p /home/chillguy/Vault/projects
+sudo chown chillguy:chillguy /home/chillguy/Vault /home/chillguy/Vault/projects
+
 sudo rsync -a --chown=chillguy:chillguy --exclude backend/.venv --exclude frontend/node_modules /home/cybro/Vault/projects/Clannon/ /home/chillguy/Vault/projects/Clannon/
 
 # agent memory is keyed by ABSOLUTE project path, so the directory name changes
@@ -63,6 +68,12 @@ it escapes the following space and mangles the source path.
 `~` expands to the home of whoever is running the command — that is why every path here
 is absolute. Running the original relative form as `cybro` made source and destination
 the same directory, which is a silent no-op.
+
+> **If you put the repo somewhere other than `~/Vault/projects/Clannon`**, the agent
+> memory directory name must match the new absolute path exactly — Claude Code derives
+> it by replacing `/` with `-`. `~/projects/Clannon` means
+> `-home-chillguy-projects-Clannon`. Get it wrong and the agents start with no memory,
+> silently, because a missing directory is indistinguishable from a fresh project.
 
 ### ② Then log in as `chillguy`
 
