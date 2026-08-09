@@ -27,6 +27,43 @@ const STATUS_FILTERS: { value: RunStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+type DateFilter = "all" | "7d" | "30d";
+
+const DATE_FILTERS: { value: DateFilter; label: string; days?: number }[] = [
+  { value: "all", label: "Any time" },
+  { value: "7d", label: "Last 7 days", days: 7 },
+  { value: "30d", label: "Last 30 days", days: 30 },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+function FilterPill({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        "cursor-pointer rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+        selected
+          ? "border-primary bg-primary-soft text-primary"
+          : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * Every past conversation, searchable and filterable — the sidebar's own
  * "Recent" list has neither (just a flat, unlimited scroll), and this is
@@ -48,18 +85,30 @@ export default function HistoryPage() {
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<RunStatus | "all">("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  // Keep one reference point for this page visit. A filter should not move its
+  // boundary between renders because typing in the search field took a second.
+  const [filterReferenceTime] = useState(() => Date.now());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const days = DATE_FILTERS.find((filter) => filter.value === dateFilter)?.days;
+    const cutoff = days ? filterReferenceTime - days * DAY_MS : null;
     return sessions.filter((session) => {
       if (status !== "all" && session.status !== status) return false;
+      if (cutoff !== null && Date.parse(session.createdAt) < cutoff) return false;
       if (q && !session.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [sessions, query, status]);
+  }, [sessions, query, status, dateFilter, filterReferenceTime]);
+
+  function clearSelectionAnd(action: () => void) {
+    setSelected(new Set());
+    action();
+  }
 
   function toggleSelected(sessionId: string) {
     setSelected((prev) => {
@@ -113,7 +162,7 @@ export default function HistoryPage() {
         </p>
         <h1 className="display mt-3 text-[2.4rem] leading-[1.0]">Every run</h1>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-          Search and filter past conversations
+          Search by title, status, and date
           {currentProject ? ` in ${currentProject.name}` : ""}. Switch the project
           scope from the sidebar switcher.
         </p>
@@ -127,31 +176,42 @@ export default function HistoryPage() {
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => clearSelectionAnd(() => setQuery(e.target.value))}
           placeholder="Search by title…"
           aria-label="Search run history"
           className="h-10 w-full rounded-md border border-border-strong bg-surface-raised pl-10 pr-3.5 text-base text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-sm"
         />
       </div>
 
-      <div role="radiogroup" aria-label="Filter by status" className="mt-4 flex flex-wrap gap-1.5">
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            role="radio"
-            aria-checked={status === f.value}
-            onClick={() => setStatus(f.value)}
-            className={cn(
-              "cursor-pointer rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
-              status === f.value
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="tag-label w-11 shrink-0 text-faint">Status</span>
+          <div role="radiogroup" aria-label="Filter by status" className="flex flex-wrap gap-1.5">
+            {STATUS_FILTERS.map((filter) => (
+              <FilterPill
+                key={filter.value}
+                selected={status === filter.value}
+                onSelect={() => clearSelectionAnd(() => setStatus(filter.value))}
+              >
+                {filter.label}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="tag-label w-11 shrink-0 text-faint">Date</span>
+          <div role="radiogroup" aria-label="Filter by date" className="flex flex-wrap gap-1.5">
+            {DATE_FILTERS.map((filter) => (
+              <FilterPill
+                key={filter.value}
+                selected={dateFilter === filter.value}
+                onSelect={() => clearSelectionAnd(() => setDateFilter(filter.value))}
+              >
+                {filter.label}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* selection toolbar — only takes space once something is checked, so
@@ -186,7 +246,7 @@ export default function HistoryPage() {
             description={
               sessions.length === 0
                 ? "Runs you start will show up here, searchable and filterable."
-                : "Try a different search term or status filter."
+                : "Try a different search term, status, or date filter."
             }
           />
         ) : (
@@ -202,7 +262,7 @@ export default function HistoryPage() {
                 />
                 <Link
                   href={`/app/runs/${session.latestId}`}
-                  className="flex flex-1 items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-muted"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-muted"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{session.title}</p>

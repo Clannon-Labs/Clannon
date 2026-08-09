@@ -5,7 +5,7 @@ Owner: frontend
 Started: 2026-07-28  
 Replaces: screenshot beauty scores as primary frontend benchmark
 
-Current verified score: **85.57 -> 86/100**  
+Current verified score: **85.87 -> 86/100**
 Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
 `benchmark/REAL_JOURNEY.md`, `previews/2026-07-28_completion-status/`,
 `previews/2026-08-01_project-creation-redesign/`,
@@ -13,7 +13,8 @@ Current evidence: `benchmark/PERFORMANCE.md`, `benchmark/FIRST_VALUE.md`,
 `previews/2026-08-01_failed-and-quota-states/`,
 `previews/2026-08-02_run-notifications/`,
 `previews/2026-08-02_spend-awareness/`,
-`previews/2026-08-02_history-page/`, and
+`previews/2026-08-02_history-page/`,
+`previews/2026-08-09_history-date-filter/`, and
 `reports/frontend/frontend_report_v8.md` through the latest
 
 **90 is not reachable without backend/framework-level work, independent of
@@ -719,6 +720,32 @@ dimension's own definition names *"cancellation"* explicitly among what must be
 previously zero cancellation path in the product beyond a static link to the refund
 policy. Not claiming a second dimension — downgrade/invoices are real value but
 don't match any other dimension's own listed criteria this precisely.
+
+## Pass 15 — History date filtering + mobile overflow fix, no score claimed (2026-08-09)
+
+Pass 11 shipped History search and status filters, but its original gap statement
+also named date filtering and that part remained unbuilt. Added explicit `Any time`,
+`Last 7 days`, and `Last 30 days` controls using timestamps already returned by
+`GET /runs`; no new API surface or duplicated history data path. Search, status, and
+date combine, and changing any filter clears bulk selection so a row hidden by the
+new result set cannot remain silently selected for deletion. No-match recovery copy
+now names all three controls.
+
+Real 390px production-browser verification found an older row-layout defect that
+unit tests could not measure: loaded History rows widened the document from 390px to
+440px because the flex link retained its min-content width. Fixed the actual flex
+boundary with `min-w-0`; a Playwright regression now proves document width equals
+viewport width after real mock login, loaded data, and date selection.
+
+Verified: focused red-before-green History tests, full TypeScript and ESLint clean,
+Vitest **201/201**, production build, focused Playwright 1/1, then loaded desktop
+1280×800 and mobile 390×844 captures with `Last 7 days` selected, zero console errors,
+and zero horizontal overflow. Evidence:
+`previews/2026-08-09_history-date-filter/`.
+
+**No score move.** Date filtering completes the same continuity surface that already
+moved 89→90 in Pass 11. Awarding another point for finishing that same feature would
+double-count it. Score remains **85.87 → 86**.
 
 ## 3. Hard gates
 

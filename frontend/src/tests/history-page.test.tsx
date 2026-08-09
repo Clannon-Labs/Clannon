@@ -128,6 +128,63 @@ describe("HistoryPage", () => {
     expect(screen.getByText("No matches")).toBeInTheDocument();
   });
 
+  it("filters sessions to the last 7 or 30 days", () => {
+    const now = Date.now();
+    mockRuns = [
+      {
+        ...runs[0],
+        id: "run_recent",
+        sessionId: "sess_recent",
+        title: "Recent market brief",
+        createdAt: new Date(now - 2 * 24 * 60 * 60 * 1_000).toISOString(),
+      },
+      {
+        ...runs[1],
+        id: "run_this_month",
+        sessionId: "sess_this_month",
+        title: "Monthly competitor review",
+        createdAt: new Date(now - 20 * 24 * 60 * 60 * 1_000).toISOString(),
+      },
+      {
+        ...runs[2],
+        id: "run_old",
+        sessionId: "sess_old",
+        title: "Old sourcing plan",
+        createdAt: new Date(now - 45 * 24 * 60 * 60 * 1_000).toISOString(),
+      },
+    ];
+    mockLoading = false;
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Last 7 days" }));
+    expect(screen.getByText("Recent market brief")).toBeInTheDocument();
+    expect(screen.queryByText("Monthly competitor review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old sourcing plan")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Last 30 days" }));
+    expect(screen.getByText("Recent market brief")).toBeInTheDocument();
+    expect(screen.getByText("Monthly competitor review")).toBeInTheDocument();
+    expect(screen.queryByText("Old sourcing plan")).not.toBeInTheDocument();
+  });
+
+  it("names the date filter in the no-matches recovery copy", () => {
+    mockRuns = [
+      {
+        ...runs[0],
+        createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1_000).toISOString(),
+      },
+    ];
+    mockLoading = false;
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Last 7 days" }));
+
+    expect(screen.getByText("No matches")).toBeInTheDocument();
+    expect(
+      screen.getByText("Try a different search term, status, or date filter."),
+    ).toBeInTheDocument();
+  });
+
   it("shows a genuinely-empty state distinct from a no-matches state", () => {
     mockRuns = [];
     mockLoading = false;
@@ -156,6 +213,18 @@ describe("HistoryPage", () => {
     expect(screen.getByText("1 selected")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+  });
+
+  it("clears selection when a filter changes so hidden rows cannot stay selected", () => {
+    mockRuns = runs;
+    mockLoading = false;
+    render(<HistoryPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Source and profile leads" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Delivered" }));
     expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
   });
 

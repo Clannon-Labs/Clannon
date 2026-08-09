@@ -4,6 +4,65 @@ Transfers live frontend work between Claude Code and Codex.
 
 ## Current checkpoint
 
+- Provider: Codex
+- Updated: 2026-08-09 (state-reconciliation session)
+- Task: after state reconciliation, owner asked whether frontend could build without
+  waiting for backend. Built missing History date filtering plus a browser-measured
+  mobile overflow repair. Product changes are committed locally at current `HEAD`.
+- **Identity:** this is Clannon's frontend specialist. Owns `frontend/**`, the
+  paid-product UX benchmark, mock-first UI, preview evidence, and frontend API
+  requests under `specification/api/requests/`. Never edits backend-owned code.
+- **Live state:** `main` is at the frontend commit at `HEAD`, two commits ahead of
+  `origin/main`: owner-authored `1630af0` (`backend-rust/README.md`) followed by
+  this frontend work. Push deliberately withheld because pushing frontend would
+  also publish the unrelated owner-authored Rust commit; owner must push/confirm
+  that commit first. Worktree otherwise clean. `backend-rust/` remains owner-only.
+- Seven frontend commits landed after the 2026-08-02 checkpoint below:
+  templates wired (`e9c4e4a`); background-run completion notifications
+  (`34192a8`); spend estimates + private-alpha signup finding (`dbc0d49`);
+  searchable/filterable History (`7912eea`); print/PDF + History bulk delete +
+  cold-load template crash fix (`84393a6`); PWA icon set (`7d284c9`); mock-first
+  cancel/downgrade/invoices UI and HTTP contract (`6f54edb`). Reports v18-v23
+  and `comms/2026-08-02/frontend.md` hold full evidence.
+- Current frontend benchmark scorecard is **85.87 -> 86/100**. Its header still
+  says `85.57 -> 86`, a small internal doc inconsistency to fix with the next
+  benchmark-touching commit. Dominant recorded cap remains performance 64 and
+  time-to-first-value 78; do not infer current causes without remeasurement.
+- Built 2026-08-09: History `Any time` / `Last 7 days` / `Last 30 days` filters,
+  composable with title/status. Filter changes clear bulk selection. Live 390px
+  test found page width 440px from the existing flex row; `min-w-0` fixed it and
+  Playwright now measures viewport equality. Benchmark honestly remains 85.87→86.
+- Fresh verification: `npm run typecheck` clean, `npm run lint` clean, Vitest
+  **201/201** across 26 files, production build clean, Playwright History 1/1.
+  Desktop/mobile loaded captures inspected with zero console errors under
+  `previews/2026-08-09_history-date-filter/`.
+- Inbox: one FYI-only file,
+  `proposals/to-frontend/2026-08-02_specification-directory-is-your-channel.md`;
+  no ruling or reply requested. Owner-local `frontend/proposals/` is empty.
+- Backend began its request sweep during this reconciliation: archive discrepancy
+  is DONE/archived (false route removed); billing is IN PROGRESS; both share-link
+  requests are QUEUED behind billing for security review; signup gating is BLOCKED
+  on owner ruling, with backend recommending an email allowlist. These are live,
+  uncommitted backend edits; do not race or edit them.
+- **Recommended next product unit:** when backend's billing routes land, exercise
+  existing cancel/undo/downgrade/invoices UI over real HTTP and fix only measured
+  contract mismatches. Then wire share UI only after security-reviewed payload
+  lands. Signup UI follows owner ruling; frontend-only gating would be security
+  theater.
+- Other named candidates remain lower priority: attachment reuse, account data
+  export/deletion, session/device management. Notification center needs genuine
+  app-wide run tracking; offline/service-worker needs an explicit live-SSE caching
+  design; referral flow depends on signup-gating shape.
+
+## Change note
+
+Reconciled continuity against live Git because prior checkpoint stopped at billing
+`e53197f`, while seven later frontend commits already reached `main`. No product
+work was repeated. Fresh suite established current health; handoff now names actual
+HEAD, shipped surface, open contracts, and security-first next unit.
+
+## Previous checkpoint (2026-08-02)
+
 - Provider: Claude Code
 - Updated: 2026-08-02 (session end)
 - Task: owner ordered the extreme-priority billing proposal executed, then
