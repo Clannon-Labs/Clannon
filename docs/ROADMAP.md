@@ -42,7 +42,9 @@ and has no real-user feedback yet. Owner is arranging a small friends/family
 cohort in parallel; engineering keeps closing capability gaps and does not wait
 on that outreach.
 
-**Track B — the Rust rewrite, and it is the OWNER'S, by hand.** They created
+**Track B — the Rust rewrite, and it is the OWNER'S, by hand.** Written from a second
+machine profile — treat that as a different person who only writes Rust; the owner is
+still present here and reads `proposals/`/`reports/`/`comms/` as always. They created
 `backend-rust/` on 2026-08-09 and asked that nothing else touch it; `crew.sh` refuses to
 dispatch a worker there and root `CLAUDE.md` carries the prohibition. **Agents write no
 Rust.** Design docs live in `specification/rust/`. Owner: *"Python backend can be kept

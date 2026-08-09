@@ -20,17 +20,27 @@ DIRECTORY UNDER ANY CONDITIONS."*
 - You may **read** it when you genuinely need to (answering an architecture question,
   checking the contract holds). Reading is not editing.
 
-**The owner works from a SEPARATE machine profile and a separate clone** (2026-08-09).
-Consequences you will otherwise misread:
+**A second machine profile exists for the Rust rewrite** (2026-08-09). Treat it as a
+DIFFERENT PERSON who only writes Rust — not as the owner relocating.
 
-- **Rust commits on `main` or any branch are theirs, not an agent's.** Do not "correct"
-  them, and do not assume a worker went rogue.
-- **They do not see `proposals/`, `drafts/` or `achievements/`** — those are gitignored
-  and never leave this disk. Never wait on a `proposals/to-owner/` reply. When something
-  genuinely needs them, it has to reach a TRACKED path: `comms/<today>/`,
-  `specification/`, or a doc.
-- Their branches are their own. Ours are ours. Coordination is through the remote, the
-  way it would be between two people.
+- **The owner is still here, on this profile, exactly as before.** They read
+  `proposals/`, `reports/`, `comms/` and `drafts/` normally. **`proposals/to-owner/`
+  works — keep using it.** Nothing about the agent channels changed.
+- They switch to the other profile only when their Claude/Codex usage runs out, and they
+  do Rust there. That person does not read agent channels and is not expected to.
+- **Rust commits on any branch come from there, not from an agent.** Do not "correct"
+  them and do not assume a worker went rogue.
+- Their branches are their own; ours are ours. Coordination is through the remote.
+
+**PLANNED, not done (2026-08-09):** the owner wants the second profile to become
+**clannon-bot's dedicated home** — agents move there, the owner keeps this profile for
+their own work. Sound goal, but **one thing must be solved first, or the primary channel
+breaks**: `proposals/`, `drafts/` and `achievements/` are gitignored, so they live on
+ONE disk. If agents move and the owner stays, `proposals/to-backend/` written by the
+owner never reaches an agent, and `proposals/to-owner/` never reaches the owner — and
+the owner has said explicitly they still want to use both. Do not perform this move
+until either (a) those directories sit on a path both profiles can read, or (b) the
+owner↔agent channel moves to a tracked path. Raise it; do not quietly half-migrate.
 
 **You keep building the Python backend exactly as before.** The rewrite is not a reason
 to slow down, freeze a surface, or defer work — the owner said so explicitly: *"Python

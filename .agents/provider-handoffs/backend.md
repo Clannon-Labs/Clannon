@@ -68,18 +68,28 @@ finished something.
 **Read `CLAUDE.md`'s top two sections before anything.** Two boundaries changed today and
 both are the kind a cold session gets wrong.
 
-### The owner is a separate developer now, literally
+### A second profile exists for Rust — but the owner has NOT moved
 
-They work from a **different machine profile with its own clone**, own gitconfig
-(thecybro), own `gh auth`. Consequences:
+Corrected 2026-08-09, same day I first wrote it wrong. Treat the second machine profile
+as a **different person who only writes Rust**.
 
-- **Rust commits, on any branch, are theirs.** `backend-rust/README.md` is on `main`
-  (their commit `1630af0`); the Cargo crates are on their branch `rust/init`. Nothing
-  went wrong; do not "fix" either.
-- **They never see `proposals/`, `drafts/`, `achievements/`** — gitignored, never leave
-  this disk. **Never wait on a `proposals/to-owner/` reply.** Anything they must see goes
-  to a TRACKED path: `comms/<today>/`, `specification/`, or a doc.
+- **The owner is still here on this profile and reads everything as before** —
+  `proposals/`, `reports/`, `comms/`, `drafts/`. **`proposals/to-owner/` is NOT a void;
+  keep using it.** I briefly documented the opposite and it would have made agents stop
+  using the owner channel for no reason.
+- They switch profiles only when their Claude/Codex usage runs out, and do Rust there.
+- **Rust commits on any branch come from there.** `backend-rust/README.md` is on `main`
+  (their commit `1630af0`); the Cargo crates are on `rust/init`. Neither is an agent
+  going rogue; do not "fix" either.
 - `crew.sh` refuses `--dir` into `backend-rust/`. Do not route around it.
+
+**Planned, blocked, do not start:** the owner wants the second profile to become
+**clannon-bot's dedicated home** (agents move there; they keep their own profile for
+their own things). The goal is right — but `proposals/`, `drafts/` and `achievements/`
+are gitignored and therefore live on ONE disk. Move the agents and the owner↔agent
+channel silently dies in both directions, and the owner has said explicitly they still
+want to use it. Solve that first: either put those directories where both profiles can
+read them, or move owner↔agent messaging to a tracked path. Flagged in `CLAUDE.md`.
 
 ### Git identity + remotes — settled, do not "tidy"
 
