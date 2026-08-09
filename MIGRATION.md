@@ -146,12 +146,31 @@ tmux kill-server        # or crew.sh stop <role> for each
 sudo rsync -a --chown=chillguy:chillguy /home/cybro/.claude/ /home/chillguy/.claude/
 sudo rsync -a --chown=chillguy:chillguy /home/cybro/.codex/  /home/chillguy/.codex/
 
-sudo bash -c 'cd /home/chillguy/.claude/projects && for d in -home-cybro-Vault-projects-Clannon*; do mv "$d" "${d/-home-cybro-/-home-chillguy-}"; done'
+sudo bash -c 'cd /home/chillguy/.claude/projects && for d in -home-cybro-Vault-projects-Clannon*; do mv -- "$d" "${d/-home-cybro-/-home-chillguy-}"; done'
 sudo chown -R chillguy:chillguy /home/chillguy/.claude /home/chillguy/.codex
 ```
 
 The glob excludes other projects (e.g. GhostLayer) by design. `rsync` copies rather than
 moves, so the originals remain under `cybro` as a fallback until you have verified.
+
+**The `--` is load-bearing.** These directory names begin with `-`, so without it `mv`
+reads `-home-cybro-...` as a bundle of options and fails with `invalid option -- 'h'`
+once per directory. The copy still succeeds, so the result is eight correctly-copied
+directories under names the new profile will never look for.
+
+Verify the rename actually happened before trusting it:
+
+```bash
+sudo ls /home/chillguy/.claude/projects/     # expect -home-chillguy-* , no leftover Clannon -home-cybro-*
+```
+
+**Refresh the live transcript last.** Any session still running while you copy is still
+appending to its `.jsonl`, so the copy is a snapshot. After the final session ends,
+re-sync just that directory into the already-renamed destination:
+
+```bash
+sudo rsync -a --chown=chillguy:chillguy --delete /home/cybro/.claude/projects/-home-cybro-Vault-projects-Clannon/ /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon/
+```
 
 ### Then, as `chillguy`
 
