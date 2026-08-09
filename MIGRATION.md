@@ -34,17 +34,28 @@ cd ~/Vault/projects/Clannon
 ./scripts/crew.sh stop backend      # a live SQLite copy can tear; stop agents first
 ./scripts/crew.sh stop frontend
 
-sudo rsync -a --exclude backend/.venv --exclude frontend/node_modules /home/cybro/Vault/projects/Clannon/ /home/chillguy/Vault/projects/Clannon/
+sudo rsync -a --chown=chillguy:chillguy --exclude backend/.venv --exclude frontend/node_modules /home/cybro/Vault/projects/Clannon/ /home/chillguy/Vault/projects/Clannon/
 
 # agent memory is keyed by ABSOLUTE project path, so the directory name changes
 sudo mkdir -p /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon
-sudo cp -r /home/cybro/.claude/projects/-home-cybro-Vault-projects-Clannon/memory /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon/memory
+sudo rsync -a --chown=chillguy:chillguy /home/cybro/.claude/projects/-home-cybro-Vault-projects-Clannon/memory/ /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon/memory/
 
 # Claude Code settings — carries the GIT_AUTHOR_*/GIT_COMMITTER_* identity vars
-sudo cp /home/cybro/.claude/settings.json /home/chillguy/.claude/settings.json
+sudo rsync -a --chown=chillguy:chillguy /home/cybro/.claude/settings.json /home/chillguy/.claude/settings.json
 
-sudo chown -R chillguy:chillguy /home/chillguy/Vault /home/chillguy/.claude
+sudo chown -R chillguy:chillguy /home/chillguy/Vault /home/chillguy/.claude   # belt-and-braces
 ```
+
+**Why `--chown` and not a bare `sudo cp`/`mv`:** run as root, those PRESERVE the source
+owner. The file lands in the destination home still owned by `cybro`, and the new
+profile cannot write to its own workspace. The failures that follow do not look like
+permission problems — git cannot write `.git/index`, pytest cannot create caches, and
+SQLite reports a readonly database on a file you can plainly see. `--chown` sets
+ownership during the copy so the mistake is impossible rather than remembered.
+
+`sudo -iu chillguy` is the convenient way to work in that profile without logging out.
+It still cannot read `/home/cybro` — home directories are mode 700 with no ACLs — which
+is exactly why the copy itself runs as root.
 
 The rsync is **one line**. A `\` continues a line only at end-of-line; pasted mid-line
 it escapes the following space and mangles the source path.
