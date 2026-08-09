@@ -632,6 +632,32 @@ def _load_model_catalog() -> ModelCatalogConfig:
         raise RuntimeError(f"config/backend/model-catalog.yaml is invalid:\n{exc}") from exc
 
 
+class WaitlistConfig(BaseModel):
+    """Private-alpha access gating (`config/backend/waitlist.yaml`).
+
+    `enabled` is the single switch between a private alpha and an open product, which is
+    why it lives here rather than in a branch somewhere. Everything else bounds the two
+    one-time tokens and the anti-abuse limits on a PUBLIC endpoint that sends mail to
+    whatever address is typed into it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool
+    verify_token_ttl_hours: int = Field(gt=0, le=720)
+    approval_token_ttl_hours: int = Field(gt=0, le=720)
+    max_verification_sends_per_email: int = Field(gt=0, le=100)
+    resend_cooldown_seconds: int = Field(ge=0, le=3600)
+    note_max_chars: int = Field(gt=0, le=10_000)
+
+
+def _load_waitlist() -> WaitlistConfig:
+    raw = _load_mapping("backend/waitlist.yaml")
+    try:
+        return WaitlistConfig(**raw)
+    except ValidationError as exc:
+        raise RuntimeError(f"config/backend/waitlist.yaml is invalid:\n{exc}") from exc
+
+
 BUDGET: BudgetConfig = _load_budget()
 PRICING: PricingConfig = _load_pricing()
 MEMORY: MemoryConfig = _load_memory()
@@ -646,6 +672,7 @@ RESILIENCE: ResilienceConfig = _load_resilience()
 TIERS: TiersConfig = _load_tiers()
 LIMITS: LimitsConfig = _load_limits()
 MODEL_CATALOG: ModelCatalogConfig = _load_model_catalog()
+WAITLIST: WaitlistConfig = _load_waitlist()
 
 # The margin invariant's ONE source of truth (ADR-0004). Every ceiling check reads THIS —
 # nothing else defines or hardcodes the fraction. Regression-locked in tests/config_budget.py.
@@ -666,4 +693,5 @@ __all__ = [
     "TIERS", "TiersConfig", "Plan", "TierFeatures",
     "LIMITS", "LimitsConfig",
     "MODEL_CATALOG", "ModelCatalogConfig",
+    "WAITLIST", "WaitlistConfig",
 ]

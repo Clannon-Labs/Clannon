@@ -1,0 +1,29 @@
+# Private-alpha waitlist — how access is gated before the product is open.
+#
+# Owner ruling 2026-08-09: signup is replaced by "join the waitlist". A visitor gives
+# the email they want to use plus an optional note, verifies that they own the inbox,
+# and then waits for the owner to approve them individually.
+#
+# `enabled: false` restores ordinary open self-serve signup. Flipping it is the single
+# switch between "private alpha" and "open", which is exactly the kind of decision that
+# must live here and not in code (LAW 4).
+
+enabled: true
+
+# How long a verification link stays valid. Long enough that someone can act on it the
+# next morning; short enough that a link sitting in an old inbox is not a standing key.
+verify_token_ttl_hours: 48
+
+# How long an APPROVAL link stays valid once the owner grants access. Shorter, because
+# it is the thing that actually creates an account with a password.
+approval_token_ttl_hours: 168
+
+# Anti-abuse. A public endpoint that emails whatever address is typed into it can be
+# used to mail strangers, so resends are capped per address as well as rate-limited per
+# caller. Reaching the cap must NOT reveal whether the address is on the list.
+max_verification_sends_per_email: 5
+resend_cooldown_seconds: 60
+
+# Free-text the visitor may include ("stuff they want to tell us"). Optional by ruling.
+# Capped because it is untrusted input that the owner will later read.
+note_max_chars: 1000

@@ -50,6 +50,7 @@ from .contracts.batch_awareness import (
 )
 from .contracts.workspace import RunResult, WorkspacePort
 from .contracts.artifact import ArtifactRef, ArtifactStore
+from .contracts.mailer import Accepted, MailError, Mailer, Message
 from .contracts.input_file import InputFile
 
 # payload boundary
@@ -138,6 +139,10 @@ __all__ = [
     "WorkspacePort",
     "ArtifactRef",
     "ArtifactStore",
+    "Accepted",
+    "MailError",
+    "Mailer",
+    "Message",
     "InputFile",
     "coerce_to_bytes",
     "get_root",
