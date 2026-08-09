@@ -1,0 +1,33 @@
+[package]
+name = "backend-rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# tokio.workspace = true
+# serde.workspace = true
+# serde_json.workspace = true
+# thiserror.workspace = true
+
+# Add your internal workspace crates here only if the ROOT package uses them.
+# Example:
+foundation = { path = "crates/foundation" }
+api = { path = "crates/api" }
+
+[workspace]
+resolver = "3"
+
+members = ["crates/api","crates/foundation"
+    # "crates/foundation",
+    # "crates/auth",
+    # "crates/email",
+]
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+# tokio = { version = "1", features = ["full"] }
+# serde = { version = "1", features = ["derive"] }
+# serde_json = "1"
+# thiserror = "2"
