@@ -11,7 +11,49 @@ same place.
 
 ---
 
-## 1. Git carries almost everything
+## 0. The easy way — copy the folder, rebuild one thing
+
+If you can copy files between profiles directly, **do that instead of cloning.** One
+copy brings tracked files, gitignored files, and `.git` (history, branches, remotes)
+together, and you cannot forget an item off a checklist.
+
+**Sizes, measured:** everything that git ignores and matters is **~104 MB**, and 58 MB
+of that is `.agents/runs` worker logs you can skip. The real payload is under 50 MB.
+This is a twenty-minute job, most of it waiting on dependency installs.
+
+```bash
+# 1. Stop the agents first — copying a live SQLite database can tear it
+./scripts/crew.sh stop backend; ./scripts/crew.sh stop frontend   # + any others running
+
+# 2. Copy the whole project directory across profiles
+#    (skip the two big regenerable trees)
+rsync -a --exclude backend/.venv --exclude frontend/node_modules \
+      /home/cybro/Vault/projects/Clannon/  ~/Vault/projects/Clannon/
+
+# 3. Rebuild the virtualenv — it is NOT relocatable, see below
+cd ~/Vault/projects/Clannon/backend && rm -rf .venv && uv venv && uv pip install -r requirements.txt
+
+# 4. Frontend deps
+cd ../frontend && npm install
+```
+
+**Why `.venv` must be rebuilt rather than copied:** its `pyvenv.cfg` hard-codes
+`home = /home/cybro/.local/share/uv/python/...`, an absolute path into the *old*
+profile, and every script in `.venv/bin/` carries a matching shebang. Copied, it points
+at an interpreter the new profile cannot rely on. Verified, not assumed.
+
+**Still do §3** — `~/.claude` agent memory and `gh auth` live outside the project
+directory and no amount of copying the repo will bring them.
+
+Then verify with §5 before deleting anything.
+
+---
+
+## 1. The clean-clone alternative
+
+Use this if you would rather start from the remote than copy a working directory.
+
+### Git carries almost everything
 
 Every tracked file moves with a `git clone`. **No tracked file contains an absolute
 `/home/cybro` path** (verified), so nothing needs rewriting after the move.
