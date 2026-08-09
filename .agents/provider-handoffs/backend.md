@@ -83,13 +83,13 @@ as a **different person who only writes Rust**.
   going rogue; do not "fix" either.
 - `crew.sh` refuses `--dir` into `backend-rust/`. Do not route around it.
 
-**Planned, blocked, do not start:** the owner wants the second profile to become
-**clannon-bot's dedicated home** (agents move there; they keep their own profile for
-their own things). The goal is right — but `proposals/`, `drafts/` and `achievements/`
-are gitignored and therefore live on ONE disk. Move the agents and the owner↔agent
-channel silently dies in both directions, and the owner has said explicitly they still
-want to use it. Solve that first: either put those directories where both profiles can
-read them, or move owner↔agent messaging to a tracked path. Flagged in `CLAUDE.md`.
+**Planned: a profile dedicated to clannon-bot.** The entire agent workspace moves —
+repo, `proposals/`, `drafts/`, `achievements/`, comms, tmux. The owner logs into that
+profile to work with agents, exactly as today; their personal profile is where they are
+a separate Rust developer. **No channel breaks** — agents and channels stay co-located.
+The gitignored directories are copied by hand as a migration step. I initially recorded
+this as blocked on a severed owner channel; that was my misreading, not a real
+constraint.
 
 ### Git identity + remotes — settled, do not "tidy"
 

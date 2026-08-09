@@ -32,15 +32,16 @@ DIFFERENT PERSON who only writes Rust — not as the owner relocating.
   them and do not assume a worker went rogue.
 - Their branches are their own; ours are ours. Coordination is through the remote.
 
-**PLANNED, not done (2026-08-09):** the owner wants the second profile to become
-**clannon-bot's dedicated home** — agents move there, the owner keeps this profile for
-their own work. Sound goal, but **one thing must be solved first, or the primary channel
-breaks**: `proposals/`, `drafts/` and `achievements/` are gitignored, so they live on
-ONE disk. If agents move and the owner stays, `proposals/to-backend/` written by the
-owner never reaches an agent, and `proposals/to-owner/` never reaches the owner — and
-the owner has said explicitly they still want to use both. Do not perform this move
-until either (a) those directories sit on a path both profiles can read, or (b) the
-owner↔agent channel moves to a tracked path. Raise it; do not quietly half-migrate.
+**PLANNED (2026-08-09): a machine profile dedicated to clannon-bot.** The whole agent
+workspace moves there — repo, `proposals/`, `drafts/`, `achievements/`, comms, tmux
+sessions. The owner logs into that profile whenever they want to work with agents, and
+drives everything exactly as today. Their personal profile is where they act as a
+separate developer writing Rust, and needs none of it.
+
+**Nothing about the agent channels changes**, because the channels and the agents stay
+in the same place. `proposals/to-owner/` keeps working. The gitignored directories are
+not in git, so whoever performs the move copies them by hand — that is a migration step,
+not a design problem.
 
 **You keep building the Python backend exactly as before.** The rewrite is not a reason
 to slow down, freeze a surface, or defer work — the owner said so explicitly: *"Python
