@@ -37,7 +37,7 @@ Loads `.env` then `.env.local` from `backend/` (the working directory, same as
 | `SERVER_COOKIE_DOMAIN` | _(unset)_ | Session-cookie `Domain`. Unset = host-only (same-origin dev). Set `.clannon.com` (leading dot) so ONE cookie is valid for the apex and every subdomain — the mechanism behind seamless, no-relogin auth when the workspace moves to `app.clannon.com`. |
 | `SERVER_DEFAULT_PLAN` | `free` | Plan for new signups. Use `pro` in local dev to unlock all memory tiers. |
 | `SERVER_COOKIE_SECURE` | `0` | Set `1` in production (HTTPS) so the session cookie is Secure. |
-| `SERVER_DB_PATH` | `api/data/clannon.db` | SQLite location (users, sessions, projects, wiki, runs, model prefs, mock billing). |
+| `SERVER_DB_PATH` | `api/data/clannon.db` | SQLite location (users, sessions, projects, wiki, runs, model prefs, mock billing, waitlist). |
 | `SERVER_MOCK_BILLING_ENABLED` | `0` | Set `1` only where server-owned mock settlement is intentionally available. |
 | `SERVER_MOCK_BILLING_SECRET` | unset | Deployment/test secret for mock confirmation. Required when mock settlement is enabled; never returned to clients. |
 
@@ -46,7 +46,9 @@ Loads `.env` then `.env.local` from `backend/` (the working directory, same as
 | File | Owns |
 |---|---|
 | `app.py` | FastAPI assembly, CORS, and core routes. |
-| `auth.py` | Users + sessions + the SQLite data layer (projects, wiki, model prefs — every query lives here, never in the routes). Scrypt, httpOnly cookies. The dev stand-in for Supabase — swap this one module when Supabase lands. |
+| `auth.py` | Users + sessions + the SQLite data layer (projects, wiki, model prefs, waitlist — every query lives here, never in the routes). Scrypt, httpOnly cookies. The dev stand-in for Supabase — swap this one module when Supabase lands. |
+| `waitlist.py` | `POST/GET /waitlist*` routes: join, resend, verify. Composes verify/approval mail via `foundation.Mailer` (never a provider import). |
+| `waitlist_cli.py` | Owner-only CLI (`python -m api.waitlist_cli list\|approve`) — the sole way an address gets `approved`, deliberately not an HTTP route. |
 | `billing.py` | Fixed UTC anniversary periods, mock checkout ledger/router, additive token entitlement, and coarse pre-run admission. Stripe replaces this seam; Redis per-call cost enforcement stays separate. |
 | `runs.py` | Thin façade over run state, storage, execution, inputs, lineage, and SSE. |
 | `run_requests.py` | Shared multipart upload admission and per-run model override parsing. |
@@ -69,11 +71,14 @@ JSON keys are camelCase to match the frontend types in
 | Endpoint | Method | Request | Response |
 |---|---|---|---|
 | `/config` | GET (public) | — | `RemoteConfig` `{version, plans, features, limits}` |
-| `/auth/signup` | POST | `{name, email, password}` | `User`, sets cookie |
+| `/auth/signup` | POST | `{name, email?, password, approvalToken?}` | `User`, sets cookie. While `WAITLIST.enabled` (`config/backend/waitlist.yaml`): `approvalToken` is REQUIRED and `email` is ignored — the account's email comes from the token, minted only by the owner's approval (see waitlist rows below); missing/invalid/expired token is `403`. While disabled: ordinary open signup, `email` required, `approvalToken` ignored |
 | `/auth/login` | POST | `{email, password}` | `User`, sets cookie |
 | `/auth/logout` | POST | — | 204, clears cookie |
 | `/auth/me` | GET | — | `User` or 401 |
 | `/auth/oauth/:provider` | GET (navigation) | — | 302 → frontend (`?error=oauth_unavailable` until Supabase OAuth) |
+| `/waitlist` | POST (public) | `{email, note?}` (note ≤ `note_max_chars`) | `202 {status:"ok"}` ALWAYS — identical whether the address is new, already listed, already verified, or already a real account (non-disclosure: this is a public endpoint and would otherwise be an account-existence oracle). Sends a one-time verify link by mail (best-effort — `send()` accepted is not proof of delivery) unless the per-address send cap/cooldown (`waitlist.yaml`) blocks it, which is itself never revealed |
+| `/waitlist/resend` | POST (public) | `{email}` | `202 {status:"ok"}` ALWAYS, same non-disclosure as above; resends the verify link only if unverified and under cap/cooldown |
+| `/waitlist/verify` | GET (public, navigation) | `?token=` | `302` → frontend `/waitlist/confirmed` or `/waitlist/invalid-link`. Consumes the one-time verify token (unknown/expired/already-used are indistinguishable); marks the address `emailVerified` on success — verification only puts the address on the list, it does NOT grant access. Access is a separate, owner-only step: the owner approves a verified address via CLI (`python -m api.waitlist_cli approve <email>`, not an HTTP route — one owner, so no privilege boundary to add), which mints and mails an approval link (`/signup?approvalToken=`) consumed by `POST /auth/signup` above |
 | `/projects` | GET | — | `Project[]` `{id, name, color?, createdAt}`, newest activity first. A project = a client / body of work; runs + memory scope to it. The "current project" is client-side state (sent as `projectId` per request) — no server-side active project |
 | `/projects` | POST | `{name, color?, seedFacts?}` | created `Project`. `seedFacts` (optional markdown): also creates a first WIKI entry in the project titled `Client: <name> — context` (the onboarding "tell Clannon about this client" step). Requires WIKI entitlement; otherwise 403 and neither project nor seed is created |
 | `/projects/:id` | PATCH | `{name}` | renamed `Project` (404 if not the caller's) |

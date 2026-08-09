@@ -32,6 +32,33 @@ def _isolate_shared_rate_limits():
 
 
 @pytest.fixture(autouse=True)
+def _waitlist_open_unless_a_test_says_otherwise(monkeypatch):
+    """Most of this suite creates its users through `POST /auth/signup`, and the
+    private-alpha waitlist deliberately closes that route (owner ruling 2026-08-09).
+
+    The committed default in `config/backend/waitlist.yaml` stays `enabled: true` —
+    fail-CLOSED. A config that ships open and relies on a deploy step to close it is
+    exactly the failure this feature exists to prevent, so the test suite opts out
+    explicitly rather than the product shipping unlocked for the suite's convenience.
+
+    `tests/waitlist.py` turns it back on per-test via its own `set_waitlist` helper;
+    that file is what proves the gate actually holds.
+
+    Patched in two places on purpose: `settings` for modules imported after this runs,
+    and `api.app` for the already-bound name (`from settings import WAITLIST` binds by
+    value, so patching only one of them silently misses half the cases).
+    """
+    import settings
+
+    open_cfg = settings.WAITLIST.model_copy(update={"enabled": False})
+    monkeypatch.setattr(settings, "WAITLIST", open_cfg, raising=False)
+    app_mod = sys.modules.get("api.app")
+    if app_mod is not None and hasattr(app_mod, "WAITLIST"):
+        monkeypatch.setattr(app_mod, "WAITLIST", open_cfg)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _fresh_graph_store(tmp_path, monkeypatch):
     """Kuzu's db handle is a lazy module-level singleton (same shape as
     store.py's Qdrant client) — point it at a fresh on-disk db per test and

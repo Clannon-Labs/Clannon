@@ -152,6 +152,35 @@ def _db() -> sqlite3.Connection:
         "CREATE INDEX IF NOT EXISTS decision_records_by_run "
         "ON decision_records (user_id, trace_id)"
     )
+    # Private-alpha waitlist (owner ruling 2026-08-09). A waitlist row is NOT a user —
+    # no `users` row exists until the owner approves and the visitor sets a password.
+    # `email_verified` (proves inbox control, automatic) and `approved` (grants access,
+    # owner-only) are deliberately separate columns — see proposals/to-api archive.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS waitlist (
+            email TEXT PRIMARY KEY,
+            note TEXT,
+            email_verified INTEGER NOT NULL DEFAULT 0,
+            approved INTEGER NOT NULL DEFAULT 0,
+            verify_send_count INTEGER NOT NULL DEFAULT 0,
+            last_verify_sent_at REAL,
+            created_at REAL NOT NULL,
+            verified_at REAL,
+            approved_at REAL
+        )"""
+    )
+    # One-time tokens for both waitlist links (kind='verify' | 'approval'). Stored
+    # hashed like session tokens — a leaked database must not yield working links.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS waitlist_tokens (
+            token_hash TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            expires_at REAL NOT NULL,
+            consumed_at REAL,
+            created_at REAL NOT NULL
+        )"""
+    )
     return conn
 
 
@@ -450,3 +479,4 @@ def model_prefs_set(user_id: str, layer: str, model: str) -> None:
             "ON CONFLICT(user_id, layer) DO UPDATE SET model=excluded.model",
             (user_id, layer, model),
         )
+

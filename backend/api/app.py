@@ -36,7 +36,10 @@ from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
 from foundation import MemoryStore
+from settings import WAITLIST
 from . import audit as _audit, auth, billing, config, runs
+from . import waitlist as _waitlist
+from . import waitlist_store
 from . import decision_audit as _decisions
 from .memory_entitlements import allowed_memory_tiers
 from . import run_revision
@@ -100,6 +103,7 @@ async def lifespan(application: FastAPI):
 app = FastAPI(title="Clannon API (Vraksha engine)", version=config.VERSION, lifespan=lifespan)
 app.include_router(run_revision.router)
 app.include_router(billing.router)
+app.include_router(_waitlist.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -181,8 +185,12 @@ def _auth_rate_limit(request: Request) -> None:
 
 class SignupBody(BaseModel):
     name: str = Field(min_length=2, max_length=80)
-    email: EmailStr
+    # Required for ordinary open signup (WAITLIST.enabled=False). Ignored while the
+    # waitlist is gating signup — the account's email comes from the approval token,
+    # not the body, so a mistyped/mismatched email field can't create the wrong account.
+    email: EmailStr | None = None
     password: str = Field(min_length=8, max_length=256)
+    approvalToken: str | None = Field(default=None, max_length=256)
 
 
 class LoginBody(BaseModel):
@@ -193,7 +201,17 @@ class LoginBody(BaseModel):
 @app.post("/auth/signup")
 def signup(body: SignupBody, request: Request, response: Response) -> dict:
     _auth_rate_limit(request)
-    user = auth.create_user(body.email, body.name, body.password)
+    if WAITLIST.enabled:
+        if not body.approvalToken:
+            raise HTTPException(403, "Signups are invite-only right now. Join the waitlist.")
+        email = waitlist_store.waitlist_consume_token(body.approvalToken, "approval")
+        if email is None:
+            raise HTTPException(403, "This invite link is invalid or has expired.")
+    else:
+        if body.email is None:
+            raise HTTPException(422, "Email is required.")
+        email = body.email.strip().lower()
+    user = auth.create_user(email, body.name, body.password)
     auth.start_session(response, user)
     return user.as_json()
 

@@ -1,10 +1,15 @@
 """
 Mailer — the contract for sending transactional email.
 
-Clannon had no way to send mail at all before this (verified 2026-08-09: no smtp,
-sendgrid, resend, postmark, mailgun or ses anywhere; `pydantic[email]` only validates
-address syntax). The waitlist flow needs one, so the dependency arrives behind a single
-door rather than as a provider SDK sprinkled through `api/` — LAW 6.
+Clannon had no way to send mail at all before this (verified 2026-08-09 across every
+provider and SDK spelling; `pydantic[email]` only validates address syntax). The
+waitlist flow needs one, so the dependency arrives behind a single door rather than as
+a provider SDK sprinkled through `api/` — LAW 6.
+
+**This file names no provider, deliberately**, and neither may anything else except the
+one implementation module. `tests/mail_port.py` fails the suite if a provider name or
+SDK appears anywhere else, so "we can swap providers by editing one place" is checked
+rather than promised.
 
 Three things this contract deliberately does NOT do, each for a reason:
 

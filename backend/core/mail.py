@@ -23,12 +23,16 @@ from __future__ import annotations
 import logging
 import os
 
+import httpx
+
 from foundation import Accepted, MailError, Message
 
 log = logging.getLogger(__name__)
 
 _ENV = "CLANNON_ENV"
 _MAILER_ENV = "CLANNON_MAILER"
+_RESEND_KEY_ENV = "RESEND_API_KEY"
+_SENDER_ENV = "CLANNON_MAIL_FROM"
 
 
 class LogMailer:
@@ -50,7 +54,65 @@ class LogMailer:
         return Accepted(provider_id=None)
 
 
-def resolve_mailer() -> LogMailer:
+class ResendMailer:
+    """Resend (https://resend.com) — the production transport.
+
+    Chosen over SES for one blocking reason, not a preference: **SES starts every new
+    account in a sandbox that can only send to pre-verified addresses.** A waitlist
+    exists precisely to mail strangers, so SES cannot run it at all until AWS grants
+    production access through a support ticket — a human-in-the-loop dependency that
+    can take days and can be refused. Resend needs DNS records and nothing else.
+
+    It also costs no new dependency: this is one POST with a bearer token, so `httpx`
+    (already here) is enough. SES would mean boto3 for a single call, or hand-rolled
+    SigV4 signing.
+
+    SES wins on price far above alpha volume ($0.10/1000 vs a free tier of 3,000/month).
+    If that day comes, this class is the only thing that changes.
+    """
+
+    _ENDPOINT = "https://api.resend.com/emails"
+
+    def __init__(self, api_key: str, sender: str, *, timeout_s: float = 10.0) -> None:
+        self._api_key = api_key
+        self._sender = sender
+        self._timeout_s = timeout_s
+
+    async def send(self, message: Message) -> Accepted:
+        payload = {
+            "from": self._sender,
+            "to": [message.to],
+            "subject": message.subject,
+            "text": message.text,
+        }
+        if message.html:
+            payload["html"] = message.html
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
+                response = await client.post(
+                    self._ENDPOINT,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            # Typed at the boundary so callers never catch an httpx class and quietly
+            # couple themselves to the library this module exists to isolate.
+            raise MailError(f"mail transport failed: {type(exc).__name__}") from exc
+
+        if response.status_code >= 400:
+            # Body may echo the recipient; status and a short reason only. Never the
+            # key, never the address (LAW 5 — no secrets or user data in logs).
+            raise MailError(f"mail provider rejected the message (HTTP {response.status_code})")
+
+        provider_id = None
+        try:
+            provider_id = (response.json() or {}).get("id")
+        except ValueError:
+            pass  # accepted but unparseable body — still accepted, id simply unknown
+        return Accepted(provider_id=provider_id)
+
+
+def resolve_mailer() -> LogMailer | ResendMailer:
     """The single place a mailer is chosen.
 
     Fails closed in production rather than degrading to a no-op: an alpha whose
@@ -68,4 +130,21 @@ def resolve_mailer() -> LogMailer:
             )
         return LogMailer()
 
-    raise MailError(f"unknown mailer {configured!r} (set CLANNON_MAILER=log for dev)")
+    if configured == "resend":
+        api_key = (os.getenv(_RESEND_KEY_ENV) or "").strip()
+        sender = (os.getenv(_SENDER_ENV) or "").strip()
+        # Fail at resolve time, not at the first signup: a missing key must not become
+        # a runtime surprise for the first stranger who tries to join.
+        if not api_key:
+            raise MailError(f"CLANNON_MAILER=resend but {_RESEND_KEY_ENV} is not set")
+        if not sender:
+            raise MailError(
+                f"CLANNON_MAILER=resend but {_SENDER_ENV} is not set "
+                "(e.g. 'Clannon <hello@yourdomain.com>' — the domain must be verified "
+                "in Resend with its SPF/DKIM DNS records, or mail will not arrive)"
+            )
+        return ResendMailer(api_key, sender)
+
+    raise MailError(
+        f"unknown mailer {configured!r} (set CLANNON_MAILER=log for dev, or resend)"
+    )

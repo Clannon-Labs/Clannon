@@ -1,4 +1,4 @@
-# The 38 routes — the HTTP surface any implementation must serve
+# The 41 routes — the HTTP surface any implementation must serve
 
 **Read this if you are:** the frontend, deciding what you can call today · the backend,
 before adding a route · the owner, building the Rust API surface.
@@ -8,9 +8,10 @@ Need a route that is not here? File it in [`requests/`](requests/); do not add i
 this table yourself.
 
 **Verified 2026-08-09 by enumerating the live FastAPI app**, not by reading source:
-32 on `app.py`, 5 on `billing.py`'s router, 1 on `run_revision.py`'s. Where this file
-and the code disagree, the code wins and this file is the bug — say so rather than
-building to the prose.
+32 on `app.py`, 5 on `billing.py`'s router, 1 on `run_revision.py`'s, 3 on
+`waitlist.py`'s (added same day for the private-alpha waitlist gate). Where this
+file and the code disagree, the code wins and this file is the bug — say so
+rather than building to the prose.
 
 > **The 2026-08-02 "verified" claim was false**, and the frontend caught it by applying
 > exactly the rule in the line above. `GET /runs/archive` was listed and has never
@@ -24,15 +25,16 @@ building to the prose.
 
 | Rule | Detail |
 |---|---|
-| Auth | HTTP-only cookie, `SameSite=Lax`, set by `/auth/login` and `/auth/signup`. 30 of 38 routes require it. |
+| Auth | HTTP-only cookie, `SameSite=Lax`, set by `/auth/login` and `/auth/signup`. 30 of 41 routes require it. |
 | Ownership | Every resource is fetched **scoped by `user.id`**. Never "fetch then check". |
 | Non-disclosure | A resource owned by someone else returns **404**, never 403. A foreign run must be indistinguishable from a nonexistent one. |
 | Errors | `HTTPException(status, "human sentence")` → `{"detail": "..."}`. Messages are user-facing prose. |
 | Status codes in use | 401 auth · 403 forbidden · 404 not-found/non-disclosure · 409 conflict · 422 validation · 429 rate limit · 503 dependency down |
 
-**The 8 unauthenticated routes:** `/health`, `/ready`, `/config`,
+**The 11 unauthenticated routes:** `/health`, `/ready`, `/config`,
 `POST /auth/signup`, `POST /auth/login`, `POST /auth/logout`,
-`GET /auth/oauth/{provider}`, and `POST /billing/mock/confirm`.
+`GET /auth/oauth/{provider}`, `POST /billing/mock/confirm`, `POST /waitlist`,
+`POST /waitlist/resend`, and `GET /waitlist/verify`.
 
 ---
 
@@ -50,11 +52,19 @@ building to the prose.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/auth/signup` | no | Create account, set cookie. |
+| POST | `/auth/signup` | no | Create account, set cookie. While `WAITLIST.enabled` (`config/backend/waitlist.yaml`): requires `approvalToken`, ignores `email` (the token supplies it) — 403 if missing/invalid/expired. While disabled: ordinary open signup. |
 | POST | `/auth/login` | no | Set cookie. |
 | POST | `/auth/logout` | no | Delete cookie (`path=/`, `domain=COOKIE_DOMAIN`). |
 | GET | `/auth/me` | yes | Current user. The frontend's session probe — 401 when absent. |
 | GET | `/auth/oauth/{provider}` | no | `RedirectResponse` to the provider. |
+
+### Waitlist — 3 (private-alpha gate, added 2026-08-09)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/waitlist` | no | Join: `{email, note?}`. **Always** `202 {"status":"ok"}` — identical whether the address is new, already listed, already verified, or already a real account (non-disclosure; a public endpoint that varied its response would be an account-existence oracle). Sends a one-time verify link by mail, best-effort. |
+| POST | `/waitlist/resend` | no | `{email}`. Same non-disclosure, same always-`202` shape. Resends only if unverified and under the per-address send cap/cooldown. |
+| GET | `/waitlist/verify` | no | `?token=`. Consumes the one-time verify token; `302` to `/waitlist/confirmed` or `/waitlist/invalid-link` (unknown/expired/already-used are indistinguishable). Marks the address verified — **not** approved; approval is a separate, owner-only CLI step (`python -m api.waitlist_cli approve <email>`, deliberately not a route) that mails an approval link consumed by `POST /auth/signup`. |
 
 ### Projects & sessions — 5
 

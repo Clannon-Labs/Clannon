@@ -40,10 +40,13 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def db(tmp_path, monkeypatch):
-    from api import config, run_store
+    from api import config, run_store, app as app_mod
     import api.runs as runs_mod
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    # This file pins cross-user IDOR/BOLA, not the waitlist gate (see tests/waitlist.py
+    # for that) -- open signup so both fixture users can be created directly.
+    monkeypatch.setattr(app_mod, "WAITLIST", app_mod.WAITLIST.model_copy(update={"enabled": False}))
     # BOLA proof needs a writable wiki resource to attack; starter owns wiki.
     monkeypatch.setattr(config, "DEFAULT_PLAN", "starter")
     store = run_store.RunStore()
