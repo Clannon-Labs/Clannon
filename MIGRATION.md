@@ -13,39 +13,69 @@ same place.
 
 ## 0. The easy way — copy the folder, rebuild one thing
 
-If you can copy files between profiles directly, **do that instead of cloning.** One
-copy brings tracked files, gitignored files, and `.git` (history, branches, remotes)
-together, and you cannot forget an item off a checklist.
+**Profiles on this machine:** `cybro` (the owner's personal profile, where the workspace
+lives today) and `chillguy` (the second profile, becoming clannon-bot's home).
 
-**Sizes, measured:** everything that git ignores and matters is **~104 MB**, and 58 MB
-of that is `.agents/runs` worker logs you can skip. The real payload is under 50 MB.
-This is a twenty-minute job, most of it waiting on dependency installs.
+**Sizes, measured:** everything git ignores that matters is ~104 MB, and 58 MB of that
+is `.agents/runs` worker logs you can skip. Real payload under 50 MB. Twenty minutes,
+most of it waiting on dependency installs.
+
+### The permission wall — read before you start
+
+Both home directories are mode **700** (`drwx------`), so neither user can read the
+other's home. **A plain `rsync` or a GUI copy-paste fails in both directions.** The copy
+needs `sudo`, followed by `chown`. This is the step that silently wastes an afternoon
+if you miss it.
+
+### ① Run these AS `cybro`
 
 ```bash
-# 1. Stop the agents first — copying a live SQLite database can tear it
-./scripts/crew.sh stop backend; ./scripts/crew.sh stop frontend   # + any others running
+cd ~/Vault/projects/Clannon
+./scripts/crew.sh stop backend      # a live SQLite copy can tear; stop agents first
+./scripts/crew.sh stop frontend
 
-# 2. Copy the whole project directory across profiles
-#    (skip the two big regenerable trees)
-rsync -a --exclude backend/.venv --exclude frontend/node_modules \
-      /home/cybro/Vault/projects/Clannon/  ~/Vault/projects/Clannon/
+sudo rsync -a --exclude backend/.venv --exclude frontend/node_modules /home/cybro/Vault/projects/Clannon/ /home/chillguy/Vault/projects/Clannon/
 
-# 3. Rebuild the virtualenv — it is NOT relocatable, see below
-cd ~/Vault/projects/Clannon/backend && rm -rf .venv && uv venv && uv pip install -r requirements.txt
+# agent memory is keyed by ABSOLUTE project path, so the directory name changes
+sudo mkdir -p /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon
+sudo cp -r /home/cybro/.claude/projects/-home-cybro-Vault-projects-Clannon/memory /home/chillguy/.claude/projects/-home-chillguy-Vault-projects-Clannon/memory
 
-# 4. Frontend deps
-cd ../frontend && npm install
+# Claude Code settings — carries the GIT_AUTHOR_*/GIT_COMMITTER_* identity vars
+sudo cp /home/cybro/.claude/settings.json /home/chillguy/.claude/settings.json
+
+sudo chown -R chillguy:chillguy /home/chillguy/Vault /home/chillguy/.claude
 ```
 
-**Why `.venv` must be rebuilt rather than copied:** its `pyvenv.cfg` hard-codes
-`home = /home/cybro/.local/share/uv/python/...`, an absolute path into the *old*
-profile, and every script in `.venv/bin/` carries a matching shebang. Copied, it points
-at an interpreter the new profile cannot rely on. Verified, not assumed.
+The rsync is **one line**. A `\` continues a line only at end-of-line; pasted mid-line
+it escapes the following space and mangles the source path.
 
-**Still do §3** — `~/.claude` agent memory and `gh auth` live outside the project
-directory and no amount of copying the repo will bring them.
+`~` expands to the home of whoever is running the command — that is why every path here
+is absolute. Running the original relative form as `cybro` made source and destination
+the same directory, which is a silent no-op.
 
-Then verify with §5 before deleting anything.
+### ② Then log in as `chillguy`
+
+```bash
+cd ~/Vault/projects/Clannon/backend
+rm -rf .venv && uv venv && uv pip install -r requirements.txt
+cd ../frontend && npm install
+
+gh auth login                       # as clannon-bot
+git config --global user.name  "clannon-bot"
+git config --global user.email "293251899+clannon-bot@users.noreply.github.com"
+```
+
+**Why `.venv` is rebuilt, never copied:** its `pyvenv.cfg` hard-codes
+`home = /home/cybro/.local/share/uv/python/...`, an absolute path into the old profile,
+and every `.venv/bin/` shebang matches. Verified by reading the file.
+
+### ③ Verify as `chillguy` BEFORE deleting anything from `cybro`
+
+```bash
+cd ~/Vault/projects/Clannon/backend && .venv/bin/python -m pytest -q    # ~1670 passed
+sqlite3 api/data/clannon.db "select count(*) from waitlist;"            # db came across
+cd .. && git log -1 --format='%an'                                      # clannon-bot
+```
 
 ---
 
