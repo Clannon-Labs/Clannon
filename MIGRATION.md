@@ -101,6 +101,70 @@ cd .. && git log -1 --format='%an'                                      # clanno
 
 ---
 
+## 0b. Moving the Claude Code and Codex sessions
+
+**A running session cannot be moved.** What moves is its history, and Claude Code
+resumes from that (`claude --resume`). So do this **last, after the agent sessions have
+stopped** — a live transcript is still being written, and copying mid-conversation
+snapshots a partial file.
+
+### What holds session state
+
+| Path | Size | Holds |
+|---|---|---|
+| `~/.claude/projects/<key>/*.jsonl` | 145 M | **The conversation transcripts.** One `<key>` per working directory |
+| `~/.claude/projects/<key>/memory/` | small | Agent memory. Lives INSIDE the project dir, so it travels with it |
+| `~/.claude/plugins/` | 871 M | Installed plugins. Copying beats reinstalling |
+| `~/.claude/settings.json` | tiny | The `GIT_AUTHOR_*` / `GIT_COMMITTER_*` identity vars |
+| `~/.claude/history.jsonl`, `file-history/` | 16 M | Prompt history, edit history |
+| `~/.codex/` | 929 M | `auth.json`, `config.toml`, history, sqlite state |
+
+### The rekey — this is where "nothing lost" is won or lost
+
+`<key>` is the working directory's absolute path with `/` replaced by `-`. Eight
+directories are Clannon's, one per agent working dir:
+
+```
+-home-cybro-Vault-projects-Clannon                          the coordinator
+-home-cybro-Vault-projects-Clannon-backend-api              api specialist
+-home-cybro-Vault-projects-Clannon-backend-core-memory      memory specialist
+-home-cybro-Vault-projects-Clannon-backend-core-orchestrator
+-home-cybro-Vault-projects-Clannon-backend-registry
+-home-cybro-Vault-projects-Clannon-backend-security
+-home-cybro-Vault-projects-Clannon-frontend
+-home-cybro-Vault-projects-Clannon-drafts
+```
+
+Copy them unrenamed and the new profile finds nothing — **silently**, because a missing
+key is indistinguishable from a project that has never been opened.
+
+### Run as `cybro`, after stopping the agents
+
+```bash
+tmux kill-server        # or crew.sh stop <role> for each
+
+sudo rsync -a --chown=chillguy:chillguy /home/cybro/.claude/ /home/chillguy/.claude/
+sudo rsync -a --chown=chillguy:chillguy /home/cybro/.codex/  /home/chillguy/.codex/
+
+sudo bash -c 'cd /home/chillguy/.claude/projects && for d in -home-cybro-Vault-projects-Clannon*; do mv "$d" "${d/-home-cybro-/-home-chillguy-}"; done'
+sudo chown -R chillguy:chillguy /home/chillguy/.claude /home/chillguy/.codex
+```
+
+The glob excludes other projects (e.g. GhostLayer) by design. `rsync` copies rather than
+moves, so the originals remain under `cybro` as a fallback until you have verified.
+
+### Then, as `chillguy`
+
+```bash
+cd ~/Vault/projects/Clannon && claude --resume
+```
+
+**Expect to re-authenticate.** `~/.claude/.credentials.json` and `~/.codex/auth.json`
+are commonly machine- or keyring-bound. Re-logging in costs nothing: transcripts,
+memory and settings are separate files and are unaffected by it.
+
+---
+
 ## 1. The clean-clone alternative
 
 Use this if you would rather start from the remote than copy a working directory.
