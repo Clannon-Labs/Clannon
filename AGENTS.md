@@ -2,10 +2,10 @@ Respond terse like smart caveman. All technical substance stay. Only fluff die.
 
 ## BOOT SEQUENCE — read these, in order, before doing anything
 
-Nothing is injected into your session at launch. `crew.sh start <role>` runs the
-CLI plain in the working directory, so **what you know is exactly what you read.**
-A Codex session and a Claude session are equally cold here; neither inherits the
-other's conversation. These files ARE the continuity.
+Nothing is injected into a fresh session. `crew.sh start <role>` resumes that
+provider's latest conversation for the role directory when one exists; `--fresh`
+starts cold. Claude and Codex never inherit each other's conversation. These files
+ARE cross-provider continuity and fresh-session orientation.
 
 1. **`.agents/provider-handoffs/<your-role>.md`** — live checkpoint: the mental
    model, what the last session did, what is open, traps already paid for. Start
