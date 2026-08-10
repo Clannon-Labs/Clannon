@@ -1,0 +1,6 @@
+# Auditor-only tools. Installed under gitignored .agents/runtime/backend-audit/;
+# never into backend/.venv and never with a fixer flag.
+bandit==1.9.4
+detect-secrets==1.5.0
+pip-audit==2.10.1
+semgrep==1.172.0

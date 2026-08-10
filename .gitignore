@@ -45,6 +45,11 @@ security/vendors/
 
 demos/
 drafts/
+/backend-audit/notes/*
+!/backend-audit/notes/README.md
+!/backend-audit/drafts/
+/backend-audit/drafts/*
+!/backend-audit/drafts/README.md
 /benchmarks/        # anchored: root-level only, so docs/benchmarks/ stays tracked
 
 /memory/

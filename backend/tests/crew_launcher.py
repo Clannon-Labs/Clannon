@@ -19,18 +19,24 @@ ROLE_DIRS = {
     "orchestration": REPO_ROOT / "backend" / "core" / "orchestrator",
     "security": REPO_ROOT / "backend" / "security",
     "api": REPO_ROOT / "backend" / "api",
+    "backend-audit": REPO_ROOT / "backend-audit",
     "release": REPO_ROOT / "release",
 }
 
 
-def _write_session(home: Path, cwd: Path, source: str = "cli") -> None:
-    session = home / ".codex" / "sessions" / "2026" / "08" / "09" / f"{cwd.name}.jsonl"
+def _write_session(codex_home: Path, cwd: Path, source: str = "cli") -> None:
+    session = codex_home / "sessions" / "2026" / "08" / "09" / f"{cwd.name}.jsonl"
     session.parent.mkdir(parents=True, exist_ok=True)
     metadata = {"type": "session_meta", "payload": {"cwd": str(cwd), "source": source}}
     session.write_text(json.dumps(metadata, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def _start(tmp_path: Path, role: str, *flags: str) -> tuple[subprocess.CompletedProcess[str], str]:
+def _start(
+    tmp_path: Path,
+    role: str,
+    *flags: str,
+    with_codex: bool = True,
+) -> tuple[subprocess.CompletedProcess[str], str]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
     tmux_log = tmp_path / "tmux.log"
@@ -49,9 +55,14 @@ def _start(tmp_path: Path, role: str, *flags: str) -> tuple[subprocess.Completed
         HOME=str(tmp_path / "home"),
         PATH=f"{fake_bin}:{env['PATH']}",
         TMUX_LOG=str(tmux_log),
+        CLANNON_AUDIT_RUNTIME=str(tmp_path / "audit-runtime"),
     )
+    args = [str(CREW), "start", role]
+    if with_codex:
+        args.append("--codex")
+    args.extend(flags)
     result = subprocess.run(
-        [str(CREW), "start", role, "--codex", *flags],
+        args,
         cwd=REPO_ROOT,
         env=env,
         text=True,
@@ -62,23 +73,44 @@ def _start(tmp_path: Path, role: str, *flags: str) -> tuple[subprocess.Completed
 
 
 class CrewLauncherTest(unittest.TestCase):
+    def test_backend_audit_defaults_to_codex_sandbox(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+
+            result, tmux_call = _start(
+                tmp_path,
+                "backend-audit",
+                with_codex=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[codex, fresh", result.stdout)
+            self.assertIn("backend-audit-sandbox.sh start", tmux_call)
+
     def test_codex_resumes_interactive_session_for_each_role(self):
         for role, cwd in ROLE_DIRS.items():
             with self.subTest(role=role), tempfile.TemporaryDirectory() as temp_dir:
                 tmp_path = Path(temp_dir)
-                _write_session(tmp_path / "home", cwd)
+                if role == "backend-audit":
+                    codex_home = tmp_path / "audit-runtime" / "codex-home"
+                else:
+                    codex_home = tmp_path / "home" / ".codex"
+                _write_session(codex_home, cwd)
 
                 result, tmux_call = _start(tmp_path, role)
 
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("[codex, resuming prior conversation]", result.stdout)
-                self.assertIn("codex resume --last", tmux_call)
-                self.assertNotIn("--all", tmux_call)
+                if role == "backend-audit":
+                    self.assertIn("backend-audit-sandbox.sh resume", tmux_call)
+                else:
+                    self.assertIn("codex resume --last", tmux_call)
+                    self.assertNotIn("--all", tmux_call)
 
     def test_codex_does_not_resume_another_roles_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
-            _write_session(tmp_path / "home", ROLE_DIRS["backend"])
+            _write_session(tmp_path / "home" / ".codex", ROLE_DIRS["backend"])
 
             result, tmux_call = _start(tmp_path, "frontend")
 
@@ -92,7 +124,7 @@ class CrewLauncherTest(unittest.TestCase):
     def test_codex_fresh_flag_skips_matching_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
-            _write_session(tmp_path / "home", ROLE_DIRS["backend"])
+            _write_session(tmp_path / "home" / ".codex", ROLE_DIRS["backend"])
 
             result, tmux_call = _start(tmp_path, "backend", "--fresh")
 
@@ -103,7 +135,7 @@ class CrewLauncherTest(unittest.TestCase):
     def test_codex_does_not_resume_headless_worker_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
-            _write_session(tmp_path / "home", ROLE_DIRS["api"], source="exec")
+            _write_session(tmp_path / "home" / ".codex", ROLE_DIRS["api"], source="exec")
 
             result, tmux_call = _start(tmp_path, "api")
 

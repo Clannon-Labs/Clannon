@@ -46,11 +46,17 @@ explicitly retired in §2.2.
 | **orchestration** | `clannon-orchestration` | `backend/core/orchestrator/`, `backend/registry/`, `backend/experts/`, `backend/tools/` |
 | **security** | `clannon-security` | `backend/security/` |
 | **api** | `clannon-api` | `backend/api/` |
+| **backend-audit** | `clannon-backend-audit` | no source; only own notes/drafts, handoff, reports, comms, and proposal output |
 
 Exclusive means exclusive: **no agent edits another's tree, ever** — not even a
 one-line "obvious" fix. Cross-tree needs go through a proposal (§3.2). The
 backend agent has final integration authority and is the **sole pusher**, but
 being coordinator does not grant edit rights into a specialist's tree.
+
+`backend-audit` is different: independent researcher, not implementer. Repository
+source is technically read-only. Bubblewrap remounts only its explicit output paths
+writable; missing sandbox support refuses launch. Existing `security` specialist
+still owns security implementation and never audits itself as final authority.
 
 Each role's detailed charter lives in the `CLAUDE.md` of the tree it owns.
 
@@ -207,12 +213,12 @@ free to type them yourself as the owner; no automation may.
 
 ### 4.2 Launch deliberately, not as a standing crew
 
-Six agents running simultaneously on one 24 GB box, in one shared git tree, was
+Many agents running simultaneously on one 24 GB box, in one shared git tree, was
 a persistent source of OOM pressure and cross-agent collisions. The default is
 now: **start the roles you actually need for the work at hand.**
 
 The backend agent alone is a perfectly normal configuration. So is backend plus
-one specialist. All six at once should be a deliberate choice, not a default.
+one specialist. Starting every role at once should be deliberate, not default.
 
 ### 4.3 Commands
 
@@ -226,6 +232,11 @@ one specialist. All six at once should be a deliberate choice, not a default.
 `start` resumes the role's existing conversation when one exists, and starts
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
+
+`backend-audit` defaults to Codex and is Codex-only until an equivalent Claude
+sandbox is independently proven. Run `scripts/backend-audit-sandbox.sh self-test`
+to prove auditor outputs are writable while source, `.git`, and charter are not.
+No prompt-only fallback exists.
 
 ### 4.4 Two ways an agent runs — interactive vs. delegated
 
@@ -350,6 +361,7 @@ could not commit its own work and had to write a fallback report instead.
 |---|---|---|
 | **Coordinator (backend)** | always | never |
 | Architecture, planning, rulings, review | yes | no |
+| Independent backend adversarial audit | no (v1) | **yes** — Codex Security + enforced read-only source |
 | Scoped implementation from a spec | fine | **preferred** — faster, stays in scope |
 | Debugging a specific failure | fine | **preferred** |
 | Open-ended "figure out what to do next" | yes | avoid |

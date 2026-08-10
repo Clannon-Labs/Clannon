@@ -8,7 +8,7 @@
 #   ./scripts/crew.sh stop <role>
 #   ./scripts/crew.sh run <role> --brief <file> [--claude|--codex]
 #
-# Roles: backend frontend memory orchestration security api release
+# Roles: backend frontend memory orchestration security api backend-audit release
 #
 # TWO WAYS AN AGENT RUNS — they do not overlap:
 #   start/attach  interactive session in tmux. For the OWNER to drive an agent.
@@ -32,7 +32,8 @@
 set -uo pipefail   # no -e: a failure on one role must not abort a multi-role loop
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ROLES="backend frontend memory orchestration security api release"
+AUDIT_RUNTIME="${CLANNON_AUDIT_RUNTIME:-$ROOT/.agents/runtime/backend-audit}"
+ROLES="backend frontend memory orchestration security api backend-audit release"
 
 die() { echo "crew: $*" >&2; exit 2; }
 
@@ -62,6 +63,7 @@ dir_for() {
     orchestration) echo "$ROOT/backend/core/orchestrator" ;;
     security)      echo "$ROOT/backend/security" ;;
     api)           echo "$ROOT/backend/api" ;;
+    backend-audit) echo "$ROOT/backend-audit" ;;
     release)       echo "$ROOT/release" ;;
     *)             return 1 ;;
   esac
@@ -77,6 +79,8 @@ is_specialist() {
   # NOTE: `release` is deliberately absent — it is a conversational role the
   # owner drives directly, so it keeps the stronger default model.
 }
+
+is_auditor() { [ "$1" = backend-audit ]; }
 
 # --- session liveness -------------------------------------------------------
 # A tmux session can outlive its agent: when claude/codex exits, the wrapper
@@ -126,7 +130,11 @@ claude_has_session() {
 # `codex exec` workers that happen to run inside the same module.
 codex_has_session() {
   local dir="$1" sessions_dir file metadata
-  sessions_dir="${CODEX_HOME:-$HOME/.codex}/sessions"
+  if [ "$dir" = "$ROOT/backend-audit" ]; then
+    sessions_dir="$AUDIT_RUNTIME/codex-home/sessions"
+  else
+    sessions_dir="${CODEX_HOME:-$HOME/.codex}/sessions"
+  fi
   [ -d "$sessions_dir" ] || return 1
 
   while IFS= read -r -d '' file; do
@@ -150,6 +158,17 @@ provider_has_session() {
 
 launch_command() {   # role provider fresh dir -> the shell command the session runs
   local role="$1" provider="$2" fresh="$3" dir="$4" cmd
+  if is_auditor "$role"; then
+    [ "$provider" = codex ] || die "$role is Codex-only until its Claude sandbox is independently proven"
+    if [ "$fresh" = no ] && codex_has_session "$dir"; then
+      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") resume"
+    else
+      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") start"
+    fi
+    cmd="$(agent_env "$role")$cmd"
+    echo "$cmd; echo; echo '[crew] auditor exited — session kept for inspection. Ctrl-b d to detach.'; exec bash"
+    return
+  fi
   case "$provider" in
     claude)
       cmd="claude --dangerously-skip-permissions"
@@ -184,7 +203,7 @@ launch_command() {   # role provider fresh dir -> the shell command the session 
 }
 
 cmd_start() {
-  local role="" provider=claude fresh=no arg
+  local role="" provider="" fresh=no arg
   for arg in "$@"; do
     case "$arg" in
       --codex) provider=codex ;;
@@ -195,6 +214,9 @@ cmd_start() {
   done
   [ -n "$role" ] || die "usage: crew.sh start <role> [--codex] [--fresh]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+  if [ -z "$provider" ]; then
+    if is_auditor "$role"; then provider=codex; else provider=claude; fi
+  fi
 
   local session="clannon-$role" dir running
   dir="$(dir_for "$role")"
@@ -310,6 +332,9 @@ cmd_run() {
   done
   [ -n "$role" ] && [ -n "$brief" ] || die "usage: crew.sh run <role> --brief <file> [--claude|--codex]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
+  if is_auditor "$role"; then
+    die "backend-audit is a persistent, read-only research role; use: crew.sh start backend-audit"
+  fi
   # The coordinator owns real trees too (foundation/, core/llm, core/pipeline.py,
   # config/, scripts/, docs/). Dispatching a worker into one of those is exactly how
   # it delegates instead of doing the labour itself — but it must be SCOPED, because

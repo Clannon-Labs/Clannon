@@ -226,6 +226,7 @@ pure computation) still stands and this follows it.
 | **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + author/RFC provenance + supersession linkage (Manager-only curation/save provenance DONE) |
 | **orchestration** | central/batch prompt contracts landed; continue Mission Engine + batch hardening, propose-first where owner-gated |
 | **security** | standing invariant review of budget/batch designs; widen adversarial regression coverage when new classes appear |
+| **backend-audit** | establish backend/root threat model; baseline adversarial audit; targeted deep review of money, identity/tenant, network/tool, sandbox, and fail-closed boundaries; report only |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
 | **frontend** | its own backlog; `HANDOFF.md` in `frontend/` |
 | **release** | post-v0.3.0 housekeeping; next release when there is scope |
