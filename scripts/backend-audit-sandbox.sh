@@ -133,7 +133,8 @@ PY
   cat > "$CLAUDE_STATE/settings.json" <<'JSON'
 {
   "skipDangerousModePermissionPrompt": true,
-  "includeCoAuthoredBy": false
+  "includeCoAuthoredBy": false,
+  "remoteControlAtStartup": false
 }
 JSON
 }
@@ -188,6 +189,19 @@ BWRAP=(
   --setenv TMPDIR /tmp
   --setenv PYTHONDONTWRITEBYTECODE 1
   --setenv SEMGREP_SEND_METRICS off
+  # A parent Claude Code session exports markers that a nested one obeys — inheriting
+  # CLAUDE_CODE_CHILD_SESSION silently turns transcript saving OFF, which would leave
+  # `resume` with nothing to resume and no error to explain it. crew.sh is routinely
+  # run from inside an agent's own session, so this is the normal case, not the odd one.
+  --unsetenv CLAUDECODE
+  --unsetenv CLAUDE_CODE_CHILD_SESSION
+  --unsetenv CLAUDE_CODE_SESSION_ID
+  --unsetenv CLAUDE_CODE_BRIDGE_SESSION_ID
+  --unsetenv CLAUDE_CODE_MESSAGING_SOCKET
+  --unsetenv CLAUDE_CODE_ENTRYPOINT
+  --unsetenv CLAUDE_CODE_EXECPATH
+  --unsetenv CLAUDE_EFFORT
+  --unsetenv CLAUDE_PID
   --unsetenv SSH_AUTH_SOCK
   --unsetenv GH_TOKEN
   --unsetenv GITHUB_TOKEN
