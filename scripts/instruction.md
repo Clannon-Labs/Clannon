@@ -17,7 +17,7 @@ Full design + reasoning: `docs/architecture/CREW_WORKFLOW.md`.
 ```
 
 Roles: `backend` `frontend` `memory` `orchestration` `security` `api`
-`backend-audit` `release`
+`backend-audit` `frontend-audit` `release`
 
 - Resumes that role's existing conversation if there is one; starts fresh
   otherwise.
@@ -34,7 +34,7 @@ Options:
 ./scripts/crew.sh start api --fresh    # ignore prior conversation, start clean
 ```
 
-Every role, `backend-audit` included, is Claude unless you pass `--codex`.
+Every role, both audit roles included, is Claude unless you pass `--codex`.
 
 ### Start only what you need
 
@@ -49,26 +49,28 @@ normal setup.** Add a specialist when there is work in its tree.
 
 ---
 
-## The auditor is different — `backend-audit`
+## Audit roles are different
 
-An independent security researcher, not another implementer and not the `security`
-specialist. It reads the backend and root infrastructure, hunts for realistic ways to
-abuse Clannon, and **writes findings only**. It never fixes them, never commits, never
-pushes, never touches anything remote.
+Independent security researchers, not implementers. `backend-audit` covers backend and
+root infrastructure. `frontend-audit` covers browser/client surfaces using the
+frontend-owned `frontend/FRONTEND_AUDIT_CHARTER.md`, and reads backend code only when a
+frontend security claim depends on server enforcement. Both hunt realistic abuse and
+working-as-designed control bypasses; scanners are only evidence inputs. Both write
+findings only: no fixes, commits, pushes, or remote mutation.
 
 ```bash
 ./scripts/crew.sh start backend-audit           # Claude, like every role
 ./scripts/crew.sh start backend-audit --codex   # Codex
+./scripts/crew.sh start frontend-audit
+./scripts/crew.sh start frontend-audit --codex
 ```
 
-Start it the same way, but understand what it is doing underneath: `crew.sh` hands
-this one role to `scripts/backend-audit-sandbox.sh`, which runs the agent inside
-Bubblewrap. The repository — source, tests, config, `.git`, and the auditor's own
-rules — is mounted **read-only**. Writable are only its own outputs: `notes/`,
-`drafts/`, `reports/backend-audit/`, `comms/<today>/backend-audit.md`, its handoff, and
-`proposals/to-backend/from-backend-audit/`. Your normal home is not in there at all, so
-no SSH keys, no `gh` token, no cloud credentials. Its provider profile is isolated too —
-it cannot see your own Claude or Codex state.
+`crew.sh` hands either role to `scripts/audit-sandbox.sh`, with role and provider as
+parameters. Repository source, tests, config, `.git`, dependency manifests,
+lockfiles, project environments, and auditor rules are mounted **read-only**. Writable
+are only that role's notes/drafts, reports, own comms, handoff, and routed proposal
+outputs. Normal home is absent: no SSH keys, `gh` token, cloud credentials, or owner
+provider state.
 
 That is the point: independence you do not have to trust a prompt for. If Bubblewrap is
 missing, **it refuses to launch** rather than falling back to a polite request.
@@ -76,18 +78,21 @@ missing, **it refuses to launch** rather than falling back to a polite request.
 Prove the boundary after anything changes in that script:
 
 ```bash
-./scripts/backend-audit-sandbox.sh self-test --claude
-./scripts/backend-audit-sandbox.sh self-test --codex
+./scripts/audit-sandbox.sh backend-audit self-test --codex
+./scripts/audit-sandbox.sh backend-audit self-test --claude
+./scripts/audit-sandbox.sh frontend-audit self-test --codex
+./scripts/audit-sandbox.sh frontend-audit self-test --claude
 ```
 
-It checks that the auditor's outputs are writable, that source/`.git`/charter are not,
-that name resolution works, that the pinned scanners (bandit, detect-secrets, pip-audit,
-semgrep — installed into `.agents/runtime/backend-audit/`, never the project venv) are
-visible, and that the provider actually starts against its isolated profile.
+It checks role outputs writable; source/`.git`/charter read-only; name resolution;
+pinned scanners and project-aware tools visible; project configs parse without writes;
+and provider startup against isolated state. Tools live below
+`.agents/runtime/<role>/`, never project venv or `frontend/node_modules`.
 
-Findings arrive as `reports/backend-audit/report_vN.md`, with anything actionable also
-filed to `proposals/to-backend/from-backend-audit/` for the coordinator to route. Both
-are gitignored on purpose — unfixed vulnerability detail should not ship with the source.
+Findings arrive in `reports/<role>/report_vN.md`. Backend findings route to
+`proposals/to-backend/from-backend-audit/`; frontend findings route to frontend or
+backend by actual fix ownership. Reports and proposals are gitignored: unfixed
+vulnerability detail must not ship with source.
 
 ---
 

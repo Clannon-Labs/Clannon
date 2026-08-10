@@ -1,0 +1,4 @@
+# Shared source-only scanners. Installed under the role's gitignored runtime;
+# never into frontend/node_modules or backend/.venv and never with a fixer flag.
+detect-secrets==1.5.0
+semgrep==1.172.0

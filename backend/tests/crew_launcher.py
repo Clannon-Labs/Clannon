@@ -80,6 +80,25 @@ def _start(
 
 
 class CrewLauncherTest(unittest.TestCase):
+    def test_frontend_audit_tooling_is_exact_and_separate_from_project(self):
+        """Coordinator-owned audit pins must never rewrite frontend dependencies."""
+        tooling = REPO_ROOT / "frontend-audit" / "tooling"
+        manifest = json.loads((tooling / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((tooling / "package-lock.json").read_text(encoding="utf-8"))
+        expected = {
+            "@playwright/test": "1.62.0",
+            "eslint": "9.39.4",
+            "eslint-config-next": "16.2.12",
+            "npm": "11.16.0",
+            "typescript": "5.9.3",
+            "vitest": "4.1.9",
+        }
+
+        self.assertEqual(manifest["dependencies"], expected)
+        self.assertEqual(lock["packages"][""]["dependencies"], expected)
+        for package, version in expected.items():
+            self.assertEqual(lock["packages"][f"node_modules/{package}"]["version"], version)
+
     def test_backend_audit_defaults_to_claude_in_the_sandbox(self):
         """No flag means Claude for every role; the auditor is not an exception."""
         with tempfile.TemporaryDirectory() as temp_dir:

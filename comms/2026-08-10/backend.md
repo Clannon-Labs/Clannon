@@ -66,3 +66,16 @@ the mount policy is the boundary, so the launcher gets a role parameter the way 
 already takes a provider one. Their open question about a Codex default is moot now
 that every role defaults to Claude. Asked them for pinned npm audit tooling; not
 blocking.
+
+## Independent frontend security auditor ready
+
+Completed interrupted root wiring. `frontend-audit` now has durable Claude/Codex
+charters, provider equipment, continuity, routed findings, isolated exact Python/npm
+tool locks, and the same role-parameterized Bubblewrap boundary as `backend-audit`.
+No frontend source, manifest, lockfile, or project dependency changed.
+
+Boundary proof passed on Claude and Codex: source/`.git`/charters/project dependencies
+rejected writes; exact tools ran full ESLint and `tsc --noEmit`, Vitest/Playwright
+discovery, and report-only npm audit against real project. Baseline assignment queued;
+no candidate risk promoted to finding and no security verdict exists yet. Launcher:
+11 passed. Full backend: 1683 passed, 13 service skips, 9 subtests.

@@ -47,16 +47,19 @@ explicitly retired in §2.2.
 | **security** | `clannon-security` | `backend/security/` |
 | **api** | `clannon-api` | `backend/api/` |
 | **backend-audit** | `clannon-backend-audit` | no source; only own notes/drafts, handoff, reports, comms, and proposal output |
+| **frontend-audit** | `clannon-frontend-audit` | no source; only own notes/drafts, handoff, reports, comms, and routed proposal output |
 
 Exclusive means exclusive: **no agent edits another's tree, ever** — not even a
 one-line "obvious" fix. Cross-tree needs go through a proposal (§3.2). The
 backend agent has final integration authority and is the **sole pusher**, but
 being coordinator does not grant edit rights into a specialist's tree.
 
-`backend-audit` is different: independent researcher, not implementer. Repository
-source is technically read-only. Bubblewrap remounts only its explicit output paths
-writable; missing sandbox support refuses launch. Existing `security` specialist
-still owns security implementation and never audits itself as final authority.
+Audit roles are different: independent researchers, not implementers. Repository
+source is technically read-only. One role-parameterized Bubblewrap launcher remounts
+only each role's explicit outputs writable; missing sandbox support refuses launch.
+`backend-audit` covers backend/root. `frontend-audit` covers browser/client surfaces
+from the frontend-owned threat model and routes server-side findings to the coordinator.
+Existing implementation roles never audit themselves as final authority.
 
 Each role's detailed charter lives in the `CLAUDE.md` of the tree it owns.
 
@@ -233,19 +236,21 @@ one specialist. Starting every role at once should be deliberate, not default.
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
 
-`backend-audit` follows the same provider rule as every other role — Claude unless
-you pass `--codex` (both proven 2026-08-10). It goes through ONE enforced launcher
-with the provider as a parameter — the Bubblewrap mount policy is the security boundary, and a per-provider
-copy of it would drift. Prove it after any change to that script:
+Both audit roles follow the same provider rule as every other role — Claude unless
+you pass `--codex`. They go through ONE enforced launcher with role and provider as
+parameters. Bubblewrap mount policy is the security boundary; per-role or per-provider
+copies would drift. Prove affected role/provider combinations after any change:
 
 ```bash
-./scripts/backend-audit-sandbox.sh self-test --codex
-./scripts/backend-audit-sandbox.sh self-test --claude
+./scripts/audit-sandbox.sh backend-audit self-test --codex
+./scripts/audit-sandbox.sh backend-audit self-test --claude
+./scripts/audit-sandbox.sh frontend-audit self-test --codex
+./scripts/audit-sandbox.sh frontend-audit self-test --claude
 ```
 
 The proof covers writable outputs, read-only source/`.git`/charter, name resolution,
-scanner visibility, and that the provider actually starts inside the sandbox against
-an isolated profile. No prompt-only fallback exists.
+pinned role-tool visibility and project parsing, and provider startup inside an
+isolated profile. No prompt-only fallback exists.
 
 ### 4.4 Two ways an agent runs — interactive vs. delegated
 

@@ -50,6 +50,11 @@ drafts/
 !/backend-audit/drafts/
 /backend-audit/drafts/*
 !/backend-audit/drafts/README.md
+/frontend-audit/notes/*
+!/frontend-audit/notes/README.md
+!/frontend-audit/drafts/
+/frontend-audit/drafts/*
+!/frontend-audit/drafts/README.md
 /benchmarks/        # anchored: root-level only, so docs/benchmarks/ stays tracked
 
 /memory/

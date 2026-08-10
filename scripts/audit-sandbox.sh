@@ -30,7 +30,7 @@ die() { echo "audit sandbox: $*" >&2; exit 2; }
 
 ROLE="${1:-}"
 MODE="${2:-}"
-PROVIDER=codex
+PROVIDER=claude
 shift 2 2>/dev/null || true
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,9 +46,11 @@ done
 # the confinement itself is per-role, and nothing here may weaken it.
 case "$ROLE" in
   backend-audit)
+    NODE_TOOLING=0
     PROPOSAL_DIRS=("$ROOT/proposals/to-backend/from-backend-audit")
     ;;
   frontend-audit)
+    NODE_TOOLING=1
     # Two inboxes on purpose: a frontend-owned fix goes to the frontend, while a
     # finding whose real fix is server-side goes to the coordinator — the auditor
     # never asks an implementer to relay for it.
@@ -67,6 +69,7 @@ RUNTIME="$RUNTIME_ROOT/$ROLE"
 CODEX_STATE="$RUNTIME/codex-home"
 CLAUDE_STATE="$RUNTIME/claude-home"
 TOOLS_VENV="$RUNTIME/tools-venv"
+NODE_TOOLS="$RUNTIME/node-tools"
 REPORTS="$ROOT/reports/$ROLE"
 TODAY="$ROOT/comms/$(date +%F)"
 COMMS_FILE="$TODAY/$ROLE.md"
@@ -76,6 +79,8 @@ case "$MODE" in start|resume|self-test) ;; *) die "usage: $0 <role> {start|resum
 [ -d "$ROLE_DIR" ] || die "role directory missing: $ROLE_DIR"
 command -v bwrap >/dev/null 2>&1 || die "Bubblewrap (bwrap) is required; refusing unsafe fallback"
 command -v uv >/dev/null 2>&1 || die "uv is required to provision isolated audit tools"
+[ "$NODE_TOOLING" -eq 0 ] || command -v npm >/dev/null 2>&1 \
+  || die "npm is required to provision isolated frontend audit tools"
 
 # Host-side preparation happens before confinement. Paths contain no machine-specific
 # constants; every location derives from the repository root, HOME, CODEX_HOME, or the
@@ -83,7 +88,15 @@ command -v uv >/dev/null 2>&1 || die "uv is required to provision isolated audit
 mkdir -p \
   "$ROLE_DIR/notes" "$ROLE_DIR/drafts" "$RUNTIME/tmp" \
   "$REPORTS" "$TODAY" "${PROPOSAL_DIRS[@]}"
+COMMS_WAS_PRESENT=0
+[ ! -e "$COMMS_FILE" ] || COMMS_WAS_PRESENT=1
 touch "$COMMS_FILE" "$HANDOFF"
+cleanup_self_test_comms() {
+  if [ "$COMMS_WAS_PRESENT" -eq 0 ] && [ ! -s "$COMMS_FILE" ]; then
+    unlink "$COMMS_FILE"
+  fi
+}
+[ "$MODE" != self-test ] || trap cleanup_self_test_comms EXIT
 
 if [ ! -x "$TOOLS_VENV/bin/python" ]; then
   uv venv --quiet --python 3.12 "$TOOLS_VENV" >/dev/null \
@@ -96,6 +109,30 @@ TOOLS_PYTHON_REAL="$(readlink -f "$TOOLS_VENV/bin/python")"
 TOOLS_PYTHON_ROOT="$(dirname "$(dirname "$TOOLS_PYTHON_REAL")")"
 TOOLS_PYTHON_LINK="$(readlink "$TOOLS_VENV/bin/python")"
 TOOLS_PYTHON_MOUNT="$(dirname "$(dirname "$TOOLS_PYTHON_LINK")")"
+
+TOOLS_PATH="$TOOLS_VENV/bin:/opt/clannon-provider:/usr/local/bin:/usr/bin:/bin"
+if [ "$NODE_TOOLING" -eq 1 ]; then
+  NODE_MANIFEST="$ROLE_DIR/tooling/package.json"
+  NODE_LOCK="$ROLE_DIR/tooling/package-lock.json"
+  [ -f "$NODE_MANIFEST" ] && [ -f "$NODE_LOCK" ] \
+    || die "frontend audit tooling manifest or lockfile missing"
+  NODE_LOCK_HASH="$(sha256sum "$NODE_MANIFEST" "$NODE_LOCK")"
+  NODE_MARKER="$NODE_TOOLS/.clannon-lock-hash"
+  if [ ! -f "$NODE_MARKER" ] || [ "$(cat "$NODE_MARKER")" != "$NODE_LOCK_HASH" ]; then
+    mkdir -p "$NODE_TOOLS"
+    cp "$NODE_MANIFEST" "$NODE_LOCK" "$NODE_TOOLS/"
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci \
+      --prefix "$NODE_TOOLS" --ignore-scripts --no-audit --no-fund >/dev/null \
+      || die "could not provision pinned frontend audit tools"
+    printf '%s' "$NODE_LOCK_HASH" > "$NODE_MARKER"
+  fi
+  # Playwright keys its singleton by resolved module path. Its CLI therefore must
+  # enter through the project path that the read-only package overlay below replaces;
+  # starting at the runtime path creates a second instance during test discovery.
+  mkdir -p "$NODE_TOOLS/bin"
+  ln -sfn "$ROOT/frontend/node_modules/.bin/playwright" "$NODE_TOOLS/bin/playwright"
+  TOOLS_PATH="$NODE_TOOLS/bin:$NODE_TOOLS/node_modules/.bin:$TOOLS_PATH"
+fi
 
 prepare_codex() {
   [ -n "$CODEX_REAL" ] && [ -x "$CODEX_REAL" ] || die "Codex CLI not found"
@@ -208,7 +245,7 @@ BWRAP=(
   --dir /opt
   --chdir "$ROLE_DIR"
   --setenv HOME "$HOME"
-  --setenv PATH "$TOOLS_VENV/bin:/opt/clannon-provider:/usr/local/bin:/usr/bin:/bin"
+  --setenv PATH "$TOOLS_PATH"
   --setenv GIT_CONFIG_GLOBAL /dev/null
   --setenv GIT_CONFIG_SYSTEM /dev/null
   --setenv GIT_TERMINAL_PROMPT 0
@@ -216,6 +253,7 @@ BWRAP=(
   # npm/npx would otherwise reach for a cache in the absent home; a JS/TS auditor
   # running `npm audit` needs one that is inside the sandbox.
   --setenv npm_config_cache /tmp/npm-cache
+  --setenv npm_config_update_notifier false
   --setenv PYTHONDONTWRITEBYTECODE 1
   --setenv SEMGREP_SEND_METRICS off
   # A parent Claude Code session exports markers that a nested one obeys — inheriting
@@ -241,6 +279,19 @@ BWRAP=(
 for proposal_dir in "${PROPOSAL_DIRS[@]}"; do
   BWRAP+=( --bind "$proposal_dir" "$proposal_dir" )
 done
+if [ "$NODE_TOOLING" -eq 1 ]; then
+  # Playwright rejects test discovery when its CLI and test imports come from two
+  # physical package copies, even at the same version. Overlay the isolated locked
+  # copies onto the sandbox VIEW of project node_modules. Host files remain untouched,
+  # and the overlay is read-only like the project tree beneath it.
+  for package in @playwright/test playwright playwright-core; do
+    [ -d "$ROOT/frontend/node_modules/$package" ] \
+      || die "frontend project package missing: $package"
+    BWRAP+=(
+      --ro-bind "$NODE_TOOLS/node_modules/$package" "$ROOT/frontend/node_modules/$package"
+    )
+  done
+fi
 [ -n "$RESOLV_REAL" ] && case "$RESOLV_REAL" in
   /etc/*) ;;
   *) BWRAP+=( --ro-bind "$RESOLV_REAL" "$RESOLV_REAL" ) ;;
@@ -280,19 +331,31 @@ if [ "$MODE" = self-test ]; then
   frontend_negative="$ROOT/frontend/.sandbox-write-test"
   git_negative="$ROOT/.git/.sandbox-write-test"
   charter_negative="$ROLE_DIR/CLAUDE.md"
-  "${BWRAP[@]}" bash -c '
-    set -eu
-    touch "$1" "$2" "$3"
-    ! touch "$4" 2>/dev/null
-    ! touch "$5" 2>/dev/null
-    ! touch "$6" 2>/dev/null
-    ! { printf "tamper\n" >> "$7"; } 2>/dev/null
-  ' bash "$positive" "$report_positive" "$proposal_positive" \
-    "$backend_negative" "$frontend_negative" "$git_negative" "$charter_negative"
+  manifest_negative="$ROOT/frontend/package.json"
+  lock_negative="$ROOT/frontend/package-lock.json"
+  modules_negative="$ROOT/frontend/node_modules/.sandbox-write-test"
+  "${BWRAP[@]}" touch "$positive" "$report_positive" "$proposal_positive" \
+    || die "role output paths are not writable"
+  for target in "$backend_negative" "$frontend_negative" "$git_negative" "$modules_negative"; do
+    if "${BWRAP[@]}" touch "$target" 2>/dev/null; then
+      die "sandbox allowed forbidden creation: $target"
+    fi
+  done
+  for target in "$charter_negative" "$manifest_negative" "$lock_negative"; do
+    if "${BWRAP[@]}" bash -c 'printf "tamper\n" >> "$1"' bash "$target" 2>/dev/null; then
+      die "sandbox allowed forbidden edit: $target"
+    fi
+  done
   unlink "$positive"
   unlink "$report_positive"
   unlink "$proposal_positive"
-  [ ! -e "$backend_negative" ] && [ ! -e "$frontend_negative" ] && [ ! -e "$git_negative" ] \
+  for proposal_dir in "${PROPOSAL_DIRS[@]:1}"; do
+    proposal_positive="$proposal_dir/.sandbox-write-test"
+    "${BWRAP[@]}" touch "$proposal_positive"
+    unlink "$proposal_positive"
+  done
+  [ ! -e "$backend_negative" ] && [ ! -e "$frontend_negative" ] \
+    && [ ! -e "$git_negative" ] && [ ! -e "$modules_negative" ] \
     || die "negative write test left unexpected files"
 
   # A provider that cannot resolve its own API silently retries forever, so name
@@ -302,6 +365,32 @@ if [ "$MODE" = self-test ]; then
   "${BWRAP[@]}" "$TOOLS_VENV/bin/python" -c \
     'import detect_secrets, semgrep' \
     || die "shared audit tooling not visible inside sandbox"
+
+  if [ "$NODE_TOOLING" -eq 1 ]; then
+    # Exact versions come from the coordinator-owned lock, not frontend/node_modules.
+    # Then each tool must parse the real project while its entire tree stays read-only.
+    "${BWRAP[@]}" bash -c '
+      set -eu
+      [ "$(npm --version)" = "11.16.0" ]
+      eslint --version | grep -qx "v9.39.4"
+      tsc --version | grep -qx "Version 5.9.3"
+      vitest --version | grep -q "vitest/4.1.9"
+      playwright --version | grep -qx "Version 1.62.0"
+
+      cd "$1/frontend"
+      eslint --no-cache . >/tmp/eslint.txt
+      tsc --noEmit --pretty false --project tsconfig.json \
+        --tsBuildInfoFile /tmp/frontend-audit.tsbuildinfo >/tmp/tsc.txt
+      VITE_CONFIG_NATIVE_IGNORE_WARNING=true \
+        vitest list --root . --filesOnly --no-color >/tmp/vitest-files.txt
+      PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test --config playwright.config.ts \
+        --list --reporter=line --output=/tmp/playwright-results >/tmp/playwright-tests.txt
+      audit_exit=0
+      npm audit --package-lock-only --ignore-scripts --json >/tmp/npm-audit.json \
+        || audit_exit=$?
+      [ "$audit_exit" -eq 0 ] || [ "$audit_exit" -eq 1 ]
+    ' bash "$ROOT" || die "pinned frontend tools could not read the project inside sandbox"
+  fi
 
   case "$PROVIDER" in
     codex)
@@ -324,7 +413,7 @@ if [ "$MODE" = self-test ]; then
         || die "Claude runtime isolation check failed"
       ;;
   esac
-  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; DNS, security tooling, and provider runtime verified"
+  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; DNS, pinned role tooling, and provider runtime verified"
   exit 0
 fi
 

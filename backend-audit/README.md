@@ -25,8 +25,8 @@ launcher fails closed if source-read-only enforcement is unavailable.
 
 Claude-specific equipment is repo-local and tracked, not installed from a
 marketplace: `.claude/settings.json` (denied write/publish commands),
-`.claude/agents/` (`attack-path-tracer`, `counterevidence`), `.claude/skills/`
-(`audit-scanners`).
+`.claude/skills/audit-scanners/`, and the shared root `.claude/agents/`
+(`attack-path-tracer`, `counterevidence`).
 
 Run the boundary proof for the provider you touched — it covers writable outputs,
 read-only source/`.git`/charter, name resolution, scanner visibility, and provider

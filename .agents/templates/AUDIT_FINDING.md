@@ -1,4 +1,4 @@
-# Backend security audit — <scope>
+# Security audit — <scope>
 
 - Revision:
 - Date:

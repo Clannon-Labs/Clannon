@@ -8,8 +8,8 @@ proposals; this tracked file contains safe continuity only.
 
 Role architecture and the Bubblewrap boundary exist and are proven for **Codex and
 Claude Code**. The role follows the same provider rule as every other one — Claude
-unless launched with `--codex` — through one launcher (`scripts/backend-audit-sandbox.sh
-{start|resume|self-test} [--codex|--claude]`). Codex brings the Codex Security
+unless launched with `--codex` — through one launcher (`scripts/audit-sandbox.sh
+backend-audit {start|resume|self-test} [--codex|--claude]`). Codex brings the Codex Security
 plugin; Claude brings repo-local `backend-audit/.claude/` — the `audit-scanners`
 skill plus the `attack-path-tracer` and `counterevidence` subagents. Pinned scanners
 (bandit, detect-secrets, pip-audit, semgrep) are provisioned per machine into

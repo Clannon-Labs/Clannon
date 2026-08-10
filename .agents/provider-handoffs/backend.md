@@ -46,10 +46,11 @@ work outside your tree is the START of a task, not the end of it — file the
 proposal AND dispatch AND push it. See the
 "THAT'S X'S JOB" section in `CLAUDE.md`.
 
-An independent sixth specialist, `backend-audit`, owns no source. Bubblewrap makes
-backend/root source read-only and exposes only auditor output paths. It threat-models,
-searches for realistic abuse/control-bypass paths, and reports; implementation still
-routes through you to the owning specialist.
+Two independent audit specialists own no source. `backend-audit` covers backend/root;
+`frontend-audit` covers browser/client surfaces from the frontend-owned threat model.
+One role-parameterized Bubblewrap launcher exposes only each role's outputs. Both seek
+realistic abuse/control-bypass paths and report; implementation routes through you to
+the owning specialist.
 
 **Messaging is PULL, never push.** Nothing injects into a running session. You
 check `comms/<today>/` and `proposals/to-backend/` yourself, at session start and
@@ -68,7 +69,42 @@ finished something.
 
 ---
 
-## Current checkpoint — auditor runs on both providers; sandbox had no DNS (2026-08-10, later)
+## Current checkpoint — frontend audit role completed after interrupted setup (2026-08-10)
+
+Claude's backend session stopped after committing the reusable role-parameterized
+audit launcher as local `32c516c`; it had written only untracked
+`frontend-audit/CLAUDE.md` for the new role. Resumed from that exact state.
+
+`frontend-audit` is now complete as an independent source-read-only researcher. Its
+frontend-owned, code-grounded domain threat model remains canonical at
+`frontend/FRONTEND_AUDIT_CHARTER.md`; root role files reference rather than duplicate
+it. Durable role charter, Claude/Codex equipment, shared-provider handoff, report and
+proposal routing, gitignored notes/drafts, operator docs, roadmap lane, and baseline
+assignment now exist. No frontend source, manifest, lockfile, or dependency tree was
+changed.
+
+One `scripts/audit-sandbox.sh` still owns enforcement. Frontend tooling is exactly
+lock-pinned in its own tracked tool package and installed only under gitignored role
+runtime: Semgrep 1.172.0, detect-secrets 1.5.0, npm 11.16.0, ESLint 9.39.4,
+eslint-config-next 16.2.12, TypeScript 5.9.3, Vitest 4.1.9, Playwright 1.62.0.
+Playwright required a read-only sandbox overlay: its CLI rejects discovery when CLI
+and test imports resolve through two physical package copies, even at equal versions.
+
+Measured both providers: source/`.git`/charter/frontend manifests+lock+node_modules
+reject writes; DNS, isolated provider state, exact versions, full ESLint and
+`tsc --noEmit`, Vitest/Playwright discovery, and report-only npm audit pass. Backend
+audit remained green after shared-launcher changes. Baseline frontend audit has not
+run; charter seeds remain unverified hypotheses, not findings. Launcher regression:
+11 passed. Full backend: 1683 passed, 13 service skips, 9 subtests. Both audit roles
+passed boundary self-test on both providers.
+
+## Change note
+
+Finished the interrupted root-owned frontend auditor integration without duplicating
+the enforcement boundary or touching frontend-owned implementation. Added measurement
+for the actual project-aware tool commands and preserved independent reporting.
+
+## Previous checkpoint — backend auditor runs on both providers; sandbox had no DNS
 
 `backend-audit` is no longer Codex-only. `crew.sh start backend-audit --claude` goes
 through the SAME launcher: `backend-audit-sandbox.sh {start|resume|self-test}
@@ -96,7 +132,7 @@ purpose, so the sandbox cannot rotate the owner's refresh token — relaunch if 
 expires). Full suite green: 1680 passed, 13 dependency skips, 8 subtests. Detail:
 `reports/backend/report_v24.md`. Baseline audit STILL not run.
 
-## Change note
+### Change note
 
 Removed the auditor's provider lock by proving the Claude sandbox rather than
 duplicating it, and closed a network defect that would have stalled either provider on

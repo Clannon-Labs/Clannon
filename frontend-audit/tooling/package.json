@@ -1,0 +1,14 @@
+{
+  "name": "clannon-frontend-audit-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned, isolated read-only audit tooling for the frontend security role.",
+  "dependencies": {
+    "@playwright/test": "1.62.0",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.12",
+    "npm": "11.16.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}
