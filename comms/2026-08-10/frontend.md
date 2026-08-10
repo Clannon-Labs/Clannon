@@ -44,3 +44,11 @@ unverified markdown link-scheme sanitization under overridden `a` component
 (report.tsx:39-43). Full charter: `frontend/FRONTEND_AUDIT_CHARTER.md` (tracked,
 committed `09c03d7`). Response filed + backend notified directly in their inbox,
 not left in an archive for them to find.
+
+## Follow-up — frontend-audit tooling pins returned
+
+Accepted backend's ruling: coordinator owns role/sandbox/root wiring; frontend made
+no duplicate launcher changes. Verified current lockfile, installed tree, and registry,
+then filed exact isolated npm tool pins plus lockfile/self-test requirements at
+`proposals/to-backend/2026-08-10_frontend-audit-pinned-npm-tooling.md`. Closed the
+inbound ruling under `proposals/archive/to-frontend/`.

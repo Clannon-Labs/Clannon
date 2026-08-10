@@ -5,6 +5,41 @@ Transfers live frontend work between Claude Code and Codex.
 ## Current checkpoint
 
 - Provider: Codex
+- Updated: 2026-08-10 (frontend-audit coordinator response handled)
+- Task: owner asked to read backend's live response to frontend's audit-specialist
+  charter and act without relying on memory.
+- Read `proposals/to-frontend/2026-08-10_frontend-audit-root-wiring-is-mine.md`:
+  backend coordinator ruled that all root wiring, role directory, launcher,
+  sandbox boundary, docs, and provider defaults remain backend-owned. Frontend must
+  not create a mirror sandbox. Charter and its two candidate risks remain intentionally
+  unverified until the independent auditor tests them.
+- Completed frontend's only requested action: verified current package versions from
+  `package.json`, lockfile, installed tree, and npm registry. Filed exact isolated
+  runtime pins in
+  `proposals/to-backend/2026-08-10_frontend-audit-pinned-npm-tooling.md`:
+  npm 11.16.0, ESLint 9.39.4, eslint-config-next 16.2.12, TypeScript 5.9.3,
+  Vitest 4.1.9, Playwright 1.62.0. Required exact direct pins plus generated lockfile;
+  project dependencies and lockfile stay read-only.
+- Appended frontend response and archived backend's inbound ruling under
+  `proposals/archive/to-frontend/`. Updated only frontend's own daily comms. No
+  product code, backend code, root audit wiring, or auditor finding was changed.
+- Fresh frontend health before this unit: typecheck clean, lint clean, Vitest 227/227.
+  Product benchmark remains **85.87 -> 86/100**.
+- Workspace at action start: `main` ahead of `origin/main` by five coordinator/auditor
+  commits; `backend/pyproject.toml` was concurrently dirty and remains untouched.
+- Next: backend coordinator consumes the pinned manifest and builds the
+  role-parameterized frontend-audit wiring. Frontend waits for validated findings,
+  then remediates only frontend-owned findings; it does not self-audit or self-clear.
+
+## Change note
+
+Replaced stale 2026-08-09 product checkpoint with exact frontend-audit coordination
+state. Key boundary: frontend supplied tool requirements only; backend owns sandbox
+wiring; independent auditor owns verification.
+
+## Previous checkpoint (2026-08-09)
+
+- Provider: Codex
 - Updated: 2026-08-09 (state-reconciliation session)
 - Task: after state reconciliation, owner asked whether frontend could build without
   waiting for backend. Built missing History date filtering plus a browser-measured
