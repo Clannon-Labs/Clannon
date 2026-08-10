@@ -14,10 +14,12 @@ Launch:
 ```bash
 ./scripts/crew.sh start backend-audit           # Claude Code (default)
 ./scripts/crew.sh start backend-audit --codex   # Codex
+./scripts/crew.sh run backend-audit --codex \
+  --brief proposals/to-backend-audit/<assignment>.md  # unattended bounded audit
 ```
 
 Both providers go through one enforced launcher, so the boundary cannot differ
-between them. It requires Bubblewrap, provisions the provider's isolated runtime
+between interactive and unattended use either. It requires Bubblewrap, provisions the provider's isolated runtime
 (Codex Security plugin state, or a Claude config dir the owner's own profile never
 touches) plus pinned Bandit, detect-secrets, pip-audit, and Semgrep. Tooling lives
 under gitignored `.agents/runtime/backend-audit/`, never the project venv. The

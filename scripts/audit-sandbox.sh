@@ -11,7 +11,8 @@
 # turning red. Everything a role differs by — its directory, its output paths, its
 # proposal inboxes — is a table entry below.
 #
-#   ./scripts/audit-sandbox.sh <role> {start|resume|self-test} [--codex|--claude]
+#   ./scripts/audit-sandbox.sh <role> {start|resume|run|self-test} [--codex|--claude]
+#       [--brief proposals/to-<role>/<assignment>.md]
 
 set -euo pipefail
 
@@ -31,11 +32,17 @@ die() { echo "audit sandbox: $*" >&2; exit 2; }
 ROLE="${1:-}"
 MODE="${2:-}"
 PROVIDER=claude
+BRIEF=""
 shift 2 2>/dev/null || true
 while [ $# -gt 0 ]; do
   case "$1" in
     --claude) PROVIDER=claude ;;
     --codex)  PROVIDER=codex ;;
+    --brief)
+      shift
+      [ $# -gt 0 ] || die "--brief needs a path"
+      BRIEF="$1"
+      ;;
     *)        MODE="" ;;
   esac
   shift
@@ -67,6 +74,7 @@ esac
 ROLE_DIR="$ROOT/$ROLE"
 RUNTIME="$RUNTIME_ROOT/$ROLE"
 CODEX_STATE="$RUNTIME/codex-home"
+CODEX_CONFIG="$RUNTIME/codex-config.toml"
 CLAUDE_STATE="$RUNTIME/claude-home"
 TOOLS_VENV="$RUNTIME/tools-venv"
 NODE_TOOLS="$RUNTIME/node-tools"
@@ -75,8 +83,19 @@ TODAY="$ROOT/comms/$(date +%F)"
 COMMS_FILE="$TODAY/$ROLE.md"
 HANDOFF="$ROOT/.agents/provider-handoffs/$ROLE.md"
 
-case "$MODE" in start|resume|self-test) ;; *) die "usage: $0 <role> {start|resume|self-test} [--codex|--claude]" ;; esac
+case "$MODE" in start|resume|run|self-test) ;; *) die "usage: $0 <role> {start|resume|run|self-test} [--codex|--claude] [--brief <file>]" ;; esac
 [ -d "$ROLE_DIR" ] || die "role directory missing: $ROLE_DIR"
+BRIEF_REAL=""
+if [ "$MODE" = run ]; then
+  [ -n "$BRIEF" ] && [ -f "$BRIEF" ] || die "run needs an existing --brief file"
+  BRIEF_REAL="$(readlink -f "$BRIEF")"
+  case "$BRIEF_REAL" in
+    "$ROOT/proposals/to-$ROLE/"*) ;;
+    *) die "audit brief must live under proposals/to-$ROLE/" ;;
+  esac
+elif [ -n "$BRIEF" ]; then
+  die "--brief is valid only with run"
+fi
 command -v bwrap >/dev/null 2>&1 || die "Bubblewrap (bwrap) is required; refusing unsafe fallback"
 command -v uv >/dev/null 2>&1 || die "uv is required to provision isolated audit tools"
 [ "$NODE_TOOLING" -eq 0 ] || command -v npm >/dev/null 2>&1 \
@@ -138,9 +157,27 @@ prepare_codex() {
   [ -n "$CODEX_REAL" ] && [ -x "$CODEX_REAL" ] || die "Codex CLI not found"
   [ -f "$HOST_AUTH" ] || die "Codex auth not found at configured CODEX_HOME/auth.json"
   [ -d "$HOST_PLUGIN_CATALOG" ] || die "Codex plugin catalog unavailable; open /plugins once"
+  command -v python3 >/dev/null 2>&1 || die "python3 is required to seed isolated Codex config"
 
   mkdir -p "$CODEX_STATE/.tmp/plugins" "$CODEX_STATE/plugins/cache"
   touch "$CODEX_STATE/auth.json" "$CODEX_STATE/config.toml"
+
+  # Codex will not load project instructions unattended until the git root is
+  # trusted. Trust belongs in user config, but the audit profile is isolated from
+  # the owner's user config. Generate its machine-local path at launch instead of
+  # committing one person's checkout path. Mount this generated config read-only:
+  # the role cannot rewrite its own trust/plugin policy.
+  python3 - "$ROLE_DIR/codex.config.toml" "$CODEX_CONFIG" "$ROOT" <<'PY'
+import json
+import pathlib
+import sys
+
+source, destination, root = map(pathlib.Path, sys.argv[1:])
+base = source.read_text().rstrip()
+destination.write_text(
+    f'{base}\n\n[projects.{json.dumps(str(root))}]\ntrust_level = "trusted"\n'
+)
+PY
 
   # Plugin package is machine-local, never a committed $HOME path or project setting.
   # Runtime state is isolated; catalog/package are exposed read-only inside sandbox.
@@ -304,7 +341,7 @@ case "$PROVIDER" in
     BWRAP+=(
       --bind "$CODEX_STATE" "$CODEX_STATE"
       --ro-bind "$HOST_AUTH" "$CODEX_STATE/auth.json"
-      --ro-bind "$ROLE_DIR/codex.config.toml" "$CODEX_STATE/config.toml"
+      --ro-bind "$CODEX_CONFIG" "$CODEX_STATE/config.toml"
       --ro-bind "$HOST_PLUGIN_CATALOG" "$CODEX_STATE/.tmp/plugins"
       --ro-bind "$HOST_PLUGIN_CACHE" "$CODEX_STATE/plugins/cache"
       --ro-bind "$(dirname "$CODEX_REAL")" /opt/clannon-provider
@@ -394,6 +431,18 @@ if [ "$MODE" = self-test ]; then
 
   case "$PROVIDER" in
     codex)
+      if ! "${BWRAP[@]}" "$TOOLS_VENV/bin/python" - "$CODEX_STATE/config.toml" "$ROOT" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+config_path, root = pathlib.Path(sys.argv[1]), sys.argv[2]
+config = tomllib.loads(config_path.read_text())
+assert config["projects"][root]["trust_level"] == "trusted"
+PY
+      then
+        die "isolated Codex config does not trust the repository root"
+      fi
       "${BWRAP[@]}" "$PROVIDER_BIN" plugin list \
         | grep -q '^codex-security@openai-curated[[:space:]].*installed, enabled' \
         || die "codex-security plugin not visible inside isolated runtime"
@@ -419,16 +468,30 @@ fi
 
 case "$PROVIDER" in
   codex)
-    LAUNCH=(
-      "$PROVIDER_BIN"
-      --no-alt-screen
-      --sandbox workspace-write
-      --ask-for-approval never
-      --search
-      --model gpt-5.6-sol
-      --config 'model_reasoning_effort="xhigh"'
-    )
-    [ "$MODE" = resume ] && LAUNCH=("$PROVIDER_BIN" resume --last "${LAUNCH[@]:1}")
+    if [ "$MODE" = run ]; then
+      LAUNCH=(
+        "$PROVIDER_BIN"
+        --sandbox workspace-write
+        --ask-for-approval never
+        --search
+        --model gpt-5.6-sol
+        --config 'model_reasoning_effort="xhigh"'
+        exec
+        --skip-git-repo-check
+        -
+      )
+    else
+      LAUNCH=(
+        "$PROVIDER_BIN"
+        --no-alt-screen
+        --sandbox workspace-write
+        --ask-for-approval never
+        --search
+        --model gpt-5.6-sol
+        --config 'model_reasoning_effort="xhigh"'
+      )
+      [ "$MODE" = resume ] && LAUNCH=("$PROVIDER_BIN" resume --last "${LAUNCH[@]:1}")
+    fi
     ;;
   claude)
     # Bypass mode matches the other roles' unattended posture. It is safe HERE for a
@@ -443,8 +506,15 @@ case "$PROVIDER" in
       --model claude-opus-5
       --effort xhigh
     )
-    [ "$MODE" = resume ] && LAUNCH+=(--continue)
+    if [ "$MODE" = run ]; then
+      LAUNCH+=(--print)
+    elif [ "$MODE" = resume ]; then
+      LAUNCH+=(--continue)
+    fi
     ;;
 esac
 
+if [ "$MODE" = run ]; then
+  exec "${BWRAP[@]}" "${LAUNCH[@]}" < "$BRIEF_REAL"
+fi
 exec "${BWRAP[@]}" "${LAUNCH[@]}"

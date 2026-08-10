@@ -16,9 +16,11 @@ Launch:
 ```bash
 ./scripts/crew.sh start frontend-audit           # Claude Code (default)
 ./scripts/crew.sh start frontend-audit --codex   # Codex
+./scripts/crew.sh run frontend-audit --claude \
+  --brief proposals/to-frontend-audit/<assignment>.md  # unattended bounded audit
 ```
 
-Both providers use `scripts/audit-sandbox.sh`. Bubblewrap mounts repository source,
+Both providers and both launch modes use `scripts/audit-sandbox.sh`. Bubblewrap mounts repository source,
 Git metadata, dependency manifests, lockfiles, project `node_modules`, and this role's
 own rules read-only. Only explicit evidence and continuity outputs are writable.
 Missing enforcement refuses launch.

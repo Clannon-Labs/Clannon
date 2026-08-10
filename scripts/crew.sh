@@ -351,7 +351,14 @@ cmd_run() {
   [ -n "$role" ] && [ -n "$brief" ] || die "usage: crew.sh run <role> --brief <file> [--claude|--codex]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
   if is_auditor "$role"; then
-    die "$role is a persistent, read-only research role; use: crew.sh start $role"
+    [ "${#subdirs[@]}" -eq 0 ] || die "audit roles use their chartered read-only scope; omit --dir"
+    [ -f "$brief" ] || die "brief not found: $brief"
+    provider="$(resolve_provider "$provider")"
+    case "$provider" in claude|codex) ;; *) die "bad provider: $provider" ;; esac
+    echo "crew: dispatching $role audit  [$provider]"
+    echo "crew: brief   $brief"
+    "$ROOT/scripts/audit-sandbox.sh" "$role" run "--$provider" --brief "$brief"
+    return
   fi
   # The coordinator owns real trees too (foundation/, core/llm, core/pipeline.py,
   # config/, scripts/, docs/). Dispatching a worker into one of those is exactly how
