@@ -2,7 +2,7 @@
 #
 # crew.sh — start, watch, and stop the Clannon agents.
 #
-#   ./scripts/crew.sh start <role> [--codex] [--fresh]
+#   ./scripts/crew.sh start <role> [--codex|--claude] [--fresh]
 #   ./scripts/crew.sh status
 #   ./scripts/crew.sh attach <role>
 #   ./scripts/crew.sh stop <role>
@@ -120,9 +120,16 @@ is_live() { [ -n "$(live_provider "$1")" ]; }
 # to continue", which would drop the pane straight to a dead shell. Detecting up
 # front means there is no failure path to recover from.
 claude_has_session() {
-  local dir="$1" encoded
+  local dir="$1" encoded projects_dir
   encoded="${dir//\//-}"
-  compgen -G "$HOME/.claude/projects/$encoded/*.jsonl" >/dev/null 2>&1
+  # The auditor runs against an isolated config dir so it never sees the owner's
+  # own Claude state; its transcripts land there too, not under $HOME.
+  if [ "$dir" = "$ROOT/backend-audit" ]; then
+    projects_dir="$AUDIT_RUNTIME/claude-home/projects"
+  else
+    projects_dir="$HOME/.claude/projects"
+  fi
+  compgen -G "$projects_dir/$encoded/*.jsonl" >/dev/null 2>&1
 }
 
 # Codex stores the cwd and launch source in the first `session_meta` record.
@@ -159,11 +166,14 @@ provider_has_session() {
 launch_command() {   # role provider fresh dir -> the shell command the session runs
   local role="$1" provider="$2" fresh="$3" dir="$4" cmd
   if is_auditor "$role"; then
-    [ "$provider" = codex ] || die "$role is Codex-only until its Claude sandbox is independently proven"
-    if [ "$fresh" = no ] && codex_has_session "$dir"; then
-      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") resume"
+    # Both providers go through the same enforced launcher: the Bubblewrap mount
+    # policy IS the boundary, so it is written once and takes the provider as a
+    # parameter. Prove it after touching it — `backend-audit-sandbox.sh self-test
+    # --claude|--codex`.
+    if [ "$fresh" = no ] && provider_has_session "$provider" "$dir"; then
+      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") resume --$provider"
     else
-      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") start"
+      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") start --$provider"
     fi
     cmd="$(agent_env "$role")$cmd"
     echo "$cmd; echo; echo '[crew] auditor exited — session kept for inspection. Ctrl-b d to detach.'; exec bash"
@@ -206,13 +216,14 @@ cmd_start() {
   local role="" provider="" fresh=no arg
   for arg in "$@"; do
     case "$arg" in
-      --codex) provider=codex ;;
-      --fresh) fresh=yes ;;
-      --*)     die "unknown flag: $arg" ;;
-      *)       role="$arg" ;;
+      --codex)  provider=codex ;;
+      --claude) provider=claude ;;
+      --fresh)  fresh=yes ;;
+      --*)      die "unknown flag: $arg" ;;
+      *)        role="$arg" ;;
     esac
   done
-  [ -n "$role" ] || die "usage: crew.sh start <role> [--codex] [--fresh]"
+  [ -n "$role" ] || die "usage: crew.sh start <role> [--codex|--claude] [--fresh]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
   if [ -z "$provider" ]; then
     if is_auditor "$role"; then provider=codex; else provider=claude; fi

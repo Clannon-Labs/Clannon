@@ -12,17 +12,29 @@ Independent source-read-only security research role.
 Launch:
 
 ```bash
-./scripts/crew.sh start backend-audit
+./scripts/crew.sh start backend-audit            # Codex (default)
+./scripts/crew.sh start backend-audit --claude   # Claude Code
 ```
 
-Role defaults to Codex. Launcher requires Bubblewrap and provisions isolated Codex
-Security plugin state plus pinned Bandit, detect-secrets, pip-audit, and Semgrep tools.
-Tooling lives under gitignored `.agents/runtime/backend-audit/`, never project venv.
-Launcher fails closed if source-read-only enforcement is unavailable.
-Run boundary proof after launcher changes:
+Both providers go through one enforced launcher, so the boundary cannot differ
+between them. It requires Bubblewrap, provisions the provider's isolated runtime
+(Codex Security plugin state, or a Claude config dir the owner's own profile never
+touches) plus pinned Bandit, detect-secrets, pip-audit, and Semgrep. Tooling lives
+under gitignored `.agents/runtime/backend-audit/`, never the project venv. The
+launcher fails closed if source-read-only enforcement is unavailable.
+
+Claude-specific equipment is repo-local and tracked, not installed from a
+marketplace: `.claude/settings.json` (denied write/publish commands),
+`.claude/agents/` (`attack-path-tracer`, `counterevidence`), `.claude/skills/`
+(`audit-scanners`).
+
+Run the boundary proof for the provider you touched — it covers writable outputs,
+read-only source/`.git`/charter, name resolution, scanner visibility, and provider
+startup:
 
 ```bash
-./scripts/backend-audit-sandbox.sh self-test
+./scripts/backend-audit-sandbox.sh self-test --codex
+./scripts/backend-audit-sandbox.sh self-test --claude
 ```
 
 Detailed notes, drafts, reports, and proposals are gitignored because unresolved

@@ -223,7 +223,7 @@ one specialist. Starting every role at once should be deliberate, not default.
 ### 4.3 Commands
 
 ```bash
-./scripts/crew.sh start <role> [--codex]   # start (or resume) one role
+./scripts/crew.sh start <role> [--codex|--claude]   # start (or resume) one role
 ./scripts/crew.sh status                   # what's running, and under which provider
 ./scripts/crew.sh attach <role>            # watch a session (Ctrl-b d to detach)
 ./scripts/crew.sh stop <role>              # stop one role cleanly
@@ -233,10 +233,19 @@ one specialist. Starting every role at once should be deliberate, not default.
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
 
-`backend-audit` defaults to Codex and is Codex-only until an equivalent Claude
-sandbox is independently proven. Run `scripts/backend-audit-sandbox.sh self-test`
-to prove auditor outputs are writable while source, `.git`, and charter are not.
-No prompt-only fallback exists.
+`backend-audit` defaults to Codex and also runs on Claude Code (`--claude`, proven
+2026-08-10). Both go through ONE enforced launcher with the provider as a
+parameter — the Bubblewrap mount policy is the security boundary, and a per-provider
+copy of it would drift. Prove it after any change to that script:
+
+```bash
+./scripts/backend-audit-sandbox.sh self-test --codex
+./scripts/backend-audit-sandbox.sh self-test --claude
+```
+
+The proof covers writable outputs, read-only source/`.git`/charter, name resolution,
+scanner visibility, and that the provider actually starts inside the sandbox against
+an isolated profile. No prompt-only fallback exists.
 
 ### 4.4 Two ways an agent runs — interactive vs. delegated
 
@@ -361,7 +370,7 @@ could not commit its own work and had to write a fallback report instead.
 |---|---|---|
 | **Coordinator (backend)** | always | never |
 | Architecture, planning, rulings, review | yes | no |
-| Independent backend adversarial audit | no (v1) | **yes** — Codex Security + enforced read-only source |
+| Independent backend adversarial audit | **yes** — repo-local audit subagents/skill | **yes** (default) — Codex Security |
 | Scoped implementation from a spec | fine | **preferred** — faster, stays in scope |
 | Debugging a specific failure | fine | **preferred** |
 | Open-ended "figure out what to do next" | yes | avoid |

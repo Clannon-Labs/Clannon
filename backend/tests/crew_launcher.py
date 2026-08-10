@@ -31,6 +31,12 @@ def _write_session(codex_home: Path, cwd: Path, source: str = "cli") -> None:
     session.write_text(json.dumps(metadata, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
+def _write_claude_session(projects_root: Path, cwd: Path) -> None:
+    session = projects_root / str(cwd).replace("/", "-") / "session.jsonl"
+    session.parent.mkdir(parents=True, exist_ok=True)
+    session.write_text("{}\n", encoding="utf-8")
+
+
 def _start(
     tmp_path: Path,
     role: str,
@@ -86,6 +92,63 @@ class CrewLauncherTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[codex, fresh", result.stdout)
             self.assertIn("backend-audit-sandbox.sh start", tmux_call)
+
+    def test_backend_audit_on_claude_uses_the_same_enforced_sandbox(self):
+        """Claude is a launcher parameter, never a way around the boundary."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+
+            result, tmux_call = _start(
+                tmp_path,
+                "backend-audit",
+                "--claude",
+                with_codex=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[claude, fresh", result.stdout)
+            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
+            self.assertNotIn("claude --dangerously-skip-permissions", tmux_call)
+
+    def test_backend_audit_resumes_claude_from_its_isolated_config_dir(self):
+        """The auditor's transcripts live in its runtime, not the owner's ~/.claude."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            _write_claude_session(
+                tmp_path / "audit-runtime" / "claude-home" / "projects",
+                ROLE_DIRS["backend-audit"],
+            )
+
+            result, tmux_call = _start(
+                tmp_path,
+                "backend-audit",
+                "--claude",
+                with_codex=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[claude, resuming prior conversation]", result.stdout)
+            self.assertIn("backend-audit-sandbox.sh resume --claude", tmux_call)
+
+    def test_backend_audit_ignores_owner_claude_sessions(self):
+        """A session in the owner's own config dir must not resume the auditor."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            _write_claude_session(
+                tmp_path / "home" / ".claude" / "projects",
+                ROLE_DIRS["backend-audit"],
+            )
+
+            result, tmux_call = _start(
+                tmp_path,
+                "backend-audit",
+                "--claude",
+                with_codex=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[claude, fresh", result.stdout)
+            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
 
     def test_codex_resumes_interactive_session_for_each_role(self):
         for role, cwd in ROLE_DIRS.items():

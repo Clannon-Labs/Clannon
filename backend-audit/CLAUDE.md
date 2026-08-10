@@ -84,7 +84,12 @@ Only these outputs are writable:
 - `reports/backend-audit/`
 - `comms/YYYY-MM-DD/backend-audit.md`
 - `proposals/to-backend/from-backend-audit/`
-- isolated machine-local Codex runtime under `.agents/runtime/backend-audit/`
+- isolated machine-local provider runtime under `.agents/runtime/backend-audit/`
+  (`codex-home/` or `claude-home/`, plus the pinned scanner venv)
+
+`backend-audit/.claude/` is part of that read-only source, so the role cannot loosen
+its own permission rules, subagents, or skills from inside a session — a change there
+is a proposal to the backend coordinator like any other.
 
 Never edit code, tests, config, charters, docs, dependencies, or lockfiles. Never
 format, install into project environments, run a fix mode, commit, push, open/modify
@@ -94,11 +99,23 @@ no secrets, payloads, private user content, or turnkey exploitation instructions
 
 ## Tools and safe research
 
-Primary tool: `codex-security@openai-curated`. Use threat-model, standard scan,
-diff scan, deep scan, attack-path analysis, validation, and vulnerability-writeup
-workflows. Never use `fix-finding` or external `track-findings` workflows.
+The role runs on either provider; the launcher and the boundary are the same for
+both. What differs is only the research equipment each one brings:
 
-Also use:
+- **On Codex:** `codex-security@openai-curated`. Use threat-model, standard scan,
+  diff scan, deep scan, attack-path analysis, validation, and vulnerability-writeup
+  workflows. Never use `fix-finding` or external `track-findings` workflows.
+- **On Claude Code:** the repo-local equipment in `.claude/` — the `audit-scanners`
+  skill (exact no-fix scanner invocations), and the `attack-path-tracer` and
+  `counterevidence` subagents, which fan work out into isolated context: one
+  proves or refutes reachability, the other tries to falsify a draft finding
+  before it is written down. Root `.claude/agents/security-review.md` is also in
+  scope and stays the invariant checker it already is. No marketplace plugin is
+  installed: the security ones there review code an agent is writing, hook into
+  edit/commit events this role never performs, or need a vendor account and
+  network path the charter excludes.
+
+Also use, on both:
 
 - `rg`, read-only Git inspection, project tests, focused local repros
 - dependency/SAST/secret scanners only in no-fix mode, when provisioned in an

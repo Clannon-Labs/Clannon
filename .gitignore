@@ -102,8 +102,11 @@ llm_view_snapshot.json
 .agents/runs/
 .agents/briefs/
 # .claude/ is TRACKED (subagents, commands, shared settings are source).
-# Only personal/machine-local settings are ignored:
-.claude/settings.local.json
+# Only personal/machine-local settings are ignored — at EVERY level, because each
+# specialist's own directory grows a .claude/ once an agent has run there, and the
+# root-anchored form left those showing up as untracked noise in git status:
+**/.claude/settings.local.json
+**/.claude/scheduled_tasks.lock
 
 static_analysis_semgrep_*
 static_analysis_semgrep_*/

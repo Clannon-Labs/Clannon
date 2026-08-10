@@ -26,3 +26,24 @@ Boundary proof passed; launcher proof: 5 tests + 8 role subtests. Baseline not r
 
 Frontend audit design requested through `proposals/to-frontend/`; frontend owns its
 domain threat model, coordinator owns root sandbox wiring.
+
+## `backend-audit` now runs on Claude Code too — and the sandbox had no DNS
+
+The auditor was Codex-only; `crew.sh start backend-audit --claude` now works through
+the SAME launcher (`backend-audit-sandbox.sh {start|resume|self-test}
+[--codex|--claude]`). One script on purpose: the Bubblewrap mount policy is the
+boundary, and a per-provider copy would drift.
+
+Found while proving it: `/etc/resolv.conf` symlinks into `/run`, which was never
+mounted, so **name resolution failed inside the sandbox on BOTH providers** — the
+auditor would have retried its own API forever. The write-boundary self-test passed
+throughout, because it only asked about writes. Fixed; `self-test` now fails closed on
+resolution, scanner visibility, and provider startup.
+
+Claude equipment is repo-local and tracked, not a marketplace plugin (those hook
+edit/commit events this role never performs, or need vendor accounts):
+`backend-audit/.claude/` — deny rules, `attack-path-tracer` and `counterevidence`
+subagents, `audit-scanners` skill. Detail + what is NOT proven:
+`reports/backend/report_v24.md`.
+
+Baseline audit still not run — this is equipment, not a verdict.

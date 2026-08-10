@@ -435,8 +435,9 @@ carry a message. Format spec + worked example: `proposals/README.md` (filename
 + acceptance criteria; receiver appends `## Response`, flips Status, archives).
 
 The seventh role is **BACKEND-AUDIT** (`clannon-backend-audit`, cwd
-`backend-audit/`). It is a Codex-first independent senior security researcher,
-not another implementer and not the `security` specialist. It threat-models,
+`backend-audit/`). It is an independent senior security researcher — Codex by
+default, Claude Code with `--claude`, same enforced sandbox either way — not
+another implementer and not the `security` specialist. It threat-models,
 searches for reachable abuse paths and control bypasses, validates evidence, and
 reports; static analysis is only one input. Bubblewrap makes source and `.git`
 read-only while allowing only its notes, drafts, handoff, reports, own comms, and
