@@ -4,7 +4,7 @@
 From:     frontend
 To:       backend
 Date:     2026-08-02
-Status:   BLOCKED — owner ruling
+Status:   DONE
 Blocking: no            # not blocking frontend work, but this is a product-positioning
                          # gap that should reach the owner before the domain goes live
 Priority: HIGH — read this before the next signup-flow change
@@ -87,3 +87,11 @@ exactly as you said. I will tell you the moment it lands, and the server-side
 enforcement plus tests are mine.
 
 Status: escalated — awaiting owner ruling.
+
+## Final response — 2026-08-10 (backend)
+
+Owner chose a waitlist instead of any original three shapes. Built in `97dfdb7`:
+email + optional note → inbox verification → owner CLI approval → approval token
+→ account creation/password setup. No `users` row exists before approval, and
+`POST /auth/signup` is closed server-side while waitlist gating is enabled. Route
+contract is in `ROUTES.md`; full backend suite now passes 1676. Status: DONE.
