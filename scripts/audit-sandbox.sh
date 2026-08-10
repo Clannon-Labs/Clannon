@@ -110,7 +110,16 @@ mkdir -p \
 COMMS_WAS_PRESENT=0
 [ ! -e "$COMMS_FILE" ] || COMMS_WAS_PRESENT=1
 touch "$COMMS_FILE" "$HANDOFF"
+SECRET_TEST_FILE=""
+if [ "$MODE" = self-test ]; then
+  # Prove ignored local deployment secrets are masked, not merely made read-only.
+  # Drafts are already an auditor-owned, gitignored output area; cleanup below
+  # removes this probe even when a later self-test assertion fails.
+  SECRET_TEST_FILE="$ROLE_DIR/drafts/.env.audit-sandbox-secret-test"
+  printf 'audit-secret-must-not-be-readable\n' > "$SECRET_TEST_FILE"
+fi
 cleanup_self_test_comms() {
+  [ -z "$SECRET_TEST_FILE" ] || unlink "$SECRET_TEST_FILE" 2>/dev/null || true
   if [ "$COMMS_WAS_PRESENT" -eq 0 ] && [ ! -s "$COMMS_FILE" ]; then
     unlink "$COMMS_FILE"
   fi
@@ -354,6 +363,28 @@ if [ "$NODE_TOOLING" -eq 1 ]; then
     )
   done
 fi
+
+# A read-only repository mount still exposes ignored `.env*` files. Those can hold
+# real provider, mail, or deployment credentials and are not audit evidence. Mask
+# every non-example env file with /dev/null inside the sandbox. Paths are discovered
+# from this checkout at launch; nothing machine-specific is committed. Keep this
+# AFTER writable output overlays so an old env-shaped draft cannot become a durable
+# prompt-injection/secret surface on a later resume.
+SECRET_MASK_FILES=()
+while IFS= read -r -d '' secret_file; do
+  case "$(basename "$secret_file")" in
+    *.example|*.sample|*.template) continue ;;
+  esac
+  SECRET_MASK_FILES+=("$secret_file")
+done < <(
+  find "$ROOT" \
+    \( -path "$ROOT/.git" -o -path "$ROOT/.agents" -o \
+       -path "$ROOT/backend-rust" -o -name node_modules -o -name .venv \) -prune -o \
+    \( -type f -o -type l \) \( -name .env -o -name '.env.*' \) -print0
+)
+for secret_file in "${SECRET_MASK_FILES[@]}"; do
+  BWRAP+=( --ro-bind /dev/null "$secret_file" )
+done
 [ -n "$RESOLV_REAL" ] && case "$RESOLV_REAL" in
   /etc/*) ;;
   *) BWRAP+=( --ro-bind "$RESOLV_REAL" "$RESOLV_REAL" ) ;;
@@ -419,6 +450,14 @@ if [ "$MODE" = self-test ]; then
   [ ! -e "$backend_negative" ] && [ ! -e "$frontend_negative" ] \
     && [ ! -e "$git_negative" ] && [ ! -e "$modules_negative" ] \
     || die "negative write test left unexpected files"
+
+  [ -n "$SECRET_TEST_FILE" ] || die "secret-mask self-test probe missing"
+  "${BWRAP[@]}" test ! -s "$SECRET_TEST_FILE" \
+    || die "sandbox exposed ignored .env content: $SECRET_TEST_FILE"
+  for target in "${SECRET_MASK_FILES[@]}"; do
+    "${BWRAP[@]}" test ! -s "$target" \
+      || die "sandbox exposed ignored .env content: $target"
+  done
 
   # A provider that cannot resolve its own API silently retries forever, so name
   # resolution is a launch prerequisite and is proven, not assumed.
@@ -496,7 +535,7 @@ PY
         || die "Claude runtime isolation check failed"
       ;;
   esac
-  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; DNS, pinned role tooling, and provider runtime verified"
+  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; ignored env secrets masked; DNS, pinned role tooling, and provider runtime verified"
   exit 0
 fi
 

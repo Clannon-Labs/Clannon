@@ -23,7 +23,9 @@ between interactive and unattended use either. It requires Bubblewrap, provision
 (Codex Security plugin state, or a Claude config dir the owner's own profile never
 touches) plus pinned Bandit, detect-secrets, pip-audit, and Semgrep. Tooling lives
 under gitignored `.agents/runtime/backend-audit/`, never the project venv. The
-launcher fails closed if source-read-only enforcement is unavailable.
+launcher fails closed if source-read-only enforcement is unavailable. Ignored local
+`.env*` files are masked with `/dev/null` inside the sandbox (examples/templates stay
+readable), so read-only source access never implies access to deployment secrets.
 
 Claude-specific equipment is repo-local and tracked, not installed from a
 marketplace: `.claude/settings.json` (denied write/publish commands),
@@ -31,8 +33,8 @@ marketplace: `.claude/settings.json` (denied write/publish commands),
 (`attack-path-tracer`, `counterevidence`).
 
 Run the boundary proof for the provider you touched — it covers writable outputs,
-read-only source/`.git`/charter, name resolution, scanner visibility, and provider
-startup:
+read-only source/`.git`/charter, ignored-env masking, name resolution, scanner
+visibility, and provider startup:
 
 ```bash
 ./scripts/audit-sandbox.sh backend-audit self-test --codex

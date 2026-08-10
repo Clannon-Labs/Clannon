@@ -4,39 +4,40 @@ Independent source-read-only security research role. Read `backend-audit/CLAUDE.
 after root boot files. Detailed unresolved findings stay in gitignored reports and
 proposals; this tracked file contains safe continuity only.
 
-## Current checkpoint — role runs on both providers, baseline audit not started (2026-08-10)
+## Current checkpoint — bounded PARTIAL baseline synthesized (2026-08-10)
 
-Role architecture and the Bubblewrap boundary exist and are proven for **Codex and
-Claude Code**. The role follows the same provider rule as every other one — Claude
-unless launched with `--codex` — through one launcher (`scripts/audit-sandbox.sh
-backend-audit {start|resume|self-test} [--codex|--claude]`). Codex brings the Codex Security
-plugin; Claude brings repo-local `backend-audit/.claude/` — the `audit-scanners`
-skill plus the `attack-path-tracer` and `counterevidence` subagents. Pinned scanners
-(bandit, detect-secrets, pip-audit, semgrep) are provisioned per machine into
-`.agents/runtime/backend-audit/tools-venv/` for both.
+Revision `b517b98f2ec97ddc7e7a8a89ac5feae39d066cd2`. Existing threat model,
+dependency research, ranking, Bandit/Semgrep, and focused source evidence were
+reconciled without restarting scanners or generating payloads. Deep report:
+`reports/backend-audit/report_v1.md` (gitignored). Verdict: **PARTIAL / private-alpha
+STOP**; no whole-system PASS.
 
-Whichever provider you are: your profile is isolated (the owner's own Codex/Claude
-state is not mounted), the source tree including this role's own `.claude/` rules is
-read-only, and `self-test` is the only thing that proves it — run it after any change
-to the launcher.
+Three launch controls remain OPEN and have proposals under
+`proposals/to-backend/from-backend-audit/`: canonical production mode does not govern
+startup strictness/YARA; required production mail is not validated before serving;
+owner-disabled outbound mutation remains model-reachable. Waitlist response timing is
+a Medium proof-limited concern. Citation-scheme candidate was not validated because
+sole current producer constrains sources to HTTP(S).
 
-Scope is the Python backend plus root infrastructure; frontend and owner-only Rust
-are excluded. First work is unchanged: pin revision, build the repository threat
-model, run a standard baseline scan, then choose targeted deep scans from
-attack-surface risk.
-
-No security verdict exists yet. No finding is implied by role creation.
+Focused hermetic proof: 52 passed. Secret-free environment matrix measured
+production-mode split. No network, production system, account, secret, source edit,
+commit, or push occurred. All deferred threat-model surfaces are enumerated in report.
+Next work is independent retest after owning agents remediate; findings are not closed
+by this auditor.
 
 ## Change note
 
-Claude Code launch path added and proven (self-test PASS on both providers). Fixed a
-defect that affected the Codex path too: `/etc/resolv.conf` is a symlink into `/run`,
-which was not mounted, so name resolution failed inside the sandbox and any provider
-would have retried its own API forever. The launcher now binds the resolv target and
-`self-test` fails closed if resolution does not work.
+Completed coordinator's bounded defensive synthesis after earlier provider filtering
+stopped final reporting. Added PARTIAL report, three remediation proposals, safe comms,
+scanner false-positive analysis, and explicit deferred coverage. No implementation
+work performed.
 
 ## Previous checkpoint
 
-Role created, baseline audit not started (2026-08-10). Role architecture and
-Bubblewrap boundary existed; Codex Security plugin provisioned per machine by the
-launcher. Same scope and same first work as above.
+Role architecture and Bubblewrap boundary were proven for Codex and Claude Code. One
+role-parameterized launcher enforced read-only source/`.git`/charters and writable
+auditor outputs; pinned scanners were provisioned in isolated runtime. Baseline had
+not yet produced a security verdict. Scope was Python backend plus root infrastructure;
+frontend and owner-only Rust excluded.
+
+Earlier checkpoint: role created, baseline not started; Codex Security provisioned.

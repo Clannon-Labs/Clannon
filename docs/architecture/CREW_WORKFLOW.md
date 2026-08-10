@@ -248,9 +248,10 @@ copies would drift. Prove affected role/provider combinations after any change:
 ./scripts/audit-sandbox.sh frontend-audit self-test --claude
 ```
 
-The proof covers writable outputs, read-only source/`.git`/charter, name resolution,
-pinned role-tool visibility and project parsing, and provider startup inside an
-isolated profile. No prompt-only fallback exists.
+The proof covers writable outputs, read-only source/`.git`/charter, masking of ignored
+local `.env*` secrets, name resolution, pinned role-tool visibility and project
+parsing, and provider startup inside an isolated profile. No prompt-only fallback
+exists.
 
 ### 4.4 Two ways an agent runs — interactive vs. delegated
 

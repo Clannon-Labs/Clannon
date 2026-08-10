@@ -23,7 +23,8 @@ Launch:
 Both providers and both launch modes use `scripts/audit-sandbox.sh`. Bubblewrap mounts repository source,
 Git metadata, dependency manifests, lockfiles, project `node_modules`, and this role's
 own rules read-only. Only explicit evidence and continuity outputs are writable.
-Missing enforcement refuses launch.
+Ignored local `.env*` files are overlaid with `/dev/null` while example/template env
+files remain readable. Missing enforcement refuses launch.
 
 Pinned Semgrep and detect-secrets live under gitignored
 `.agents/runtime/frontend-audit/tools-venv/`. Pinned npm, ESLint, TypeScript, Vitest,
