@@ -54,3 +54,8 @@ have fired against a real `semgrep scan … --autofix` — removed rather than l
 as enforced. Everything else held: `pip install` / `git commit` / `gh` / `detect-secrets
 audit` denied, deny beats an inherited allow rule, `pip-audit` and read-only
 `git status` still run.
+
+Owner call: `backend-audit` no longer carries its own provider default. Every role is
+Claude unless launched with `--codex`, auditor included. `scripts/instruction.md` now
+documents the role — what the sandbox actually does, the self-test, and where findings
+land.

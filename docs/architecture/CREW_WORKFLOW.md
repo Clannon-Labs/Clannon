@@ -233,9 +233,9 @@ one specialist. Starting every role at once should be deliberate, not default.
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
 
-`backend-audit` defaults to Codex and also runs on Claude Code (`--claude`, proven
-2026-08-10). Both go through ONE enforced launcher with the provider as a
-parameter — the Bubblewrap mount policy is the security boundary, and a per-provider
+`backend-audit` follows the same provider rule as every other role — Claude unless
+you pass `--codex` (both proven 2026-08-10). It goes through ONE enforced launcher
+with the provider as a parameter — the Bubblewrap mount policy is the security boundary, and a per-provider
 copy of it would drift. Prove it after any change to that script:
 
 ```bash

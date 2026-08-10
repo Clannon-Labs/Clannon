@@ -79,7 +79,8 @@ def _start(
 
 
 class CrewLauncherTest(unittest.TestCase):
-    def test_backend_audit_defaults_to_codex_sandbox(self):
+    def test_backend_audit_defaults_to_claude_in_the_sandbox(self):
+        """No flag means Claude for every role; the auditor is not an exception."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
 
@@ -90,8 +91,18 @@ class CrewLauncherTest(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[claude, fresh", result.stdout)
+            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
+
+    def test_backend_audit_honours_explicit_codex(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+
+            result, tmux_call = _start(tmp_path, "backend-audit")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[codex, fresh", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh start", tmux_call)
+            self.assertIn("backend-audit-sandbox.sh start --codex", tmux_call)
 
     def test_backend_audit_on_claude_uses_the_same_enforced_sandbox(self):
         """Claude is a launcher parameter, never a way around the boundary."""

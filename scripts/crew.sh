@@ -225,9 +225,8 @@ cmd_start() {
   done
   [ -n "$role" ] || die "usage: crew.sh start <role> [--codex|--claude] [--fresh]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
-  if [ -z "$provider" ]; then
-    if is_auditor "$role"; then provider=codex; else provider=claude; fi
-  fi
+  # One rule for every role, auditor included: Claude unless you say --codex.
+  [ -n "$provider" ] || provider=claude
 
   local session="clannon-$role" dir running
   dir="$(dir_for "$role")"

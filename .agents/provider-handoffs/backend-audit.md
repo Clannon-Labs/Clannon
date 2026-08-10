@@ -7,7 +7,8 @@ proposals; this tracked file contains safe continuity only.
 ## Current checkpoint — role runs on both providers, baseline audit not started (2026-08-10)
 
 Role architecture and the Bubblewrap boundary exist and are proven for **Codex and
-Claude Code**, through one launcher (`scripts/backend-audit-sandbox.sh
+Claude Code**. The role follows the same provider rule as every other one — Claude
+unless launched with `--codex` — through one launcher (`scripts/backend-audit-sandbox.sh
 {start|resume|self-test} [--codex|--claude]`). Codex brings the Codex Security
 plugin; Claude brings repo-local `backend-audit/.claude/` — the `audit-scanners`
 skill plus the `attack-path-tracer` and `counterevidence` subagents. Pinned scanners

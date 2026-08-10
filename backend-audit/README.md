@@ -12,8 +12,8 @@ Independent source-read-only security research role.
 Launch:
 
 ```bash
-./scripts/crew.sh start backend-audit            # Codex (default)
-./scripts/crew.sh start backend-audit --claude   # Claude Code
+./scripts/crew.sh start backend-audit           # Claude Code (default)
+./scripts/crew.sh start backend-audit --codex   # Codex
 ```
 
 Both providers go through one enforced launcher, so the boundary cannot differ

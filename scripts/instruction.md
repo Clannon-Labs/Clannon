@@ -16,7 +16,8 @@ Full design + reasoning: `docs/architecture/CREW_WORKFLOW.md`.
 ./scripts/crew.sh start backend
 ```
 
-Roles: `backend` `frontend` `memory` `orchestration` `security` `api` `release`
+Roles: `backend` `frontend` `memory` `orchestration` `security` `api`
+`backend-audit` `release`
 
 - Resumes that role's existing conversation if there is one; starts fresh
   otherwise.
@@ -29,8 +30,11 @@ Options:
 
 ```bash
 ./scripts/crew.sh start api --codex    # run this role on Codex instead of Claude
+./scripts/crew.sh start api --claude   # explicit Claude (this is the default)
 ./scripts/crew.sh start api --fresh    # ignore prior conversation, start clean
 ```
+
+Every role, `backend-audit` included, is Claude unless you pass `--codex`.
 
 ### Start only what you need
 
@@ -42,6 +46,48 @@ normal setup.** Add a specialist when there is work in its tree.
 ./scripts/crew.sh start backend
 ./scripts/crew.sh start api        # only if there's api/ work queued
 ```
+
+---
+
+## The auditor is different — `backend-audit`
+
+An independent security researcher, not another implementer and not the `security`
+specialist. It reads the backend and root infrastructure, hunts for realistic ways to
+abuse Clannon, and **writes findings only**. It never fixes them, never commits, never
+pushes, never touches anything remote.
+
+```bash
+./scripts/crew.sh start backend-audit           # Claude, like every role
+./scripts/crew.sh start backend-audit --codex   # Codex
+```
+
+Start it the same way, but understand what it is doing underneath: `crew.sh` hands
+this one role to `scripts/backend-audit-sandbox.sh`, which runs the agent inside
+Bubblewrap. The repository — source, tests, config, `.git`, and the auditor's own
+rules — is mounted **read-only**. Writable are only its own outputs: `notes/`,
+`drafts/`, `reports/backend-audit/`, `comms/<today>/backend-audit.md`, its handoff, and
+`proposals/to-backend/from-backend-audit/`. Your normal home is not in there at all, so
+no SSH keys, no `gh` token, no cloud credentials. Its provider profile is isolated too —
+it cannot see your own Claude or Codex state.
+
+That is the point: independence you do not have to trust a prompt for. If Bubblewrap is
+missing, **it refuses to launch** rather than falling back to a polite request.
+
+Prove the boundary after anything changes in that script:
+
+```bash
+./scripts/backend-audit-sandbox.sh self-test --claude
+./scripts/backend-audit-sandbox.sh self-test --codex
+```
+
+It checks that the auditor's outputs are writable, that source/`.git`/charter are not,
+that name resolution works, that the pinned scanners (bandit, detect-secrets, pip-audit,
+semgrep — installed into `.agents/runtime/backend-audit/`, never the project venv) are
+visible, and that the provider actually starts against its isolated profile.
+
+Findings arrive as `reports/backend-audit/report_vN.md`, with anything actionable also
+filed to `proposals/to-backend/from-backend-audit/` for the coordinator to route. Both
+are gitignored on purpose — unfixed vulnerability detail should not ship with the source.
 
 ---
 
@@ -99,8 +145,8 @@ when they finish a piece of work. Nothing interrupts them.
 Also gone: automatic Claude→Codex failover. The two don't share conversation
 memory, so it never really "continued" anything — it just re-read a handoff,
 which is what a normal restart does anyway. Now you pick the provider when you
-start a role (`--codex`), and an agent nearing its limit writes its handoff and
-stops.
+start a role (`--codex`; Claude is the default), and an agent nearing its limit
+writes its handoff and stops.
 
 Old commands (`clannon-standup.sh`, `agent-session.sh`,
 `clannon-provider-status.sh`, ...) are deleted. `crew.sh` covers all of it.
