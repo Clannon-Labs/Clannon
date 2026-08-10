@@ -19,6 +19,7 @@ import type {
   SignupInput,
   UsageSummary,
   User,
+  WaitlistJoinInput,
 } from "./types";
 
 /**
@@ -35,7 +36,14 @@ export interface ClannonClient {
   getRemoteConfig(): Promise<RemoteConfig | null>;
 
   login(input: Credentials): Promise<User>;
+  /** Rejects with a 403 `ApiError` when the waitlist is on and no (valid)
+   *  `approvalToken` is present — see `SignupInput`. */
   signup(input: SignupInput): Promise<User>;
+  /** Always resolves — join/resend never disclose list membership (see
+   *  `specification/api/ROUTES.md` §Waitlist), so there is nothing for the
+   *  UI to branch on beyond "it didn't throw" vs. a rate-limit 429. */
+  joinWaitlist(input: WaitlistJoinInput): Promise<void>;
+  resendWaitlistVerification(email: string): Promise<void>;
   /**
    * OAuth sign-in. The http client navigates the browser to the
    * backend's OAuth start route (the returned promise never settles

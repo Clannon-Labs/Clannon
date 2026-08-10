@@ -23,6 +23,7 @@ import {
   type SignupInput,
   type UsageSummary,
   type User,
+  type WaitlistJoinInput,
 } from "./types";
 
 function url(endpoint: string, params?: Record<string, string>): string {
@@ -199,6 +200,20 @@ export class HttpClient implements ClannonClient {
     return request(appConfig.endpoints.signup, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  }
+
+  async joinWaitlist(input: WaitlistJoinInput): Promise<void> {
+    await request(appConfig.endpoints.waitlistJoin, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async resendWaitlistVerification(email: string): Promise<void> {
+    await request(appConfig.endpoints.waitlistResend, {
+      method: "POST",
+      body: JSON.stringify({ email }),
     });
   }
 

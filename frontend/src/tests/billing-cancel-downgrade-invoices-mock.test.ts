@@ -50,7 +50,7 @@ describe("mock cancel subscription", () => {
     // whatever's still in localStorage — this is exactly the bug class
     // that shipped once already for EMPTY_ACCOUNT_KEY (see mock.ts comments)
     const second = new MockClient();
-    await second.signup({ name: "New", email: "new2@example.com", password: "correct-horse" });
+    await second.signup({ name: "New", password: "correct-horse", approvalToken: "demo-approved" });
     const portal = await second.openBillingPortal();
     expect(portal.subscription).toEqual({ status: "active", cancelEffectiveAt: null });
   });
@@ -87,7 +87,7 @@ describe("mock downgrade", () => {
 describe("mock invoices", () => {
   it("is empty on a fresh signup — never a fabricated invoice", async () => {
     const client = new MockClient();
-    await client.signup({ name: "New", email: "new3@example.com", password: "correct-horse" });
+    await client.signup({ name: "New", password: "correct-horse", approvalToken: "demo-approved" });
     const { invoices } = await client.getInvoices();
     expect(invoices).toEqual([]);
   });

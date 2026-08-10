@@ -46,6 +46,10 @@ export const appConfig = {
     login: "/auth/login",
     signup: "/auth/signup",
     logout: "/auth/logout",
+    /** Private-alpha gate (owner ruling 2026-08-09, shipped 97dfdb7). Public,
+     *  non-disclosing — see `specification/api/ROUTES.md` §Waitlist. */
+    waitlistJoin: "/waitlist",
+    waitlistResend: "/waitlist/resend",
     me: "/auth/me",
     /**
      * Server-side OAuth start. The browser navigates here; the backend

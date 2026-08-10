@@ -747,6 +747,62 @@ and zero horizontal overflow. Evidence:
 moved 89→90 in Pass 11. Awarding another point for finishing that same feature would
 double-count it. Score remains **85.87 → 86**.
 
+## Pass 16 — private-alpha waitlist gate: signup was wrong against an already-shipped
+backend, not merely incomplete (2026-08-10)
+
+Not a premium-gap pass. `specification/api/ROUTES.md` (re-verified 2026-08-09) and
+`backend/api/waitlist.py`/`app.py:193-210` show the owner's private-alpha waitlist
+(ruled 2026-08-09, shipped `97dfdb7`) is fully live server-side, and
+`config/backend/waitlist.yaml` ships `enabled: true`. The frontend's `/signup` was
+still the pre-gate open form, and the two routes `verify_waitlist` redirects to —
+`/waitlist/confirmed`, `/waitlist/invalid-link` — did not exist at all. A real
+visitor clicking a real verify link would have hit a 404 despite the backend
+verifying them successfully. That is the frontend being incorrect against a shipped
+contract, the class of bug this file's gates exist to catch, not a feature gap this
+file's score exists to reward.
+
+Filed `specification/api/requests/2026-08-10_config-waitlist-enabled-flag.md` first
+(per standing instruction) asking `GET /config` to add `waitlistEnabled` — the one
+thing the frontend cannot determine itself. Built regardless of that landing:
+`useWaitlistEnabled()` collapses "field absent" (today's real backend), "backend
+unreachable" (`getRemoteConfig()` returns `null`), and "explicitly `true`" all to
+gated, since the committed server default already is `true` and an open form that
+will certainly 403 is the dishonest failure mode. `/signup` now branches three ways —
+`?approvalToken=` present → name+password completion form (email comes from the
+token server-side, never the body, so the form says so rather than pretending to
+know it); no token + gated → invite-only state linking to `/waitlist`; no token +
+explicitly ungated → today's original open form, now with a 403-on-submit backstop
+that redirects to `/waitlist` instead of dead-ending. Built `/waitlist` (join, with
+the same non-oracle "if that address can join" copy this codebase already uses on
+`/forgot-password` — never "you're on the list!", which the backend's always-202
+non-disclosure design would make a claim the frontend can't actually verify) and
+`/waitlist/invalid-link` (resend). `MockClient` mirrors the real gate (`signup()`
+rejects without a valid approval token, matching `app.py`'s 403) rather than the
+open form it simulated before — five existing test fixtures that called `signup()`
+as a setup helper needed an approval token added; not a design change to those
+tests, just following the gate the mock now honestly enforces.
+
+Verified: `tsc`/`eslint` clean, Vitest **227/227** (26 new: `waitlist-mock.test.ts`,
+`waitlist-client.test.ts`, `waitlist-pages.test.tsx`, `signup-page.test.tsx` — the
+gate check itself mutation-tested, flipping `MOCK_WAITLIST_ENABLED` to `false` and
+confirming 4/5 dependent assertions failed before restoring). Production build +
+`curl` against `:3100`: all six routes (`/waitlist`, `/waitlist/confirmed`,
+`/waitlist/invalid-link`, `/signup`, `/signup?approvalToken=demo-approved`,
+`/signup?approvalToken=bogus`) serve `200`, and the two new state pages render their
+real body text server-side.
+
+**No score move, and no browser screenshots this pass** — this file's own rule 7
+("do not raise score for code that has not been exercised in browser") applies
+directly: the Playwright/Chrome-DevTools MCP tools this codebase normally uses for
+live verification were disconnected for this session, so only `curl`-level route
+proof exists, not an interactive click-through. Recording the gap rather than
+letting it pass silently; next session with those tools back should do a real
+browser pass on `/waitlist` → `/waitlist/confirmed`/`/waitlist/invalid-link` and the
+`?approvalToken=demo-approved` path before this is called done. This is also a
+catch-up fix rather than new capability, so even with that evidence the honest home
+would likely be "prevented a regression," not a dimension increase. Score remains
+**85.87 → 86**.
+
 ## 3. Hard gates
 
 Weighted score alone cannot hide critical failure.
