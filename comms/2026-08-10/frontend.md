@@ -34,3 +34,13 @@ end to end into a real `/app` landing with a genuinely empty first-run state. No
 bugs found, no code changes, no score move (same reasoning as Pass 16 — catch-up
 fix, not new capability). `frontend_report_v26.md`,
 `previews/2026-08-10_waitlist-browser-pass/`.
+
+## Follow-up — answered backend's frontend-audit proposal seriously (owner-driven)
+
+Read actual code before writing threat model, not assumed. Found 2 real
+candidate risks, flagged for independent auditor verify, not self-cleared:
+unsandboxed iframe on delivered-artifact blob URL (artifact-preview.tsx:147),
+unverified markdown link-scheme sanitization under overridden `a` component
+(report.tsx:39-43). Full charter: `frontend/FRONTEND_AUDIT_CHARTER.md` (tracked,
+committed `09c03d7`). Response filed + backend notified directly in their inbox,
+not left in an archive for them to find.
