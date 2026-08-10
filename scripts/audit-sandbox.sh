@@ -154,6 +154,7 @@ if [ "$NODE_TOOLING" -eq 1 ]; then
 fi
 
 prepare_codex() {
+  local plugin_revision plugin_root skill
   [ -n "$CODEX_REAL" ] && [ -x "$CODEX_REAL" ] || die "Codex CLI not found"
   [ -f "$HOST_AUTH" ] || die "Codex auth not found at configured CODEX_HOME/auth.json"
   [ -d "$HOST_PLUGIN_CATALOG" ] || die "Codex plugin catalog unavailable; open /plugins once"
@@ -188,6 +189,30 @@ PY
   fi
   [ -d "$HOST_PLUGIN_CACHE/openai-curated/codex-security" ] \
     || die "codex-security plugin cache unavailable after install"
+
+  # Current CLI plugin inventory can report an installed package without adding
+  # its skills to a headless session. Expose the installed package's read-only
+  # workflows through the isolated CODEX_HOME as a deterministic fallback. Omit
+  # mutation workflows structurally: this role may validate/report, never fix or
+  # publish tracking state.
+  plugin_revision="$(codex plugin list 2>/dev/null | awk \
+    '$1 == "codex-security@openai-curated" && $2 == "installed," { print $4 }')"
+  [ -n "$plugin_revision" ] || die "could not resolve installed codex-security revision"
+  plugin_root="$HOST_PLUGIN_CACHE/openai-curated/codex-security/$plugin_revision"
+  [ -d "$plugin_root/skills" ] || die "installed codex-security skills unavailable"
+  mkdir -p "$CODEX_STATE/skills"
+  for skill in \
+    attack-path-analysis deep-security-scan finding-discovery \
+    propose-security-hardening security-diff-scan security-scan \
+    threat-model triage-finding validation vulnerability-writeup
+  do
+    [ -f "$plugin_root/skills/$skill/SKILL.md" ] \
+      || die "codex-security skill missing: $skill"
+    ln -sfn "$CODEX_STATE/plugins/cache/openai-curated/codex-security/$plugin_revision/skills/$skill" \
+      "$CODEX_STATE/skills/codex-security-$skill"
+  done
+  unlink "$CODEX_STATE/skills/codex-security-fix-finding" 2>/dev/null || true
+  unlink "$CODEX_STATE/skills/codex-security-track-findings" 2>/dev/null || true
 }
 
 prepare_claude() {
@@ -446,6 +471,15 @@ PY
       "${BWRAP[@]}" "$PROVIDER_BIN" plugin list \
         | grep -q '^codex-security@openai-curated[[:space:]].*installed, enabled' \
         || die "codex-security plugin not visible inside isolated runtime"
+      "${BWRAP[@]}" bash -c '
+        set -eu
+        for skill in security-scan threat-model attack-path-analysis validation vulnerability-writeup; do
+          test -r "$1/skills/codex-security-$skill/SKILL.md"
+        done
+        test ! -e "$1/skills/codex-security-fix-finding"
+        test ! -e "$1/skills/codex-security-track-findings"
+      ' bash "$CODEX_STATE" \
+        || die "safe codex-security workflows not visible inside isolated runtime"
       ;;
     claude)
       "${BWRAP[@]}" "$PROVIDER_BIN" --version >/dev/null \
@@ -471,8 +505,7 @@ case "$PROVIDER" in
     if [ "$MODE" = run ]; then
       LAUNCH=(
         "$PROVIDER_BIN"
-        --sandbox workspace-write
-        --ask-for-approval never
+        --dangerously-bypass-approvals-and-sandbox
         --search
         --model gpt-5.6-sol
         --config 'model_reasoning_effort="xhigh"'
@@ -484,8 +517,7 @@ case "$PROVIDER" in
       LAUNCH=(
         "$PROVIDER_BIN"
         --no-alt-screen
-        --sandbox workspace-write
-        --ask-for-approval never
+        --dangerously-bypass-approvals-and-sandbox
         --search
         --model gpt-5.6-sol
         --config 'model_reasoning_effort="xhigh"'
