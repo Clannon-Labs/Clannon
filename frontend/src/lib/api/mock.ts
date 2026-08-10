@@ -105,6 +105,32 @@ function modalityOf(file: File): string {
   return "text";
 }
 
+/** A small valid PDF keeps the mock preview path browser-testable without fixtures. */
+function mockPdf(): string {
+  const stream = "BT /F1 18 Tf 72 720 Td (Clannon source pack) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets
+    .slice(1)
+    .map((offset) => `${offset.toString().padStart(10, "0")} 00000 n \n`)
+    .join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
+
 /**
  * In-browser simulator of the Clannon pipeline. Implements the same
  * interface as HttpClient so the rest of the app cannot tell the
@@ -505,6 +531,9 @@ export class MockClient implements ClannonClient {
         ["metric,value\nmarket size 2026,£3.4B\nDTC price band,£22–£38\nlead time,6–9 weeks\n"],
         { type: "text/csv" },
       );
+    }
+    if (/\.pdf$/i.test(name)) {
+      return new Blob([mockPdf()], { type: "application/pdf" });
     }
     return new Blob([`mock artifact — ${name}`], { type: "text/plain" });
   }

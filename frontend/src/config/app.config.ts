@@ -3,12 +3,14 @@
  * wiring this UI to a real backend.
  *
  * Everything here can be overridden per-environment via NEXT_PUBLIC_*
- * variables (see .env.example). Flip NEXT_PUBLIC_API_MODE to "http",
- * point NEXT_PUBLIC_API_BASE_URL at the FastAPI host, and the whole
- * app switches from the bundled mock to live endpoints. No component
+ * variables (see .env.example). HTTP is the fail-safe default; mock mode
+ * requires an explicit NEXT_PUBLIC_API_MODE=mock opt-in. Point
+ * NEXT_PUBLIC_API_BASE_URL at the FastAPI host to change backends. No component
  * imports an URL or fetch call directly — they only know the client
  * in `src/lib/api`.
  */
+
+import { requireHttpBaseUrl } from "@/config/url-policy";
 
 export type ApiMode = "mock" | "http";
 
@@ -19,12 +21,26 @@ const env = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
 };
 
+/**
+ * Missing mode uses the real server. Mock authentication is intentionally
+ * explicit: a typo must stop the build instead of shipping a convincing local
+ * simulator to production.
+ */
+export function resolveApiMode(value: string | undefined): ApiMode {
+  if (value === undefined || value === "") return "http";
+  if (value === "http" || value === "mock") return value;
+  throw new Error('NEXT_PUBLIC_API_MODE must be exactly "http" or "mock".');
+}
+
 export const appConfig = {
   /** "mock" runs the bundled simulator; "http" talks to the real backend. */
-  apiMode: (env.apiMode === "http" ? "http" : "mock") as ApiMode,
+  apiMode: resolveApiMode(env.apiMode),
 
   /** Base URL of the backend — the Vraksha engine (FastAPI). No trailing slash. */
-  apiBaseUrl: env.apiBaseUrl?.replace(/\/$/, "") ?? "http://localhost:8000",
+  apiBaseUrl: requireHttpBaseUrl(
+    env.apiBaseUrl ?? "http://localhost:8000",
+    "NEXT_PUBLIC_API_BASE_URL",
+  ),
 
   /**
    * Origin the workspace is served from. Empty = same origin as the marketing

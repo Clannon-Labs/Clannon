@@ -24,8 +24,9 @@ import type {
 
 /**
  * The one interface every page talks to. Two implementations:
- * the mock simulator (default) and the http client. Which one you
- * get is decided by `appConfig.apiMode` — change the config, not
+ * the explicit mock simulator and the default HTTP client. Which one you
+ * get is decided by `appConfig.apiMode` — HTTP unless mock is explicitly
+ * selected. Change the config, not
  * the components. Get an instance via `getClient()` from `@/lib/api`.
  */
 export interface ClannonClient {

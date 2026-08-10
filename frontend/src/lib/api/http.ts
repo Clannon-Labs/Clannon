@@ -2,6 +2,7 @@ import { appConfig } from "@/config/app.config";
 import type { OAuthProvider } from "@/config/site.config";
 import type { ClannonClient } from "./client";
 import type { PlanId } from "@/config/plans";
+import { parseRunEvent } from "./run-event";
 import {
   ApiError,
   type ApiErrorAction,
@@ -428,9 +429,11 @@ export class HttpClient implements ClannonClient {
             const payload = line.slice(5).trim();
             if (!payload || payload === "[DONE]") continue;
             try {
-              yield JSON.parse(payload) as RunEvent;
+              const event = parseRunEvent(JSON.parse(payload));
+              if (event) yield event;
             } catch {
-              // skip malformed frames rather than killing the stream
+              // Invalid JSON and invalid event shapes are isolated to one frame;
+              // later events and the caller's reconnect policy keep working.
             }
           }
         }

@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 import os from "node:os";
 import type { NetworkInterfaceInfo } from "node:os";
+import { requireHttpBaseUrl } from "./src/config/url-policy";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl = requireHttpBaseUrl(
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
+  "NEXT_PUBLIC_API_BASE_URL",
+);
 const devBackendUrl = process.env.CLANNON_DEV_BACKEND_URL;
 const isDev = process.env.NODE_ENV === "development";
 
@@ -27,33 +31,44 @@ function detectLanHosts(): string[] {
 const lanHosts = detectLanHosts();
 
 /**
- * Security headers. The CSP allows 'unsafe-inline' for script/style
- * because Next.js App Router injects inline bootstrapping — move to
- * nonce-based CSP via middleware when auth cookies go live.
+ * Build one CSP from validated configuration. Script/style 'unsafe-inline'
+ * remains because the static
+ * root layout contains the pre-hydration theme script and generated theme CSS,
+ * while Next's nonce path requires per-request Proxy headers plus dynamic
+ * rendering. Removing it is a separate rendering/performance migration, not a
+ * header-only edit.
  * 'unsafe-eval' is DEV ONLY: React dev tooling (callstack
  * reconstruction, fast refresh) needs eval(); production never gets it.
  * connect-src is widened to the configured backend origin only.
  */
+export function buildContentSecurityPolicy(backendUrl: string, development: boolean): string {
+  const normalizedBackendUrl = requireHttpBaseUrl(backendUrl, "NEXT_PUBLIC_API_BASE_URL");
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    // Parsed serialization guarantees one CSP source expression, never raw env text.
+    `connect-src 'self' ${new URL(normalizedBackendUrl).origin}`,
+    // No product surface embeds frames; PDF blobs open in a separate browser tab.
+    "frame-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    // Production-only: forces http→https. In dev this breaks LAN access
+    // (http://<lan-ip>:3000) because the browser upgrades every _next/static
+    // asset to https, which isn't served — localhost is exempt, so it only
+    // bites over the network. Production serves HTTPS, so it stays on there.
+    ...(development ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+}
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      `connect-src 'self' ${apiBaseUrl}`,
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "object-src 'none'",
-      // Production-only: forces http→https. In dev this breaks LAN access
-      // (http://<lan-ip>:3000) because the browser upgrades every _next/static
-      // asset to https, which isn't served — localhost is exempt, so it only
-      // bites over the network. Production serves HTTPS, so it stays on there.
-      ...(isDev ? [] : ["upgrade-insecure-requests"]),
-    ].join("; "),
+    value: buildContentSecurityPolicy(apiBaseUrl, isDev),
   },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
