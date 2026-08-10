@@ -11,7 +11,7 @@ one narrow question the tool asks; it is not a verdict, and it never justifies P
 
 They are on `PATH` already, from the auditor's isolated environment under
 `.agents/runtime/backend-audit/tools-venv/` — provisioned and pinned by
-`scripts/backend-audit-sandbox.sh` from `../tooling-requirements.txt`.
+`scripts/audit-sandbox.sh` from `../tooling-requirements.txt`.
 
 Never `pip install` anything, never touch `backend/.venv`, never run a tool's fix
 mode. The project's permission rules deny the installers and the git write commands

@@ -20,6 +20,7 @@ ROLE_DIRS = {
     "security": REPO_ROOT / "backend" / "security",
     "api": REPO_ROOT / "backend" / "api",
     "backend-audit": REPO_ROOT / "backend-audit",
+    "frontend-audit": REPO_ROOT / "frontend-audit",
     "release": REPO_ROOT / "release",
 }
 
@@ -61,7 +62,7 @@ def _start(
         HOME=str(tmp_path / "home"),
         PATH=f"{fake_bin}:{env['PATH']}",
         TMUX_LOG=str(tmux_log),
-        CLANNON_AUDIT_RUNTIME=str(tmp_path / "audit-runtime"),
+        CLANNON_AGENT_RUNTIME=str(tmp_path / "runtime"),
     )
     args = [str(CREW), "start", role]
     if with_codex:
@@ -92,7 +93,19 @@ class CrewLauncherTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[claude, fresh", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
+            self.assertIn("audit-sandbox.sh backend-audit start --claude", tmux_call)
+
+    def test_frontend_audit_uses_the_same_launcher_with_its_own_role(self):
+        """Both audit roles share one enforced launcher; role is a parameter."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+
+            result, tmux_call = _start(tmp_path, "frontend-audit", with_codex=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[claude, fresh", result.stdout)
+            self.assertIn("audit-sandbox.sh frontend-audit start --claude", tmux_call)
+            self.assertNotIn("backend-audit", tmux_call)
 
     def test_backend_audit_honours_explicit_codex(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -102,7 +115,7 @@ class CrewLauncherTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[codex, fresh", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh start --codex", tmux_call)
+            self.assertIn("audit-sandbox.sh backend-audit start --codex", tmux_call)
 
     def test_backend_audit_on_claude_uses_the_same_enforced_sandbox(self):
         """Claude is a launcher parameter, never a way around the boundary."""
@@ -118,7 +131,7 @@ class CrewLauncherTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[claude, fresh", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
+            self.assertIn("audit-sandbox.sh backend-audit start --claude", tmux_call)
             self.assertNotIn("claude --dangerously-skip-permissions", tmux_call)
 
     def test_backend_audit_resumes_claude_from_its_isolated_config_dir(self):
@@ -126,7 +139,7 @@ class CrewLauncherTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
             _write_claude_session(
-                tmp_path / "audit-runtime" / "claude-home" / "projects",
+                tmp_path / "runtime" / "backend-audit" / "claude-home" / "projects",
                 ROLE_DIRS["backend-audit"],
             )
 
@@ -139,7 +152,7 @@ class CrewLauncherTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[claude, resuming prior conversation]", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh resume --claude", tmux_call)
+            self.assertIn("audit-sandbox.sh backend-audit resume --claude", tmux_call)
 
     def test_backend_audit_ignores_owner_claude_sessions(self):
         """A session in the owner's own config dir must not resume the auditor."""
@@ -159,14 +172,14 @@ class CrewLauncherTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[claude, fresh", result.stdout)
-            self.assertIn("backend-audit-sandbox.sh start --claude", tmux_call)
+            self.assertIn("audit-sandbox.sh backend-audit start --claude", tmux_call)
 
     def test_codex_resumes_interactive_session_for_each_role(self):
         for role, cwd in ROLE_DIRS.items():
             with self.subTest(role=role), tempfile.TemporaryDirectory() as temp_dir:
                 tmp_path = Path(temp_dir)
-                if role == "backend-audit":
-                    codex_home = tmp_path / "audit-runtime" / "codex-home"
+                if role in ("backend-audit", "frontend-audit"):
+                    codex_home = tmp_path / "runtime" / role / "codex-home"
                 else:
                     codex_home = tmp_path / "home" / ".codex"
                 _write_session(codex_home, cwd)
@@ -175,8 +188,8 @@ class CrewLauncherTest(unittest.TestCase):
 
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("[codex, resuming prior conversation]", result.stdout)
-                if role == "backend-audit":
-                    self.assertIn("backend-audit-sandbox.sh resume", tmux_call)
+                if role in ("backend-audit", "frontend-audit"):
+                    self.assertIn(f"audit-sandbox.sh {role} resume --codex", tmux_call)
                 else:
                     self.assertIn("codex resume --last", tmux_call)
                     self.assertNotIn("--all", tmux_call)

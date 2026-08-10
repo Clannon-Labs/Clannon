@@ -74,8 +74,8 @@ Out of scope unless owner explicitly expands it:
 ## Enforced independence
 
 Source, tests, config, dependency files, lockfiles, `.git`, and remote systems are
-read-only. `scripts/backend-audit-sandbox.sh` enforces repository mounts with
-Bubblewrap. Missing enforcement means refuse launch; never fall back to trust.
+read-only. `scripts/audit-sandbox.sh backend-audit …` enforces repository mounts with
+Bubblewrap (one launcher, shared with `frontend-audit`). Missing enforcement means refuse launch; never fall back to trust.
 
 Only these outputs are writable:
 
@@ -134,7 +134,7 @@ queue means update handoff and stop; do not manufacture findings or busywork.
 ## Reporting contract
 
 Write one new `reports/backend-audit/report_vN.md` per finished audit using
-`templates/FINDING.md` as minimum structure. A report must state:
+`.agents/templates/AUDIT_FINDING.md` as minimum structure. A report must state:
 
 - revision, scope, threat model, coverage, commands/tools, deferred surfaces
 - attacker story and source-to-sink attack path

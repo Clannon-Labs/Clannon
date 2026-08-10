@@ -3,7 +3,7 @@
 Independent source-read-only security research role.
 
 - Charter: `CLAUDE.md` (`AGENTS.md` points Codex to same source)
-- Safe durable template: `templates/FINDING.md`
+- Safe durable template: `../.agents/templates/AUDIT_FINDING.md` (shared with `frontend-audit`)
 - Local research: `notes/`, `drafts/`
 - Deep audits: `../reports/backend-audit/report_vN.md`
 - Actionable findings: `../proposals/to-backend/from-backend-audit/`
@@ -33,8 +33,8 @@ read-only source/`.git`/charter, name resolution, scanner visibility, and provid
 startup:
 
 ```bash
-./scripts/backend-audit-sandbox.sh self-test --codex
-./scripts/backend-audit-sandbox.sh self-test --claude
+./scripts/audit-sandbox.sh backend-audit self-test --codex
+./scripts/audit-sandbox.sh backend-audit self-test --claude
 ```
 
 Detailed notes, drafts, reports, and proposals are gitignored because unresolved

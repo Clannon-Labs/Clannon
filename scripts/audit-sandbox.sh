@@ -1,28 +1,22 @@
 #!/usr/bin/env bash
-# Enforced launcher for the independent backend security auditor.
+# Enforced launcher for the independent audit roles (`backend-audit`, `frontend-audit`).
 #
-# Source tree is mounted read-only. Only auditor-owned evidence/continuity paths
-# and isolated provider runtime state are writable. Prompt instructions are not the
+# The repository is mounted read-only. Only the role's own evidence/continuity paths
+# and its isolated provider runtime are writable. Prompt instructions are not the
 # security boundary; Bubblewrap is. Missing Bubblewrap therefore fails closed.
 #
-# The provider (Codex or Claude Code) is a PARAMETER, not a second script: the
-# mount policy is the security boundary, so it is written once and shared. A
-# per-provider copy would be a second source of truth for the boundary and would
-# drift silently — exactly what LAW 1 forbids.
+# ROLE and PROVIDER are both PARAMETERS, never a second script. The mount policy IS
+# the boundary, so it is written once: a per-role or per-provider copy would drift
+# silently, and it would drift in the direction of "less confined" without anything
+# turning red. Everything a role differs by — its directory, its output paths, its
+# proposal inboxes — is a table entry below.
+#
+#   ./scripts/audit-sandbox.sh <role> {start|resume|self-test} [--codex|--claude]
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ROLE_DIR="$ROOT/backend-audit"
-RUNTIME="${CLANNON_AUDIT_RUNTIME:-$ROOT/.agents/runtime/backend-audit}"
-CODEX_STATE="$RUNTIME/codex-home"
-CLAUDE_STATE="$RUNTIME/claude-home"
-TOOLS_VENV="$RUNTIME/tools-venv"
-REPORTS="$ROOT/reports/backend-audit"
-PROPOSALS="$ROOT/proposals/to-backend/from-backend-audit"
-TODAY="$ROOT/comms/$(date +%F)"
-COMMS_FILE="$TODAY/backend-audit.md"
-HANDOFF="$ROOT/.agents/provider-handoffs/backend-audit.md"
+RUNTIME_ROOT="${CLANNON_AGENT_RUNTIME:-$ROOT/.agents/runtime}"
 HOST_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 HOST_AUTH="$HOST_CODEX_HOME/auth.json"
 HOST_PLUGIN_CATALOG="$HOST_CODEX_HOME/.tmp/plugins"
@@ -32,9 +26,12 @@ HOST_CLAUDE_CREDS="$HOST_CLAUDE_HOME/.credentials.json"
 CODEX_REAL="$(readlink -f "$(command -v codex || true)" 2>/dev/null || true)"
 CLAUDE_REAL="$(readlink -f "$(command -v claude || true)" 2>/dev/null || true)"
 
-MODE="${1:-}"
+die() { echo "audit sandbox: $*" >&2; exit 2; }
+
+ROLE="${1:-}"
+MODE="${2:-}"
 PROVIDER=codex
-shift || true
+shift 2 2>/dev/null || true
 while [ $# -gt 0 ]; do
   case "$1" in
     --claude) PROVIDER=claude ;;
@@ -44,18 +41,48 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-die() { echo "backend-audit sandbox: $*" >&2; exit 2; }
+# --- the role table ---------------------------------------------------------
+# Adding an audit role is this case block plus its role directory. Nothing about
+# the confinement itself is per-role, and nothing here may weaken it.
+case "$ROLE" in
+  backend-audit)
+    PROPOSAL_DIRS=("$ROOT/proposals/to-backend/from-backend-audit")
+    ;;
+  frontend-audit)
+    # Two inboxes on purpose: a frontend-owned fix goes to the frontend, while a
+    # finding whose real fix is server-side goes to the coordinator — the auditor
+    # never asks an implementer to relay for it.
+    PROPOSAL_DIRS=(
+      "$ROOT/proposals/to-frontend/from-frontend-audit"
+      "$ROOT/proposals/to-backend/from-frontend-audit"
+    )
+    ;;
+  *)
+    die "unknown audit role: '$ROLE' (roles: backend-audit frontend-audit)"
+    ;;
+esac
 
-case "$MODE" in start|resume|self-test) ;; *) die "usage: $0 {start|resume|self-test} [--codex|--claude]" ;; esac
+ROLE_DIR="$ROOT/$ROLE"
+RUNTIME="$RUNTIME_ROOT/$ROLE"
+CODEX_STATE="$RUNTIME/codex-home"
+CLAUDE_STATE="$RUNTIME/claude-home"
+TOOLS_VENV="$RUNTIME/tools-venv"
+REPORTS="$ROOT/reports/$ROLE"
+TODAY="$ROOT/comms/$(date +%F)"
+COMMS_FILE="$TODAY/$ROLE.md"
+HANDOFF="$ROOT/.agents/provider-handoffs/$ROLE.md"
+
+case "$MODE" in start|resume|self-test) ;; *) die "usage: $0 <role> {start|resume|self-test} [--codex|--claude]" ;; esac
+[ -d "$ROLE_DIR" ] || die "role directory missing: $ROLE_DIR"
 command -v bwrap >/dev/null 2>&1 || die "Bubblewrap (bwrap) is required; refusing unsafe fallback"
 command -v uv >/dev/null 2>&1 || die "uv is required to provision isolated audit tools"
 
 # Host-side preparation happens before confinement. Paths contain no machine-specific
-# constants; every location derives from repository root, HOME, CODEX_HOME, or the
+# constants; every location derives from the repository root, HOME, CODEX_HOME, or the
 # Claude config dir.
 mkdir -p \
   "$ROLE_DIR/notes" "$ROLE_DIR/drafts" "$RUNTIME/tmp" \
-  "$REPORTS" "$PROPOSALS" "$TODAY"
+  "$REPORTS" "$TODAY" "${PROPOSAL_DIRS[@]}"
 touch "$COMMS_FILE" "$HANDOFF"
 
 if [ ! -x "$TOOLS_VENV/bin/python" ]; then
@@ -127,9 +154,9 @@ projects.setdefault(root, {}).update({
 path.write_text(json.dumps(state, indent=2))
 PY
 
-  # Machine-local user-scope settings for the isolated profile. The auditor's actual
-  # policy is the TRACKED backend-audit/.claude/settings.json, which is mounted
-  # read-only with the rest of the source — the auditor cannot edit its own rules.
+  # Machine-local user-scope settings for the isolated profile. The role's actual
+  # policy is the TRACKED <role>/.claude/settings.json, which is mounted read-only
+  # with the rest of the source — a session cannot edit its own rules.
   cat > "$CLAUDE_STATE/settings.json" <<'JSON'
 {
   "skipDangerousModePermissionPrompt": true,
@@ -176,7 +203,6 @@ BWRAP=(
   --bind "$ROLE_DIR/notes" "$ROLE_DIR/notes"
   --bind "$ROLE_DIR/drafts" "$ROLE_DIR/drafts"
   --bind "$REPORTS" "$REPORTS"
-  --bind "$PROPOSALS" "$PROPOSALS"
   --bind "$COMMS_FILE" "$COMMS_FILE"
   --bind "$HANDOFF" "$HANDOFF"
   --dir /opt
@@ -187,6 +213,9 @@ BWRAP=(
   --setenv GIT_CONFIG_SYSTEM /dev/null
   --setenv GIT_TERMINAL_PROMPT 0
   --setenv TMPDIR /tmp
+  # npm/npx would otherwise reach for a cache in the absent home; a JS/TS auditor
+  # running `npm audit` needs one that is inside the sandbox.
+  --setenv npm_config_cache /tmp/npm-cache
   --setenv PYTHONDONTWRITEBYTECODE 1
   --setenv SEMGREP_SEND_METRICS off
   # A parent Claude Code session exports markers that a nested one obeys — inheriting
@@ -209,6 +238,9 @@ BWRAP=(
   --unsetenv AWS_SECRET_ACCESS_KEY
   --unsetenv AWS_SESSION_TOKEN
 )
+for proposal_dir in "${PROPOSAL_DIRS[@]}"; do
+  BWRAP+=( --bind "$proposal_dir" "$proposal_dir" )
+done
 [ -n "$RESOLV_REAL" ] && case "$RESOLV_REAL" in
   /etc/*) ;;
   *) BWRAP+=( --ro-bind "$RESOLV_REAL" "$RESOLV_REAL" ) ;;
@@ -243,8 +275,9 @@ esac
 if [ "$MODE" = self-test ]; then
   positive="$ROLE_DIR/notes/.sandbox-write-test"
   report_positive="$REPORTS/.sandbox-write-test"
-  proposal_positive="$PROPOSALS/.sandbox-write-test"
-  source_negative="$ROOT/backend/.sandbox-write-test"
+  proposal_positive="${PROPOSAL_DIRS[0]}/.sandbox-write-test"
+  backend_negative="$ROOT/backend/.sandbox-write-test"
+  frontend_negative="$ROOT/frontend/.sandbox-write-test"
   git_negative="$ROOT/.git/.sandbox-write-test"
   charter_negative="$ROLE_DIR/CLAUDE.md"
   "${BWRAP[@]}" bash -c '
@@ -252,13 +285,14 @@ if [ "$MODE" = self-test ]; then
     touch "$1" "$2" "$3"
     ! touch "$4" 2>/dev/null
     ! touch "$5" 2>/dev/null
-    ! { printf "tamper\n" >> "$6"; } 2>/dev/null
+    ! touch "$6" 2>/dev/null
+    ! { printf "tamper\n" >> "$7"; } 2>/dev/null
   ' bash "$positive" "$report_positive" "$proposal_positive" \
-    "$source_negative" "$git_negative" "$charter_negative"
+    "$backend_negative" "$frontend_negative" "$git_negative" "$charter_negative"
   unlink "$positive"
   unlink "$report_positive"
   unlink "$proposal_positive"
-  [ ! -e "$source_negative" ] && [ ! -e "$git_negative" ] \
+  [ ! -e "$backend_negative" ] && [ ! -e "$frontend_negative" ] && [ ! -e "$git_negative" ] \
     || die "negative write test left unexpected files"
 
   # A provider that cannot resolve its own API silently retries forever, so name
@@ -266,8 +300,8 @@ if [ "$MODE" = self-test ]; then
   "${BWRAP[@]}" getent hosts api.anthropic.com >/dev/null \
     || die "name resolution failed inside sandbox (offline host, or /etc/resolv.conf target not mounted)"
   "${BWRAP[@]}" "$TOOLS_VENV/bin/python" -c \
-    'import bandit, detect_secrets, pip_audit, semgrep' \
-    || die "one or more pinned audit tools not visible inside sandbox"
+    'import detect_secrets, semgrep' \
+    || die "shared audit tooling not visible inside sandbox"
 
   case "$PROVIDER" in
     codex)
@@ -278,8 +312,8 @@ if [ "$MODE" = self-test ]; then
     claude)
       "${BWRAP[@]}" "$PROVIDER_BIN" --version >/dev/null \
         || die "Claude Code did not start inside isolated runtime"
-      # Isolation proof: the auditor's profile is the runtime one, and the owner's
-      # own Claude state (accounts, MCP servers, project history) is not present.
+      # Isolation proof: the role's profile is the runtime one, and the owner's own
+      # Claude state (accounts, MCP servers, project history) is not present.
       "${BWRAP[@]}" bash -c '
         set -eu
         [ -r "$1/.credentials.json" ]
@@ -290,7 +324,7 @@ if [ "$MODE" = self-test ]; then
         || die "Claude runtime isolation check failed"
       ;;
   esac
-  echo "backend-audit sandbox: PASS ($PROVIDER) — outputs writable; source/.git/charter read-only; DNS, security tooling, and provider runtime verified"
+  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; DNS, security tooling, and provider runtime verified"
   exit 0
 fi
 
@@ -311,8 +345,8 @@ case "$PROVIDER" in
     # Bypass mode matches the other roles' unattended posture. It is safe HERE for a
     # reason the other roles cannot claim: the tree is mounted read-only, so the
     # permission layer is defence in depth rather than the boundary. `--add-dir`
-    # carries the repository root because the auditor's cwd is its own role
-    # directory while its subject is `backend/` and root config.
+    # carries the repository root because the role's cwd is its own directory while
+    # its subject is the tree it audits.
     LAUNCH=(
       "$PROVIDER_BIN"
       --dangerously-skip-permissions

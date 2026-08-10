@@ -8,7 +8,8 @@
 #   ./scripts/crew.sh stop <role>
 #   ./scripts/crew.sh run <role> --brief <file> [--claude|--codex]
 #
-# Roles: backend frontend memory orchestration security api backend-audit release
+# Roles: backend frontend memory orchestration security api backend-audit
+#        frontend-audit release
 #
 # TWO WAYS AN AGENT RUNS — they do not overlap:
 #   start/attach  interactive session in tmux. For the OWNER to drive an agent.
@@ -32,8 +33,8 @@
 set -uo pipefail   # no -e: a failure on one role must not abort a multi-role loop
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-AUDIT_RUNTIME="${CLANNON_AUDIT_RUNTIME:-$ROOT/.agents/runtime/backend-audit}"
-ROLES="backend frontend memory orchestration security api backend-audit release"
+RUNTIME_ROOT="${CLANNON_AGENT_RUNTIME:-$ROOT/.agents/runtime}"
+ROLES="backend frontend memory orchestration security api backend-audit frontend-audit release"
 
 die() { echo "crew: $*" >&2; exit 2; }
 
@@ -63,7 +64,8 @@ dir_for() {
     orchestration) echo "$ROOT/backend/core/orchestrator" ;;
     security)      echo "$ROOT/backend/security" ;;
     api)           echo "$ROOT/backend/api" ;;
-    backend-audit) echo "$ROOT/backend-audit" ;;
+    backend-audit)  echo "$ROOT/backend-audit" ;;
+    frontend-audit) echo "$ROOT/frontend-audit" ;;
     release)       echo "$ROOT/release" ;;
     *)             return 1 ;;
   esac
@@ -80,7 +82,13 @@ is_specialist() {
   # owner drives directly, so it keeps the stronger default model.
 }
 
-is_auditor() { [ "$1" = backend-audit ]; }
+# The audit roles are the ones with no source of their own: they run confined by
+# scripts/audit-sandbox.sh instead of as a normal agent.
+is_auditor() { case "$1" in backend-audit|frontend-audit) return 0 ;; *) return 1 ;; esac; }
+
+# An audit role's transcripts live in its own isolated runtime, never the owner's
+# provider state. Every *_has_session lookup below routes through this.
+audit_runtime() { echo "$RUNTIME_ROOT/$1"; }
 
 # --- session liveness -------------------------------------------------------
 # A tmux session can outlive its agent: when claude/codex exits, the wrapper
@@ -124,8 +132,8 @@ claude_has_session() {
   encoded="${dir//\//-}"
   # The auditor runs against an isolated config dir so it never sees the owner's
   # own Claude state; its transcripts land there too, not under $HOME.
-  if [ "$dir" = "$ROOT/backend-audit" ]; then
-    projects_dir="$AUDIT_RUNTIME/claude-home/projects"
+  if is_auditor "${dir##*/}"; then
+    projects_dir="$(audit_runtime "${dir##*/}")/claude-home/projects"
   else
     projects_dir="$HOME/.claude/projects"
   fi
@@ -137,8 +145,8 @@ claude_has_session() {
 # `codex exec` workers that happen to run inside the same module.
 codex_has_session() {
   local dir="$1" sessions_dir file metadata
-  if [ "$dir" = "$ROOT/backend-audit" ]; then
-    sessions_dir="$AUDIT_RUNTIME/codex-home/sessions"
+  if is_auditor "${dir##*/}"; then
+    sessions_dir="$(audit_runtime "${dir##*/}")/codex-home/sessions"
   else
     sessions_dir="${CODEX_HOME:-$HOME/.codex}/sessions"
   fi
@@ -168,12 +176,12 @@ launch_command() {   # role provider fresh dir -> the shell command the session 
   if is_auditor "$role"; then
     # Both providers go through the same enforced launcher: the Bubblewrap mount
     # policy IS the boundary, so it is written once and takes the provider as a
-    # parameter. Prove it after touching it — `backend-audit-sandbox.sh self-test
-    # --claude|--codex`.
+    # parameter, and so is the ROLE. Prove it after touching it —
+    # `audit-sandbox.sh <role> self-test --claude|--codex`.
     if [ "$fresh" = no ] && provider_has_session "$provider" "$dir"; then
-      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") resume --$provider"
+      cmd="$(printf '%q' "$ROOT/scripts/audit-sandbox.sh") $role resume --$provider"
     else
-      cmd="$(printf '%q' "$ROOT/scripts/backend-audit-sandbox.sh") start --$provider"
+      cmd="$(printf '%q' "$ROOT/scripts/audit-sandbox.sh") $role start --$provider"
     fi
     cmd="$(agent_env "$role")$cmd"
     echo "$cmd; echo; echo '[crew] auditor exited — session kept for inspection. Ctrl-b d to detach.'; exec bash"
@@ -343,7 +351,7 @@ cmd_run() {
   [ -n "$role" ] && [ -n "$brief" ] || die "usage: crew.sh run <role> --brief <file> [--claude|--codex]"
   valid_role "$role" || die "unknown role: $role (roles: $ROLES)"
   if is_auditor "$role"; then
-    die "backend-audit is a persistent, read-only research role; use: crew.sh start backend-audit"
+    die "$role is a persistent, read-only research role; use: crew.sh start $role"
   fi
   # The coordinator owns real trees too (foundation/, core/llm, core/pipeline.py,
   # config/, scripts/, docs/). Dispatching a worker into one of those is exactly how
