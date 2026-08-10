@@ -1,10 +1,10 @@
 # 0004 — Redis enforces token budgets atomically; Postgres is the truth
 
-> **Status:** accepted-in-principle — **UNIMPLEMENTED**. The design below is the
-> ratified target, but **no Redis-Lua budget code and no Postgres RLS exist in the
-> repo today** (`INVARIANT_OWNERSHIP.md` marks §V.21–22 aspirational). Do not rely on
-> atomic budgets or RLS tenant-isolation as shipped guarantees; they land with the
-> billing / multi-tenancy milestone. (Tracked: issue #14.)
+> **Status:** partially implemented, enforcement **OFF**. Redis-Lua atomic
+> reserve/reconcile, seeding, and the per-call LLM anchor exist and are tested.
+> Production seeding, anniversary-period wiring, durable Postgres synchronization,
+> and Postgres RLS remain unbuilt; do not claim atomic budgets or RLS as shipped
+> guarantees while `enforcement_enabled` is false. (Tracked: issue #14.)
 > **Date recorded:** 2026-06-15 (back-filled; decision predates this record)
 > **Supersedes / superseded by:** —
 > **Authority:** Tier 7 (ADR). Reflected as Invariants §V.21–22.

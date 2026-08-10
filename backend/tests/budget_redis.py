@@ -243,11 +243,49 @@ def test_reconcile_settles_both_ceilings():
     _run(go())
 
 
+def test_reconcile_charges_the_period_that_granted_the_reservation():
+    """A call crossing a billing boundary must not move money in the new period."""
+    async def go():
+        r = aioredis.FakeRedis()
+        periods = iter(("2026-07", "2026-08"))
+        await r.set("budget:user:u1:2026-07", 1000)
+        await r.set("budget:user:u1:2026-08", 2000)
+        b = RedisBudget(r, period_provider=lambda: next(periods))
+
+        resv = await b.reserve(BudgetScope(user_id="u1"), 300)  # July: 700
+        await b.reconcile(resv, actual=120)                      # July: +180
+
+        assert int(await r.get("budget:user:u1:2026-07")) == 880
+        assert int(await r.get("budget:user:u1:2026-08")) == 2000
+    _run(go())
+
+
 def test_reconcile_never_raises_onto_the_caller_even_if_store_down():
     async def go():
         b = _budget(_BrokenRedis())
-        resv = BudgetReservation(reservation_id="x", scope=BudgetScope(user_id="u1"), estimated=1)
-        await b.reconcile(resv, actual=1)  # must simply return, not raise
+        resv = BudgetReservation(
+            reservation_id="x",
+            scope=BudgetScope(user_id="u1"),
+            estimated=1,
+            period=_PERIOD,
+        )
+        assert await b.reconcile(resv, actual=1) is False
+    _run(go())
+
+
+def test_reconcile_refuses_an_unpinned_period_without_moving_money():
+    async def go():
+        r = aioredis.FakeRedis()
+        await _seed(r, user=1000)
+        b = _budget(r)
+        resv = BudgetReservation(
+            reservation_id="legacy",
+            scope=BudgetScope(user_id="u1"),
+            estimated=300,
+        )
+
+        assert await b.reconcile(resv, actual=100) is False
+        assert int(await r.get(f"budget:user:u1:{_PERIOD}")) == 1000
     _run(go())
 
 

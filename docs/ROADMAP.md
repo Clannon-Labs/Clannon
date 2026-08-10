@@ -131,8 +131,12 @@ PARTIAL.**
    backend must verify them against official current prices, represent
    tier/modality differences honestly, measure conservative infrastructure
    cost, seed production budgets, prove recovery/concurrency, and obtain
-   security review. Loader stays fail-closed. Create a fresh owner go-live
-   proposal only when those engineering gates are green. Owner: backend.
+   security review. Atomic reserve/reconcile, concurrency, seeding primitives, and the
+   LLM anchor are built; reconciliation now stays pinned to the period that granted its
+   hold even across a billing boundary. Still open: broker/seeding must use the API's
+   fixed anniversary period instead of the broker's calendar-month default, plus durable
+   recovery/true-up for failed reconciliation. Loader stays fail-closed. Create a fresh
+   owner go-live proposal only when those engineering gates are green. Owner: backend.
 
 **Known limitations carried into v0.3.0** (documented, not hidden): one dev-only
 Dependabot residual.

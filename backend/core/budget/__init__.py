@@ -1,10 +1,10 @@
 """
 core.budget — the real-cost margin budget domain.
 
-Today: the pure µ$ cost model (`cost.py`) — token usage + time → integer micro-dollars,
-fail-closed on an un-priced model. Later: the Redis atomic reserve/reconcile broker behind
-`foundation.BudgetPort` (ADR-0004), which consumes these cost numbers but never recomputes
-them. Kept separate from the pipeline stages: budget is a resource bound, not a stage.
+Contains the pure µ$ cost model plus the Redis atomic reserve/reconcile broker behind
+`foundation.BudgetPort` (ADR-0004). Enforcement is built but remains off by default until
+pricing, seeding, billing-period, recovery, and security gates are green. Kept separate
+from pipeline stages: budget is a resource bound, not a stage.
 """
 from core.budget.context import budget_exempt_scope, budget_user_scope, current_scope, get_broker
 from core.budget.cost import ModelCall, call_cost_micros, estimate_call_cost_micros
