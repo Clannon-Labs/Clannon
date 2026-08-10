@@ -23,3 +23,14 @@ skipped.** No score claimed (Pass 16 in the benchmark file) — catch-up fix, no
 capability, and unexercised-in-browser per this file's own rule.
 
 Full detail: `reports/frontend/frontend_report_v25.md`.
+
+## Follow-up, same day — waitlist browser pass done, plugin connection fixed
+
+MCP tools came back mid-session (marketplace cache was stale for all 4 plugins,
+`claude plugin marketplace update` + `/reload-plugins` fixed it — not a per-plugin
+reinstall). Did the browser pass Pass 16 flagged as missing: 9 states, desktop +
+mobile 390px, zero console errors, zero overflow. Approved-signup path verified
+end to end into a real `/app` landing with a genuinely empty first-run state. No
+bugs found, no code changes, no score move (same reasoning as Pass 16 — catch-up
+fix, not new capability). `frontend_report_v26.md`,
+`previews/2026-08-10_waitlist-browser-pass/`.

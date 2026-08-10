@@ -803,6 +803,13 @@ catch-up fix rather than new capability, so even with that evidence the honest h
 would likely be "prevented a regression," not a dimension increase. Score remains
 **85.87 → 86**.
 
+**Addendum (2026-08-10, same day, no code changes):** the flagged browser pass
+happened. Nine states, desktop + mobile 390px, zero console errors, zero horizontal
+overflow, approved-signup path verified end to end through to a real `/app` landing.
+Reasoning above still holds — no score move, catch-up fix not new capability. Full
+result: `previews/2026-08-10_waitlist-browser-pass/README.md`,
+`reports/frontend/frontend_report_v26.md`.
+
 ## 3. Hard gates
 
 Weighted score alone cannot hide critical failure.
