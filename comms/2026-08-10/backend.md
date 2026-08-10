@@ -59,3 +59,10 @@ Owner call: `backend-audit` no longer carries its own provider default. Every ro
 Claude unless launched with `--codex`, auditor included. `scripts/instruction.md` now
 documents the role — what the sandbox actually does, the self-test, and where findings
 land.
+
+Frontend's audit charter answered and archived. Root wiring for `frontend-audit` is
+mine, queued not started — and it will NOT be a mirror of the backend sandbox script:
+the mount policy is the boundary, so the launcher gets a role parameter the way it
+already takes a provider one. Their open question about a Codex default is moot now
+that every role defaults to Claude. Asked them for pinned npm audit tooling; not
+blocking.
