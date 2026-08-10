@@ -22,7 +22,7 @@ committed docs (`docs/architecture/**`, ADRs, this file's snapshot).
 1. **Pull the code.** `git -C <repo> fetch && git checkout main && git pull` — HEAD should be the
    last pushed commit (see snapshot below). All code + committed docs are here.
 2. **Start only the agents you need.** `./scripts/crew.sh start backend` (add
-   `--codex` to run a role on Codex). There is deliberately no "start everything"
+   `--codex` or `--claude` to pick the provider). There is deliberately no "start everything"
    command — see `docs/architecture/CREW_WORKFLOW.md` §4.2. `crew.sh status` shows
    what's up; `crew.sh attach <role>` to watch. Operator guide:
    `scripts/instruction.md`.

@@ -207,8 +207,9 @@ Messaging — PULL, never push:
 
 Provider continuity:
 - Claude Code and Codex private sessions are not interchangeable.
-- Provider chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
-  auto-switched mid-session.
+- Provider chosen at launch (`./scripts/crew.sh start <role> [--codex|--claude]`),
+  not auto-switched mid-session. Every role defaults to Claude except `backend-audit`,
+  which defaults to Codex; both run it through the same enforced sandbox.
 - Shared live checkpoint: `.agents/provider-handoffs/<role>.md`.
 - Before compaction, planned exit, or context exhaustion: update current checkpoint;
   retain earlier checkpoint under `Previous checkpoint`; explain change reason.

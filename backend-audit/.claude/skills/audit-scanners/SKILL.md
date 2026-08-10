@@ -14,9 +14,13 @@ They are on `PATH` already, from the auditor's isolated environment under
 `scripts/backend-audit-sandbox.sh` from `../tooling-requirements.txt`.
 
 Never `pip install` anything, never touch `backend/.venv`, never run a tool's fix
-mode. The sandbox mounts the tree read-only and the project's permission rules deny
-the installers outright — if a command is refused, that is the design working, not
-an obstacle to route around.
+mode. The project's permission rules deny the installers and the git write commands
+outright — if a command is refused, that is the design working, not an obstacle to
+route around.
+
+Those rules match on a command's leading words, so a fix flag buried mid-command
+(`semgrep scan … --autofix`) is NOT caught by them. What stops it is the read-only
+mount plus this instruction — measured, and stated here rather than pretended away.
 
 ## Pin the revision before the first scan
 

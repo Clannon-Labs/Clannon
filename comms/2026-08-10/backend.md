@@ -47,3 +47,10 @@ subagents, `audit-scanners` skill. Detail + what is NOT proven:
 `reports/backend/report_v24.md`.
 
 Baseline audit still not run — this is equipment, not a verdict.
+
+Follow-up, same day: measured the auditor's deny rules instead of trusting them. Deny
+patterns match a command's LEADING words, so `Bash(semgrep --autofix:*)` would never
+have fired against a real `semgrep scan … --autofix` — removed rather than left reading
+as enforced. Everything else held: `pip install` / `git commit` / `gh` / `detect-secrets
+audit` denied, deny beats an inherited allow rule, `pip-audit` and read-only
+`git status` still run.

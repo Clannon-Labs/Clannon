@@ -425,7 +425,7 @@ owns `core/memory/**`), ORCHESTRATION (`clannon-orchestration`, owns
 (`clannon-security`, spawned 2026-07-06, owns `security/**` — `sanitizers/` +
 `filter/`), and API & RUNTIME (`clannon-api`, spawned 2026-07-26, owns `api/**` —
 run lifecycle, SSE, persistence, identity). A role runs on **either** Claude or
-Codex — chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
+Codex — chosen at launch (`./scripts/crew.sh start <role> [--codex|--claude]`), not
 auto-switched mid-session; continuity across a provider change comes from
 `.agents/provider-handoffs/<role>.md`. Their charters live in the SPECIALIST
 CHARTER section of their home module's `CLAUDE.md`. They exchange work through

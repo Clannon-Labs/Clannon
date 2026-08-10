@@ -30,7 +30,6 @@
       "Bash(psql:*)",
       "Bash(redis-cli:*)",
       "Bash(alembic:*)",
-      "Bash(semgrep --autofix:*)",
       "Bash(detect-secrets audit:*)"
     ]
   }
