@@ -240,7 +240,8 @@ pure computation) still stands and this follows it.
 audits found no whole-system PASS. Canonical production mode, YARA strictness,
 startup mail preflight, frontend API-mode/URL/PDF boundaries, and private-alpha
 outbound-mutation denial are implemented locally and require independent auditor
-retest. Waitlist timing remains unmeasured. Deferred identity/tenancy, SSRF,
+retest. Waitlist mail now runs as response-background work; direct ASGI proof shows
+response bytes precede delayed mail I/O. Deferred identity/tenancy, SSRF,
 uploads, execution, persistence, availability, secrets, supply-chain, and real
 deployment surfaces remain open; do not invite testers until evidence changes this
 gate. Reports: `reports/backend-audit/report_v1.md`,

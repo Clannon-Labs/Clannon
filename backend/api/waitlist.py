@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from fastapi.responses import RedirectResponse
 
@@ -105,7 +105,9 @@ class ResendBody(BaseModel):
 
 
 @router.post("/waitlist", status_code=202)
-async def join_waitlist(body: JoinBody, request: Request) -> dict:
+async def join_waitlist(
+    body: JoinBody, request: Request, background_tasks: BackgroundTasks
+) -> dict:
     """Join the waitlist. Always returns the same body regardless of whether the
     address is new, already listed, already verified, or already a real account —
     this endpoint is public and would otherwise be an account-existence oracle."""
@@ -122,12 +124,17 @@ async def join_waitlist(body: JoinBody, request: Request) -> dict:
                 email, WAITLIST.max_verification_sends_per_email, WAITLIST.resend_cooldown_seconds
             )
         ):
-            await _send_verify_email(email)
+            # Response bytes leave server before provider I/O starts. Starlette runs
+            # this task after sending body, preserving generic response timing while
+            # retaining typed failure handling and durable token state.
+            background_tasks.add_task(_send_verify_email, email)
     return _ACCEPTED
 
 
 @router.post("/waitlist/resend", status_code=202)
-async def resend_verification(body: ResendBody, request: Request) -> dict:
+async def resend_verification(
+    body: ResendBody, request: Request, background_tasks: BackgroundTasks
+) -> dict:
     """Resend the verification email. Same non-disclosure as `join_waitlist`: an
     unknown address, an already-verified one, and one over its send cap all return
     the identical body."""
@@ -141,7 +148,7 @@ async def resend_verification(body: ResendBody, request: Request) -> dict:
             email, WAITLIST.max_verification_sends_per_email, WAITLIST.resend_cooldown_seconds
         )
     ):
-        await _send_verify_email(email)
+        background_tasks.add_task(_send_verify_email, email)
     return _ACCEPTED
 
 

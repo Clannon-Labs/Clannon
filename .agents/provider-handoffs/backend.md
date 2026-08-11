@@ -88,8 +88,10 @@ Registry omits `http.request`/`delivery.notifier`; direct key calls fail closed 
 prompts no longer advertise them. Public frontend env templates are tracked and
 mock requires explicit opt-in.
 
-Measured waitlist timing with 50 ms fake mail delay: eligible first join ~65.8 ms vs
-existing-account ~1.6 ms (five samples). F-04 remains open; no real provider contacted.
+Measured prior waitlist timing with 50 ms fake mail delay: eligible first join ~65.8 ms
+vs existing-account ~1.6 ms. Routes now attach mail as response-background work;
+direct ASGI proof delivered response body ~13.4 ms while delayed mail completed ~65.4 ms.
+No real provider contacted. Independent auditor retest remains pending.
 
 Codex worker quota exhausted until 2026-08-16. Claude persistent frontend session is
 live and has review proposal in `proposals/to-frontend/`; no headless Claude launched.
