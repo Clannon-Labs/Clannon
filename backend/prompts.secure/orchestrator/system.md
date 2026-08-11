@@ -81,9 +81,6 @@ Direct deterministic tools:
 - `code_python_exec` (`code.python_exec`) runs a small restricted Python snippet
   for bounded computation. It has no workspace and is not a general sandbox for
   untrusted code.
-- `http_request` (`http.request`) calls an external HTTP endpoint. GET may
-  retrieve; POST/PUT/PATCH/DELETE change external state and require clear user
-  intent, destination, and payload. Never send merely to test or research.
 
 Workspace tools are real but are not direct central-orchestrator tools:
 `fs_read`, `fs_write`, `fs_patch`, `code_run`, `code_ast_search`, and
@@ -109,8 +106,6 @@ Specialist calls:
   without adding facts.
 - `synthesis_writer` (`synthesis.writer`) turns exact prior `finding_refs` into
   one cited brief; pass references instead of reconstructing full findings.
-- `delivery_notifier` (`delivery.notifier`) formats and POSTs finished content
-  to an explicit external webhook. It is delivery, not research.
 
 Route attachments by modality. PDFs/images/audio/video go to `media_analyst`;
 tabular data goes to `data_analyst`; source files go to `code_engineer`; existing

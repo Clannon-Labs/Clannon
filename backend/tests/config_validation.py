@@ -40,6 +40,7 @@ def _set_good_env(monkeypatch):
 
 def _set_strict(monkeypatch):
     monkeypatch.setenv("CLANNON_STRICT_CONFIG", "1")
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
     monkeypatch.delenv("VRAKSHA_ENV", raising=False)
 
 
@@ -119,6 +120,7 @@ def test_default_never_raises_on_missing_secrets(monkeypatch):
     even with every provider key absent and CORS pointing to localhost.
     ACCEPTANCE: the hermetic test suite imports config with no real secrets."""
     monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
     monkeypatch.delenv("VRAKSHA_ENV", raising=False)
     _clear_provider_keys(monkeypatch)
     monkeypatch.setenv("FRONTEND_ORIGIN", "http://localhost:3000")
@@ -136,6 +138,101 @@ def test_default_never_raises_with_vraksha_env_dev(monkeypatch):
     monkeypatch.setenv("SERVER_DB_PATH", "/tmp/test_clannon_val.db")
 
     fail_fast_if_strict()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Runtime-mode seam: canonical, legacy migration, and tightening override
+# ---------------------------------------------------------------------------
+
+
+def _set_bad_config(monkeypatch):
+    """One deterministic config defect that proves whether strictness engaged."""
+    _clear_provider_keys(monkeypatch)
+    monkeypatch.setenv("FRONTEND_ORIGIN", "https://clannon.com")
+    monkeypatch.setenv("SERVER_COOKIE_SECURE", "1")
+    monkeypatch.setenv("SERVER_DB_PATH", "/tmp/test_clannon_val.db")
+
+
+def test_canonical_production_enables_strict_config(monkeypatch):
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    _set_bad_config(monkeypatch)
+
+    with pytest.raises(ConfigValidationError, match="LLM_PROVIDER_KEY"):
+        fail_fast_if_strict()
+
+
+def test_legacy_only_production_remains_strict_during_migration(monkeypatch):
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
+    monkeypatch.setenv("VRAKSHA_ENV", "production")
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    _set_bad_config(monkeypatch)
+
+    with pytest.raises(ConfigValidationError, match="LLM_PROVIDER_KEY"):
+        fail_fast_if_strict()
+
+
+def test_canonical_development_does_not_enable_strict_config(monkeypatch):
+    monkeypatch.setenv("CLANNON_ENV", "development")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    _set_bad_config(monkeypatch)
+
+    fail_fast_if_strict()
+
+
+def test_unset_runtime_mode_does_not_enable_strict_config(monkeypatch):
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    _set_bad_config(monkeypatch)
+
+    fail_fast_if_strict()
+
+
+def test_force_strict_tightens_development(monkeypatch):
+    monkeypatch.setenv("CLANNON_ENV", "development")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.setenv("CLANNON_STRICT_CONFIG", "true")
+    _set_bad_config(monkeypatch)
+
+    with pytest.raises(ConfigValidationError, match="LLM_PROVIDER_KEY"):
+        fail_fast_if_strict()
+
+
+def test_false_strict_override_cannot_loosen_production(monkeypatch):
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.setenv("CLANNON_STRICT_CONFIG", "0")
+    _set_bad_config(monkeypatch)
+
+    with pytest.raises(ConfigValidationError, match="LLM_PROVIDER_KEY"):
+        fail_fast_if_strict()
+
+
+def test_contradictory_runtime_modes_fail_closed(monkeypatch):
+    from foundation import RuntimeEnvironmentError
+
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.setenv("VRAKSHA_ENV", "development")
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+
+    with pytest.raises(RuntimeEnvironmentError, match="contradictory"):
+        fail_fast_if_strict()
+
+
+@pytest.mark.parametrize("name", ["CLANNON_ENV", "VRAKSHA_ENV"])
+def test_invalid_runtime_mode_fails_closed(monkeypatch, name):
+    from foundation import RuntimeEnvironmentError
+
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.delenv("CLANNON_STRICT_CONFIG", raising=False)
+    monkeypatch.setenv(name, "prodution")
+
+    with pytest.raises(RuntimeEnvironmentError, match="unsupported"):
+        fail_fast_if_strict()
 
 
 # ---------------------------------------------------------------------------

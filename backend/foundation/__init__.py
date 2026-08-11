@@ -58,6 +58,12 @@ from .coercion import coerce_to_bytes
 
 # project root
 from .paths import get_root
+from .environment import (
+    RuntimeEnvironment,
+    RuntimeEnvironmentError,
+    is_production,
+    runtime_environment,
+)
 
 # vocab — shared declarations
 from .vocab.errors import (
@@ -146,6 +152,10 @@ __all__ = [
     "InputFile",
     "coerce_to_bytes",
     "get_root",
+    "RuntimeEnvironment",
+    "RuntimeEnvironmentError",
+    "is_production",
+    "runtime_environment",
 
     # transport primitives (used inside flow, available if needed directly)
     "Status",

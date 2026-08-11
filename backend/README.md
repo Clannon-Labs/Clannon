@@ -54,6 +54,8 @@ run from `backend/`, but they do not replace the full-stack launcher.
 - Copy `backend/.env.prod` into Railway's **Variables → RAW Editor**, replace every
   `REPLACE_*`, review staged changes, then deploy. `.env.prod` is an upload
   template; Python does not load that filename automatically.
+- Set `CLANNON_ENV=production`; it is canonical for startup config, YARA, and mail.
+  `VRAKSHA_ENV` is a temporary compatibility alias only and must not contradict it.
 - Add `api.clannon.com` as the backend custom domain. Configure both DNS records
   Railway provides and wait for HTTPS to become healthy. Do not point the
   browser frontend at the raw `*.up.railway.app` origin: current Lax session

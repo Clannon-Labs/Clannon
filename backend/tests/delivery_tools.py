@@ -41,18 +41,31 @@ def test_http_request_rejects_non_http_scheme():
         asyncio.run(tool.run(HttpIn(url="file:///etc/passwd")))
 
 
-# ---- the delivery expert + tool are registered, healthy, wired -------------
+# ---- private-alpha policy: mutation capabilities stay absent ---------------
 
 
-def test_delivery_notifier_and_http_tool_registered():
+def test_private_alpha_denies_outbound_mutation_at_discovery_and_call():
     discover()
-    tool = registry.get_tool("http.request")
-    from foundation import PermissionLevel
-    assert tool is not None and tool.permission == PermissionLevel.NETWORK  # output gets re-sanitized
+    from registry.capabilities import CapabilityKind, ToolRequest, ExpertRequest
+    assert registry.get_tool("http.request") is None
+    assert registry.get_expert("delivery.notifier") is None
+    assert "http.request" not in {c["key"] for c in registry.cards(CapabilityKind.TOOL)}
+    assert "delivery.notifier" not in {c["key"] for c in registry.cards(CapabilityKind.EXPERT)}
 
-    exp = registry.get_expert("delivery.notifier")
-    assert exp is not None and exp.model_role == "research"
-    assert "http.request" in exp.tool_grants                                # its delivery channel
+    from foundation import VrakshaContext
+    from registry.capabilities.handler import ExpertHandler, ToolHandler
 
-    assert {"delivery.notifier"} & {b.key for b in registry.broken()} == set()
-    assert "http.request" not in {b.key for b in registry.broken()}
+    ctx = VrakshaContext.new(session_id="s", user_id="u", trace_id="t")
+    record = asyncio.run(
+        ToolHandler(registry=registry).call_tool(
+            ToolRequest(key="http.request", arguments={"url": "https://example.com"}), ctx
+        )
+    )
+    assert not record.success and "unknown tool" in (record.error or "")
+    summary = asyncio.run(
+        ExpertHandler(registry=registry).run_experts(
+            [ExpertRequest(key="delivery.notifier", arguments={"destination": "https://example.com", "content": "x"})], ctx
+        )
+    )[0]
+    assert summary.finding_ref == ""
+    assert "unknown expert" in summary.summary

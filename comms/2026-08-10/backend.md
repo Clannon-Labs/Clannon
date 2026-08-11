@@ -79,3 +79,11 @@ rejected writes; exact tools ran full ESLint and `tsc --noEmit`, Vitest/Playwrig
 discovery, and report-only npm audit against real project. Baseline assignment queued;
 no candidate risk promoted to finding and no security verdict exists yet. Launcher:
 11 passed. Full backend: 1683 passed, 13 service skips, 9 subtests.
+
+## dispatched workers
+- `21:59` **frontend** worker via **claude** — 2026-08-10_remediate_frontend_audit_v1.md — exit 1, 22s — output: `.agents/runs/20260810-215910-frontend.out`
+- `22:21` **frontend** worker via **codex** — 2026-08-10_remediate_frontend_audit_v1.md — exit 0, 1302s — output: `.agents/runs/20260810-220011-frontend.out`
+- `22:25` **orchestration** worker via **codex** — 2026-08-10_disable-alpha-outbound-mutation.md — exit 0, 186s — output: `.agents/runs/20260810-222252-orchestration.out`
+- `22:26` **orchestration** worker via **codex** — 2026-08-10_disable-alpha-outbound-mutation.md — exit 1, 4s — output: `.agents/runs/20260810-222619-orchestration.out`
+- `22:28` **api** worker via **codex** — 2026-08-10_canonical-mode-mail-preflight.md — exit 0, 352s — output: `.agents/runs/20260810-222251-api.out`
+- `22:29` **security** worker via **codex** — 2026-08-10_canonical-production-yara.md — exit 0, 392s — output: `.agents/runs/20260810-222251-security.out`

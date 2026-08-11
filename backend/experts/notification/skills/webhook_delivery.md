@@ -2,7 +2,9 @@
 description: How to deliver a message to a webhook channel — per-service payload shapes (Slack, Discord, generic), sending once via http.request, and reporting the real outcome. Load when delivering to a webhook.
 ---
 
-# Skill: delivering to a webhook
+# Skill: delivering to a webhook (disabled in private alpha)
+
+Reference only. Private-alpha runtime does not expose outbound mutation or this skill.
 
 A method for getting a message to the right channel and confirming it landed.
 

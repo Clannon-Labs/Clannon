@@ -4,7 +4,7 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-08-09**.
+Last reconciled: **2026-08-11**.
 
 **pydantic-ai is pinned at 2.22.0** (upgraded 2026-08-01; installed version
 verified 2026-08-02). The July pin at 2.4.0 blamed a broken bounded-loop money
@@ -235,6 +235,16 @@ pure computation) still stands and this follows it.
 ## 5. Needs the owner, not us
 
 **One open gate.**
+
+**Security campaign status (2026-08-11): STOP.** Independent backend/frontend
+audits found no whole-system PASS. Canonical production mode, YARA strictness,
+startup mail preflight, frontend API-mode/URL/PDF boundaries, and private-alpha
+outbound-mutation denial are implemented locally and require independent auditor
+retest. Waitlist timing remains unmeasured. Deferred identity/tenancy, SSRF,
+uploads, execution, persistence, availability, secrets, supply-chain, and real
+deployment surfaces remain open; do not invite testers until evidence changes this
+gate. Reports: `reports/backend-audit/report_v1.md`,
+`reports/frontend-audit/report_v1.md`.
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.

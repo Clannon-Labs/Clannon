@@ -30,7 +30,13 @@ from pydantic import BaseModel
 
 import experts
 from foundation import PermissionLevel
-from registry.capabilities import CapabilityKind, ExpertOutput, discover, registry
+from registry.capabilities import (
+    CapabilityKind,
+    ExpertOutput,
+    PRIVATE_ALPHA_DENIED_EXPERT_KEYS,
+    discover,
+    registry,
+)
 from registry.capabilities.handler import ExpertEnv
 
 # The exact run() parameter list every expert shares (self, the structured input,
@@ -57,8 +63,10 @@ def test_expert_roster_matches_files():
     broken = [b.key for b in registry.broken() if b.kind == CapabilityKind.EXPERT]
 
     assert broken == [], f"experts registered BROKEN: {broken}"
-    assert len(ok) == len(on_disk), (
-        f"{len(on_disk)} expert.py files but {len(ok)} registered experts "
+    expected = len(on_disk) - len(PRIVATE_ALPHA_DENIED_EXPERT_KEYS)
+    assert len(ok) == expected, (
+        f"{len(on_disk)} expert.py files minus {len(PRIVATE_ALPHA_DENIED_EXPERT_KEYS)} "
+        f"private-alpha-denied experts expected {expected}, got {len(ok)} "
         f"({sorted(c['key'] for c in ok)})"
     )
 
@@ -131,7 +139,6 @@ _EXPECTED_REGISTRATION: dict[str, tuple[PermissionLevel, tuple[str, ...]]] = {
     "data.analyst": (PermissionLevel.EXECUTE, ("code.run", "fs.read", "fs.write")),
     "docs.writer": (PermissionLevel.WRITE, ("fs.read", "fs.write")),
     "media.analyst": (PermissionLevel.READ, ("fs.read",)),
-    "delivery.notifier": (PermissionLevel.NETWORK, ("http.request",)),
     "summary.condenser": (PermissionLevel.READ, ()),
     "verification.claims": (PermissionLevel.NETWORK, ("search.web", "web.fetch_url")),
     "web.research": (PermissionLevel.NETWORK, ("search.web", "web.fetch_url")),

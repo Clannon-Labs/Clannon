@@ -26,7 +26,16 @@ from .schemas import (
     ToolRequest,
 )
 from .store import CapabilityRegistry, registry
-from .registration import discover, expert, import_failures, reset_discovery, tool
+from .registration import (
+    PRIVATE_ALPHA_DENIED_KEYS,
+    PRIVATE_ALPHA_DENIED_EXPERT_KEYS,
+    PRIVATE_ALPHA_DENIED_TOOL_KEYS,
+    discover,
+    expert,
+    import_failures,
+    reset_discovery,
+    tool,
+)
 
 __all__ = [
     # specs
@@ -45,6 +54,9 @@ __all__ = [
     "discover",
     "import_failures",
     "reset_discovery",
+    "PRIVATE_ALPHA_DENIED_KEYS",
+    "PRIVATE_ALPHA_DENIED_TOOL_KEYS",
+    "PRIVATE_ALPHA_DENIED_EXPERT_KEYS",
     # invocation contracts (what to emit to call a capability + what it returns)
     "ToolRequest",
     "ExpertRequest",

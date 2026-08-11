@@ -2,7 +2,12 @@ import asyncio
 
 import pytest
 
-from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
+from foundation import (
+    RuntimeEnvironmentError,
+    SanitizationError,
+    ThreatLevel,
+    coerce_to_bytes,
+)
 from security.sanitizers import pre_sanitization
 
 
@@ -12,6 +17,77 @@ EICAR_TEST_BYTES = (
 )
 YARA_MATCH_TEXT = "this text contains a fake yara signature marker"
 CLEAN_TEXT = "hello, this is clean text"
+
+
+def _clear_yara_mode(monkeypatch):
+    monkeypatch.delenv("CLANNON_ENV", raising=False)
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.delenv("AGENT_REQUIRE_YARA", raising=False)
+
+
+def _scan_without_rules(tmp_path):
+    return pre_sanitization.YaraScanner(tmp_path)._scan_sync(b"clean")
+
+
+def test_development_without_force_can_skip_missing_yara_rules(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "development")
+
+    result = _scan_without_rules(tmp_path)
+
+    assert result.passed is True
+    assert result.skipped is True
+
+
+def test_canonical_production_requires_yara_rules(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "production")
+
+    with pytest.raises(SanitizationError, match="YARA rules required"):
+        _scan_without_rules(tmp_path)
+
+
+def test_legacy_only_production_requires_yara_rules(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("VRAKSHA_ENV", "production")
+
+    with pytest.raises(SanitizationError, match="YARA rules required"):
+        _scan_without_rules(tmp_path)
+
+
+def test_explicit_yara_force_tightens_development(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "development")
+    monkeypatch.setenv("AGENT_REQUIRE_YARA", "true")
+
+    with pytest.raises(SanitizationError, match="YARA rules required"):
+        _scan_without_rules(tmp_path)
+
+
+def test_false_yara_force_cannot_loosen_production(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.setenv("AGENT_REQUIRE_YARA", "0")
+
+    with pytest.raises(SanitizationError, match="YARA rules required"):
+        _scan_without_rules(tmp_path)
+
+
+def test_invalid_canonical_mode_fails_closed(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "prod-ish")
+
+    with pytest.raises(RuntimeEnvironmentError, match="unsupported"):
+        _scan_without_rules(tmp_path)
+
+
+def test_contradictory_modes_fail_closed(monkeypatch, tmp_path):
+    _clear_yara_mode(monkeypatch)
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.setenv("VRAKSHA_ENV", "development")
+
+    with pytest.raises(RuntimeEnvironmentError, match="contradictory"):
+        _scan_without_rules(tmp_path)
 
 
 @pytest.mark.parametrize("clean_text", [CLEAN_TEXT])
