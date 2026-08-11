@@ -256,6 +256,7 @@ secrets, supply-chain, and real deployment surfaces also remain open. Owner paus
 autonomous campaign after current runs finish; resume step-by-step only on owner
 prompt. Do not invite testers until evidence changes this gate. Reports:
 `reports/backend-audit/report_v3.md`, `reports/frontend-audit/report_v2.md`.
+Unified frozen campaign summary: [private-alpha security campaign report card](goal-reports/2026-08-11_PRIVATE_ALPHA_SECURITY_CAMPAIGN.md).
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.

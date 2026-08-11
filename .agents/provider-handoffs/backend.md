@@ -75,6 +75,11 @@ Owner directed natural clean stop and step-by-step continuation only. All runs e
 no worker/auditor remains active and no new pass or remediation was dispatched.
 Private-alpha verdict stays **STOP**.
 
+Owner requested one cold-readable goal retrospective instead of reconstructing state
+from local auditor reports. Tracked unified record now lives at
+`docs/goal-reports/2026-08-11_PRIVATE_ALPHA_SECURITY_CAMPAIGN.md`; its folder README,
+docs start page, and ROADMAP link make it discoverable across profiles.
+
 Frontend-audit report v2 at `dc2cd8e9` independently closes F-03 PDF isolation and
 F-04 ASGI/frontend waitlist ordering. F-01 explicit production mock builds and F-02
 frontend credential/malformed URL admission remain alpha blockers. F-05 CSP
@@ -99,8 +104,9 @@ owner prompt and chooses one bounded step; do not restart campaign automatically
 
 ## Change note
 
-Recorded completed auditor/E2E outputs, surviving blockers, exact evidence, and owner
-pause. Previous launch-control checkpoint retained below.
+Recorded completed auditor/E2E outputs, surviving blockers, exact evidence, owner
+pause, and later unified goal report. Previous launch-control checkpoint retained
+below.
 
 ## Previous checkpoint — backend launch controls retested; campaign still STOP (2026-08-11)
 

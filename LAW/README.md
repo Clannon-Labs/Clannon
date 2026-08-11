@@ -42,7 +42,7 @@ tidiness — it is how the system stays correct as it grows.
    fully describe what it does; if the honest name needs an "and," split it.
 3. **One file = one KIND of job.** A file holds one coherent responsibility (one type, one
    concern), not a grab-bag. Single-stage types live in that stage, not in the shared seam.
-4. **One folder = one layer** (memory, verifier, orchestrator, security, api, delivery, config,
+4. **One directory = one layer** (memory, verifier, orchestrator, security, api, delivery, config,
    …) or that layer's utilities. Nothing lives in the wrong layer.
 5. **A new thing goes in its correct existing home.** You do NOT create a parallel or duplicate
    path because it's faster right now. No speculative surface area — don't add an abstraction,
@@ -79,7 +79,7 @@ extend it.
    Rename the moment a name stops being true.
 3. **No long files.** 500 lines is a soft cap, and you only approach it when cutting below would
    genuinely hurt clarity; otherwise stay well under (~400). A file growing past this is a signal
-   to split by responsibility — do it before the sprawl, not after. > Recent law change by owner.
+   to split by responsibility — do it before the sprawl, not after. > Recent law update by owner.
 4. **No long functions.** A function stays short and single-purpose; extract helpers before it
    sprawls. Deep nesting is a smell — flatten with early returns / guard clauses.
 5. **Match the surrounding idiom** — comment density, naming style, structure — so the file reads
