@@ -95,6 +95,9 @@ No real provider contacted. Independent auditor retest remains pending.
 
 Codex worker quota exhausted until 2026-08-16. Claude persistent frontend session is
 live and has review proposal in `proposals/to-frontend/`; no headless Claude launched.
+Fresh-cache frontend security E2E proof: `e2e/security-boundaries.spec.ts` 1 passed,
+1 environment-gated skip. Broader E2E run hit stale generated `.next` references to
+`/home/cybro/...` and was aborted; cache moved aside and fresh security run passed.
 Alpha verdict remains **STOP** until independent retests, deployment-like mail/readiness,
 and deferred identity/tenant/network/upload/execution/state/availability/supply-chain
 surfaces are evidenced.
