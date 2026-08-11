@@ -1,15 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { authenticateMockUser } from "./auth";
 
 const decision = "Decide whether to enter the UK market this year";
-
-async function signup(page: Page) {
-  await page.goto("/signup");
-  await page.getByLabel("Name").fill("Maya Chen");
-  await page.getByLabel("Email").fill("maya@example.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("correct-horse");
-  await page.getByRole("button", { name: "Create my workspace" }).click();
-  await expect(page).toHaveURL(/\/app$/);
-}
 
 async function removeDevelopmentIndicator(page: Page) {
   await page.locator("nextjs-portal").evaluateAll((portals) => {
@@ -25,7 +17,7 @@ test("new user reaches a live, scoped assignment without prompt expertise", asyn
   });
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
-  await signup(page);
+  await authenticateMockUser(page, { kind: "fresh", name: "Maya Chen" });
 
   // project creation is behind an explicit click, not shown by default
   // (owner correction, 2026-08-01) — the composer itself is available
@@ -70,7 +62,7 @@ test("new user reaches a live, scoped assignment without prompt expertise", asyn
 
 test("creating a first project remains usable at phone width", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signup(page);
+  await authenticateMockUser(page, { kind: "fresh", name: "Maya Chen" });
 
   await expect(page.getByText("Start with a project")).toBeVisible();
   await page.getByRole("button", { name: "Create your first project" }).click();

@@ -2,7 +2,32 @@
 
 Transfers live frontend work between Claude Code and Codex.
 
-## Current checkpoint
+## Current checkpoint — private-alpha E2E authentication repaired (2026-08-11)
+
+Coordinator-dispatched frontend Codex worker replaced stale public-signup helpers
+with one `e2e/auth.ts` helper that enters through visible mock UI contracts. Fresh
+accounts use mock's approved-invite URL; returning accounts use `/login`; helper
+first proves the visible mock-only notice, so it refuses an HTTP-backed build.
+`/signup` remains waitlist-gated and now has browser regression coverage. Optional
+real-backend tests remain separate and require explicit opt-in.
+
+Updated billing, completion-state, first-value, History, prompt-action, and security
+specs plus Playwright server/real-backend selection. No product source changed.
+Independent coordinator verification: typecheck clean, ESLint clean, Vitest 258/258,
+fresh default Playwright 15 passed + 1 environment-gated skip in 5.1 minutes.
+
+Frontend-audit report v2 at exact `dc2cd8e9` independently leaves F-01 production
+mock-mode acceptance and F-02 credential/malformed source URLs OPEN; F-05 is low
+residual CSP migration work. F-03 PDF isolation and backend F-04 waitlist ordering
+are mitigated. Owner paused autonomous campaign: do not begin fixes until owner
+reviews/prompts next step. Alpha remains STOP.
+
+## Change note
+
+Integrated test-harness repair without reopening self-serve signup. Recorded owner
+pause and exact surviving audit findings. Previous checkpoint retained below.
+
+## Previous checkpoint — frontend-audit tooling coordination (2026-08-10)
 
 - Provider: Codex
 - Updated: 2026-08-10 (frontend-audit coordinator response handled)
@@ -31,7 +56,7 @@ Transfers live frontend work between Claude Code and Codex.
   role-parameterized frontend-audit wiring. Frontend waits for validated findings,
   then remediates only frontend-owned findings; it does not self-audit or self-clear.
 
-## Change note
+## Earlier change note
 
 Replaced stale 2026-08-09 product checkpoint with exact frontend-audit coordination
 state. Key boundary: frontend supplied tool requirements only; backend owns sandbox

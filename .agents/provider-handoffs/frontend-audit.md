@@ -6,7 +6,47 @@ Independent source-read-only frontend product-security research role. Read
 findings stay in gitignored reports and proposals; this tracked file carries safe
 continuity only.
 
-## Current checkpoint — baseline audit COMPLETE, findings open (2026-08-10)
+## Current checkpoint — remediation retest COMPLETE (2026-08-11)
+
+Retested exact local `main` revision
+`dc2cd8e9f2c7f82bbce4d55ae8fa40c430a39c48`. Requested `e34f1f4b` resolved to
+`e34f1f42e528f5662be62a1a42e96ea944ea17a5`; local main contained two later
+commits, including server source-URL remediation. Full evidence:
+`reports/frontend-audit/report_v2.md`. **No whole-system PASS.**
+
+Finding states:
+
+- F-01 **OPEN, narrowed** — unset production mode is HTTP and invalid modes fail;
+  exact mock mode remains accepted by production builds and drives local mock auth.
+- F-02 **OPEN, narrowed** — backend/SSE/render controls reject non-web schemes;
+  frontend parser still admits credential-bearing and malformed-percent HTTP(S).
+- F-03 **RETESTED — MITIGATED** — no iframe; PDF opens as a separate blob tab;
+  production CSP says `frame-src 'none'`.
+- F-04 **RETESTED — MITIGATED** at ASGI/frontend boundary — response body precedes
+  delayed mail. Production proxy/socket equality remains deployment evidence.
+- F-05 **OPEN, low residual** — production still uses `'unsafe-inline'`; actual
+  build has 18 inline scripts/no nonce, but no reachable attacker-controlled inline
+  sink found. Next nonce path requires dynamic rendering; do not demand header-only
+  removal.
+
+Independent checks: frontend 258 Vitest passed; TypeScript and ESLint exit 0;
+backend focused 49 passed after routing audit logs to `/tmp`; three disposable
+production build branches exercised; Firefox 153 actual production flows covered
+unset HTTP selection, explicit mock login, PDF navigation, CSP, and two-tab storage.
+Chrome/Chromium unavailable; Playwright lists 18 tests/8 files but default suite has
+stale open-signup authentication and no CI workflow.
+
+Deferred surfaces now inspected: ignored previews are not shipped; manifest has no
+service worker/offline cache; drafts use identity-scoped `sessionStorage`; shared
+preferences can race cross-tab but no auth/tenant boundary found; billing/error
+actions admit fixed internal endpoints and revealed no XSS/open redirect path.
+
+Routed updates appended. Backend proposal is `RETESTED — MITIGATED` and ready for
+coordinator archive. Frontend proposal remains OPEN for F-01/F-02/F-05. Worktree had
+unrelated concurrent changes; builds/read evidence used exact committed archive and
+`git show HEAD`, never dirty source.
+
+## Previous checkpoint — baseline audit COMPLETE, findings open (2026-08-10)
 
 Audited rev `b517b98`, tree clean. Report: `reports/frontend-audit/report_v1.md`.
 **Verdict: no PASS.** Five findings open, none retested — this role never closes its
@@ -67,7 +107,7 @@ browser. Neither tool's output was allowed to stand as a verdict in either direc
 Next session: retest anything the implementers report fixed (never self-close), then
 take the deferred surfaces above.
 
-## Previous checkpoint — role ready; baseline audit not started (2026-08-10)
+## Earlier checkpoint — role ready; baseline audit not started (2026-08-10)
 
 Role architecture and Bubblewrap boundary exist for Claude Code and Codex. Every
 launch goes through one role-parameterized `scripts/audit-sandbox.sh`; Claude is
@@ -89,7 +129,7 @@ read backend implementation before any claim that a server-side control is absen
 
 No security verdict exists. No candidate risk is a finding yet.
 
-## Change note
+## Earlier change note — 2026-08-10
 
 Baseline audit executed. Both charter seeds were verified by measurement and both of
 their headline claims were KILLED — the value of the pass came from what the seeds did
@@ -98,3 +138,10 @@ authentication (F-01), and a URL sink outside the charter's designated chokepoin
 (F-02). Prior checkpoint retained above; its tooling inventory is still accurate,
 except that Playwright's browsers are absent, so Firefox-headless screenshots are the
 working measurement technique in this sandbox.
+
+## Change note — 2026-08-11
+
+Independent remediation retest completed after coordinator request. Previous
+baseline checkpoint retained intact. Findings changed only where implementation plus
+reachable behavior supported it: F-03/F-04 mitigated; F-01/F-02/F-05 remain open
+with narrowed scope and explicit counterevidence.

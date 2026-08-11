@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { authenticateMockUser } from "./auth";
 
-async function login(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("security-preview@example.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("correct-horse");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/app$/, { timeout: 20_000 });
-}
+test("private alpha keeps self-serve signup gated", async ({ page }) => {
+  await page.goto("/signup");
+  await expect(page.getByRole("heading", { name: "Private alpha" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Join the waitlist" })).toBeVisible();
+  await expect(page.getByLabel("Name")).toHaveCount(0);
+});
 
 test("production CSP forbids frames and opens PDF blob in browser viewer", async ({ page }) => {
   const cspErrors: string[] = [];
@@ -16,7 +16,10 @@ test("production CSP forbids frames and opens PDF blob in browser viewer", async
     }
   });
 
-  await login(page);
+  await authenticateMockUser(page, {
+    kind: "returning",
+    email: "security-preview@example.com",
+  });
   await page.goto("/app/runs/run_seed_1");
   await page.getByTitle("Preview source-pack.pdf").click();
 

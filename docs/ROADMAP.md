@@ -240,13 +240,19 @@ pure computation) still stands and this follows it.
 `e34f1f42` marks launch-control F-01 through F-04 mitigated in bounded local scope:
 canonical production mode/YARA, mail startup preflight, private-alpha outbound
 mutation denial, and ASGI waitlist response ordering. This is not whole-system PASS.
-Frontend remediation still awaits independent retest; its full Playwright suite is
-blocked by stale mock tests that still use removed public signup. Server citation
-projection now drops unsafe/non-HTTP(S) values and also awaits auditor retest. Missing
-production YARA rules fail the first scan, not application readiness. Deferred identity/tenancy, SSRF, uploads,
-execution, persistence, availability, secrets, supply-chain, and real deployment
-surfaces remain open; do not invite testers until evidence changes this gate. Reports:
-`reports/backend-audit/report_v2.md`, `reports/frontend-audit/report_v1.md`.
+Frontend-audit report v2 independently mitigates PDF isolation (F-03) and the
+backend/frontend waitlist response boundary (F-04). Production still accepts an
+explicit mock-mode build (F-01), and frontend URL normalization still admits
+credential-bearing/malformed HTTP(S) values (F-02); both must close before alpha GO.
+`'unsafe-inline'` remains low residual without a reachable injection sink and needs a
+tested Next rendering migration, not a header-only patch. Stale mock browser auth is
+repaired: fresh default Playwright now passes 15 with one environment-gated skip.
+Missing production YARA rules fail the first scan, not application readiness.
+Deferred identity/tenancy, SSRF, uploads, execution, persistence, availability,
+secrets, supply-chain, and real deployment surfaces remain open. Owner paused the
+autonomous campaign after current runs finish; resume step-by-step only on owner
+prompt. Do not invite testers until evidence changes this gate. Reports:
+`reports/backend-audit/report_v2.md`, `reports/frontend-audit/report_v2.md`.
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.

@@ -1,19 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { authenticateMockUser } from "./auth";
 
 const ORIGINAL =
   "Client is a US-based DTC skincare brand (~$6M ARR) considering UK expansion in Q4. Need: market size and structure, regulatory requirements post-Brexit, recent comparable entrants and how they performed, and a go/no-go recommendation with budget.";
 
-async function login(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("returning@example.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("correct-horse");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/app$/, { timeout: 20_000 });
-}
-
 test("sent prompt owns copy and edit actions, and revision starts a new path", async ({ page }) => {
   test.setTimeout(90_000);
-  await login(page);
+  await authenticateMockUser(page, { kind: "returning", email: "returning@example.com" });
   await page.goto("/app/runs/run_seed_1");
 
   const prompt = page.getByRole("button", {
@@ -28,7 +21,9 @@ test("sent prompt owns copy and edit actions, and revision starts a new path", a
   await page.getByRole("button", { name: "Edit sent prompt" }).click();
   const editor = page.getByRole("textbox", { name: "Edit sent prompt" });
   await expect(editor).toHaveValue(ORIGINAL);
-  await expect(page.getByText(/starts a new path from here/i)).toBeVisible();
+  await expect(
+    page.getByText(/Submitting removes this turn and its response.*Saved memory remains available/i),
+  ).toBeVisible();
   await page.screenshot({
     path: "previews/2026-07-29_prompt-revision/desktop-edit-prompt.png",
     fullPage: true,
@@ -52,7 +47,7 @@ test("sent prompt owns copy and edit actions, and revision starts a new path", a
 test("touch users reveal the same prompt actions by tapping the bubble", async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page);
+  await authenticateMockUser(page, { kind: "returning", email: "returning@example.com" });
   await page.goto("/app/runs/run_seed_1");
 
   await page.getByRole("button", {
