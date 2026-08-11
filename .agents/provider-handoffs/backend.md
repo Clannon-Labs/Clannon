@@ -69,17 +69,18 @@ finished something.
 
 ---
 
-## Current checkpoint — implementation landed; independent retest remains open (2026-08-11)
+## Current checkpoint — backend launch controls retested; campaign still STOP (2026-08-11)
 
-Independent backend audit report `reports/backend-audit/report_v1.md` and frontend
-audit report `reports/frontend-audit/report_v1.md` both remain PARTIAL/NO PASS. Frontend
-remediation and sandbox masking landed in `0ec15dd`/`227e901`; backend launch-control
-remediation and private-alpha capability denial landed in `934b138`.
+Independent backend audit report v2 retested report-v1 F-01 through F-04 at exact
+`e34f1f42e528f5662be62a1a42e96ea944ea17a5`: all four are **RETESTED —
+MITIGATED** within bounded local scope. Focused independent proof: 115 passed, one
+unavailable-ClamAV skip. Original backend launch-control proposals are closed and
+archived. No whole-system PASS or private-alpha GO exists.
 
-Current evidence: backend full suite **1714 passed, 13 skipped, 9 subtests, 2
-warnings**; frontend typecheck/lint/Vitest **258 passed** and explicit-HTTP production
-build passed. Focused backend security/runtime proof: **100 passed, 1 ClamAV skip**.
-These are coordinator proofs, not auditor closure.
+Latest coordinator evidence before retest: backend full suite **1715 passed, 13
+skipped, 9 subtests, 2 warnings**; frontend typecheck/lint/Vitest **258 passed** and
+explicit-HTTP production build passed. Fresh-cache frontend security E2E: 1 passed,
+1 environment-gated skip. Frontend auditor retest remains open.
 
 Validated code now shares `foundation.runtime_environment()` for canonical
 `CLANNON_ENV` with contradiction/unknown rejection and legacy compatibility; API
@@ -88,24 +89,29 @@ Registry omits `http.request`/`delivery.notifier`; direct key calls fail closed 
 prompts no longer advertise them. Public frontend env templates are tracked and
 mock requires explicit opt-in.
 
-Measured prior waitlist timing with 50 ms fake mail delay: eligible first join ~65.8 ms
-vs existing-account ~1.6 ms. Routes now attach mail as response-background work;
-direct ASGI proof delivered response body ~13.4 ms while delayed mail completed ~65.4 ms.
-No real provider contacted. Independent auditor retest remains pending.
+Independent ASGI timing with 150 ms fake mail across five eligible trials measured
+body emission at 34.0–43.8 ms and mail starting 32.4–42.0 ms after final body event.
+Both branches returned exact 202/body. Actual socket/proxy timing and durable queueing
+remain unproven.
 
-Codex worker quota exhausted until 2026-08-16. Claude persistent frontend session is
-live and has review proposal in `proposals/to-frontend/`; no headless Claude launched.
-Fresh-cache frontend security E2E proof: `e2e/security-boundaries.spec.ts` 1 passed,
-1 environment-gated skip. Broader E2E run hit stale generated `.next` references to
-`/home/cybro/...` and was aborted; cache moved aside and fresh security run passed.
-Alpha verdict remains **STOP** until independent retests, deployment-like mail/readiness,
-and deferred identity/tenant/network/upload/execution/state/availability/supply-chain
-surfaces are evidenced.
+Persistent frontend Claude session is live but idle: `work it now` is typed at prompt
+and was never submitted. Pull-not-push forbids coordinator keystroke injection. Old
+audit-remediation proposal now explicitly says implementation already landed; only
+current useful frontend task is the shared mock-E2E auth helper, then integration
+review. Full fresh Playwright rerun previously found four signup-form timeouts and a
+fifth same-path interruption; 13 tests did not run.
+
+One backend finding remains visibly open: `api/run_sources.py` accepts any non-empty
+source URL string and emits it unchanged. Route server-side HTTP(S)-only validation to
+API specialist, then independent frontend retest. Also open: production YARA rules
+fail on first scan rather than startup readiness, tracked production env-template
+portability, deployment/provider proof, and deeper identity/tenant/SSRF/upload/
+execution/state/availability/secrets/supply-chain audit work. Alpha stays **STOP**.
 
 ## Change note
 
-Integrated audit findings under owner priority “rigorous testing/stability > speed.”
-Recorded exact proofs, remaining gates, provider limits, and timing measurement.
+Integrated independent launch-control retest, closed proven findings, and corrected
+current live queue. Preserved STOP because frontend/deployment/deep coverage remains.
 
 ## Previous checkpoint — backend auditor runs on both providers; sandbox had no DNS
 

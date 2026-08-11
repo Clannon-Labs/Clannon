@@ -236,16 +236,17 @@ pure computation) still stands and this follows it.
 
 **One open gate.**
 
-**Security campaign status (2026-08-11): STOP.** Independent backend/frontend
-audits found no whole-system PASS. Canonical production mode, YARA strictness,
-startup mail preflight, frontend API-mode/URL/PDF boundaries, and private-alpha
-outbound-mutation denial are implemented locally and require independent auditor
-retest. Waitlist mail now runs as response-background work; direct ASGI proof shows
-response bytes precede delayed mail I/O. Deferred identity/tenancy, SSRF,
-uploads, execution, persistence, availability, secrets, supply-chain, and real
-deployment surfaces remain open; do not invite testers until evidence changes this
-gate. Reports: `reports/backend-audit/report_v1.md`,
-`reports/frontend-audit/report_v1.md`.
+**Security campaign status (2026-08-11): STOP.** Independent backend retest at
+`e34f1f42` marks launch-control F-01 through F-04 mitigated in bounded local scope:
+canonical production mode/YARA, mail startup preflight, private-alpha outbound
+mutation denial, and ASGI waitlist response ordering. This is not whole-system PASS.
+Frontend remediation still awaits independent retest; its full Playwright suite is
+blocked by stale mock tests that still use removed public signup. Server citation
+projection also still emits arbitrary URL schemes. Missing production YARA rules fail
+the first scan, not application readiness. Deferred identity/tenancy, SSRF, uploads,
+execution, persistence, availability, secrets, supply-chain, and real deployment
+surfaces remain open; do not invite testers until evidence changes this gate. Reports:
+`reports/backend-audit/report_v2.md`, `reports/frontend-audit/report_v1.md`.
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.
