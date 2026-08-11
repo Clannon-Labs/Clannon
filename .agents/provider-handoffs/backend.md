@@ -69,7 +69,40 @@ finished something.
 
 ---
 
-## Current checkpoint — backend launch controls retested; campaign still STOP (2026-08-11)
+## Current checkpoint — autonomous campaign cleanly stopped (2026-08-11)
+
+Owner directed natural clean stop and step-by-step continuation only. All runs exited;
+no worker/auditor remains active and no new pass or remediation was dispatched.
+Private-alpha verdict stays **STOP**.
+
+Frontend-audit report v2 at `dc2cd8e9` independently closes F-03 PDF isolation and
+F-04 ASGI/frontend waitlist ordering. F-01 explicit production mock builds and F-02
+frontend credential/malformed URL admission remain alpha blockers. F-05 CSP
+`'unsafe-inline'` is low residual with no reachable injection sink; migration needs a
+working Next rendering plan, not a header-only edit.
+
+Frontend E2E authentication repair landed/pushed as `4a013c4`: one mock-UI helper,
+private-alpha signup-gate regression, real-backend tests explicit opt-in. Coordinator
+verification: typecheck/lint clean, Vitest 258/258, default Playwright 15 passed and
+one environment-gated skip in 5.1 minutes.
+
+Backend-audit report v3 completed targeted FastAPI access-control review at exact
+`dc2cd8e9`: no validated current-scope tenant-isolation defect; 99 focused tests
+passed with 3 live-Qdrant skips; auditor probe 110/110. Artifact adapter is not
+tenant-aware, but no client-writable corrupt metadata path exists; defense-in-depth
+counterevidence, not current vulnerability. Concurrency, post-revocation SSE,
+cross-process lifecycle, deployed topology, live Qdrant/providers remain deferred.
+
+Owner-local `LAW/README.md` change remains untouched. Durable pause/current evidence:
+`proposals/to-owner/2026-08-11_security-campaign-checkpoint.md`. Next session reads
+owner prompt and chooses one bounded step; do not restart campaign automatically.
+
+## Change note
+
+Recorded completed auditor/E2E outputs, surviving blockers, exact evidence, and owner
+pause. Previous launch-control checkpoint retained below.
+
+## Previous checkpoint — backend launch controls retested; campaign still STOP (2026-08-11)
 
 Independent backend audit report v2 retested report-v1 F-01 through F-04 at exact
 `e34f1f42e528f5662be62a1a42e96ea944ea17a5`: all four are **RETESTED —
@@ -110,7 +143,7 @@ fail on first scan rather than startup readiness, tracked production env-templat
 portability, deployment/provider proof, and deeper identity/tenant/SSRF/upload/
 execution/state/availability/secrets/supply-chain audit work. Alpha stays **STOP**.
 
-## Change note
+### Change note
 
 Integrated independent launch-control retest, closed proven findings, and corrected
 current live queue. Preserved STOP because frontend/deployment/deep coverage remains.

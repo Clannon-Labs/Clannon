@@ -248,11 +248,14 @@ credential-bearing/malformed HTTP(S) values (F-02); both must close before alpha
 tested Next rendering migration, not a header-only patch. Stale mock browser auth is
 repaired: fresh default Playwright now passes 15 with one environment-gated skip.
 Missing production YARA rules fail the first scan, not application readiness.
-Deferred identity/tenancy, SSRF, uploads, execution, persistence, availability,
-secrets, supply-chain, and real deployment surfaces remain open. Owner paused the
+Targeted FastAPI access-control report v3 found no validated current-scope tenant
+isolation defect (99 passed, 3 Qdrant skips; auditor probe 110/110), but session/token
+concurrency, post-revocation SSE, cross-process lifecycle, deployed topology, and live
+Qdrant/providers remain deferred. SSRF, uploads, execution, persistence, availability,
+secrets, supply-chain, and real deployment surfaces also remain open. Owner paused the
 autonomous campaign after current runs finish; resume step-by-step only on owner
 prompt. Do not invite testers until evidence changes this gate. Reports:
-`reports/backend-audit/report_v2.md`, `reports/frontend-audit/report_v2.md`.
+`reports/backend-audit/report_v3.md`, `reports/frontend-audit/report_v2.md`.
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.
