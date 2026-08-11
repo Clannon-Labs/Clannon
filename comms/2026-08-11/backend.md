@@ -8,5 +8,10 @@ Frontend remediation remains awaiting auditor retest. Persistent frontend sessio
 idle because its typed command was not submitted; old remediation proposal now states
 do not redo it. Live frontend task is shared mock-E2E authentication helper.
 
-Server citation projection still emits arbitrary URL schemes. API remediation and
-deeper backend audit remain next. Alpha verdict stays STOP.
+Server citation projection now enforces one HTTP(S)-only API gate before shared
+REST/SSE/persistence output. Proof: 45 focused; full backend 1733 passed, 13 dependency
+skips. Frontend-audit retest and deeper identity/tenant audit remain next. Alpha stays
+STOP.
+
+## dispatched workers
+- `16:08` **api** worker via **codex** — 2026-08-11_server-source-url-policy.md — exit 0, 364s — output: `.agents/runs/20260811-160241-api.out`

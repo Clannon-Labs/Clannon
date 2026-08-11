@@ -101,9 +101,11 @@ current useful frontend task is the shared mock-E2E auth helper, then integratio
 review. Full fresh Playwright rerun previously found four signup-form timeouts and a
 fifth same-path interruption; 13 tests did not run.
 
-One backend finding remains visibly open: `api/run_sources.py` accepts any non-empty
-source URL string and emits it unchanged. Route server-side HTTP(S)-only validation to
-API specialist, then independent frontend retest. Also open: production YARA rules
+Server citation projection now has one API-owned HTTP(S)-only gate before shared
+REST/SSE/persistence output. It rejects credentials, malformed hosts/ports/escapes,
+controls, relative values, and other schemes; 45 focused plus full backend **1733
+passed, 13 skipped, 9 subtests, 2 warnings**. Independent frontend-audit retest still
+owns closure. Also open: production YARA rules
 fail on first scan rather than startup readiness, tracked production env-template
 portability, deployment/provider proof, and deeper identity/tenant/SSRF/upload/
 execution/state/availability/secrets/supply-chain audit work. Alpha stays **STOP**.

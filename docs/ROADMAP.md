@@ -242,8 +242,8 @@ canonical production mode/YARA, mail startup preflight, private-alpha outbound
 mutation denial, and ASGI waitlist response ordering. This is not whole-system PASS.
 Frontend remediation still awaits independent retest; its full Playwright suite is
 blocked by stale mock tests that still use removed public signup. Server citation
-projection also still emits arbitrary URL schemes. Missing production YARA rules fail
-the first scan, not application readiness. Deferred identity/tenancy, SSRF, uploads,
+projection now drops unsafe/non-HTTP(S) values and also awaits auditor retest. Missing
+production YARA rules fail the first scan, not application readiness. Deferred identity/tenancy, SSRF, uploads,
 execution, persistence, availability, secrets, supply-chain, and real deployment
 surfaces remain open; do not invite testers until evidence changes this gate. Reports:
 `reports/backend-audit/report_v2.md`, `reports/frontend-audit/report_v1.md`.
