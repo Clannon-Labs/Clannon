@@ -472,7 +472,7 @@ if [ "$MODE" = self-test ]; then
     # Then each tool must parse the real project while its entire tree stays read-only.
     "${BWRAP[@]}" bash -c '
       set -eu
-      [ "$(npm --version)" = "11.16.0" ]
+      [ "$(npm --version)" = "11.19.0" ]
       eslint --version | grep -qx "v9.39.4"
       tsc --version | grep -qx "Version 5.9.3"
       vitest --version | grep -q "vitest/4.1.9"
