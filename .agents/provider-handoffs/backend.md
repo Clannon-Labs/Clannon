@@ -69,40 +69,38 @@ finished something.
 
 ---
 
-## Current checkpoint — frontend audit role completed after interrupted setup (2026-08-10)
+## Current checkpoint — implementation landed; independent retest remains open (2026-08-11)
 
-Claude's backend session stopped after committing the reusable role-parameterized
-audit launcher as local `32c516c`; it had written only untracked
-`frontend-audit/CLAUDE.md` for the new role. Resumed from that exact state.
+Independent backend audit report `reports/backend-audit/report_v1.md` and frontend
+audit report `reports/frontend-audit/report_v1.md` both remain PARTIAL/NO PASS. Frontend
+remediation and sandbox masking landed in `0ec15dd`/`227e901`; backend launch-control
+remediation and private-alpha capability denial landed in `934b138`.
 
-`frontend-audit` is now complete as an independent source-read-only researcher. Its
-frontend-owned, code-grounded domain threat model remains canonical at
-`frontend/FRONTEND_AUDIT_CHARTER.md`; root role files reference rather than duplicate
-it. Durable role charter, Claude/Codex equipment, shared-provider handoff, report and
-proposal routing, gitignored notes/drafts, operator docs, roadmap lane, and baseline
-assignment now exist. No frontend source, manifest, lockfile, or dependency tree was
-changed.
+Current evidence: backend full suite **1714 passed, 13 skipped, 9 subtests, 2
+warnings**; frontend typecheck/lint/Vitest **258 passed** and explicit-HTTP production
+build passed. Focused backend security/runtime proof: **100 passed, 1 ClamAV skip**.
+These are coordinator proofs, not auditor closure.
 
-One `scripts/audit-sandbox.sh` still owns enforcement. Frontend tooling is exactly
-lock-pinned in its own tracked tool package and installed only under gitignored role
-runtime: Semgrep 1.172.0, detect-secrets 1.5.0, npm 11.16.0, ESLint 9.39.4,
-eslint-config-next 16.2.12, TypeScript 5.9.3, Vitest 4.1.9, Playwright 1.62.0.
-Playwright required a read-only sandbox overlay: its CLI rejects discovery when CLI
-and test imports resolve through two physical package copies, even at equal versions.
+Validated code now shares `foundation.runtime_environment()` for canonical
+`CLANNON_ENV` with contradiction/unknown rejection and legacy compatibility; API
+strictness, YARA, and production mail use it. App lifespan preflights mail config.
+Registry omits `http.request`/`delivery.notifier`; direct key calls fail closed and
+prompts no longer advertise them. Public frontend env templates are tracked and
+mock requires explicit opt-in.
 
-Measured both providers: source/`.git`/charter/frontend manifests+lock+node_modules
-reject writes; DNS, isolated provider state, exact versions, full ESLint and
-`tsc --noEmit`, Vitest/Playwright discovery, and report-only npm audit pass. Backend
-audit remained green after shared-launcher changes. Baseline frontend audit has not
-run; charter seeds remain unverified hypotheses, not findings. Launcher regression:
-11 passed. Full backend: 1683 passed, 13 service skips, 9 subtests. Both audit roles
-passed boundary self-test on both providers.
+Measured waitlist timing with 50 ms fake mail delay: eligible first join ~65.8 ms vs
+existing-account ~1.6 ms (five samples). F-04 remains open; no real provider contacted.
+
+Codex worker quota exhausted until 2026-08-16. Claude persistent frontend session is
+live and has review proposal in `proposals/to-frontend/`; no headless Claude launched.
+Alpha verdict remains **STOP** until independent retests, deployment-like mail/readiness,
+and deferred identity/tenant/network/upload/execution/state/availability/supply-chain
+surfaces are evidenced.
 
 ## Change note
 
-Finished the interrupted root-owned frontend auditor integration without duplicating
-the enforcement boundary or touching frontend-owned implementation. Added measurement
-for the actual project-aware tool commands and preserved independent reporting.
+Integrated audit findings under owner priority “rigorous testing/stability > speed.”
+Recorded exact proofs, remaining gates, provider limits, and timing measurement.
 
 ## Previous checkpoint — backend auditor runs on both providers; sandbox had no DNS
 
