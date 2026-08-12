@@ -2,7 +2,50 @@
 
 Transfers live frontend work between Claude Code and Codex.
 
-## Current checkpoint — private-alpha E2E authentication repaired (2026-08-11)
+## Current checkpoint — F-01/F-02 remediated; audit retest pending (2026-08-12)
+
+- Provider: Claude Code (headless `frontend-worker`, dispatched by backend-coordinator)
+- Task: close frontend-audit F-01 (production mock-mode auth) and F-02 (client URL
+  boundary) per `proposals/to-frontend/2026-08-12_close-private-alpha-security-blockers.md`.
+  Verified both premises against `dc2cd8e` source and `reports/frontend-audit/report_v2.md`
+  before editing — both confirmed true (see proposal response for exact evidence).
+- **F-01**: `resolveApiMode()` (`src/config/app.config.ts`) now takes a `nodeEnv`
+  parameter, defaulting to `process.env.NODE_ENV`, and throws when `value === "mock"
+  && nodeEnv === "production"`. Missing/empty still resolves to `"http"` regardless of
+  environment; unknown/case-mismatched values still throw independent of environment.
+  Measured: `next build` always forces production semantics internally (confirmed
+  empirically — passing `NODE_ENV=development` to `next build` still produced a
+  production build and triggered the mock rejection), so the non-production/mock
+  acceptance branch is proven at the `resolveApiMode()` unit level, not via `next
+  build` — there is no such thing as a non-production `next build`. `next dev` and the
+  test runner set `NODE_ENV` correctly themselves.
+- **F-02**: `normalizeHttpUrl()` (`src/config/url-policy.ts`) now rejects
+  credential-bearing URLs (`parsed.username || parsed.password`) and malformed percent
+  escapes (new `hasMalformedPercentEscape()`, scanning the raw string the same way
+  `backend/api/run_sources.py:_client_source_url` does — read-only reference, not
+  edited) while still accepting safe percent-encoded path/query values. Single shared
+  function; both `run-event.ts` (SSE) and `expert-panel.tsx` (render) already call it,
+  so no second validator was added.
+- Verification: focused `vitest run src/tests/app-config-security.test.ts` 30/30;
+  full `npm test -- --run` 273/273; `npm run typecheck` clean; `npm run lint` clean;
+  four `next build` runs proving each F-01 branch by exact exit code
+  (prod+unset→0/http, prod+mock→1 with the exact throw message, prod+http→0,
+  case-mismatched→1 regardless of env). No Playwright run — no visual UI changed, and
+  the existing unit/build evidence already proves every required branch; recorded
+  explicitly rather than fabricating screenshot evidence for a non-visual change.
+- Left uncommitted per dispatch mandate — coordinator reviews and commits. Only the
+  three owned files changed:
+  `src/config/app.config.ts`, `src/config/url-policy.ts`,
+  `src/tests/app-config-security.test.ts`. `e2e/security-boundaries.spec.ts` was in
+  the owned-path list but deliberately left untouched (no material behavior a
+  Playwright run would add over the unit/build evidence above).
+- Finding status remains OPEN until independent `frontend-audit` retests exact
+  committed revision. Implementer evidence does not self-close audit findings.
+- Full detail: proposal response in
+  `proposals/to-frontend/2026-08-12_close-private-alpha-security-blockers.md`; today's
+  comms: `comms/2026-08-12/frontend.md`.
+
+## Previous checkpoint — private-alpha E2E authentication repaired (2026-08-11)
 
 Coordinator-dispatched frontend Codex worker replaced stale public-signup helpers
 with one `e2e/auth.ts` helper that enters through visible mock UI contracts. Fresh

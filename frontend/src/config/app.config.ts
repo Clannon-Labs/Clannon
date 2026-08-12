@@ -24,12 +24,25 @@ const env = {
 /**
  * Missing mode uses the real server. Mock authentication is intentionally
  * explicit: a typo must stop the build instead of shipping a convincing local
- * simulator to production.
+ * simulator to production. Mock is additionally refused whenever NODE_ENV is
+ * "production" — that variable is set by `next build` itself, not by
+ * deployment convention, so there is no undocumented path around it.
  */
-export function resolveApiMode(value: string | undefined): ApiMode {
+export function resolveApiMode(
+  value: string | undefined,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): ApiMode {
   if (value === undefined || value === "") return "http";
-  if (value === "http" || value === "mock") return value;
-  throw new Error('NEXT_PUBLIC_API_MODE must be exactly "http" or "mock".');
+  if (value !== "http" && value !== "mock") {
+    throw new Error('NEXT_PUBLIC_API_MODE must be exactly "http" or "mock".');
+  }
+  if (value === "mock" && nodeEnv === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_API_MODE=mock is not permitted when NODE_ENV=production. " +
+        "Mock authentication (localStorage-only login) must never ship to production.",
+    );
+  }
+  return value;
 }
 
 export const appConfig = {

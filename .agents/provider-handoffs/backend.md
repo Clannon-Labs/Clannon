@@ -69,7 +69,23 @@ finished something.
 
 ---
 
-## Current checkpoint — autonomous campaign cleanly stopped (2026-08-11)
+## Current checkpoint — frontend blockers remediated; retest pending (2026-08-12)
+
+Owner approved one bounded step and explicitly selected Claude for frontend work.
+Headless Claude frontend worker remediated F-01/F-02 in the shared API-mode and URL
+policy doors with regression tests. Coordinator review found no scope expansion.
+Independent proof before commit: frontend 273/273, typecheck/lint clean, production
+mock build failed for the intended guard, production HTTP build passed; backend full
+suite 1733 passed, 13 service skips, 9 subtests, 4 warnings (two known dependency,
+two intermittent un-awaited-coroutine reliability leads already observed before).
+Findings remain OPEN until frontend-audit retests exact committed revision.
+
+## Change note
+
+Owner resumed one step from clean STOP. Implementation and coordinator verification
+finished; independent retest is the only active next action.
+
+## Previous checkpoint — autonomous campaign cleanly stopped (2026-08-11)
 
 Owner directed natural clean stop and step-by-step continuation only. All runs exited;
 no worker/auditor remains active and no new pass or remediation was dispatched.
