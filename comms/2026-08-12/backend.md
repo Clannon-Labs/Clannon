@@ -14,3 +14,8 @@ Second remediation independently verified: frontend 274/274, typecheck/lint clea
 plain and `--debug-prerender` mock builds rejected; HTTP/unset builds passed; mock
 dev booted. Backend 1733 passed, 13 unavailable-service skips, 4 warnings. Awaiting
 commit/push and frontend-audit retest before F-01 closure.
+
+Committed/pushed as `be5ed80`. Claude frontend-audit retest against exact revision
+hit provider session limit before writing any evidence or verdict. Clean stop:
+source/worktree clean; F-01 remains OPEN; next action is only bounded retest after
+capacity returns.
