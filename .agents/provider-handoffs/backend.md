@@ -69,21 +69,28 @@ finished something.
 
 ---
 
-## Current checkpoint — frontend blockers remediated; retest pending (2026-08-12)
+## Current checkpoint — F-01 bypass remediated; second retest pending (2026-08-12)
 
 Owner approved one bounded step and explicitly selected Claude for frontend work.
-Headless Claude frontend worker remediated F-01/F-02 in the shared API-mode and URL
-policy doors with regression tests. Coordinator review found no scope expansion.
-Independent proof before commit: frontend 273/273, typecheck/lint clean, production
-mock build failed for the intended guard, production HTTP build passed; backend full
-suite 1733 passed, 13 service skips, 9 subtests, 4 warnings (two known dependency,
-two intermittent un-awaited-coroutine reliability leads already observed before).
-Findings remain OPEN until frontend-audit retests exact committed revision.
+First Claude remediation landed/pushed as `adea99a`: F-01 production mock guard plus
+F-02 credential/malformed-percent URL rejection. Independent frontend-audit retest
+then marked F-02 MITIGATED but found a real F-01 bypass: `next build
+--debug-prerender` produced a deployable mock-auth artifact because NODE_ENV was the
+guard signal.
+
+Second Claude frontend worker reproduced the bypass and moved the single API-mode
+policy to Next's production-build phase. `next.config.ts` enforces it before
+Turbopack; app config uses the same door. Coordinator left worker source intact and
+verified: frontend 274/274, typecheck/lint clean; normal and debug-prerender mock
+builds rejected, HTTP/unset builds passed, mock dev booted; backend 1733 passed with
+13 service skips and 4 warnings. Source is ready to commit/push, then frontend-audit
+must retest exact revision. F-01 stays OPEN until that independent retest.
 
 ## Change note
 
-Owner resumed one step from clean STOP. Implementation and coordinator verification
-finished; independent retest is the only active next action.
+First retest found a deployable debug-build bypass, so coordinator rejected closure
+and dispatched the owning Claude frontend specialist again. Second implementation
+and coordinator verification finished; commit/push and independent retest remain.
 
 ## Previous checkpoint — autonomous campaign cleanly stopped (2026-08-11)
 

@@ -2,7 +2,63 @@
 
 Transfers live frontend work between Claude Code and Codex.
 
-## Current checkpoint — F-01/F-02 remediated; audit retest pending (2026-08-12)
+## Current checkpoint — F-01 build-phase bypass closed (2026-08-12, later same day)
+
+- Provider: Claude Code (headless `frontend-worker`, dispatched by backend-coordinator)
+- Task: close `proposals/to-frontend/2026-08-12_close-debug-prerender-mock-bypass.md`.
+  Independent `frontend-audit` report_v3 (retest of `adea99a`) found the NODE_ENV-based
+  F-01 guard below was bypassable: `NEXT_PUBLIC_API_MODE=mock next build
+  --debug-prerender` exits 0 and produces a deployable build wired to `MockClient`,
+  because that flag forces Turbopack to inline `NODE_ENV` as `"development"` in the
+  compiled chunks while the guard's default parameter reads exactly that inlined value.
+- Verified the premise myself before touching anything: reproduced the exact bypass
+  (`NEXT_PUBLIC_API_MODE=mock node node_modules/next/dist/bin/next build
+  --debug-prerender` → exit 0, `.next` chunks contained `clannon.mock.session` etc.)
+  and confirmed a normal build still failed closed (exit 1) — both matched report_v3
+  exactly.
+- Root cause confirmed by reading the installed Next source
+  (`node_modules/next/dist/cli/next-build.js:65`, `next/dist/build/index.js:421,1131`)
+  and by empirical probes (temporary console.error instrumentation, reverted before
+  the real fix): the `phase` argument Next's CLI passes to a function-form
+  `next.config.ts`, and `process.env.NEXT_PHASE` (which Next sets during the build's
+  page-data-collection step), are **both** `"phase-production-build"` for every
+  `next build` invocation — with or without `--debug-prerender`. NODE_ENV is the only
+  signal that flag can steer; phase cannot be.
+- Fix: new `src/config/api-mode.ts` — one pure `resolveApiMode(value, phase)`, gating
+  on `phase === PHASE_PRODUCTION_BUILD` (imported from `next/constants`, not a
+  hand-typed string) instead of NODE_ENV. Two callers share it:
+  - `next.config.ts` now exports the phase-aware function form
+    `(phase) => NextConfig` (Next's documented "Async Configuration" / `Phase`
+    pattern) and calls `resolveApiMode(process.env.NEXT_PUBLIC_API_MODE, phase)` at
+    the top, before `buildNextConfig()` runs — this is the authoritative,
+    build-aborting gate: it throws during config load, before Turbopack starts, so
+    `--debug-prerender` never gets a compiled chunk to inline anything into.
+  - `src/config/app.config.ts` calls the same function with
+    `process.env.NEXT_PHASE` as defense-in-depth (kept as a second call to the one
+    shared door, not a second rule).
+  - Old inline `resolveApimode`/NODE_ENV logic in `app.config.ts` removed; its false
+    comment ("that variable is set by `next build` itself") is gone along with it.
+- Verification, all real:
+  1. `NEXT_PUBLIC_API_MODE=mock next build` → exit 1, rejected.
+  2. `NEXT_PUBLIC_API_MODE=mock next build --debug-prerender` → **exit 1 now**
+     (was 0) — the bypass is closed.
+  3. `NEXT_PUBLIC_API_MODE=http next build` → exit 0.
+  4. mode unset → exit 0.
+  5. `NEXT_PUBLIC_API_MODE=mock next dev` → boots clean (`✓ Ready`), no throw.
+  6. `vitest run` 274/274 (273 + 1 new NODE_ENV-vs-phase regression test proving the
+     gate survives an inlined/ambient `NODE_ENV=development` alongside the real
+     production-build phase); `tsc --noEmit` clean; `eslint .` clean.
+- Left uncommitted per dispatch mandate — coordinator reviews and commits. Only the
+  owned files changed: `next.config.ts`, `src/config/api-mode.ts` (new),
+  `src/config/app.config.ts`, `src/tests/app-config-security.test.ts`. Did not touch
+  F-02, F-05/CSP, backend, dependencies, UX, CI, or any doc outside this handoff/comms.
+- No visual behavior changed — no screenshots taken; this is a build/config-time gate,
+  not a UI change.
+- Full detail: proposal response in
+  `proposals/to-frontend/2026-08-12_close-debug-prerender-mock-bypass.md`; today's
+  comms: `comms/2026-08-12/frontend.md`.
+
+## Previous checkpoint — F-01/F-02 remediated; audit retest pending (2026-08-12)
 
 - Provider: Claude Code (headless `frontend-worker`, dispatched by backend-coordinator)
 - Task: close frontend-audit F-01 (production mock-mode auth) and F-02 (client URL

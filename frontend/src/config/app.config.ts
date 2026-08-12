@@ -10,9 +10,12 @@
  * in `src/lib/api`.
  */
 
+import { resolveApiMode } from "@/config/api-mode";
+import type { ApiMode } from "@/config/api-mode";
 import { requireHttpBaseUrl } from "@/config/url-policy";
 
-export type ApiMode = "mock" | "http";
+export type { ApiMode };
+export { resolveApiMode };
 
 const env = {
   apiMode: process.env.NEXT_PUBLIC_API_MODE,
@@ -21,33 +24,23 @@ const env = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
 };
 
-/**
- * Missing mode uses the real server. Mock authentication is intentionally
- * explicit: a typo must stop the build instead of shipping a convincing local
- * simulator to production. Mock is additionally refused whenever NODE_ENV is
- * "production" — that variable is set by `next build` itself, not by
- * deployment convention, so there is no undocumented path around it.
- */
-export function resolveApiMode(
-  value: string | undefined,
-  nodeEnv: string | undefined = process.env.NODE_ENV,
-): ApiMode {
-  if (value === undefined || value === "") return "http";
-  if (value !== "http" && value !== "mock") {
-    throw new Error('NEXT_PUBLIC_API_MODE must be exactly "http" or "mock".');
-  }
-  if (value === "mock" && nodeEnv === "production") {
-    throw new Error(
-      "NEXT_PUBLIC_API_MODE=mock is not permitted when NODE_ENV=production. " +
-        "Mock authentication (localStorage-only login) must never ship to production.",
-    );
-  }
-  return value;
-}
-
 export const appConfig = {
-  /** "mock" runs the bundled simulator; "http" talks to the real backend. */
-  apiMode: resolveApiMode(env.apiMode),
+  /**
+   * "mock" runs the bundled simulator; "http" talks to the real backend.
+   * Missing mode uses the real server. Mock is intentionally explicit: a
+   * typo must stop the build instead of shipping a convincing local
+   * simulator to production.
+   *
+   * The production gate lives in `resolveApiMode` (src/config/api-mode.ts),
+   * called here with `process.env.NEXT_PHASE` — the phase Next itself sets
+   * during the build's page-data-collection step, not NODE_ENV. NODE_ENV is
+   * a compile-time-inlined value that `next build --debug-prerender` can
+   * force to "development" inside the compiled bundle; NEXT_PHASE cannot be
+   * steered by that flag. `next.config.ts` calls the same shared function
+   * with Next's real `phase` argument as the authoritative, build-aborting
+   * check — this call is defense-in-depth against the identical rule.
+   */
+  apiMode: resolveApiMode(env.apiMode, process.env.NEXT_PHASE),
 
   /** Base URL of the backend — the Vraksha engine (FastAPI). No trailing slash. */
   apiBaseUrl: requireHttpBaseUrl(

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import os from "node:os";
 import type { NetworkInterfaceInfo } from "node:os";
+import { resolveApiMode } from "./src/config/api-mode";
 import { requireHttpBaseUrl } from "./src/config/url-policy";
 
 const apiBaseUrl = requireHttpBaseUrl(
@@ -80,41 +81,63 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 
-const nextConfig: NextConfig = {
-  poweredByHeader: false,
-  reactStrictMode: true,
-  // wraps route navigations in document.startViewTransition() so the browser
-  // can crossfade/morph between pages — powers the shared-element run-row →
-  // run-page morph (matching view-transition-name per run id). Native API;
-  // gated to prefers-reduced-motion in globals.css.
-  experimental: {
-    viewTransition: true,
-  },
-  // Dev-only: lets HMR/fast-refresh work when the app is opened over the LAN
-  // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
-  // new IP needs no edit. Ignored in production.
-  allowedDevOrigins: lanHosts,
-  async rewrites() {
-    // Root ./dev.sh gives local development one browser-visible origin:
-    // Next owns :3000 and forwards /api/* to FastAPI's private :8000 listener.
-    // Production keeps using NEXT_PUBLIC_API_BASE_URL directly; this rewrite
-    // exists only when the launcher supplies its server-only target.
-    if (!isDev || !devBackendUrl) return [];
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${devBackendUrl}/:path*`,
-      },
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-    ];
-  },
-};
+function buildNextConfig(): NextConfig {
+  return {
+    poweredByHeader: false,
+    reactStrictMode: true,
+    // wraps route navigations in document.startViewTransition() so the browser
+    // can crossfade/morph between pages — powers the shared-element run-row →
+    // run-page morph (matching view-transition-name per run id). Native API;
+    // gated to prefers-reduced-motion in globals.css.
+    experimental: {
+      viewTransition: true,
+    },
+    // Dev-only: lets HMR/fast-refresh work when the app is opened over the LAN
+    // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
+    // new IP needs no edit. Ignored in production.
+    allowedDevOrigins: lanHosts,
+    async rewrites() {
+      // Root ./dev.sh gives local development one browser-visible origin:
+      // Next owns :3000 and forwards /api/* to FastAPI's private :8000 listener.
+      // Production keeps using NEXT_PUBLIC_API_BASE_URL directly; this rewrite
+      // exists only when the launcher supplies its server-only target.
+      if (!isDev || !devBackendUrl) return [];
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${devBackendUrl}/:path*`,
+        },
+      ];
+    },
+    async headers() {
+      return [
+        {
+          source: "/(.*)",
+          headers: securityHeaders,
+        },
+      ];
+    },
+  };
+}
 
-export default nextConfig;
+/**
+ * Exported as the phase-aware function form (see
+ * https://nextjs.org/docs — "Async Configuration" / `Phase`) instead of a
+ * plain object so the mock-mode gate below runs against the real `phase`
+ * argument Next's CLI passes in, not against NODE_ENV. `next build
+ * --debug-prerender` forces NODE_ENV to "development" for the compiled
+ * output, but every `next build` invocation — with or without that flag —
+ * still runs config load as PHASE_PRODUCTION_BUILD; see src/config/api-mode.ts.
+ */
+export default function nextConfig(phase: string): NextConfig {
+  // Throws (aborting the whole build before any page code compiles) when
+  // NEXT_PUBLIC_API_MODE=mock and this is a real production build. This is
+  // the authoritative enforcement point: it runs before Turbopack starts, so
+  // there is no compiled chunk left for --debug-prerender's NODE_ENV inlining
+  // to smuggle a mock build past. app.config.ts calls the same shared
+  // function again at app runtime, as defense-in-depth — never a second, and
+  // possibly drifting, rule.
+  resolveApiMode(process.env.NEXT_PUBLIC_API_MODE, phase);
+
+  return buildNextConfig();
+}

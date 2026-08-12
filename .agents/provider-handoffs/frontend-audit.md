@@ -6,7 +6,57 @@ Independent source-read-only frontend product-security research role. Read
 findings stay in gitignored reports and proposals; this tracked file carries safe
 continuity only.
 
-## Current checkpoint — remediation retest COMPLETE (2026-08-11)
+## Current checkpoint — F-01/F-02 retest COMPLETE (2026-08-12)
+
+Retested exact revision `adea99a77db1cc900767d464660ab0f3b2ea30d5` from a disposable
+`git archive` of the committed tree (worktree dirty: `frontend/.env.prod`). Evidence:
+`reports/frontend-audit/report_v3.md`. Retest appended to the canonical frontend
+proposal; comms written. **No whole-system PASS** — targeted two-finding retest.
+
+- F-02 **RETESTED — MITIGATED** at the client boundary. Credentials (all parser forms,
+  incl. `%40`/`%3A`-encoded), malformed percent escapes across path/query/fragment, and
+  scheme/relative/whitespace/host/port are rejected; safe encoded + ordinary HTTP(S)
+  preserved with no over-rejection. SSE parse (`run-event.ts:40`) and render sink
+  (`expert-panel.tsx:83`) share one policy; rejected URLs render as a non-clickable
+  `div[data-invalid-source-url]`. Bypass hunt found nothing.
+- F-01 **OPEN, narrowed high -> medium.** Guard fails closed for unset, empty, mistyped
+  and case-mismatched modes AND for ambient `NODE_ENV=development`/`=test` — proven with
+  five real `next build` runs. One bypass survives: `next build --debug-prerender`.
+
+**Two traps already paid for — do not re-derive:**
+
+1. **`next build` does NOT set `NODE_ENV`.** The CLI does
+   `NODE_ENV = process.env.NODE_ENV || defaultEnv` (original source readable via
+   `next/dist/bin/next.map`), so an ambient value survives. From source reading alone the
+   F-01 guard looks bypassable through the environment. **It is not** — Turbopack inlines
+   `process.env.NODE_ENV` as a compile-time literal, `"production"` for `next build`.
+   I predicted the opposite and the real build refuted me. Reading the CLI was necessary
+   but not sufficient.
+2. **`--debug-prerender` sets `NODE_ENV='development'` in the CLI action before
+   compilation**, so the inlined literal becomes `"development"` and the guard's
+   comparison can never be true. That build exits 0, is deployable (BUILD_ID, 46 static
+   chunks, `next start` serves `/login` HTTP 200) and selects `MockClient`. Fastest way to
+   read any build's resolved mode: grep built chunks for
+   `apiMode: ("TURBOPACK compile-time value", ...)`.
+
+**Tooling unlocked this session.** `npx` stays denied, but direct node entrypoints work:
+`node node_modules/next/dist/bin/next build`, `node node_modules/typescript/bin/tsc
+--noEmit`, `node node_modules/eslint/bin/eslint.js .`, `node node_modules/vitest/vitest.mjs
+run`. That finally obtained the tsc/eslint coverage deferred in report_v2 (both exit 0;
+Vitest 273 passed / 34 files). Turbopack **refuses a symlinked `node_modules`** pointing
+outside the project root, and hardlinks fail cross-bind-mount — so `cp -a` the 759M
+`node_modules` into the /tmp archive. Node 24 strips TS types natively, so a probe can
+`import` the real `url-policy.ts` rather than reimplementing it.
+
+**Sandbox note:** `frontend/.env.local` and `.env.prod` are masked as `/dev/null` char
+devices (`crw-rw-rw- 1,3`), so `git diff` reports "unsupported file type". Masking, not
+corruption — and it guarantees no ambient `.env` leaked into these builds.
+
+Open: F-01 (medium, awaiting frontend's decision — accepting the flag as out of scope for
+private alpha is a legitimate answer), F-05 (low residual, unchanged). F-03/F-04 remain
+MITIGATED and were not re-audited; this diff does not touch their attack paths.
+
+## Previous checkpoint — remediation retest COMPLETE (2026-08-11)
 
 Retested exact local `main` revision
 `dc2cd8e9f2c7f82bbce4d55ae8fa40c430a39c48`. Requested `e34f1f4b` resolved to
@@ -145,3 +195,13 @@ Independent remediation retest completed after coordinator request. Previous
 baseline checkpoint retained intact. Findings changed only where implementation plus
 reachable behavior supported it: F-03/F-04 mitigated; F-01/F-02/F-05 remain open
 with narrowed scope and explicit counterevidence.
+
+## Change note — 2026-08-12
+
+Targeted retest of F-01 and F-02 at `adea99a` on coordinator request; the 2026-08-11
+checkpoint is retained above in full. F-02's client half moved to MITIGATED on a complete
+payload matrix run against the real module. F-01 stayed OPEN but was narrowed to medium:
+the environment-based bypass I hypothesised was refuted by real builds, and the surviving
+bypass is a documented debug build flag rather than a misconfiguration. The load-bearing
+correction recorded above is that the guard's strength comes from Turbopack compile-time
+inlining, not from `next build` setting `NODE_ENV` as the source comment claims.

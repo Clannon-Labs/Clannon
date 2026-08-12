@@ -1,5 +1,6 @@
+import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER } from "next/constants";
 import { describe, expect, it } from "vitest";
-import { resolveApiMode } from "@/config/app.config";
+import { resolveApiMode } from "@/config/api-mode";
 import {
   normalizeHttpBaseUrl,
   normalizeHttpUrl,
@@ -8,37 +9,56 @@ import {
 
 describe("fail-safe API configuration", () => {
   it("uses HTTP when API mode is missing or empty", () => {
-    expect(resolveApiMode(undefined)).toBe("http");
-    expect(resolveApiMode("")).toBe("http");
-    // Missing/empty is safe regardless of environment.
-    expect(resolveApiMode(undefined, "production")).toBe("http");
-    expect(resolveApiMode("", "production")).toBe("http");
+    expect(resolveApiMode(undefined, undefined)).toBe("http");
+    expect(resolveApiMode("", undefined)).toBe("http");
+    // Missing/empty is safe regardless of phase.
+    expect(resolveApiMode(undefined, PHASE_PRODUCTION_BUILD)).toBe("http");
+    expect(resolveApiMode("", PHASE_PRODUCTION_BUILD)).toBe("http");
   });
 
   it("requires explicit mock opt-in and rejects unknown modes", () => {
-    expect(resolveApiMode("mock", "development")).toBe("mock");
-    expect(resolveApiMode("http")).toBe("http");
-    expect(() => resolveApiMode("htp")).toThrow(/must be exactly/);
-    expect(() => resolveApiMode("MOCK")).toThrow(/must be exactly/);
-    // Case-mismatched/unknown values are rejected independent of environment.
-    expect(() => resolveApiMode("MOCK", "production")).toThrow(/must be exactly/);
-    expect(() => resolveApiMode("htp", "development")).toThrow(/must be exactly/);
+    expect(resolveApiMode("mock", PHASE_DEVELOPMENT_SERVER)).toBe("mock");
+    expect(resolveApiMode("http", undefined)).toBe("http");
+    expect(() => resolveApiMode("htp", undefined)).toThrow(/must be exactly/);
+    expect(() => resolveApiMode("MOCK", undefined)).toThrow(/must be exactly/);
+    // Case-mismatched/unknown values are rejected independent of phase.
+    expect(() => resolveApiMode("MOCK", PHASE_PRODUCTION_BUILD)).toThrow(/must be exactly/);
+    expect(() => resolveApiMode("htp", PHASE_DEVELOPMENT_SERVER)).toThrow(/must be exactly/);
   });
 
-  it("F-01: rejects mock mode in production, accepts it elsewhere", () => {
-    // production + mock => rejected
-    expect(() => resolveApiMode("mock", "production")).toThrow(
-      /not permitted when NODE_ENV=production/,
+  it("F-01: rejects mock mode during a production build, accepts it elsewhere", () => {
+    // production build phase + mock => rejected
+    expect(() => resolveApiMode("mock", PHASE_PRODUCTION_BUILD)).toThrow(
+      /not permitted during a production build/,
     );
-    // production + http => accepted
-    expect(resolveApiMode("http", "production")).toBe("http");
-    // production + missing/empty => http (safe default, not a rejection)
-    expect(resolveApiMode(undefined, "production")).toBe("http");
-    expect(resolveApiMode("", "production")).toBe("http");
-    // non-production + explicit mock => accepted
-    expect(resolveApiMode("mock", "development")).toBe("mock");
-    expect(resolveApiMode("mock", "test")).toBe("mock");
+    // production build phase + http => accepted
+    expect(resolveApiMode("http", PHASE_PRODUCTION_BUILD)).toBe("http");
+    // production build phase + missing/empty => http (safe default, not a rejection)
+    expect(resolveApiMode(undefined, PHASE_PRODUCTION_BUILD)).toBe("http");
+    expect(resolveApiMode("", PHASE_PRODUCTION_BUILD)).toBe("http");
+    // non-production-build phase + explicit mock => accepted
+    expect(resolveApiMode("mock", PHASE_DEVELOPMENT_SERVER)).toBe("mock");
+    expect(resolveApiMode("mock", PHASE_PRODUCTION_SERVER)).toBe("mock");
     expect(resolveApiMode("mock", undefined)).toBe("mock");
+  });
+
+  it("F-01 regression: the phase gate does not depend on NODE_ENV, so a build flag that only rewrites NODE_ENV cannot bypass it", () => {
+    // `next build --debug-prerender` forces NODE_ENV to "development" while
+    // Next still runs the build as PHASE_PRODUCTION_BUILD (measured in
+    // reports/frontend-audit/report_v3.md). Simulate that exact split: an
+    // ambient/inlined NODE_ENV of "development" alongside the real
+    // production-build phase must still reject mock.
+    const originalNodeEnv = process.env.NODE_ENV;
+    // @ts-expect-error -- test-only override of a readonly-typed env var
+    process.env.NODE_ENV = "development";
+    try {
+      expect(() => resolveApiMode("mock", PHASE_PRODUCTION_BUILD)).toThrow(
+        /not permitted during a production build/,
+      );
+    } finally {
+      // @ts-expect-error -- restore test-only override
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 });
 
