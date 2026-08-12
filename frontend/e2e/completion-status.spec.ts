@@ -1,16 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { authenticateMockUser } from "./auth";
 
 const PARTIAL_BRIEF =
   "Force a partial timeout for e2e — draft a short market note on EU solar subsidies for a client presentation.";
-
-async function signup(page: import("@playwright/test").Page, email: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Name").fill("Priya Nair");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("textbox", { name: "Password" }).fill("correct-horse");
-  await page.getByRole("button", { name: "Create my workspace" }).click();
-  await expect(page).toHaveURL(/\/app$/);
-}
 
 test("a partial-timeout delivery renders the completion badge and banner, and Continue works", async ({
   page,
@@ -18,7 +10,7 @@ test("a partial-timeout delivery renders the completion badge and banner, and Co
   // a full mock delivery takes ~1.2 minutes end to end (FIRST_VALUE.md) — the
   // default 30s per-test timeout isn't enough to watch one run to terminal.
   test.setTimeout(150_000);
-  await signup(page, `partial-${Date.now()}@example.com`);
+  await authenticateMockUser(page, { kind: "fresh", name: "Priya Nair" });
   // the composer is always available now — a project is optional, not a gate
   // (owner correction, 2026-08-01: project creation moved behind an explicit
   // "Create your first project" click, no longer auto-shown on this screen)
@@ -54,7 +46,7 @@ test("a partial-timeout delivery renders the completion badge and banner, and Co
 test("the partial banner reads correctly at 390px", async ({ page }) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  await signup(page, `partial-mobile-${Date.now()}@example.com`);
+  await authenticateMockUser(page, { kind: "fresh", name: "Priya Nair" });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(PARTIAL_BRIEF);
@@ -76,7 +68,7 @@ test("a quota-exceeded delivery reads as a rate-limit interruption, not a timeou
   page,
 }) => {
   test.setTimeout(150_000);
-  await signup(page, `quota-${Date.now()}@example.com`);
+  await authenticateMockUser(page, { kind: "fresh", name: "Priya Nair" });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(
@@ -106,7 +98,7 @@ test("a failed run states plainly that a pipeline stage broke, distinct from blo
   page,
 }) => {
   test.setTimeout(150_000);
-  await signup(page, `failed-${Date.now()}@example.com`);
+  await authenticateMockUser(page, { kind: "fresh", name: "Priya Nair" });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(
@@ -141,7 +133,7 @@ test("a filter-blocked run explains the gate, preserves the brief, and offers a 
   // the block check only fires after the full scripted work sequence runs
   // (same ~70-90s as a normal delivery) — it diverges only at the very end.
   test.setTimeout(150_000);
-  await signup(page, `blocked-${Date.now()}@example.com`);
+  await authenticateMockUser(page, { kind: "fresh", name: "Priya Nair" });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(

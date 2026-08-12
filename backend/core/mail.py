@@ -25,11 +25,10 @@ import os
 
 import httpx
 
-from foundation import Accepted, MailError, Message
+from foundation import Accepted, MailError, Message, is_production
 
 log = logging.getLogger(__name__)
 
-_ENV = "CLANNON_ENV"
 _MAILER_ENV = "CLANNON_MAILER"
 _RESEND_KEY_ENV = "RESEND_API_KEY"
 _SENDER_ENV = "CLANNON_MAIL_FROM"
@@ -119,11 +118,10 @@ def resolve_mailer() -> LogMailer | ResendMailer:
     verification mail goes to a log file is one nobody can join, and it would look
     identical to a working system from the server's side.
     """
-    env = (os.getenv(_ENV) or "dev").strip().lower()
     configured = (os.getenv(_MAILER_ENV) or "log").strip().lower()
 
     if configured == "log":
-        if env in {"prod", "production"}:
+        if is_production():
             raise MailError(
                 "no email provider configured (CLANNON_MAILER=log) and CLANNON_ENV is "
                 "production — refusing to start with a mailer that sends nothing"

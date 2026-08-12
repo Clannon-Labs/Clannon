@@ -236,7 +236,7 @@ So when you hit something outside your tree:
 
 **Coordinator inbox sweep is automatic, not owner-triggered.** At session start and
 after each completed unit, inspect every `proposals/to-{backend,memory,orchestration,
-security,api,frontend}/` inbox—not only your own. For each item: verify the acceptance
+security,api,frontend,backend-audit,frontend-audit}/` inbox—not only your own. For each item: verify the acceptance
 criteria against code/tests; if proven complete, append `## Response`, update Status,
 and archive it; if unfinished, immediately dispatch its owning specialist and carry
 the result through review, suite, commit, and push. A status label or plausible commit
@@ -311,7 +311,7 @@ role, so a report is findable by who wrote it:
 
 ```
 reports/backend/        the coordinator's own report_vN.md  ← YOURS
-reports/{api,memory,orchestration,security,frontend,release}/
+reports/{api,memory,orchestration,security,backend-audit,frontend-audit,frontend,release}/
 ```
 
 Only shared information belongs at `reports/` root:
@@ -416,7 +416,8 @@ structural change (all batch + graph work).
 
 ## PROPOSAL PROTOCOL (cross-agent channel — no owner relay)
 
-SIX interactive sessions work this repo: the BACKEND agent (this file's reader,
+Six implementation sessions plus two independent audit sessions work this repo:
+the BACKEND agent (this file's reader,
 root + backend/, the **coordinator**), the FRONTEND agent (frontend/), and four
 backend **specialists** the backend agent coordinates — MEMORY (`clannon-memory`,
 owns `core/memory/**`), ORCHESTRATION (`clannon-orchestration`, owns
@@ -424,7 +425,7 @@ owns `core/memory/**`), ORCHESTRATION (`clannon-orchestration`, owns
 (`clannon-security`, spawned 2026-07-06, owns `security/**` — `sanitizers/` +
 `filter/`), and API & RUNTIME (`clannon-api`, spawned 2026-07-26, owns `api/**` —
 run lifecycle, SSE, persistence, identity). A role runs on **either** Claude or
-Codex — chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
+Codex — chosen at launch (`./scripts/crew.sh start <role> [--codex|--claude]`), not
 auto-switched mid-session; continuity across a provider change comes from
 `.agents/provider-handoffs/<role>.md`. Their charters live in the SPECIALIST
 CHARTER section of their home module's `CLAUDE.md`. They exchange work through
@@ -432,6 +433,24 @@ FILES — never by editing another side's code, never by asking the owner to
 carry a message. Format spec + worked example: `proposals/README.md` (filename
 `YYYY-MM-DD_slug.md`; header From/To/Status/Priority/Summary; body with contract
 + acceptance criteria; receiver appends `## Response`, flips Status, archives).
+
+The seventh role is **BACKEND-AUDIT** (`clannon-backend-audit`, cwd
+`backend-audit/`). It is an independent senior security researcher — Claude by
+default like every role, Codex with `--codex`, same enforced sandbox either way —
+not another implementer and not the `security` specialist. It threat-models,
+searches for reachable abuse paths and control bypasses, validates evidence, and
+reports; static analysis is only one input. Bubblewrap makes source and `.git`
+read-only while allowing only its notes, drafts, handoff, reports, own comms, and
+proposal output. It never fixes findings, commits, pushes, or changes remote
+systems. Frontend and owner-only `backend-rust/` are outside its scope.
+
+The eighth role is **FRONTEND-AUDIT** (`clannon-frontend-audit`, cwd
+`frontend-audit/`). Same independent research model and same role-parameterized
+Bubblewrap launcher; its code-grounded threat model lives in the frontend-owned
+`frontend/FRONTEND_AUDIT_CHARTER.md`. It audits browser/client trust boundaries and
+verifies backend controls only when a frontend claim depends on them. Frontend-owned
+fixes route to frontend; server-side findings route to the coordinator. It never edits
+either implementation.
 
 **Topology = hub-and-spoke.** The specialists coordinate through the backend agent
 (the hub), not directly with each other. As coordinator, the backend agent: owns

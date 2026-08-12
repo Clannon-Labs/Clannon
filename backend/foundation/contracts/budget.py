@@ -7,14 +7,10 @@ atomic check-and-decrement, ADR-0004) agree on, so neither imports the other —
 same one-door / sole-broker discipline as `MemoryPort` and `GraphPort`. No caller ever
 touches Redis or a raw `DECRBY`; every spend goes through `reserve()`/`reconcile()`.
 
-Ratified 2026-07-05 (backend: seam placement) from the Redis-budget design. This is
-the CONTRACT slice only — inert, no implementer yet: the atomic Redis-Lua enforcement,
-the `retry.py` anchor, and the `budget_scope` ContextVar land as the #3 build (they
-need Redis added as a dependency, proposed separately). The mission ceiling
-(`mission_id` / `TokenBudget.mission_remaining`) is designed-in for the Mission Engine
-(#4) but inert until then — a user-only scope simply carries no mission ceiling.
-Nothing here forces either to be built; it makes the ratified seam concrete so the
-implementation has a stable target.
+Ratified 2026-07-05 (backend: seam placement). Redis-Lua enforcement, seeding, and
+the `retry.py` anchor now implement this contract behind an off-by-default production
+flag. Mission scope is also wired: a user-only scope carries no mission ceiling, while
+`mission_id` adds a second all-or-nothing ceiling.
 
 Budget is the MONEY sibling of the whole-turn wall clock (`settings.ORCHESTRATOR.
 turn_wall_clock_s`, the TIME bound): both are fail-closed resource bounds on one turn,
@@ -73,13 +69,15 @@ class TokenBudget:
 class BudgetReservation:
     """The handle a granted `reserve()` returns, so `reconcile()` can settle real cost.
 
-    `estimated` tokens were atomically decremented up front; `reconcile(actual)` refunds
-    the over-estimate (or charges the shortfall). `reservation_id` makes reconcile
-    idempotent — replaying it must not double-charge.
+    `estimated` µ$ were atomically decremented up front; `reconcile(actual)` refunds
+    the over-estimate (or charges the shortfall). `period` pins settlement to the same
+    billing key that granted the hold even when a call crosses a period boundary.
+    `reservation_id` makes reconcile idempotent — replaying it must not double-charge.
     """
     reservation_id: str
     scope: BudgetScope
     estimated: int
+    period: str = ""
 
 
 @runtime_checkable
@@ -104,7 +102,7 @@ class BudgetPort(Protocol):
         ...
 
     async def reconcile(self, reservation: BudgetReservation, actual: int) -> bool:
-        """Settle a reservation to the ACTUAL tokens used once the call returns: refund
+        """Settle a reservation to the ACTUAL µ$ cost once the call returns: refund
         `estimated - actual` if over-reserved, charge the extra if under. Idempotent on
         `reservation_id` (a retry must not double-settle). Never RAISES onto the caller's
         path — a store fault is logged internally and reported via the `bool` return

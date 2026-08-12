@@ -29,19 +29,31 @@ import clamd
 import yara
 
 import settings
-from foundation import SanitizationError, ThreatLevel, coerce_to_bytes
+from foundation import (
+    SanitizationError,
+    ThreatLevel,
+    coerce_to_bytes,
+    is_production,
+)
 
 
 CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
 CLAMAV_PORT = int(os.getenv("CLAMAV_PORT", "3310"))
 YARA_RULES_DIR = os.getenv("AGENT_YARA_DIR", "rules")
 
-# When YARA rules are required, a missing/empty rules dir is a hard config fault
-# (fail-closed) rather than a silent skip. Enabled in production or explicitly.
-YARA_REQUIRED = (
-    os.getenv("VRAKSHA_ENV", "").strip().lower() in {"prod", "production"}
-    or os.getenv("AGENT_REQUIRE_YARA", "").strip().lower() in {"1", "true", "yes"}
-)
+_TRUTHY = frozenset({"1", "true", "yes"})
+
+
+def _yara_required() -> bool:
+    """Whether an absent YARA rule set must stop sanitization.
+
+    Runtime mode comes from foundation's canonical environment seam. The
+    security-specific override can only tighten development/test behavior; it
+    cannot weaken canonical production mode.
+    """
+
+    force_required = os.getenv("AGENT_REQUIRE_YARA", "").strip().lower() in _TRUTHY
+    return is_production() or force_required
 
 
 @dataclass(slots=True)
@@ -176,13 +188,13 @@ class YaraScanner:
         Match cached/compiled YARA rules against the payload.
 
         Missing rules are reported as skipped/clean in development so the
-        pipeline runs before rules are added; when YARA_REQUIRED (production),
-        a missing rule set is a hard SanitizationError (fail-closed). Invalid
-        rules always raise SanitizationError.
+        pipeline runs before rules are added; in canonical production mode or
+        when explicitly forced, a missing rule set is a hard SanitizationError
+        (fail-closed). Invalid rules always raise SanitizationError.
         """
         rule_files = self._rule_files()
         if not rule_files:
-            if YARA_REQUIRED:
+            if _yara_required():
                 raise SanitizationError(
                     f"YARA rules required but none found in {self.rules_dir}",
                     modality="all",

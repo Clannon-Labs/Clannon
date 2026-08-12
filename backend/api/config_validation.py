@@ -14,15 +14,16 @@ This module provides two callables:
 
     fail_fast_if_strict()  -> None
         Call once at startup (api/app.py does this).
-        In strict/prod mode (VRAKSHA_ENV=production OR CLANNON_STRICT_CONFIG=1):
+        In strict/prod mode (foundation.is_production() OR
+        CLANNON_STRICT_CONFIG=1):
             raises ConfigValidationError naming ALL bad keys at once — a bad
             deploy dies at boot with an actionable message, not mid-run.
         In dev/test default:
             logs warnings only, never raises — the hermetic test suite imports
             config with no real secrets and must remain unaffected.
 
-The strict flag mirrors the existing fail-closed prod-guard precedent used by
-security/sanitizers/pre_sanitization.py (VRAKSHA_ENV / AGENT_REQUIRE_YARA).
+Runtime mode comes from foundation's one canonical parser. The explicit strict
+flag can tighten development or test, but cannot loosen production.
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ import logging
 import os
 from dataclasses import dataclass
 from enum import Enum
+
+from foundation import is_production
 
 _log = logging.getLogger("clannon.config")
 
@@ -63,10 +66,9 @@ class ConfigValidationError(RuntimeError):
 
 
 def _is_strict() -> bool:
-    """True in production/strict mode. Mirrors the VRAKSHA_ENV pattern from
-    security/sanitizers/pre_sanitization.py:40-43."""
+    """True in canonical production mode or under the tightening override."""
     return (
-        os.getenv("VRAKSHA_ENV", "").strip().lower() in {"prod", "production"}
+        is_production()
         or os.getenv("CLANNON_STRICT_CONFIG", "").strip().lower() in {"1", "true", "yes"}
     )
 
@@ -215,7 +217,7 @@ def fail_fast_if_strict() -> None:
     """Validate startup config and enforce it in strict/production mode.
 
     Logs a warning for every non-OK check regardless of mode.
-    In strict mode (VRAKSHA_ENV=production OR CLANNON_STRICT_CONFIG=1/true/yes):
+    In strict mode (canonical production OR CLANNON_STRICT_CONFIG=1/true/yes):
         raises ConfigValidationError naming ALL bad keys at once so the operator
         sees every problem in one message, not just the first.
     In dev/test default (no strict flag):

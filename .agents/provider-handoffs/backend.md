@@ -3,9 +3,9 @@
 Transfers live backend-coordinator work between Claude Code and Codex.
 
 **If you are a fresh Codex session: read this whole file, then the boot sequence
-at the top of `AGENTS.md`.** Nothing is injected into your session at launch —
-`crew.sh start backend --codex` runs plain `codex` in the repo root, so what you
-know is exactly what you read. This file is written for that.
+at the top of `AGENTS.md`.** `crew.sh start backend --codex` resumes the latest
+Codex conversation from the repo root when one exists; `--fresh`, a new machine,
+or a provider switch starts cold. This file is written for every cold path.
 
 ---
 
@@ -37,7 +37,7 @@ resource. You own `foundation/`, `core/pipeline.py`, `delivery/`, `config/`,
 committer and pusher** — specialists produce scoped diffs; you review, test,
 commit, and push.
 
-**How work actually gets done.** Five specialists own disjoint trees
+**How work actually gets done.** Five implementation specialists own disjoint trees
 (memory, orchestration, security, api, frontend) and coordinate hub-and-spoke
 through you, never with each other. You delegate through **headless workers**
 (`./scripts/crew.sh run <role> --brief <file> --dir <paths>`); workers never
@@ -45,6 +45,12 @@ commit or push. You review the diff, run the suite, commit, and push. Finding
 work outside your tree is the START of a task, not the end of it — file the
 proposal AND dispatch AND push it. See the
 "THAT'S X'S JOB" section in `CLAUDE.md`.
+
+Two independent audit specialists own no source. `backend-audit` covers backend/root;
+`frontend-audit` covers browser/client surfaces from the frontend-owned threat model.
+One role-parameterized Bubblewrap launcher exposes only each role's outputs. Both seek
+realistic abuse/control-bypass paths and report; implementation routes through you to
+the owning specialist.
 
 **Messaging is PULL, never push.** Nothing injects into a running session. You
 check `comms/<today>/` and `proposals/to-backend/` yourself, at session start and
@@ -63,7 +69,299 @@ finished something.
 
 ---
 
-## Current checkpoint — waitlist shipped; owner now works from a separate clone (2026-08-09)
+## Current checkpoint — F-01 bypass remediated; second retest pending (2026-08-12)
+
+Owner approved one bounded step and explicitly selected Claude for frontend work.
+First Claude remediation landed/pushed as `adea99a`: F-01 production mock guard plus
+F-02 credential/malformed-percent URL rejection. Independent frontend-audit retest
+then marked F-02 MITIGATED but found a real F-01 bypass: `next build
+--debug-prerender` produced a deployable mock-auth artifact because NODE_ENV was the
+guard signal.
+
+Second Claude frontend worker reproduced the bypass and moved the single API-mode
+policy to Next's production-build phase. `next.config.ts` enforces it before
+Turbopack; app config uses the same door. Coordinator left worker source intact and
+verified: frontend 274/274, typecheck/lint clean; normal and debug-prerender mock
+builds rejected, HTTP/unset builds passed, mock dev booted; backend 1733 passed with
+13 service skips and 4 warnings. Fix committed/pushed as `be5ed80`.
+
+Independent Claude frontend-audit was dispatched against exact `be5ed80` but hit its
+provider session limit before producing any report, handoff, or finding. Worktree is
+clean. Resume only this bounded retest after provider capacity returns. F-01 stays
+OPEN meanwhile; do not infer failure or closure from the interrupted run.
+
+## Change note
+
+First retest found a deployable debug-build bypass, so coordinator rejected closure
+and dispatched the owning Claude frontend specialist again. Second implementation
+landed at `be5ed80`; independent retest was attempted but provider-limited before
+evidence. Owner requested natural stop because both provider limits are low.
+
+## Previous checkpoint — autonomous campaign cleanly stopped (2026-08-11)
+
+Owner directed natural clean stop and step-by-step continuation only. All runs exited;
+no worker/auditor remains active and no new pass or remediation was dispatched.
+Private-alpha verdict stays **STOP**.
+
+Owner requested one cold-readable goal retrospective instead of reconstructing state
+from local auditor reports. Tracked unified record now lives at
+`docs/goal-reports/2026-08-11_PRIVATE_ALPHA_SECURITY_CAMPAIGN.md`; its folder README,
+docs start page, and ROADMAP link make it discoverable across profiles.
+
+Frontend-audit report v2 at `dc2cd8e9` independently closes F-03 PDF isolation and
+F-04 ASGI/frontend waitlist ordering. F-01 explicit production mock builds and F-02
+frontend credential/malformed URL admission remain alpha blockers. F-05 CSP
+`'unsafe-inline'` is low residual with no reachable injection sink; migration needs a
+working Next rendering plan, not a header-only edit.
+
+Frontend E2E authentication repair landed/pushed as `4a013c4`: one mock-UI helper,
+private-alpha signup-gate regression, real-backend tests explicit opt-in. Coordinator
+verification: typecheck/lint clean, Vitest 258/258, default Playwright 15 passed and
+one environment-gated skip in 5.1 minutes.
+
+Backend-audit report v3 completed targeted FastAPI access-control review at exact
+`dc2cd8e9`: no validated current-scope tenant-isolation defect; 99 focused tests
+passed with 3 live-Qdrant skips; auditor probe 110/110. Artifact adapter is not
+tenant-aware, but no client-writable corrupt metadata path exists; defense-in-depth
+counterevidence, not current vulnerability. Concurrency, post-revocation SSE,
+cross-process lifecycle, deployed topology, live Qdrant/providers remain deferred.
+
+Owner-local `LAW/README.md` change remains untouched. Durable pause/current evidence:
+`proposals/to-owner/2026-08-11_security-campaign-checkpoint.md`. Next session reads
+owner prompt and chooses one bounded step; do not restart campaign automatically.
+
+## Change note
+
+Recorded completed auditor/E2E outputs, surviving blockers, exact evidence, owner
+pause, and later unified goal report. Previous launch-control checkpoint retained
+below.
+
+## Previous checkpoint — backend launch controls retested; campaign still STOP (2026-08-11)
+
+Independent backend audit report v2 retested report-v1 F-01 through F-04 at exact
+`e34f1f42e528f5662be62a1a42e96ea944ea17a5`: all four are **RETESTED —
+MITIGATED** within bounded local scope. Focused independent proof: 115 passed, one
+unavailable-ClamAV skip. Original backend launch-control proposals are closed and
+archived. No whole-system PASS or private-alpha GO exists.
+
+Latest coordinator evidence before retest: backend full suite **1715 passed, 13
+skipped, 9 subtests, 2 warnings**; frontend typecheck/lint/Vitest **258 passed** and
+explicit-HTTP production build passed. Fresh-cache frontend security E2E: 1 passed,
+1 environment-gated skip. Frontend auditor retest remains open.
+
+Validated code now shares `foundation.runtime_environment()` for canonical
+`CLANNON_ENV` with contradiction/unknown rejection and legacy compatibility; API
+strictness, YARA, and production mail use it. App lifespan preflights mail config.
+Registry omits `http.request`/`delivery.notifier`; direct key calls fail closed and
+prompts no longer advertise them. Public frontend env templates are tracked and
+mock requires explicit opt-in.
+
+Independent ASGI timing with 150 ms fake mail across five eligible trials measured
+body emission at 34.0–43.8 ms and mail starting 32.4–42.0 ms after final body event.
+Both branches returned exact 202/body. Actual socket/proxy timing and durable queueing
+remain unproven.
+
+Persistent frontend Claude session is live but idle: `work it now` is typed at prompt
+and was never submitted. Pull-not-push forbids coordinator keystroke injection. Old
+audit-remediation proposal now explicitly says implementation already landed; only
+current useful frontend task is the shared mock-E2E auth helper, then integration
+review. Full fresh Playwright rerun previously found four signup-form timeouts and a
+fifth same-path interruption; 13 tests did not run.
+
+Server citation projection now has one API-owned HTTP(S)-only gate before shared
+REST/SSE/persistence output. It rejects credentials, malformed hosts/ports/escapes,
+controls, relative values, and other schemes; 45 focused plus full backend **1733
+passed, 13 skipped, 9 subtests, 2 warnings**. Independent frontend-audit retest still
+owns closure. Also open: production YARA rules
+fail on first scan rather than startup readiness, tracked production env-template
+portability, deployment/provider proof, and deeper identity/tenant/SSRF/upload/
+execution/state/availability/secrets/supply-chain audit work. Alpha stays **STOP**.
+
+### Change note
+
+Integrated independent launch-control retest, closed proven findings, and corrected
+current live queue. Preserved STOP because frontend/deployment/deep coverage remains.
+
+## Previous checkpoint — backend auditor runs on both providers; sandbox had no DNS
+
+`backend-audit` is no longer Codex-only. `crew.sh start backend-audit --claude` goes
+through the SAME launcher: `backend-audit-sandbox.sh {start|resume|self-test}
+[--codex|--claude]`. One script deliberately — the Bubblewrap mount policy IS the
+boundary, so a per-provider copy would be a second source of truth for it.
+
+**The defect this exposed, and it was live on the Codex path too:**
+`/etc/resolv.conf` symlinks into `/run`, which was never mounted, so name resolution
+failed inside the sandbox and either provider would have retried its own API forever
+(measured: `getaddrinfo ETIMEOUT api.anthropic.com`). The write-boundary self-test
+passed the whole time because it only asked about writes. `self-test` now also proves
+resolution, scanner visibility, and provider startup, and fails closed on each.
+
+Claude equipment is repo-local and tracked, not a marketplace plugin (the security
+plugins there hook edit/commit events this role never performs, or need vendor
+accounts): `backend-audit/.claude/` — deny rules, `attack-path-tracer` and
+`counterevidence` subagents, `audit-scanners` skill. It sits in the read-only mount,
+so the auditor cannot loosen its own rules. Claude runs against an isolated
+`CLAUDE_CONFIG_DIR`; the three first-run dialogs are pre-seeded from keys derived by
+accepting each once and diffing, not guessed. `permissions.deny` was measured to hold
+under `--dangerously-skip-permissions`.
+
+Not proven: OAuth token expiry over a long session (credential is mounted read-only on
+purpose, so the sandbox cannot rotate the owner's refresh token — relaunch if it
+expires). Full suite green: 1680 passed, 13 dependency skips, 8 subtests. Detail:
+`reports/backend/report_v24.md`. Baseline audit STILL not run.
+
+### Change note
+
+Removed the auditor's provider lock by proving the Claude sandbox rather than
+duplicating it, and closed a network defect that would have stalled either provider on
+first launch.
+
+## Previous checkpoint — independent backend security auditor created (2026-08-10)
+
+Created `backend-audit`: senior adversarial researcher, separate from `security`
+implementer. Its method starts from threat model and reachable attacker stories,
+including working-as-designed controls that fail under concurrency, fallback, stale
+state, deployment, privilege, sequencing, cost, or composed conditions. Static
+analysis is only one evidence source.
+
+`scripts/backend-audit-sandbox.sh` uses Bubblewrap: repository source, `.git`, and
+charters are read-only; only notes/drafts, handoff, reports, own comms, and proposal
+output are writable. Normal home credentials are absent. Codex Security plugin plus
+pinned Bandit/detect-secrets/pip-audit/Semgrep live in isolated gitignored runtime,
+not backend venv. Role defaults to gpt-5.6-sol/xhigh Codex; Claude refused until an
+equivalent sandbox is proven. Boundary self-test passed. Launcher tests: 5 passed,
+8 subtests.
+
+Frontend implementation proposal filed locally at
+`proposals/to-frontend/2026-08-10_frontend-security-auditor.md`; frontend defines its
+domain threat model inside its ownership, coordinator retains root launcher/sandbox
+enforcement. Landed and pushed as `debee6e`; remote SHA verified exact. Baseline backend
+audit has not started; assignment is in `proposals/to-backend-audit/`. Push reported
+two high Dependabot alerts; assignment treats them as unverified seeds requiring exact
+package/scope/reachability/attack-path evidence, not automatic findings. No security
+verdict exists.
+
+## Change note
+
+Added independent evidence-producing security lane without granting code, Git, or
+remote mutation rights. Detailed unresolved findings remain gitignored.
+
+## Previous checkpoint — Redis settlement period pinned (2026-08-10)
+
+Audited backend-owned Redis budget safety before enforcement go-live. Found and
+reproduced a real cross-boundary defect: `reserve()` decremented the granting period,
+then `reconcile()` asked the period provider again and moved the refund/shortfall in
+the new period. Added the granting period to `BudgetReservation`; Redis reconciliation
+now uses it and refuses missing/malformed periods instead of guessing. Old-code
+regression failed exactly (old period stayed at 700; refund landed elsewhere).
+
+Corrected stale budget docs that still called Redis-Lua and the anchor unimplemented.
+Enforcement remains OFF. Open gates now name the API-anniversary-vs-calendar-period
+wiring mismatch and durable failed-reconcile true-up explicitly. Focused proof: 57
+passed. Full backend: 1676 passed, 13 service skips, 7 subtests. Pushed as `8d4b91e`.
+
+Post-unit inbox sweep closed three stale local waitlist/mail proposals, archived the
+tracked completed signup-gating request, corrected billing from false "building now"
+to QUEUED, and fixed the API index from 38 to the verified 41 routes. Second full suite:
+1676 passed / 13 service skips / 7 subtests; pushed as `b7832d7`. That second run emitted
+two intermittent un-awaited-coroutine warnings in project tests in addition to the two
+known dependency warnings; green, but a reliability lead for the next audit.
+
+## Change note
+
+First post-migration product unit. Money holds now settle against the same billing key
+that granted them; docs describe built-but-off state instead of an obsolete future plan.
+
+## Previous checkpoint — chillguy profile is operational; push proven (2026-08-09)
+
+Rebuilt `backend/.venv` with uv-managed CPython 3.12.13 from both
+`requirements.txt` and `requirements-dev.txt`: 179 packages, pytest 9.1.1. Full
+backend suite passed 1674 / 13 service skips / 7 subtests. DB integrity is `ok`.
+
+Current repo contains every migration-runbook critical payload: DB and backend/frontend
+env files, 335 proposals, 49 drafts, achievements, memory data, frontend handoff, 109
+worker logs, all eight re-keyed Claude project histories, and Codex history. Re-keyed
+local Claude/Codex configs and specialist permission files away from old-profile paths.
+Re-keyed 71 Codex session cwd/index records; backed up Codex state DB first; integrity
+stays `ok`. Old paths now remain only in historical records and the migration guide.
+
+Frontend current-profile proof: dependency tree clean, typecheck passed, Vitest 201,
+production build passed. GitHub auth is clannon-bot. Portable launcher commit `cb85b0d`
+pushed directly to `origin/main`; fetched remote SHA exactly matched local.
+
+**Whole old-clone deletion certified.** Owner ran the read-only checksum rsync from
+cybro/root; reviewed all 3,365 main-tree itemized lines. Zero non-cache files are missing
+from chillguy. The 976 missing files and 26 missing directories are only regenerated
+Python bytecode caches. All other entries are expected ownership changes, current-profile
+re-keying, current log/DB/artifact evolution, or newer tracked work. Current DB integrity
+and both full product suites are green. Separate read-only `backend-rust/` comparison
+reported only owner/group metadata differences; `README.md` content is identical and no
+Rust files are missing. Old repo can be deleted without losing Clannon state.
+
+Final Git/venv audit closed remaining blind spots: all 97 old refs resolve locally, all
+257 old reflog commits exist, no non-remote named ref is missing, and old stash is empty.
+Only `main` differs because current `main` is newer. Current venv contains every one of
+the old venv's 178 package names plus declared dev dependency `pyflakes`; 70 unpinned
+dependencies resolved to newer versions, already covered by the green full backend suite.
+
+## Change note
+
+New profile now has working backend/frontend environments, migrated session lookup, valid
+local configs, proven GitHub push, and completed main-tree, owner-tree, Git-object, and venv
+audits. No machine-specific path was included in pushed commit.
+
+## Previous checkpoint — Codex interactive sessions now resume per role cwd (2026-08-09)
+
+Owner reported `crew.sh start <role> --codex` always opened a fresh conversation,
+unlike Claude. Read `scripts/crew.sh`: this was deliberate old behavior based on the
+claim that `codex resume --last` selected globally. Current Codex 0.147.0 and official
+OpenAI CLI docs now say `--last` is scoped to current working directory unless
+`--all` is passed.
+
+Changed `scripts/crew.sh` so Codex resumes only when its session metadata contains an
+interactive (`source=cli`) session whose cwd exactly matches `dir_for(role)`. Headless
+`codex exec` sessions are excluded. `--fresh` still forces a clean conversation. Added
+`backend/tests/crew_launcher.py`, covering all seven role directories, cross-role
+isolation, forced fresh, and headless-session exclusion.
+
+Verification: `bash -n scripts/crew.sh`; standalone launcher tests 4/4; current Codex
+accepted the exact constructed resume flags; `git diff --check` clean. Full backend
+pytest was not run because current `backend/.venv` has no pytest installed; no commit
+or push made. Preserve unrelated `backend/pyproject.toml` and module `.claude/` changes.
+
+### Change note
+
+Launcher assumption became stale as Codex gained cwd-scoped resume. Replaced it with
+measured current CLI behavior and regression coverage. No product behavior changed.
+
+## Previous checkpoint — Codex migrated from root npm to standalone curl install (2026-08-09)
+
+Owner reported Codex could not update and preferred official curl installation over npm.
+Measured cause: active `0.145.0` came from root-owned
+`/usr/local/lib/node_modules/@openai/codex`; `codex update` selected
+`npm install -g @openai/codex` and failed `EACCES` while renaming that package.
+
+Installed official standalone `0.147.0` with
+`https://chatgpt.com/codex/install.sh`. It now resolves first at
+`~/.local/bin/codex`, backed by `~/.codex/packages/standalone/`. Fresh-login-shell
+`codex doctor --summary` identifies it as `standalone`, and `codex update` uses the
+official curl installer successfully. Config, auth, and sessions remain in
+`~/.codex`.
+
+Old npm copy still exists at `/usr/local/bin/codex` because non-interactive sudo
+requires owner's password. It is shadowed, not active. Owner cleanup command:
+`sudo npm uninstall -g --prefix /usr/local @openai/codex`, then `hash -r` or open a
+new terminal. The current Codex process exports `CODEX_MANAGED_BY_NPM=1`; child
+commands from this already-running session can therefore misidentify even the new
+binary as npm-managed. A fresh terminal does not inherit that variable.
+
+### Change note
+
+No Clannon product work performed. Only local Codex installation changed. Existing
+unrelated worktree changes in `backend/pyproject.toml` and two module `.claude/`
+directories were preserved.
+
+## Previous checkpoint — waitlist shipped; owner now works from a separate clone (2026-08-09)
 
 **Read `CLAUDE.md`'s top two sections before anything.** Two boundaries changed today and
 both are the kind a cold session gets wrong.

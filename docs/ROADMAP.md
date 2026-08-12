@@ -4,7 +4,7 @@
 single entry point; the detailed plans it points at stay authoritative for their
 own areas.
 
-Last reconciled: **2026-08-09**.
+Last reconciled: **2026-08-11**.
 
 **pydantic-ai is pinned at 2.22.0** (upgraded 2026-08-01; installed version
 verified 2026-08-02). The July pin at 2.4.0 blamed a broken bounded-loop money
@@ -131,8 +131,12 @@ PARTIAL.**
    backend must verify them against official current prices, represent
    tier/modality differences honestly, measure conservative infrastructure
    cost, seed production budgets, prove recovery/concurrency, and obtain
-   security review. Loader stays fail-closed. Create a fresh owner go-live
-   proposal only when those engineering gates are green. Owner: backend.
+   security review. Atomic reserve/reconcile, concurrency, seeding primitives, and the
+   LLM anchor are built; reconciliation now stays pinned to the period that granted its
+   hold even across a billing boundary. Still open: broker/seeding must use the API's
+   fixed anniversary period instead of the broker's calendar-month default, plus durable
+   recovery/true-up for failed reconciliation. Loader stays fail-closed. Create a fresh
+   owner go-live proposal only when those engineering gates are green. Owner: backend.
 
 **Known limitations carried into v0.3.0** (documented, not hidden): one dev-only
 Dependabot residual.
@@ -222,6 +226,8 @@ pure computation) still stands and this follows it.
 | **memory** | CB3/EB3 media ingestion; CB1/EB1 retrieval explanation + author/RFC provenance + supersession linkage (Manager-only curation/save provenance DONE) |
 | **orchestration** | central/batch prompt contracts landed; continue Mission Engine + batch hardening, propose-first where owner-gated |
 | **security** | standing invariant review of budget/batch designs; widen adversarial regression coverage when new classes appear |
+| **backend-audit** | establish backend/root threat model; baseline adversarial audit; targeted deep review of money, identity/tenant, network/tool, sandbox, and fail-closed boundaries; report only |
+| **frontend-audit** | establish browser/client threat model from frontend charter; baseline adversarial audit; deep review of rendered content, iframe/URL handling, identity/storage, SSR/client divergence, third-party surface, and backend-enforced controls; report only |
 | **api** | remaining run-lifecycle proof areas (cross-user non-disclosure sweep) |
 | **frontend** | its own backlog; `HANDOFF.md` in `frontend/` |
 | **release** | post-v0.3.0 housekeeping; next release when there is scope |
@@ -229,6 +235,28 @@ pure computation) still stands and this follows it.
 ## 5. Needs the owner, not us
 
 **One open gate.**
+
+**Security campaign status (2026-08-11): STOP.** Independent backend retest at
+`e34f1f42` marks launch-control F-01 through F-04 mitigated in bounded local scope:
+canonical production mode/YARA, mail startup preflight, private-alpha outbound
+mutation denial, and ASGI waitlist response ordering. This is not whole-system PASS.
+Frontend-audit report v2 independently mitigates PDF isolation (F-03) and the
+backend/frontend waitlist response boundary (F-04). Production still accepts an
+explicit mock-mode build (F-01), and frontend URL normalization still admits
+credential-bearing/malformed HTTP(S) values (F-02); both must close before alpha GO.
+`'unsafe-inline'` remains low residual without a reachable injection sink and needs a
+tested Next rendering migration, not a header-only patch. Stale mock browser auth is
+repaired: fresh default Playwright now passes 15 with one environment-gated skip.
+Missing production YARA rules fail the first scan, not application readiness.
+Targeted FastAPI access-control report v3 found no validated current-scope tenant
+isolation defect (99 passed, 3 Qdrant skips; auditor probe 110/110), but session/token
+concurrency, post-revocation SSE, cross-process lifecycle, deployed topology, and live
+Qdrant/providers remain deferred. SSRF, uploads, execution, persistence, availability,
+secrets, supply-chain, and real deployment surfaces also remain open. Owner paused the
+autonomous campaign after current runs finish; resume step-by-step only on owner
+prompt. Do not invite testers until evidence changes this gate. Reports:
+`reports/backend-audit/report_v3.md`, `reports/frontend-audit/report_v2.md`.
+Unified frozen campaign summary: [private-alpha security campaign report card](goal-reports/2026-08-11_PRIVATE_ALPHA_SECURITY_CAMPAIGN.md).
 
 **RULED 2026-08-09 — signup gating.** Owner chose a **waitlist**, not the allowlist
 recommended: email + optional note → verify inbox → owner approves individually.

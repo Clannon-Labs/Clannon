@@ -63,7 +63,7 @@ def test_network_capable_experts_get_no_hydration_push():
     # any expert granted a NETWORK tool (outbound channel) is denied the push:
     # user memory + an outbound channel in one prompt = exfil surface
     discover()
-    for key in ("delivery.notifier", "verification.claims", "web.research"):
+    for key in ("verification.claims", "web.research"):
         spec = registry.get_expert(key)
         env = ExpertHandler(registry=registry)._build_env(spec, _ctx_with_memory())
         assert env.hydration == [], f"{key} must not receive pushed memory"

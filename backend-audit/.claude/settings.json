@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git restore:*)",
+      "Bash(git reset:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)",
+      "Bash(git clean:*)",
+      "Bash(git apply:*)",
+      "Bash(git tag:*)",
+      "Bash(git config:*)",
+      "Bash(gh:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(uv pip:*)",
+      "Bash(uv add:*)",
+      "Bash(npm:*)",
+      "Bash(pnpm:*)",
+      "Bash(yarn:*)",
+      "Bash(cargo:*)",
+      "Bash(docker:*)",
+      "Bash(podman:*)",
+      "Bash(systemctl:*)",
+      "Bash(psql:*)",
+      "Bash(redis-cli:*)",
+      "Bash(alembic:*)",
+      "Bash(detect-secrets audit:*)"
+    ]
+  }
+}

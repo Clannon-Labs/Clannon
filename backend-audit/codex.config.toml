@@ -1,0 +1,6 @@
+# Isolated backend-audit Codex profile. Outer Bubblewrap mount policy remains
+# authoritative; CLI flags select model and reasoning effort. Codex's nested
+# sandbox is disabled because Bubblewrap already enforces narrower output mounts.
+
+[plugins."codex-security@openai-curated"]
+enabled = true

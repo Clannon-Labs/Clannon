@@ -125,6 +125,7 @@ invariants are actually enforced. Conventions are subordinate to the Invariants.
 | How to place / wire new code | `architecture/ARCHITECTURAL_CONVENTIONS.md` |
 | Whether an invariant is actually enforced | `architecture/INVARIANT_OWNERSHIP.md` |
 | What "good enough to show" means | `benchmarks/` |
+| How a completed or paused multi-session goal evolved | `goal-reports/` |
 | Why a decision was made / what was rejected | `decisions/` |
 | What a term means | `glossary/TERMS.md` |
 | **What the API must serve / what the Rust core must satisfy** | **`../specification/`** — a contract, not documentation. Outside this tree on purpose |

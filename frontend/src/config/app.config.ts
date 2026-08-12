@@ -3,14 +3,19 @@
  * wiring this UI to a real backend.
  *
  * Everything here can be overridden per-environment via NEXT_PUBLIC_*
- * variables (see .env.example). Flip NEXT_PUBLIC_API_MODE to "http",
- * point NEXT_PUBLIC_API_BASE_URL at the FastAPI host, and the whole
- * app switches from the bundled mock to live endpoints. No component
+ * variables (see .env.example). HTTP is the fail-safe default; mock mode
+ * requires an explicit NEXT_PUBLIC_API_MODE=mock opt-in. Point
+ * NEXT_PUBLIC_API_BASE_URL at the FastAPI host to change backends. No component
  * imports an URL or fetch call directly — they only know the client
  * in `src/lib/api`.
  */
 
-export type ApiMode = "mock" | "http";
+import { resolveApiMode } from "@/config/api-mode";
+import type { ApiMode } from "@/config/api-mode";
+import { requireHttpBaseUrl } from "@/config/url-policy";
+
+export type { ApiMode };
+export { resolveApiMode };
 
 const env = {
   apiMode: process.env.NEXT_PUBLIC_API_MODE,
@@ -20,11 +25,28 @@ const env = {
 };
 
 export const appConfig = {
-  /** "mock" runs the bundled simulator; "http" talks to the real backend. */
-  apiMode: (env.apiMode === "http" ? "http" : "mock") as ApiMode,
+  /**
+   * "mock" runs the bundled simulator; "http" talks to the real backend.
+   * Missing mode uses the real server. Mock is intentionally explicit: a
+   * typo must stop the build instead of shipping a convincing local
+   * simulator to production.
+   *
+   * The production gate lives in `resolveApiMode` (src/config/api-mode.ts),
+   * called here with `process.env.NEXT_PHASE` — the phase Next itself sets
+   * during the build's page-data-collection step, not NODE_ENV. NODE_ENV is
+   * a compile-time-inlined value that `next build --debug-prerender` can
+   * force to "development" inside the compiled bundle; NEXT_PHASE cannot be
+   * steered by that flag. `next.config.ts` calls the same shared function
+   * with Next's real `phase` argument as the authoritative, build-aborting
+   * check — this call is defense-in-depth against the identical rule.
+   */
+  apiMode: resolveApiMode(env.apiMode, process.env.NEXT_PHASE),
 
   /** Base URL of the backend — the Vraksha engine (FastAPI). No trailing slash. */
-  apiBaseUrl: env.apiBaseUrl?.replace(/\/$/, "") ?? "http://localhost:8000",
+  apiBaseUrl: requireHttpBaseUrl(
+    env.apiBaseUrl ?? "http://localhost:8000",
+    "NEXT_PUBLIC_API_BASE_URL",
+  ),
 
   /**
    * Origin the workspace is served from. Empty = same origin as the marketing
@@ -46,6 +68,10 @@ export const appConfig = {
     login: "/auth/login",
     signup: "/auth/signup",
     logout: "/auth/logout",
+    /** Private-alpha gate (owner ruling 2026-08-09, shipped 97dfdb7). Public,
+     *  non-disclosing — see `specification/api/ROUTES.md` §Waitlist. */
+    waitlistJoin: "/waitlist",
+    waitlistResend: "/waitlist/resend",
     me: "/auth/me",
     /**
      * Server-side OAuth start. The browser navigates here; the backend

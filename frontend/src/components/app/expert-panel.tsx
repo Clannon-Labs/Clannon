@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import { normalizeHttpUrl } from "@/config/url-policy";
 import type { ExpertState, Source } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -78,14 +79,10 @@ export function SourcesPanel({ sources, className }: { sources: Source[]; classN
         <div className="mt-2.5 rule-strong" />
       </header>
       <ol className="divide-y divide-border/60">
-        {sources.map((source, i) => (
-          <li key={source.id}>
-            <a
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted"
-            >
+        {sources.map((source, i) => {
+          const href = normalizeHttpUrl(source.url);
+          const content = (
+            <>
               <span className="mt-px shrink-0 font-mono text-[11px] text-faint tabular">
                 [{i + 1}]
               </span>
@@ -96,9 +93,27 @@ export function SourcesPanel({ sources, className }: { sources: Source[]; classN
                 <span className="block truncate text-[12px] text-faint">{source.domain}</span>
               </span>
               <ExternalLink className="mt-1 size-3.5 shrink-0 text-faint opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-            </a>
-          </li>
-        ))}
+            </>
+          );
+          return (
+            <li key={source.id}>
+              {href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted"
+                >
+                  {content}
+                </a>
+              ) : (
+                <div className="flex items-start gap-3 px-4 py-3" data-invalid-source-url>
+                  {content}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

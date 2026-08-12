@@ -13,9 +13,13 @@ list in their results; no network, no models, no paid keys.
 """
 
 import asyncio
+import json
+
+import pytest
 
 from foundation import ExpertCallRecord, OrchestratorResponse, ToolCallRecord, VrakshaContext
 from api.run_state import RunState
+from api.sse import sse_stream
 import api.run_driver as rd
 
 
@@ -133,6 +137,78 @@ def test_collect_spans_expert_sub_tool_calls():
     assert len(sources) == 1
     assert sources[0]["url"] == "https://mintel.com/report/uk-beauty"
     assert sources[0]["domain"] == "mintel.com"
+
+
+def test_collect_drops_invalid_direct_sources_preserving_valid_order():
+    first = "https://example.com/first"
+    second = "http://research.example.org:8080/second"
+    urls = [
+        "javascript:alert(1)",
+        "//scheme-relative.example/path",
+        first,
+        "file:///etc/passwd",
+        "relative/path",
+        "https://example.com/line\nbreak",
+        second,
+        first,
+        "data:text/html,boom",
+    ]
+
+    sources = rd._collect_sources(_ctx_with_direct_search(urls))
+
+    assert [source["url"] for source in sources] == [first, second]
+    assert [source["id"] for source in sources] == ["src_1", "src_2"]
+    assert [source["domain"] for source in sources] == [
+        "example.com",
+        "research.example.org",
+    ]
+
+
+def test_collect_applies_same_policy_to_expert_sub_tool_sources():
+    valid = "https://trusted.example/report"
+    sources = rd._collect_sources(_ctx_with_expert_search([
+        "https://user:secret@evil.example/report",
+        "https://evil.example:invalid/report",
+        valid,
+        "//evil.example/report",
+    ]))
+
+    assert [source["url"] for source in sources] == [valid]
+
+
+def test_collect_accepts_valid_ip_literal_idn_and_percent_encoding():
+    urls = [
+        "https://[2001:db8::1]:8443/report",
+        "https://bücher.example/a%20report",
+    ]
+
+    sources = rd._collect_sources(_ctx_with_direct_search(urls))
+
+    assert [source["url"] for source in sources] == urls
+    assert [source["domain"] for source in sources] == [
+        "2001:db8::1",
+        "bücher.example",
+    ]
+
+
+@pytest.mark.parametrize("url", [
+    "https://user@example.com/path",
+    "https://:secret@example.com/path",
+    "https://user:secret@example.com/path",
+    "https://example.com:/path",
+    "https://example.com:not-a-port/path",
+    "https://example.com:65536/path",
+    "https://[2001:db8::1/path",
+    "https://exa mple.com/path",
+    "https://-bad.example/path",
+    "https://bad-.example/path",
+    "https://example..com/path",
+    "https://example.com/%zz",
+    "https://example.com/\x00path",
+    "https://example.com/\u202epath",
+])
+def test_collect_rejects_credentials_and_malformed_urls(url):
+    assert rd._collect_sources(_ctx_with_direct_search([url])) == []
 
 
 def test_collect_skips_failed_tool_records():
@@ -330,3 +406,39 @@ def test_execute_chat_keeps_sources_before_final_message(monkeypatch):
     )
     assert "report_delta" not in event_types
     assert "report_done" not in event_types
+
+
+def test_execute_projects_only_valid_sources_to_sse_and_persistence(monkeypatch):
+    valid = "https://example.com/persisted"
+    ctx = _ctx_with_direct_search([
+        "javascript:alert(1)",
+        "https://user:secret@evil.example/path",
+        valid,
+        "https://example.com:bad-port/path",
+    ])
+    ctx.final_response = "filtered report"
+    _monkeypatch_execute(monkeypatch, ctx)
+    persisted: list[dict] = []
+    monkeypatch.setattr(rd.STORE, "persist", lambda run: persisted.append(run.full_json()))
+
+    run = _run("r-projection")
+    asyncio.run(rd.execute(run))
+    replayed = asyncio.run(_replayed_events(run))
+
+    expected = [valid]
+    persisted_urls = [
+        [source["url"] for source in snapshot["sources"]]
+        for snapshot in persisted
+    ]
+    assert persisted_urls == [expected]
+    source_events = [event for event in replayed if event.get("type") == "sources"]
+    assert len(source_events) == 1
+    assert [source["url"] for source in source_events[0]["sources"]] == expected
+    assert replayed[-2] == {"type": "status", "status": "delivered"}
+
+
+async def _replayed_events(run: RunState) -> list[dict]:
+    return [
+        json.loads(frame.removeprefix("data: "))
+        async for frame in sse_stream(run)
+    ]

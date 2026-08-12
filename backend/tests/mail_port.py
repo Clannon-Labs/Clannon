@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fastapi.testclient import TestClient
 
 from core.mail import LogMailer, resolve_mailer
 from foundation import Accepted, Mailer, MailError, Message
@@ -38,9 +39,10 @@ def test_send_accepts_and_records_without_delivering():
     assert [m.to for m in mailer.sent] == ["tester@example.com"]
 
 
-@pytest.mark.parametrize("env", ["dev", "", "staging", "DEV"])
+@pytest.mark.parametrize("env", ["dev", "development", "test", "", "DEV"])
 def test_dev_environments_get_the_log_mailer(monkeypatch, env):
     monkeypatch.setenv("CLANNON_ENV", env)
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
     monkeypatch.delenv("CLANNON_MAILER", raising=False)
     assert isinstance(resolve_mailer(), LogMailer)
 
@@ -50,6 +52,7 @@ def test_production_refuses_a_mailer_that_sends_nothing(monkeypatch, env):
     """The whole point of the guard: a private alpha nobody can join must fail loudly at
     startup, not quietly at the first signup."""
     monkeypatch.setenv("CLANNON_ENV", env)
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
     monkeypatch.setenv("CLANNON_MAILER", "log")
     with pytest.raises(MailError) as exc:
         resolve_mailer()
@@ -60,6 +63,7 @@ def test_unknown_mailer_fails_closed(monkeypatch):
     """An unrecognised value must not fall through to the no-op transport — a typo in
     deployment config would then silently disable all mail."""
     monkeypatch.setenv("CLANNON_ENV", "dev")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
     monkeypatch.setenv("CLANNON_MAILER", "smtp")
     with pytest.raises(MailError):
         resolve_mailer()
@@ -139,6 +143,7 @@ def test_resend_is_selectable_and_fails_closed_on_missing_settings(monkeypatch):
     from core.mail import ResendMailer
 
     monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
     monkeypatch.setenv("CLANNON_MAILER", "resend")
 
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
@@ -153,6 +158,79 @@ def test_resend_is_selectable_and_fails_closed_on_missing_settings(monkeypatch):
 
     monkeypatch.setenv("CLANNON_MAIL_FROM", "Clannon <hi@example.com>")
     assert isinstance(resolve_mailer(), ResendMailer)
+
+
+def _configure_production_mail(monkeypatch, *, mailer, api_key=None, sender=None):
+    monkeypatch.setenv("CLANNON_ENV", "production")
+    monkeypatch.delenv("VRAKSHA_ENV", raising=False)
+    monkeypatch.setenv("CLANNON_MAILER", mailer)
+    for name, value in (
+        ("RESEND_API_KEY", api_key),
+        ("CLANNON_MAIL_FROM", sender),
+    ):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+
+@pytest.mark.parametrize(
+    ("mailer", "api_key", "sender", "error"),
+    [
+        ("log", None, None, "no email provider configured"),
+        ("smtp", None, None, "unknown mailer"),
+        ("resend", None, "Clannon <hi@example.com>", "RESEND_API_KEY"),
+        ("resend", "re_test_key", None, "CLANNON_MAIL_FROM"),
+    ],
+)
+def test_production_lifespan_rejects_invalid_mail_before_warmup(
+    monkeypatch, mailer, api_key, sender, error
+):
+    """Application must die before readiness, not wait for first waitlist send."""
+    import core.warmup as warmup_mod
+    from api.app import app
+
+    _configure_production_mail(
+        monkeypatch,
+        mailer=mailer,
+        api_key=api_key,
+        sender=sender,
+    )
+
+    async def _must_not_warm() -> None:
+        raise AssertionError("mail preflight must run before dependency warmup")
+
+    monkeypatch.setattr(warmup_mod, "warmup", _must_not_warm)
+    with pytest.raises(MailError, match=error):
+        with TestClient(app):
+            pass
+
+
+def test_valid_production_mail_starts_without_network_io(monkeypatch):
+    import core.mail as mail_mod
+    import core.warmup as warmup_mod
+    from api.app import app
+
+    _configure_production_mail(
+        monkeypatch,
+        mailer="resend",
+        api_key="re_test_key",
+        sender="Clannon <hi@example.com>",
+    )
+    warmed = []
+
+    async def _noop_warmup() -> None:
+        warmed.append(True)
+
+    def _network_forbidden(*_args, **_kwargs):
+        raise AssertionError("startup mail preflight attempted network I/O")
+
+    monkeypatch.setattr(warmup_mod, "warmup", _noop_warmup)
+    monkeypatch.setattr(mail_mod.httpx, "AsyncClient", _network_forbidden)
+
+    with TestClient(app):
+        pass
+    assert warmed == [True]
 
 
 def test_resend_never_touches_the_network_without_config():

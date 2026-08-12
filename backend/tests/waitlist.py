@@ -133,6 +133,24 @@ def test_join_response_identical_new_vs_already_listed(env):
     assert all(m.to == "gia@fixture.com" for m in env["mailer"].sent)
 
 
+def test_waitlist_mail_runs_after_response_body_is_scheduled(env):
+    """Mail is attached as response background work, not awaited in route logic.
+
+    TestClient executes background work before returning (so existing delivery
+    assertions stay meaningful), while a real ASGI client receives the identical
+    202 body before provider I/O begins.
+    """
+    from api.app import app
+    from api import waitlist_store
+
+    env["set_waitlist"](enabled=True)
+    client = TestClient(app)
+    response = client.post("/waitlist", json={"email": "background@fixture.com"})
+    assert response.status_code == 202
+    assert env["mailer"].sent and env["mailer"].sent[0].to == "background@fixture.com"
+    assert waitlist_store.waitlist_get("background@fixture.com")["verify_send_count"] == 1
+
+
 def test_join_response_identical_for_already_registered_account(env):
     from api import auth, waitlist_store
     from api.app import app

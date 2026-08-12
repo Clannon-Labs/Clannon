@@ -81,7 +81,7 @@ expert when the work genuinely belongs to that specialty — not to look thoroug
 
 **Tools** for acting on the world: web search and page fetch, file read/write/patch,
 sandboxed code execution, AST and dependency-graph search over a codebase, charting,
-calculation, text diffing, and outbound HTTP for webhook delivery.
+calculation, and text diffing.
 
 **Memory across sessions**, in tiers. The user's own documented facts (their wiki)
 outrank anything inferred. Below that sit facts I learned, episodes I lived through,

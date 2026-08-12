@@ -19,9 +19,9 @@ type Loaded =
 
 /**
  * Reads a delivered artifact's bytes and previews it inline — markdown rendered,
- * text/CSV/JSON as monospace, images and PDFs embedded — so a file can be opened
- * from the chat with one click instead of a download round-trip. Download stays
- * one tap away in the header.
+ * text/CSV/JSON as monospace, images inline, and PDFs in the browser's isolated
+ * viewer — so a file can be inspected from chat without trusting embedded frames.
+ * Download stays one tap away in the header.
  */
 export function ArtifactPreview({
   runId,
@@ -144,7 +144,20 @@ export function ArtifactPreview({
             </div>
           )}
           {state.kind === "pdf" && (
-            <iframe src={state.url} title={artifact.name} className="size-full" />
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Open this PDF in your browser&apos;s isolated viewer. Download remains available
+                above.
+              </p>
+              <a
+                href={state.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Open PDF preview
+              </a>
+            </div>
           )}
           {state.kind === "unsupported" && (
             <p className="p-6 text-sm text-muted-foreground">

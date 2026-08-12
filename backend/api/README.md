@@ -241,6 +241,8 @@ and an `AsyncGenerator` client-side — copy `streamRun` in both `runs.py` and
    **Variables → RAW Editor**, replace every `REPLACE_*`, review the staged
    variables, then deploy. The application auto-loads only `backend/.env` and
    `backend/.env.local`; it does **not** auto-load `.env.prod`.
+   Set `CLANNON_ENV=production`; it is canonical. Legacy `VRAKSHA_ENV`, when
+   temporarily retained, must agree or startup fails closed.
 3. Keep this exact production browser boundary:
 
    ```env

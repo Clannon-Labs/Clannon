@@ -93,6 +93,19 @@ export function useRemoteConfig() {
   });
 }
 
+/**
+ * Whether `/signup` must render the invite-only state. Fail-closed: loading,
+ * a missing field (today's real backend), and an unreachable backend
+ * (`getRemoteConfig()` resolves `null`) all collapse to gated — the committed
+ * server default is already `enabled: true`, and showing an open form that
+ * will certainly 403 is the dishonest failure mode, not the safe one. See
+ * specification/api/requests/2026-08-10_config-waitlist-enabled-flag.md.
+ */
+export function useWaitlistEnabled(): boolean {
+  const { data } = useRemoteConfig();
+  return data?.waitlistEnabled !== false;
+}
+
 /** Plans as the backend defines them, falling back to plans.ts. */
 export function useEffectivePlans(): Plan[] {
   const { data } = useRemoteConfig();

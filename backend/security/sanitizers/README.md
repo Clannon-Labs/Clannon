@@ -62,7 +62,9 @@ recompiling only when the rule files change.
 
 If the YARA rules directory is missing, it is created automatically. If no rules
 exist, YARA skips with a clean result in development; in production (env-gated by
-`VRAKSHA_ENV` / `AGENT_REQUIRE_YARA`) a missing rule set fails closed.
+canonical `CLANNON_ENV`) a missing rule set fails closed. Legacy-only
+`VRAKSHA_ENV` remains compatible during migration, while `AGENT_REQUIRE_YARA=1`
+is a tightening-only override for requiring rules outside production.
 
 ## Upload Admission (input files)
 
@@ -79,9 +81,11 @@ files become `foundation.InputFile` and ride on `ctx.input_files`.
 Relevant environment variables:
 
 ```env
+CLANNON_ENV=development
 CLAMAV_HOST=127.0.0.1
 CLAMAV_PORT=3310
 AGENT_YARA_DIR=rules
+# AGENT_REQUIRE_YARA=1  # optional: require rules outside production too
 ```
 
 In Docker Compose, ClamAV runs as its own service and the app points to it with:

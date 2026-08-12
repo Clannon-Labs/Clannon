@@ -35,7 +35,8 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from core.artifacts import LocalArtifactStore
-from foundation import MemoryStore
+from core.mail import resolve_mailer
+from foundation import MemoryStore, is_production
 from settings import WAITLIST
 from . import audit as _audit, auth, billing, config, runs
 from . import waitlist as _waitlist
@@ -62,6 +63,11 @@ _DRAIN_TIMEOUT_S = 10.0
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    # Production cannot become ready with a fake or incomplete mail transport.
+    # Resolution validates local configuration only; provider I/O remains per-send.
+    if is_production():
+        resolve_mailer()
+
     # STARTUP: warm heavy dependencies under a bounded timeout; never hard-fail
     from core.warmup import warmup
 

@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
 import os from "node:os";
 import type { NetworkInterfaceInfo } from "node:os";
+import { resolveApiMode } from "./src/config/api-mode";
+import { requireHttpBaseUrl } from "./src/config/url-policy";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl = requireHttpBaseUrl(
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
+  "NEXT_PUBLIC_API_BASE_URL",
+);
 const devBackendUrl = process.env.CLANNON_DEV_BACKEND_URL;
 const isDev = process.env.NODE_ENV === "development";
 
@@ -27,33 +32,44 @@ function detectLanHosts(): string[] {
 const lanHosts = detectLanHosts();
 
 /**
- * Security headers. The CSP allows 'unsafe-inline' for script/style
- * because Next.js App Router injects inline bootstrapping — move to
- * nonce-based CSP via middleware when auth cookies go live.
+ * Build one CSP from validated configuration. Script/style 'unsafe-inline'
+ * remains because the static
+ * root layout contains the pre-hydration theme script and generated theme CSS,
+ * while Next's nonce path requires per-request Proxy headers plus dynamic
+ * rendering. Removing it is a separate rendering/performance migration, not a
+ * header-only edit.
  * 'unsafe-eval' is DEV ONLY: React dev tooling (callstack
  * reconstruction, fast refresh) needs eval(); production never gets it.
  * connect-src is widened to the configured backend origin only.
  */
+export function buildContentSecurityPolicy(backendUrl: string, development: boolean): string {
+  const normalizedBackendUrl = requireHttpBaseUrl(backendUrl, "NEXT_PUBLIC_API_BASE_URL");
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    // Parsed serialization guarantees one CSP source expression, never raw env text.
+    `connect-src 'self' ${new URL(normalizedBackendUrl).origin}`,
+    // No product surface embeds frames; PDF blobs open in a separate browser tab.
+    "frame-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    // Production-only: forces http→https. In dev this breaks LAN access
+    // (http://<lan-ip>:3000) because the browser upgrades every _next/static
+    // asset to https, which isn't served — localhost is exempt, so it only
+    // bites over the network. Production serves HTTPS, so it stays on there.
+    ...(development ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+}
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      `connect-src 'self' ${apiBaseUrl}`,
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "object-src 'none'",
-      // Production-only: forces http→https. In dev this breaks LAN access
-      // (http://<lan-ip>:3000) because the browser upgrades every _next/static
-      // asset to https, which isn't served — localhost is exempt, so it only
-      // bites over the network. Production serves HTTPS, so it stays on there.
-      ...(isDev ? [] : ["upgrade-insecure-requests"]),
-    ].join("; "),
+    value: buildContentSecurityPolicy(apiBaseUrl, isDev),
   },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -65,41 +81,63 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 
-const nextConfig: NextConfig = {
-  poweredByHeader: false,
-  reactStrictMode: true,
-  // wraps route navigations in document.startViewTransition() so the browser
-  // can crossfade/morph between pages — powers the shared-element run-row →
-  // run-page morph (matching view-transition-name per run id). Native API;
-  // gated to prefers-reduced-motion in globals.css.
-  experimental: {
-    viewTransition: true,
-  },
-  // Dev-only: lets HMR/fast-refresh work when the app is opened over the LAN
-  // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
-  // new IP needs no edit. Ignored in production.
-  allowedDevOrigins: lanHosts,
-  async rewrites() {
-    // Root ./dev.sh gives local development one browser-visible origin:
-    // Next owns :3000 and forwards /api/* to FastAPI's private :8000 listener.
-    // Production keeps using NEXT_PUBLIC_API_BASE_URL directly; this rewrite
-    // exists only when the launcher supplies its server-only target.
-    if (!isDev || !devBackendUrl) return [];
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${devBackendUrl}/:path*`,
-      },
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-    ];
-  },
-};
+function buildNextConfig(): NextConfig {
+  return {
+    poweredByHeader: false,
+    reactStrictMode: true,
+    // wraps route navigations in document.startViewTransition() so the browser
+    // can crossfade/morph between pages — powers the shared-element run-row →
+    // run-page morph (matching view-transition-name per run id). Native API;
+    // gated to prefers-reduced-motion in globals.css.
+    experimental: {
+      viewTransition: true,
+    },
+    // Dev-only: lets HMR/fast-refresh work when the app is opened over the LAN
+    // (e.g. from a phone). Auto-detected from this machine's interfaces, so a
+    // new IP needs no edit. Ignored in production.
+    allowedDevOrigins: lanHosts,
+    async rewrites() {
+      // Root ./dev.sh gives local development one browser-visible origin:
+      // Next owns :3000 and forwards /api/* to FastAPI's private :8000 listener.
+      // Production keeps using NEXT_PUBLIC_API_BASE_URL directly; this rewrite
+      // exists only when the launcher supplies its server-only target.
+      if (!isDev || !devBackendUrl) return [];
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${devBackendUrl}/:path*`,
+        },
+      ];
+    },
+    async headers() {
+      return [
+        {
+          source: "/(.*)",
+          headers: securityHeaders,
+        },
+      ];
+    },
+  };
+}
 
-export default nextConfig;
+/**
+ * Exported as the phase-aware function form (see
+ * https://nextjs.org/docs — "Async Configuration" / `Phase`) instead of a
+ * plain object so the mock-mode gate below runs against the real `phase`
+ * argument Next's CLI passes in, not against NODE_ENV. `next build
+ * --debug-prerender` forces NODE_ENV to "development" for the compiled
+ * output, but every `next build` invocation — with or without that flag —
+ * still runs config load as PHASE_PRODUCTION_BUILD; see src/config/api-mode.ts.
+ */
+export default function nextConfig(phase: string): NextConfig {
+  // Throws (aborting the whole build before any page code compiles) when
+  // NEXT_PUBLIC_API_MODE=mock and this is a real production build. This is
+  // the authoritative enforcement point: it runs before Turbopack starts, so
+  // there is no compiled chunk left for --debug-prerender's NODE_ENV inlining
+  // to smuggle a mock build past. app.config.ts calls the same shared
+  // function again at app runtime, as defense-in-depth — never a second, and
+  // possibly drifting, rule.
+  resolveApiMode(process.env.NEXT_PUBLIC_API_MODE, phase);
+
+  return buildNextConfig();
+}

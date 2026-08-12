@@ -1,6 +1,74 @@
-"""Project grounded-search tool records onto API source events."""
+"""Project grounded-search tool records onto safe API source events."""
 
-from urllib.parse import urlparse
+from __future__ import annotations
+
+import ipaddress
+import string
+import unicodedata
+from urllib.parse import SplitResult, urlsplit
+
+
+_HEX_DIGITS = frozenset(string.hexdigits)
+
+
+def _valid_hostname(host: str) -> bool:
+    """Accept IP literals or DNS hostnames; reject parser-tolerated junk."""
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+
+    candidate = host[:-1] if host.endswith(".") else host
+    try:
+        ascii_host = candidate.encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
+    if not ascii_host or len(ascii_host) > 253:
+        return False
+    labels = ascii_host.split(".")
+    return all(
+        label
+        and len(label) <= 63
+        and label[0].isalnum()
+        and label[-1].isalnum()
+        and all(char.isalnum() or char == "-" for char in label)
+        for label in labels
+    )
+
+
+def _client_source_url(url: str) -> SplitResult | None:
+    """Parse one client-facing source URL, or reject it without rewriting."""
+    if any(
+        char.isspace() or unicodedata.category(char).startswith("C")
+        for char in url
+    ):
+        return None
+    for index, char in enumerate(url):
+        if char == "%" and (
+            index + 2 >= len(url)
+            or url[index + 1] not in _HEX_DIGITS
+            or url[index + 2] not in _HEX_DIGITS
+        ):
+            return None
+    try:
+        parsed = urlsplit(url)
+        host = parsed.hostname
+        # Access validates numeric syntax and the 0..65535 range.
+        parsed.port
+    except (ValueError, UnicodeError):
+        return None
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.netloc.endswith(":")
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+        or not _valid_hostname(host)
+    ):
+        return None
+    return parsed
 
 
 def collect_sources(ctx) -> list[dict]:
@@ -19,20 +87,22 @@ def collect_sources(ctx) -> list[dict]:
         for url in url_list:
             if not isinstance(url, str) or not url or url in seen:
                 continue
+            parsed = _client_source_url(url)
+            if parsed is None:
+                continue
             seen.add(url)
-            try:
-                parsed = urlparse(url)
-                netloc = parsed.netloc or ""
-                domain = netloc[4:] if netloc.startswith("www.") else netloc
-                path = parsed.path.rstrip("/")
-                slug = path.split("/")[-1].replace("-", " ").replace("_", " ").strip() if path else ""
-                title = f"{domain} — {slug}" if slug else domain
-            except Exception:  # noqa: BLE001
-                domain = ""
-                title = url
+            host = parsed.hostname or ""
+            domain = host[4:] if host.lower().startswith("www.") else host
+            path = parsed.path.rstrip("/")
+            slug = (
+                path.split("/")[-1].replace("-", " ").replace("_", " ").strip()
+                if path
+                else ""
+            )
+            title = f"{domain} — {slug}" if slug else domain
             sources.append({
                 "id": f"src_{len(sources) + 1}",
-                "title": title or url,
+                "title": title,
                 "url": url,
                 "domain": domain,
             })

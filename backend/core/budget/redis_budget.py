@@ -163,7 +163,12 @@ class RedisBudget:
             ceiling = "mission" if tag.startswith("mission") else "user"
             log.info("budget ceiling reached on reserve: %s", tag)
             raise BudgetExhausted(f"{ceiling} budget ceiling reached", ceiling=ceiling)
-        return BudgetReservation(reservation_id=reservation_id, scope=scope, estimated=estimate)
+        return BudgetReservation(
+            reservation_id=reservation_id,
+            scope=scope,
+            estimated=estimate,
+            period=period,
+        )
 
     async def reconcile(self, reservation: BudgetReservation, actual: int) -> bool:
         # Never RAISES onto the caller's path (contract unchanged): a reconcile fault is logged
@@ -173,7 +178,17 @@ class RedisBudget:
         # finding 2), so a `False` here means the reservation may go unrefunded past its TTL if
         # the caller's own retry also fails against the same store fault.
         scope = reservation.scope
-        period = self._period()
+        period = reservation.period
+        if not period or ":" in period:
+            # Settling against "whatever period it is now" corrupts the new period when a
+            # call crosses a billing boundary. Refuse malformed/legacy handles instead of
+            # guessing which money key granted them; enforcement is still OFF in production,
+            # so no valid live reservation predates this field.
+            log.error(
+                "budget reconcile refused reservation %s with invalid billing period",
+                reservation.reservation_id,
+            )
+            return False
         has_mission = bool(scope.mission_id)
         user_key = _user_key(scope.user_id, period)
         keys = [

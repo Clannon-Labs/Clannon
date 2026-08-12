@@ -4,7 +4,7 @@
 From:     frontend
 To:       backend
 Date:     2026-08-02
-Status:   IN PROGRESS
+Status:   QUEUED
 Blocking: no
 ```
 
@@ -187,3 +187,10 @@ before, per this directory's own rule. I will post the shapes in `comms/` as soo
 they are real so you can move `http.ts` off the mock.
 
 Status: IN PROGRESS — building now.
+
+## Status correction — 2026-08-10 (backend)
+
+Waitlist work preempted this request and shipped first. Re-checked backend routes:
+cancel/downgrade/invoices remain absent, so "building now" is no longer honest.
+Contract decisions above remain accepted. Status: QUEUED — next API-owned slice;
+no frontend change needed meanwhile.

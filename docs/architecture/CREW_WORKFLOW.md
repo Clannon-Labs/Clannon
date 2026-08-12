@@ -46,11 +46,20 @@ explicitly retired in §2.2.
 | **orchestration** | `clannon-orchestration` | `backend/core/orchestrator/`, `backend/registry/`, `backend/experts/`, `backend/tools/` |
 | **security** | `clannon-security` | `backend/security/` |
 | **api** | `clannon-api` | `backend/api/` |
+| **backend-audit** | `clannon-backend-audit` | no source; only own notes/drafts, handoff, reports, comms, and proposal output |
+| **frontend-audit** | `clannon-frontend-audit` | no source; only own notes/drafts, handoff, reports, comms, and routed proposal output |
 
 Exclusive means exclusive: **no agent edits another's tree, ever** — not even a
 one-line "obvious" fix. Cross-tree needs go through a proposal (§3.2). The
 backend agent has final integration authority and is the **sole pusher**, but
 being coordinator does not grant edit rights into a specialist's tree.
+
+Audit roles are different: independent researchers, not implementers. Repository
+source is technically read-only. One role-parameterized Bubblewrap launcher remounts
+only each role's explicit outputs writable; missing sandbox support refuses launch.
+`backend-audit` covers backend/root. `frontend-audit` covers browser/client surfaces
+from the frontend-owned threat model and routes server-side findings to the coordinator.
+Existing implementation roles never audit themselves as final authority.
 
 Each role's detailed charter lives in the `CLAUDE.md` of the tree it owns.
 
@@ -207,17 +216,17 @@ free to type them yourself as the owner; no automation may.
 
 ### 4.2 Launch deliberately, not as a standing crew
 
-Six agents running simultaneously on one 24 GB box, in one shared git tree, was
+Many agents running simultaneously on one 24 GB box, in one shared git tree, was
 a persistent source of OOM pressure and cross-agent collisions. The default is
 now: **start the roles you actually need for the work at hand.**
 
 The backend agent alone is a perfectly normal configuration. So is backend plus
-one specialist. All six at once should be a deliberate choice, not a default.
+one specialist. Starting every role at once should be deliberate, not default.
 
 ### 4.3 Commands
 
 ```bash
-./scripts/crew.sh start <role> [--codex]   # start (or resume) one role
+./scripts/crew.sh start <role> [--codex|--claude]   # start (or resume) one role
 ./scripts/crew.sh status                   # what's running, and under which provider
 ./scripts/crew.sh attach <role>            # watch a session (Ctrl-b d to detach)
 ./scripts/crew.sh stop <role>              # stop one role cleanly
@@ -226,6 +235,23 @@ one specialist. All six at once should be a deliberate choice, not a default.
 `start` resumes the role's existing conversation when one exists, and starts
 fresh otherwise. It never types into a session that is already running — if the
 role is up, it says so and does nothing.
+
+Both audit roles follow the same provider rule as every other role — Claude unless
+you pass `--codex`. They go through ONE enforced launcher with role and provider as
+parameters. Bubblewrap mount policy is the security boundary; per-role or per-provider
+copies would drift. Prove affected role/provider combinations after any change:
+
+```bash
+./scripts/audit-sandbox.sh backend-audit self-test --codex
+./scripts/audit-sandbox.sh backend-audit self-test --claude
+./scripts/audit-sandbox.sh frontend-audit self-test --codex
+./scripts/audit-sandbox.sh frontend-audit self-test --claude
+```
+
+The proof covers writable outputs, read-only source/`.git`/charter, masking of ignored
+local `.env*` secrets, name resolution, pinned role-tool visibility and project
+parsing, and provider startup inside an isolated profile. No prompt-only fallback
+exists.
 
 ### 4.4 Two ways an agent runs — interactive vs. delegated
 
@@ -350,6 +376,7 @@ could not commit its own work and had to write a fallback report instead.
 |---|---|---|
 | **Coordinator (backend)** | always | never |
 | Architecture, planning, rulings, review | yes | no |
+| Independent backend adversarial audit | **yes** — repo-local audit subagents/skill | **yes** (default) — Codex Security |
 | Scoped implementation from a spec | fine | **preferred** — faster, stays in scope |
 | Debugging a specific failure | fine | **preferred** |
 | Open-ended "figure out what to do next" | yes | avoid |

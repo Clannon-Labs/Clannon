@@ -162,10 +162,12 @@ Keying budget by `{user_id}:{billing_period}` means a reset is just writing a ne
 key, not mutating the old one — cleaner audit trail and no race with in-flight
 decrements on the boundary.
 
-**[NEEDS YOUR CODE]** How you define `billing_period` (calendar month vs Stripe
-billing anchor date) must match what Stripe sends. I can't determine your billing
-anchor without seeing your Stripe setup. Get this wrong and resets drift from
-invoices.
+**[PARTIAL — go-live gate]** Billing now uses a fixed anniversary period anchored to
+signup or latest confirmed plan payment (`api/billing.py::billing_period`). Redis
+reservations preserve the exact period that granted each hold, so a call crossing a
+boundary settles the old key. Production broker construction still defaults to a UTC
+calendar month and seeding is not wired; both must consume the API's anniversary-period
+identity before enforcement can turn on. Get this wrong and resets drift from invoices.
 
 ---
 

@@ -1,10 +1,8 @@
-"""Platform-notification expert (key: delivery.notifier) — delivers a finished result
-to an external channel by POSTing it to a webhook (Slack, Discord, Zapier, or a custom
-endpoint). It shapes the payload for the destination, sends it via the http.request
-tool (SSRF-guarded), and reports honestly whether the delivery succeeded. It is the
-'deliver to channels' step of a workflow. Its behavior lives in its system prompt +
-skills beside this file; this module declares what it is and how its request becomes
-the task."""
+"""Retained notification implementation, disabled from private-alpha discovery.
+
+Outbound mutation needs separate reviewed policy before re-enablement. Keeping this
+implementation preserves replaceability without making it model-reachable.
+"""
 
 from __future__ import annotations
 
@@ -33,11 +31,7 @@ class NotifyIn(BaseModel):
 class NotificationExpert:
     name = "notifier"
     domain = "delivery"
-    description = (
-        "Deliver a finished result to an external channel by POSTing it to a webhook "
-        "(Slack/Discord/Zapier/custom): shape the payload for the destination, send it, and "
-        "report whether it was delivered."
-    )
+    description = "Disabled private-alpha outbound delivery implementation."
     input_schema = NotifyIn
     output_schema = ExpertOutput
     skills = ("skills",)               # baseline skills/ beside this file

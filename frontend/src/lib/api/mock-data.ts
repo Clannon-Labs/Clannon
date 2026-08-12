@@ -178,6 +178,7 @@ export const SEED_RUNS: Run[] = [
     artifacts: [
       { id: "a1", run_id: "run_seed_1", name: "uk-market-entry.md", mime: "text/markdown", size: 11_240 },
       { id: "a2", run_id: "run_seed_1", name: "competitor-revenue.csv", mime: "text/csv", size: 2_980 },
+      { id: "a3", run_id: "run_seed_1", name: "source-pack.pdf", mime: "application/pdf", size: 593 },
     ],
   },
   {

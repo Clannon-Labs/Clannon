@@ -16,8 +16,8 @@ describe("mock signup first-user state", () => {
 
     const user = await client.signup({
       name: "New Operator",
-      email: "new@example.com",
       password: "correct-horse",
+      approvalToken: "demo-approved",
     });
     const [projects, runs, memory, usage] = await Promise.all([
       client.listProjects(),
@@ -44,8 +44,8 @@ describe("mock signup first-user state", () => {
     const client = new MockClient();
     await client.signup({
       name: "New Operator",
-      email: "new@example.com",
       password: "correct-horse",
+      approvalToken: "demo-approved",
     });
 
     const checkout = await client.startCheckout({ kind: "upgrade", planId: "starter" });

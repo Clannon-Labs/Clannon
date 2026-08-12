@@ -6,7 +6,7 @@ pause, wait, or guess.
 
 | File | What |
 |---|---|
-| [`ROUTES.md`](ROUTES.md) | All 38 routes — method, path, auth, purpose, and the gotchas |
+| [`ROUTES.md`](ROUTES.md) | All 41 routes — method, path, auth, purpose, and the gotchas |
 | [`SEMANTICS.md`](SEMANTICS.md) | What the surfaces **mean**, and what the UI may never claim. Read before rendering a seal, a memory hit, or an empty state |
 | [`requests/`](requests/) | **Your write channel.** Need a route that does not exist? File it here |
 

@@ -6,7 +6,7 @@ afterEach(() => window.localStorage.clear());
 describe("mock usage latency", () => {
   it("is genuinely empty on a fresh signup — never a fabricated estimate", async () => {
     const client = new MockClient();
-    await client.signup({ name: "New Operator", email: "new@example.com", password: "correct-horse" });
+    await client.signup({ name: "New Operator", password: "correct-horse", approvalToken: "demo-approved" });
     const usage = await client.getUsage();
 
     expect(usage.latency).toBeDefined();

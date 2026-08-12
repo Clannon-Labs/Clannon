@@ -161,7 +161,7 @@ Keep status current — `docs/ROADMAP.md` is the entry point, read at session st
 - Brief must let worker disagree: verify premise first, change nothing if false.
   Worker "fixing" doc to match wrong claim = worse than leaving alone.
 - Coordinator job = work gets DONE, not correctly assigned.
-- Coordinator sweeps EVERY `proposals/to-{backend,memory,orchestration,security,api,frontend}/`
+- Coordinator sweeps EVERY `proposals/to-{backend,memory,orchestration,security,api,frontend,backend-audit,frontend-audit}/`
   inbox at session start and after each finished unit, without waiting for owner.
   Verify acceptance against code/tests. Proven done → append Response, update Status,
   archive. Unfinished → dispatch owner specialist, review, suite, commit+push. Status
@@ -207,8 +207,9 @@ Messaging — PULL, never push:
 
 Provider continuity:
 - Claude Code and Codex private sessions are not interchangeable.
-- Provider chosen at launch (`./scripts/crew.sh start <role> [--codex]`), not
-  auto-switched mid-session.
+- Provider chosen at launch (`./scripts/crew.sh start <role> [--codex|--claude]`),
+  not auto-switched mid-session. Every role defaults to Claude, both audit roles
+  included; both providers run them through the same enforced sandbox.
 - Shared live checkpoint: `.agents/provider-handoffs/<role>.md`.
 - Before compaction, planned exit, or context exhaustion: update current checkpoint;
   retain earlier checkpoint under `Previous checkpoint`; explain change reason.

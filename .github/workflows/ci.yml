@@ -42,6 +42,9 @@ jobs:
   frontend-build:
     name: frontend build
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_MODE: http
+      NEXT_PUBLIC_API_BASE_URL: https://api.clannon.invalid
     defaults:
       run:
         working-directory: frontend

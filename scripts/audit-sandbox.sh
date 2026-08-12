@@ -1,0 +1,591 @@
+#!/usr/bin/env bash
+# Enforced launcher for the independent audit roles (`backend-audit`, `frontend-audit`).
+#
+# The repository is mounted read-only. Only the role's own evidence/continuity paths
+# and its isolated provider runtime are writable. Prompt instructions are not the
+# security boundary; Bubblewrap is. Missing Bubblewrap therefore fails closed.
+#
+# ROLE and PROVIDER are both PARAMETERS, never a second script. The mount policy IS
+# the boundary, so it is written once: a per-role or per-provider copy would drift
+# silently, and it would drift in the direction of "less confined" without anything
+# turning red. Everything a role differs by — its directory, its output paths, its
+# proposal inboxes — is a table entry below.
+#
+#   ./scripts/audit-sandbox.sh <role> {start|resume|run|self-test} [--codex|--claude]
+#       [--brief proposals/to-<role>/<assignment>.md]
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RUNTIME_ROOT="${CLANNON_AGENT_RUNTIME:-$ROOT/.agents/runtime}"
+HOST_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+HOST_AUTH="$HOST_CODEX_HOME/auth.json"
+HOST_PLUGIN_CATALOG="$HOST_CODEX_HOME/.tmp/plugins"
+HOST_PLUGIN_CACHE="$HOST_CODEX_HOME/plugins/cache"
+HOST_CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+HOST_CLAUDE_CREDS="$HOST_CLAUDE_HOME/.credentials.json"
+CODEX_REAL="$(readlink -f "$(command -v codex || true)" 2>/dev/null || true)"
+CLAUDE_REAL="$(readlink -f "$(command -v claude || true)" 2>/dev/null || true)"
+
+die() { echo "audit sandbox: $*" >&2; exit 2; }
+
+ROLE="${1:-}"
+MODE="${2:-}"
+PROVIDER=claude
+BRIEF=""
+shift 2 2>/dev/null || true
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --claude) PROVIDER=claude ;;
+    --codex)  PROVIDER=codex ;;
+    --brief)
+      shift
+      [ $# -gt 0 ] || die "--brief needs a path"
+      BRIEF="$1"
+      ;;
+    *)        MODE="" ;;
+  esac
+  shift
+done
+
+# --- the role table ---------------------------------------------------------
+# Adding an audit role is this case block plus its role directory. Nothing about
+# the confinement itself is per-role, and nothing here may weaken it.
+case "$ROLE" in
+  backend-audit)
+    NODE_TOOLING=0
+    PROPOSAL_DIRS=("$ROOT/proposals/to-backend/from-backend-audit")
+    ;;
+  frontend-audit)
+    NODE_TOOLING=1
+    # Two inboxes on purpose: a frontend-owned fix goes to the frontend, while a
+    # finding whose real fix is server-side goes to the coordinator — the auditor
+    # never asks an implementer to relay for it.
+    PROPOSAL_DIRS=(
+      "$ROOT/proposals/to-frontend/from-frontend-audit"
+      "$ROOT/proposals/to-backend/from-frontend-audit"
+    )
+    ;;
+  *)
+    die "unknown audit role: '$ROLE' (roles: backend-audit frontend-audit)"
+    ;;
+esac
+
+ROLE_DIR="$ROOT/$ROLE"
+RUNTIME="$RUNTIME_ROOT/$ROLE"
+CODEX_STATE="$RUNTIME/codex-home"
+CODEX_CONFIG="$RUNTIME/codex-config.toml"
+CLAUDE_STATE="$RUNTIME/claude-home"
+TOOLS_VENV="$RUNTIME/tools-venv"
+NODE_TOOLS="$RUNTIME/node-tools"
+REPORTS="$ROOT/reports/$ROLE"
+TODAY="$ROOT/comms/$(date +%F)"
+COMMS_FILE="$TODAY/$ROLE.md"
+HANDOFF="$ROOT/.agents/provider-handoffs/$ROLE.md"
+
+case "$MODE" in start|resume|run|self-test) ;; *) die "usage: $0 <role> {start|resume|run|self-test} [--codex|--claude] [--brief <file>]" ;; esac
+[ -d "$ROLE_DIR" ] || die "role directory missing: $ROLE_DIR"
+BRIEF_REAL=""
+if [ "$MODE" = run ]; then
+  [ -n "$BRIEF" ] && [ -f "$BRIEF" ] || die "run needs an existing --brief file"
+  BRIEF_REAL="$(readlink -f "$BRIEF")"
+  case "$BRIEF_REAL" in
+    "$ROOT/proposals/to-$ROLE/"*) ;;
+    *) die "audit brief must live under proposals/to-$ROLE/" ;;
+  esac
+elif [ -n "$BRIEF" ]; then
+  die "--brief is valid only with run"
+fi
+command -v bwrap >/dev/null 2>&1 || die "Bubblewrap (bwrap) is required; refusing unsafe fallback"
+command -v uv >/dev/null 2>&1 || die "uv is required to provision isolated audit tools"
+[ "$NODE_TOOLING" -eq 0 ] || command -v npm >/dev/null 2>&1 \
+  || die "npm is required to provision isolated frontend audit tools"
+
+# Host-side preparation happens before confinement. Paths contain no machine-specific
+# constants; every location derives from the repository root, HOME, CODEX_HOME, or the
+# Claude config dir.
+mkdir -p \
+  "$ROLE_DIR/notes" "$ROLE_DIR/drafts" "$RUNTIME/tmp" \
+  "$REPORTS" "$TODAY" "${PROPOSAL_DIRS[@]}"
+COMMS_WAS_PRESENT=0
+[ ! -e "$COMMS_FILE" ] || COMMS_WAS_PRESENT=1
+touch "$COMMS_FILE" "$HANDOFF"
+SECRET_TEST_FILE=""
+if [ "$MODE" = self-test ]; then
+  # Prove ignored local deployment secrets are masked, not merely made read-only.
+  # Drafts are already an auditor-owned, gitignored output area; cleanup below
+  # removes this probe even when a later self-test assertion fails.
+  SECRET_TEST_FILE="$ROLE_DIR/drafts/.env.audit-sandbox-secret-test"
+  printf 'audit-secret-must-not-be-readable\n' > "$SECRET_TEST_FILE"
+fi
+cleanup_self_test_comms() {
+  [ -z "$SECRET_TEST_FILE" ] || unlink "$SECRET_TEST_FILE" 2>/dev/null || true
+  if [ "$COMMS_WAS_PRESENT" -eq 0 ] && [ ! -s "$COMMS_FILE" ]; then
+    unlink "$COMMS_FILE"
+  fi
+}
+[ "$MODE" != self-test ] || trap cleanup_self_test_comms EXIT
+
+if [ ! -x "$TOOLS_VENV/bin/python" ]; then
+  uv venv --quiet --python 3.12 "$TOOLS_VENV" >/dev/null \
+    || die "could not create isolated audit tool environment"
+fi
+uv pip install --quiet --python "$TOOLS_VENV/bin/python" --upgrade \
+  --requirement "$ROLE_DIR/tooling-requirements.txt" >/dev/null \
+  || die "could not provision pinned audit tools"
+TOOLS_PYTHON_REAL="$(readlink -f "$TOOLS_VENV/bin/python")"
+TOOLS_PYTHON_ROOT="$(dirname "$(dirname "$TOOLS_PYTHON_REAL")")"
+TOOLS_PYTHON_LINK="$(readlink "$TOOLS_VENV/bin/python")"
+TOOLS_PYTHON_MOUNT="$(dirname "$(dirname "$TOOLS_PYTHON_LINK")")"
+
+TOOLS_PATH="$TOOLS_VENV/bin:/opt/clannon-provider:/usr/local/bin:/usr/bin:/bin"
+if [ "$NODE_TOOLING" -eq 1 ]; then
+  NODE_MANIFEST="$ROLE_DIR/tooling/package.json"
+  NODE_LOCK="$ROLE_DIR/tooling/package-lock.json"
+  [ -f "$NODE_MANIFEST" ] && [ -f "$NODE_LOCK" ] \
+    || die "frontend audit tooling manifest or lockfile missing"
+  NODE_LOCK_HASH="$(sha256sum "$NODE_MANIFEST" "$NODE_LOCK")"
+  NODE_MARKER="$NODE_TOOLS/.clannon-lock-hash"
+  if [ ! -f "$NODE_MARKER" ] || [ "$(cat "$NODE_MARKER")" != "$NODE_LOCK_HASH" ]; then
+    mkdir -p "$NODE_TOOLS"
+    cp "$NODE_MANIFEST" "$NODE_LOCK" "$NODE_TOOLS/"
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci \
+      --prefix "$NODE_TOOLS" --ignore-scripts --no-audit --no-fund >/dev/null \
+      || die "could not provision pinned frontend audit tools"
+    printf '%s' "$NODE_LOCK_HASH" > "$NODE_MARKER"
+  fi
+  # Playwright keys its singleton by resolved module path. Its CLI therefore must
+  # enter through the project path that the read-only package overlay below replaces;
+  # starting at the runtime path creates a second instance during test discovery.
+  mkdir -p "$NODE_TOOLS/bin"
+  ln -sfn "$ROOT/frontend/node_modules/.bin/playwright" "$NODE_TOOLS/bin/playwright"
+  TOOLS_PATH="$NODE_TOOLS/bin:$NODE_TOOLS/node_modules/.bin:$TOOLS_PATH"
+fi
+
+prepare_codex() {
+  local plugin_revision plugin_root skill
+  [ -n "$CODEX_REAL" ] && [ -x "$CODEX_REAL" ] || die "Codex CLI not found"
+  [ -f "$HOST_AUTH" ] || die "Codex auth not found at configured CODEX_HOME/auth.json"
+  [ -d "$HOST_PLUGIN_CATALOG" ] || die "Codex plugin catalog unavailable; open /plugins once"
+  command -v python3 >/dev/null 2>&1 || die "python3 is required to seed isolated Codex config"
+
+  mkdir -p "$CODEX_STATE/.tmp/plugins" "$CODEX_STATE/plugins/cache"
+  touch "$CODEX_STATE/auth.json" "$CODEX_STATE/config.toml"
+
+  # Codex will not load project instructions unattended until the git root is
+  # trusted. Trust belongs in user config, but the audit profile is isolated from
+  # the owner's user config. Generate its machine-local path at launch instead of
+  # committing one person's checkout path. Mount this generated config read-only:
+  # the role cannot rewrite its own trust/plugin policy.
+  python3 - "$ROLE_DIR/codex.config.toml" "$CODEX_CONFIG" "$ROOT" <<'PY'
+import json
+import pathlib
+import sys
+
+source, destination, root = map(pathlib.Path, sys.argv[1:])
+base = source.read_text().rstrip()
+destination.write_text(
+    f'{base}\n\n[projects.{json.dumps(str(root))}]\ntrust_level = "trusted"\n'
+)
+PY
+
+  # Plugin package is machine-local, never a committed $HOME path or project setting.
+  # Runtime state is isolated; catalog/package are exposed read-only inside sandbox.
+  if ! codex plugin list 2>/dev/null \
+      | grep -q '^codex-security@openai-curated[[:space:]].*installed'; then
+    codex plugin add codex-security@openai-curated >/dev/null \
+      || die "could not provision codex-security plugin"
+  fi
+  [ -d "$HOST_PLUGIN_CACHE/openai-curated/codex-security" ] \
+    || die "codex-security plugin cache unavailable after install"
+
+  # Current CLI plugin inventory can report an installed package without adding
+  # its skills to a headless session. Expose the installed package's read-only
+  # workflows through the isolated CODEX_HOME as a deterministic fallback. Omit
+  # mutation workflows structurally: this role may validate/report, never fix or
+  # publish tracking state.
+  plugin_revision="$(codex plugin list 2>/dev/null | awk \
+    '$1 == "codex-security@openai-curated" && $2 == "installed," { print $4 }')"
+  [ -n "$plugin_revision" ] || die "could not resolve installed codex-security revision"
+  plugin_root="$HOST_PLUGIN_CACHE/openai-curated/codex-security/$plugin_revision"
+  [ -d "$plugin_root/skills" ] || die "installed codex-security skills unavailable"
+  mkdir -p "$CODEX_STATE/skills"
+  for skill in \
+    attack-path-analysis deep-security-scan finding-discovery \
+    propose-security-hardening security-diff-scan security-scan \
+    threat-model triage-finding validation vulnerability-writeup
+  do
+    [ -f "$plugin_root/skills/$skill/SKILL.md" ] \
+      || die "codex-security skill missing: $skill"
+    ln -sfn "$CODEX_STATE/plugins/cache/openai-curated/codex-security/$plugin_revision/skills/$skill" \
+      "$CODEX_STATE/skills/codex-security-$skill"
+  done
+  unlink "$CODEX_STATE/skills/codex-security-fix-finding" 2>/dev/null || true
+  unlink "$CODEX_STATE/skills/codex-security-track-findings" 2>/dev/null || true
+}
+
+prepare_claude() {
+  [ -n "$CLAUDE_REAL" ] && [ -x "$CLAUDE_REAL" ] || die "Claude Code CLI not found"
+  [ -f "$HOST_CLAUDE_CREDS" ] || die "Claude credentials not found; run 'claude auth' on the host first"
+  command -v python3 >/dev/null 2>&1 || die "python3 is required to seed isolated Claude state"
+
+  mkdir -p "$CLAUDE_STATE"
+  touch "$CLAUDE_STATE/.credentials.json"
+
+  # `.claude.json` is Claude's own mutable state, not config, so it is SEEDED and
+  # merged rather than mounted: a fresh isolated profile otherwise blocks the very
+  # first interactive turn on three dialogs nobody is there to answer. Each flag
+  # below was derived by accepting the real dialog once and diffing the file, not
+  # guessed. The external-imports approval is keyed on the repository root (root
+  # CLAUDE.md imports AGENTS.md), the trust flags on the role directory.
+  python3 - "$CLAUDE_STATE/.claude.json" "$ROOT" "$ROLE_DIR" <<'PY'
+import json, pathlib, sys
+
+path, root, role_dir = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+try:
+    state = json.loads(path.read_text())
+except (FileNotFoundError, ValueError):
+    state = {}
+state["hasCompletedOnboarding"] = True
+projects = state.setdefault("projects", {})
+projects.setdefault(role_dir, {}).update({
+    "hasTrustDialogAccepted": True,
+    "hasCompletedProjectOnboarding": True,
+    "hasClaudeMdExternalIncludesApproved": True,
+    "hasClaudeMdExternalIncludesWarningShown": True,
+})
+projects.setdefault(root, {}).update({
+    "hasTrustDialogAccepted": True,
+    "hasClaudeMdExternalIncludesApproved": True,
+    "hasClaudeMdExternalIncludesWarningShown": True,
+})
+path.write_text(json.dumps(state, indent=2))
+PY
+
+  # Machine-local user-scope settings for the isolated profile. The role's actual
+  # policy is the TRACKED <role>/.claude/settings.json, which is mounted read-only
+  # with the rest of the source — a session cannot edit its own rules.
+  cat > "$CLAUDE_STATE/settings.json" <<'JSON'
+{
+  "skipDangerousModePermissionPrompt": true,
+  "includeCoAuthoredBy": false,
+  "remoteControlAtStartup": false
+}
+JSON
+}
+
+case "$PROVIDER" in
+  codex)  prepare_codex ;;
+  claude) prepare_claude ;;
+esac
+
+# Minimal filesystem view: system binaries/config, repository, isolated provider
+# runtime. Normal home (SSH keys, gh credentials, cloud credentials) is absent.
+# /etc/resolv.conf is a symlink into /run on systemd-resolved hosts, so the target
+# is bound explicitly — without it name resolution fails inside the sandbox and the
+# provider cannot reach its own API (measured, 2026-08-10).
+RESOLV_REAL="$(readlink -f /etc/resolv.conf 2>/dev/null || true)"
+BWRAP=(
+  bwrap
+  --unshare-all --share-net --die-with-parent
+  --tmpfs /
+  --proc /proc
+  --dev /dev
+  --ro-bind /usr /usr
+  --symlink usr/bin /bin
+  --symlink usr/lib /lib
+  --symlink usr/lib64 /lib64
+  --ro-bind /etc /etc
+  --bind "$RUNTIME/tmp" /tmp
+  --dir /home
+  --dir "$HOME"
+  --dir "$HOME/.local"
+  --dir "$HOME/.local/share"
+  --dir "$HOME/.local/share/uv"
+  --dir "$HOME/.local/share/uv/python"
+  --ro-bind "$TOOLS_PYTHON_ROOT" "$TOOLS_PYTHON_MOUNT"
+  --dir "$(dirname "$(dirname "$(dirname "$ROOT")")")"
+  --dir "$(dirname "$(dirname "$ROOT")")"
+  --dir "$(dirname "$ROOT")"
+  --ro-bind "$ROOT" "$ROOT"
+  --bind "$ROLE_DIR/notes" "$ROLE_DIR/notes"
+  --bind "$ROLE_DIR/drafts" "$ROLE_DIR/drafts"
+  --bind "$REPORTS" "$REPORTS"
+  --bind "$COMMS_FILE" "$COMMS_FILE"
+  --bind "$HANDOFF" "$HANDOFF"
+  --dir /opt
+  --chdir "$ROLE_DIR"
+  --setenv HOME "$HOME"
+  --setenv PATH "$TOOLS_PATH"
+  --setenv GIT_CONFIG_GLOBAL /dev/null
+  --setenv GIT_CONFIG_SYSTEM /dev/null
+  --setenv GIT_TERMINAL_PROMPT 0
+  --setenv TMPDIR /tmp
+  # npm/npx would otherwise reach for a cache in the absent home; a JS/TS auditor
+  # running `npm audit` needs one that is inside the sandbox.
+  --setenv npm_config_cache /tmp/npm-cache
+  --setenv npm_config_update_notifier false
+  --setenv PYTHONDONTWRITEBYTECODE 1
+  --setenv SEMGREP_SEND_METRICS off
+  # A parent Claude Code session exports markers that a nested one obeys — inheriting
+  # CLAUDE_CODE_CHILD_SESSION silently turns transcript saving OFF, which would leave
+  # `resume` with nothing to resume and no error to explain it. crew.sh is routinely
+  # run from inside an agent's own session, so this is the normal case, not the odd one.
+  --unsetenv CLAUDECODE
+  --unsetenv CLAUDE_CODE_CHILD_SESSION
+  --unsetenv CLAUDE_CODE_SESSION_ID
+  --unsetenv CLAUDE_CODE_BRIDGE_SESSION_ID
+  --unsetenv CLAUDE_CODE_MESSAGING_SOCKET
+  --unsetenv CLAUDE_CODE_ENTRYPOINT
+  --unsetenv CLAUDE_CODE_EXECPATH
+  --unsetenv CLAUDE_EFFORT
+  --unsetenv CLAUDE_PID
+  --unsetenv SSH_AUTH_SOCK
+  --unsetenv GH_TOKEN
+  --unsetenv GITHUB_TOKEN
+  --unsetenv AWS_ACCESS_KEY_ID
+  --unsetenv AWS_SECRET_ACCESS_KEY
+  --unsetenv AWS_SESSION_TOKEN
+)
+for proposal_dir in "${PROPOSAL_DIRS[@]}"; do
+  BWRAP+=( --bind "$proposal_dir" "$proposal_dir" )
+done
+if [ "$NODE_TOOLING" -eq 1 ]; then
+  # Playwright rejects test discovery when its CLI and test imports come from two
+  # physical package copies, even at the same version. Overlay the isolated locked
+  # copies onto the sandbox VIEW of project node_modules. Host files remain untouched,
+  # and the overlay is read-only like the project tree beneath it.
+  for package in @playwright/test playwright playwright-core; do
+    [ -d "$ROOT/frontend/node_modules/$package" ] \
+      || die "frontend project package missing: $package"
+    BWRAP+=(
+      --ro-bind "$NODE_TOOLS/node_modules/$package" "$ROOT/frontend/node_modules/$package"
+    )
+  done
+fi
+
+# A read-only repository mount still exposes ignored `.env*` files. Those can hold
+# real provider, mail, or deployment credentials and are not audit evidence. Mask
+# every non-example env file with /dev/null inside the sandbox. Paths are discovered
+# from this checkout at launch; nothing machine-specific is committed. Keep this
+# AFTER writable output overlays so an old env-shaped draft cannot become a durable
+# prompt-injection/secret surface on a later resume.
+SECRET_MASK_FILES=()
+while IFS= read -r -d '' secret_file; do
+  case "$(basename "$secret_file")" in
+    *.example|*.sample|*.template) continue ;;
+  esac
+  SECRET_MASK_FILES+=("$secret_file")
+done < <(
+  find "$ROOT" \
+    \( -path "$ROOT/.git" -o -path "$ROOT/.agents" -o \
+       -path "$ROOT/backend-rust" -o -name node_modules -o -name .venv \) -prune -o \
+    \( -type f -o -type l \) \( -name .env -o -name '.env.*' \) -print0
+)
+for secret_file in "${SECRET_MASK_FILES[@]}"; do
+  BWRAP+=( --ro-bind /dev/null "$secret_file" )
+done
+[ -n "$RESOLV_REAL" ] && case "$RESOLV_REAL" in
+  /etc/*) ;;
+  *) BWRAP+=( --ro-bind "$RESOLV_REAL" "$RESOLV_REAL" ) ;;
+esac
+
+# Provider-specific mounts. Only the runtime state, credential, and binary differ;
+# everything above — the actual boundary — is shared.
+case "$PROVIDER" in
+  codex)
+    BWRAP+=(
+      --bind "$CODEX_STATE" "$CODEX_STATE"
+      --ro-bind "$HOST_AUTH" "$CODEX_STATE/auth.json"
+      --ro-bind "$CODEX_CONFIG" "$CODEX_STATE/config.toml"
+      --ro-bind "$HOST_PLUGIN_CATALOG" "$CODEX_STATE/.tmp/plugins"
+      --ro-bind "$HOST_PLUGIN_CACHE" "$CODEX_STATE/plugins/cache"
+      --ro-bind "$(dirname "$CODEX_REAL")" /opt/clannon-provider
+      --setenv CODEX_HOME "$CODEX_STATE"
+    )
+    PROVIDER_BIN=/opt/clannon-provider/codex
+    ;;
+  claude)
+    BWRAP+=(
+      --bind "$CLAUDE_STATE" "$CLAUDE_STATE"
+      --ro-bind "$HOST_CLAUDE_CREDS" "$CLAUDE_STATE/.credentials.json"
+      --ro-bind "$CLAUDE_REAL" /opt/clannon-provider/claude
+      --setenv CLAUDE_CONFIG_DIR "$CLAUDE_STATE"
+    )
+    PROVIDER_BIN=/opt/clannon-provider/claude
+    ;;
+esac
+
+if [ "$MODE" = self-test ]; then
+  positive="$ROLE_DIR/notes/.sandbox-write-test"
+  report_positive="$REPORTS/.sandbox-write-test"
+  proposal_positive="${PROPOSAL_DIRS[0]}/.sandbox-write-test"
+  backend_negative="$ROOT/backend/.sandbox-write-test"
+  frontend_negative="$ROOT/frontend/.sandbox-write-test"
+  git_negative="$ROOT/.git/.sandbox-write-test"
+  charter_negative="$ROLE_DIR/CLAUDE.md"
+  manifest_negative="$ROOT/frontend/package.json"
+  lock_negative="$ROOT/frontend/package-lock.json"
+  modules_negative="$ROOT/frontend/node_modules/.sandbox-write-test"
+  "${BWRAP[@]}" touch "$positive" "$report_positive" "$proposal_positive" \
+    || die "role output paths are not writable"
+  for target in "$backend_negative" "$frontend_negative" "$git_negative" "$modules_negative"; do
+    if "${BWRAP[@]}" touch "$target" 2>/dev/null; then
+      die "sandbox allowed forbidden creation: $target"
+    fi
+  done
+  for target in "$charter_negative" "$manifest_negative" "$lock_negative"; do
+    if "${BWRAP[@]}" bash -c 'printf "tamper\n" >> "$1"' bash "$target" 2>/dev/null; then
+      die "sandbox allowed forbidden edit: $target"
+    fi
+  done
+  unlink "$positive"
+  unlink "$report_positive"
+  unlink "$proposal_positive"
+  for proposal_dir in "${PROPOSAL_DIRS[@]:1}"; do
+    proposal_positive="$proposal_dir/.sandbox-write-test"
+    "${BWRAP[@]}" touch "$proposal_positive"
+    unlink "$proposal_positive"
+  done
+  [ ! -e "$backend_negative" ] && [ ! -e "$frontend_negative" ] \
+    && [ ! -e "$git_negative" ] && [ ! -e "$modules_negative" ] \
+    || die "negative write test left unexpected files"
+
+  [ -n "$SECRET_TEST_FILE" ] || die "secret-mask self-test probe missing"
+  "${BWRAP[@]}" test ! -s "$SECRET_TEST_FILE" \
+    || die "sandbox exposed ignored .env content: $SECRET_TEST_FILE"
+  for target in "${SECRET_MASK_FILES[@]}"; do
+    "${BWRAP[@]}" test ! -s "$target" \
+      || die "sandbox exposed ignored .env content: $target"
+  done
+
+  # A provider that cannot resolve its own API silently retries forever, so name
+  # resolution is a launch prerequisite and is proven, not assumed.
+  "${BWRAP[@]}" getent hosts api.anthropic.com >/dev/null \
+    || die "name resolution failed inside sandbox (offline host, or /etc/resolv.conf target not mounted)"
+  "${BWRAP[@]}" "$TOOLS_VENV/bin/python" -c \
+    'import detect_secrets, semgrep' \
+    || die "shared audit tooling not visible inside sandbox"
+
+  if [ "$NODE_TOOLING" -eq 1 ]; then
+    # Exact versions come from the coordinator-owned lock, not frontend/node_modules.
+    # Then each tool must parse the real project while its entire tree stays read-only.
+    "${BWRAP[@]}" bash -c '
+      set -eu
+      [ "$(npm --version)" = "11.19.0" ]
+      eslint --version | grep -qx "v9.39.4"
+      tsc --version | grep -qx "Version 5.9.3"
+      vitest --version | grep -q "vitest/4.1.9"
+      playwright --version | grep -qx "Version 1.62.0"
+
+      cd "$1/frontend"
+      eslint --no-cache . >/tmp/eslint.txt
+      tsc --noEmit --pretty false --project tsconfig.json \
+        --tsBuildInfoFile /tmp/frontend-audit.tsbuildinfo >/tmp/tsc.txt
+      VITE_CONFIG_NATIVE_IGNORE_WARNING=true \
+        vitest list --root . --filesOnly --no-color >/tmp/vitest-files.txt
+      PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test --config playwright.config.ts \
+        --list --reporter=line --output=/tmp/playwright-results >/tmp/playwright-tests.txt
+      audit_exit=0
+      npm audit --package-lock-only --ignore-scripts --json >/tmp/npm-audit.json \
+        || audit_exit=$?
+      [ "$audit_exit" -eq 0 ] || [ "$audit_exit" -eq 1 ]
+    ' bash "$ROOT" || die "pinned frontend tools could not read the project inside sandbox"
+  fi
+
+  case "$PROVIDER" in
+    codex)
+      if ! "${BWRAP[@]}" "$TOOLS_VENV/bin/python" - "$CODEX_STATE/config.toml" "$ROOT" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+config_path, root = pathlib.Path(sys.argv[1]), sys.argv[2]
+config = tomllib.loads(config_path.read_text())
+assert config["projects"][root]["trust_level"] == "trusted"
+PY
+      then
+        die "isolated Codex config does not trust the repository root"
+      fi
+      "${BWRAP[@]}" "$PROVIDER_BIN" plugin list \
+        | grep -q '^codex-security@openai-curated[[:space:]].*installed, enabled' \
+        || die "codex-security plugin not visible inside isolated runtime"
+      "${BWRAP[@]}" bash -c '
+        set -eu
+        for skill in security-scan threat-model attack-path-analysis validation vulnerability-writeup; do
+          test -r "$1/skills/codex-security-$skill/SKILL.md"
+        done
+        test ! -e "$1/skills/codex-security-fix-finding"
+        test ! -e "$1/skills/codex-security-track-findings"
+      ' bash "$CODEX_STATE" \
+        || die "safe codex-security workflows not visible inside isolated runtime"
+      ;;
+    claude)
+      "${BWRAP[@]}" "$PROVIDER_BIN" --version >/dev/null \
+        || die "Claude Code did not start inside isolated runtime"
+      # Isolation proof: the role's profile is the runtime one, and the owner's own
+      # Claude state (accounts, MCP servers, project history) is not present.
+      "${BWRAP[@]}" bash -c '
+        set -eu
+        [ -r "$1/.credentials.json" ]
+        ! [ -w "$1/.credentials.json" ]
+        ! [ -e "$2/.claude.json" ]
+        ! [ -e "$3" ]
+      ' bash "$CLAUDE_STATE" "$HOME" "$HOST_CLAUDE_HOME/settings.json" \
+        || die "Claude runtime isolation check failed"
+      ;;
+  esac
+  echo "audit sandbox: PASS ($ROLE, $PROVIDER) — outputs writable; source/.git/charter read-only; ignored env secrets masked; DNS, pinned role tooling, and provider runtime verified"
+  exit 0
+fi
+
+case "$PROVIDER" in
+  codex)
+    if [ "$MODE" = run ]; then
+      LAUNCH=(
+        "$PROVIDER_BIN"
+        --dangerously-bypass-approvals-and-sandbox
+        --search
+        --model gpt-5.6-sol
+        --config 'model_reasoning_effort="xhigh"'
+        exec
+        --skip-git-repo-check
+        -
+      )
+    else
+      LAUNCH=(
+        "$PROVIDER_BIN"
+        --no-alt-screen
+        --dangerously-bypass-approvals-and-sandbox
+        --search
+        --model gpt-5.6-sol
+        --config 'model_reasoning_effort="xhigh"'
+      )
+      [ "$MODE" = resume ] && LAUNCH=("$PROVIDER_BIN" resume --last "${LAUNCH[@]:1}")
+    fi
+    ;;
+  claude)
+    # Bypass mode matches the other roles' unattended posture. It is safe HERE for a
+    # reason the other roles cannot claim: the tree is mounted read-only, so the
+    # permission layer is defence in depth rather than the boundary. `--add-dir`
+    # carries the repository root because the role's cwd is its own directory while
+    # its subject is the tree it audits.
+    LAUNCH=(
+      "$PROVIDER_BIN"
+      --dangerously-skip-permissions
+      --add-dir "$ROOT"
+      --model claude-opus-5
+      --effort xhigh
+    )
+    if [ "$MODE" = run ]; then
+      LAUNCH+=(--print)
+    elif [ "$MODE" = resume ]; then
+      LAUNCH+=(--continue)
+    fi
+    ;;
+esac
+
+if [ "$MODE" = run ]; then
+  exec "${BWRAP[@]}" "${LAUNCH[@]}" < "$BRIEF_REAL"
+fi
+exec "${BWRAP[@]}" "${LAUNCH[@]}"

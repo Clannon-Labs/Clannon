@@ -19,12 +19,14 @@ import type {
   SignupInput,
   UsageSummary,
   User,
+  WaitlistJoinInput,
 } from "./types";
 
 /**
  * The one interface every page talks to. Two implementations:
- * the mock simulator (default) and the http client. Which one you
- * get is decided by `appConfig.apiMode` — change the config, not
+ * the explicit mock simulator and the default HTTP client. Which one you
+ * get is decided by `appConfig.apiMode` — HTTP unless mock is explicitly
+ * selected. Change the config, not
  * the components. Get an instance via `getClient()` from `@/lib/api`.
  */
 export interface ClannonClient {
@@ -35,7 +37,14 @@ export interface ClannonClient {
   getRemoteConfig(): Promise<RemoteConfig | null>;
 
   login(input: Credentials): Promise<User>;
+  /** Rejects with a 403 `ApiError` when the waitlist is on and no (valid)
+   *  `approvalToken` is present — see `SignupInput`. */
   signup(input: SignupInput): Promise<User>;
+  /** Always resolves — join/resend never disclose list membership (see
+   *  `specification/api/ROUTES.md` §Waitlist), so there is nothing for the
+   *  UI to branch on beyond "it didn't throw" vs. a rate-limit 429. */
+  joinWaitlist(input: WaitlistJoinInput): Promise<void>;
+  resendWaitlistVerification(email: string): Promise<void>;
   /**
    * OAuth sign-in. The http client navigates the browser to the
    * backend's OAuth start route (the returned promise never settles

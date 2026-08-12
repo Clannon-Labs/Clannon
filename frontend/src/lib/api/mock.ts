@@ -27,6 +27,7 @@ import {
   type SubscriptionStatus,
   type UsageSummary,
   type User,
+  type WaitlistJoinInput,
 } from "./types";
 import {
   buildRunScript,
@@ -49,6 +50,17 @@ const EMPTY_ACCOUNT_KEY = "clannon.mock.emptyAccount";
 // scheduled. Persisted (not instance state) for the same reason SESSION_KEY
 // is — a full page reload rebuilds MockClient from scratch.
 const CANCEL_EFFECTIVE_AT_KEY = "clannon.mock.cancelEffectiveAt";
+
+// Mirrors the committed default in config/backend/waitlist.yaml (enabled: true) —
+// see specification/api/requests/2026-08-10_config-waitlist-enabled-flag.md for
+// why the mock can't read the real flag yet and fails closed to match production.
+const MOCK_WAITLIST_ENABLED = true;
+// There's no real inbox in mock mode, so an approval link can't be clicked. This
+// fixed token is the only way to reach the "approved" branch of /signup — the
+// join page's mock-only hint tells a tester it exists. Anything else non-empty
+// exercises the real invalid/expired 403 path.
+const MOCK_APPROVAL_TOKEN = "demo-approved";
+const MOCK_APPROVAL_EMAIL = "you@studio.com";
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -91,6 +103,32 @@ function modalityOf(file: File): string {
   if (file.type.startsWith("video/")) return "video";
   if (file.type.includes("pdf")) return "pdf";
   return "text";
+}
+
+/** A small valid PDF keeps the mock preview path browser-testable without fixtures. */
+function mockPdf(): string {
+  const stream = "BT /F1 18 Tf 72 720 Td (Clannon source pack) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets
+    .slice(1)
+    .map((offset) => `${offset.toString().padStart(10, "0")} 00000 n \n`)
+    .join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
 }
 
 /**
@@ -171,6 +209,7 @@ export class MockClient implements ClannonClient {
       version: "mock",
       features: { ...appConfig.features },
       limits: { ...appConfig.limits },
+      waitlistEnabled: MOCK_WAITLIST_ENABLED,
     };
   }
 
@@ -198,12 +237,28 @@ export class MockClient implements ClannonClient {
     return user;
   }
 
-  async signup({ name, email, password }: SignupInput): Promise<User> {
+  async signup({ name, email, password, approvalToken }: SignupInput): Promise<User> {
     await sleep(800);
     if (password.length < 8) {
       throw new ApiError("Password must be at least 8 characters.", 422);
     }
-    const user: User = { id: "u_demo", name, email, plan: "free" };
+    // Mirrors backend/api/app.py's signup(): while the waitlist is on, the
+    // account's email comes from the approval token, and the open-signup
+    // email field is ignored entirely — never trust the body over the token.
+    let accountEmail: string;
+    if (MOCK_WAITLIST_ENABLED) {
+      if (!approvalToken) {
+        throw new ApiError("Signups are invite-only right now. Join the waitlist.", 403);
+      }
+      if (approvalToken !== MOCK_APPROVAL_TOKEN) {
+        throw new ApiError("This invite link is invalid or has expired.", 403);
+      }
+      accountEmail = MOCK_APPROVAL_EMAIL;
+    } else {
+      if (!email) throw new ApiError("Email is required.", 422);
+      accountEmail = email;
+    }
+    const user: User = { id: "u_demo", name, email: accountEmail, plan: "free" };
     this.billingAnchor = new Date();
     // Signup must exercise a truthful first-user state. Seeded agency data is
     // useful for returning-user screenshots, but showing it to a new account
@@ -216,6 +271,37 @@ export class MockClient implements ClannonClient {
     this.clearCancelSchedule();
     this.persistSession(user);
     return user;
+  }
+
+  // Shared across join + resend, mirroring the real per-IP `_auth_rate_limit`
+  // both waitlist routes reuse (waitlist.py's `_rate_limit`) — deliberately
+  // NOT keyed by email, since a per-address signal would leak list membership
+  // through timing/behavior even though the response body never does.
+  private waitlistCallTimes: number[] = [];
+
+  private waitlistRateLimit(): void {
+    const now = Date.now();
+    this.waitlistCallTimes = this.waitlistCallTimes.filter((t) => now - t < 60_000);
+    if (this.waitlistCallTimes.length >= 5) {
+      throw new ApiError("Too many attempts — wait a minute and try again.", 429);
+    }
+    this.waitlistCallTimes.push(now);
+  }
+
+  async joinWaitlist(input: WaitlistJoinInput): Promise<void> {
+    await sleep(500);
+    this.waitlistRateLimit();
+    // Always resolves — see ClannonClient.joinWaitlist. Nothing to persist:
+    // there's no real inbox in mock mode to deliver a verify link to, so
+    // /waitlist/confirmed is reached via the mock-only hint on the join page,
+    // not a real round trip.
+    void input;
+  }
+
+  async resendWaitlistVerification(email: string): Promise<void> {
+    await sleep(400);
+    this.waitlistRateLimit();
+    void email;
   }
 
   async loginWithProvider(provider: OAuthProvider): Promise<User> {
@@ -445,6 +531,9 @@ export class MockClient implements ClannonClient {
         ["metric,value\nmarket size 2026,£3.4B\nDTC price band,£22–£38\nlead time,6–9 weeks\n"],
         { type: "text/csv" },
       );
+    }
+    if (/\.pdf$/i.test(name)) {
+      return new Blob([mockPdf()], { type: "application/pdf" });
     }
     return new Blob([`mock artifact — ${name}`], { type: "text/plain" });
   }

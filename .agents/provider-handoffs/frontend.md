@@ -2,7 +2,166 @@
 
 Transfers live frontend work between Claude Code and Codex.
 
-## Current checkpoint
+## Current checkpoint — F-01 build-phase bypass closed (2026-08-12, later same day)
+
+- Provider: Claude Code (headless `frontend-worker`, dispatched by backend-coordinator)
+- Task: close `proposals/to-frontend/2026-08-12_close-debug-prerender-mock-bypass.md`.
+  Independent `frontend-audit` report_v3 (retest of `adea99a`) found the NODE_ENV-based
+  F-01 guard below was bypassable: `NEXT_PUBLIC_API_MODE=mock next build
+  --debug-prerender` exits 0 and produces a deployable build wired to `MockClient`,
+  because that flag forces Turbopack to inline `NODE_ENV` as `"development"` in the
+  compiled chunks while the guard's default parameter reads exactly that inlined value.
+- Verified the premise myself before touching anything: reproduced the exact bypass
+  (`NEXT_PUBLIC_API_MODE=mock node node_modules/next/dist/bin/next build
+  --debug-prerender` → exit 0, `.next` chunks contained `clannon.mock.session` etc.)
+  and confirmed a normal build still failed closed (exit 1) — both matched report_v3
+  exactly.
+- Root cause confirmed by reading the installed Next source
+  (`node_modules/next/dist/cli/next-build.js:65`, `next/dist/build/index.js:421,1131`)
+  and by empirical probes (temporary console.error instrumentation, reverted before
+  the real fix): the `phase` argument Next's CLI passes to a function-form
+  `next.config.ts`, and `process.env.NEXT_PHASE` (which Next sets during the build's
+  page-data-collection step), are **both** `"phase-production-build"` for every
+  `next build` invocation — with or without `--debug-prerender`. NODE_ENV is the only
+  signal that flag can steer; phase cannot be.
+- Fix: new `src/config/api-mode.ts` — one pure `resolveApiMode(value, phase)`, gating
+  on `phase === PHASE_PRODUCTION_BUILD` (imported from `next/constants`, not a
+  hand-typed string) instead of NODE_ENV. Two callers share it:
+  - `next.config.ts` now exports the phase-aware function form
+    `(phase) => NextConfig` (Next's documented "Async Configuration" / `Phase`
+    pattern) and calls `resolveApiMode(process.env.NEXT_PUBLIC_API_MODE, phase)` at
+    the top, before `buildNextConfig()` runs — this is the authoritative,
+    build-aborting gate: it throws during config load, before Turbopack starts, so
+    `--debug-prerender` never gets a compiled chunk to inline anything into.
+  - `src/config/app.config.ts` calls the same function with
+    `process.env.NEXT_PHASE` as defense-in-depth (kept as a second call to the one
+    shared door, not a second rule).
+  - Old inline `resolveApimode`/NODE_ENV logic in `app.config.ts` removed; its false
+    comment ("that variable is set by `next build` itself") is gone along with it.
+- Verification, all real:
+  1. `NEXT_PUBLIC_API_MODE=mock next build` → exit 1, rejected.
+  2. `NEXT_PUBLIC_API_MODE=mock next build --debug-prerender` → **exit 1 now**
+     (was 0) — the bypass is closed.
+  3. `NEXT_PUBLIC_API_MODE=http next build` → exit 0.
+  4. mode unset → exit 0.
+  5. `NEXT_PUBLIC_API_MODE=mock next dev` → boots clean (`✓ Ready`), no throw.
+  6. `vitest run` 274/274 (273 + 1 new NODE_ENV-vs-phase regression test proving the
+     gate survives an inlined/ambient `NODE_ENV=development` alongside the real
+     production-build phase); `tsc --noEmit` clean; `eslint .` clean.
+- Left uncommitted per dispatch mandate — coordinator reviews and commits. Only the
+  owned files changed: `next.config.ts`, `src/config/api-mode.ts` (new),
+  `src/config/app.config.ts`, `src/tests/app-config-security.test.ts`. Did not touch
+  F-02, F-05/CSP, backend, dependencies, UX, CI, or any doc outside this handoff/comms.
+- No visual behavior changed — no screenshots taken; this is a build/config-time gate,
+  not a UI change.
+- Full detail: proposal response in
+  `proposals/to-frontend/2026-08-12_close-debug-prerender-mock-bypass.md`; today's
+  comms: `comms/2026-08-12/frontend.md`.
+
+## Previous checkpoint — F-01/F-02 remediated; audit retest pending (2026-08-12)
+
+- Provider: Claude Code (headless `frontend-worker`, dispatched by backend-coordinator)
+- Task: close frontend-audit F-01 (production mock-mode auth) and F-02 (client URL
+  boundary) per `proposals/to-frontend/2026-08-12_close-private-alpha-security-blockers.md`.
+  Verified both premises against `dc2cd8e` source and `reports/frontend-audit/report_v2.md`
+  before editing — both confirmed true (see proposal response for exact evidence).
+- **F-01**: `resolveApiMode()` (`src/config/app.config.ts`) now takes a `nodeEnv`
+  parameter, defaulting to `process.env.NODE_ENV`, and throws when `value === "mock"
+  && nodeEnv === "production"`. Missing/empty still resolves to `"http"` regardless of
+  environment; unknown/case-mismatched values still throw independent of environment.
+  Measured: `next build` always forces production semantics internally (confirmed
+  empirically — passing `NODE_ENV=development` to `next build` still produced a
+  production build and triggered the mock rejection), so the non-production/mock
+  acceptance branch is proven at the `resolveApiMode()` unit level, not via `next
+  build` — there is no such thing as a non-production `next build`. `next dev` and the
+  test runner set `NODE_ENV` correctly themselves.
+- **F-02**: `normalizeHttpUrl()` (`src/config/url-policy.ts`) now rejects
+  credential-bearing URLs (`parsed.username || parsed.password`) and malformed percent
+  escapes (new `hasMalformedPercentEscape()`, scanning the raw string the same way
+  `backend/api/run_sources.py:_client_source_url` does — read-only reference, not
+  edited) while still accepting safe percent-encoded path/query values. Single shared
+  function; both `run-event.ts` (SSE) and `expert-panel.tsx` (render) already call it,
+  so no second validator was added.
+- Verification: focused `vitest run src/tests/app-config-security.test.ts` 30/30;
+  full `npm test -- --run` 273/273; `npm run typecheck` clean; `npm run lint` clean;
+  four `next build` runs proving each F-01 branch by exact exit code
+  (prod+unset→0/http, prod+mock→1 with the exact throw message, prod+http→0,
+  case-mismatched→1 regardless of env). No Playwright run — no visual UI changed, and
+  the existing unit/build evidence already proves every required branch; recorded
+  explicitly rather than fabricating screenshot evidence for a non-visual change.
+- Left uncommitted per dispatch mandate — coordinator reviews and commits. Only the
+  three owned files changed:
+  `src/config/app.config.ts`, `src/config/url-policy.ts`,
+  `src/tests/app-config-security.test.ts`. `e2e/security-boundaries.spec.ts` was in
+  the owned-path list but deliberately left untouched (no material behavior a
+  Playwright run would add over the unit/build evidence above).
+- Finding status remains OPEN until independent `frontend-audit` retests exact
+  committed revision. Implementer evidence does not self-close audit findings.
+- Full detail: proposal response in
+  `proposals/to-frontend/2026-08-12_close-private-alpha-security-blockers.md`; today's
+  comms: `comms/2026-08-12/frontend.md`.
+
+## Previous checkpoint — private-alpha E2E authentication repaired (2026-08-11)
+
+Coordinator-dispatched frontend Codex worker replaced stale public-signup helpers
+with one `e2e/auth.ts` helper that enters through visible mock UI contracts. Fresh
+accounts use mock's approved-invite URL; returning accounts use `/login`; helper
+first proves the visible mock-only notice, so it refuses an HTTP-backed build.
+`/signup` remains waitlist-gated and now has browser regression coverage. Optional
+real-backend tests remain separate and require explicit opt-in.
+
+Updated billing, completion-state, first-value, History, prompt-action, and security
+specs plus Playwright server/real-backend selection. No product source changed.
+Independent coordinator verification: typecheck clean, ESLint clean, Vitest 258/258,
+fresh default Playwright 15 passed + 1 environment-gated skip in 5.1 minutes.
+
+Frontend-audit report v2 at exact `dc2cd8e9` independently leaves F-01 production
+mock-mode acceptance and F-02 credential/malformed source URLs OPEN; F-05 is low
+residual CSP migration work. F-03 PDF isolation and backend F-04 waitlist ordering
+are mitigated. Owner paused autonomous campaign: do not begin fixes until owner
+reviews/prompts next step. Alpha remains STOP.
+
+## Change note
+
+Integrated test-harness repair without reopening self-serve signup. Recorded owner
+pause and exact surviving audit findings. Previous checkpoint retained below.
+
+## Previous checkpoint — frontend-audit tooling coordination (2026-08-10)
+
+- Provider: Codex
+- Updated: 2026-08-10 (frontend-audit coordinator response handled)
+- Task: owner asked to read backend's live response to frontend's audit-specialist
+  charter and act without relying on memory.
+- Read `proposals/to-frontend/2026-08-10_frontend-audit-root-wiring-is-mine.md`:
+  backend coordinator ruled that all root wiring, role directory, launcher,
+  sandbox boundary, docs, and provider defaults remain backend-owned. Frontend must
+  not create a mirror sandbox. Charter and its two candidate risks remain intentionally
+  unverified until the independent auditor tests them.
+- Completed frontend's only requested action: verified current package versions from
+  `package.json`, lockfile, installed tree, and npm registry. Filed exact isolated
+  runtime pins in
+  `proposals/to-backend/2026-08-10_frontend-audit-pinned-npm-tooling.md`:
+  npm 11.16.0, ESLint 9.39.4, eslint-config-next 16.2.12, TypeScript 5.9.3,
+  Vitest 4.1.9, Playwright 1.62.0. Required exact direct pins plus generated lockfile;
+  project dependencies and lockfile stay read-only.
+- Appended frontend response and archived backend's inbound ruling under
+  `proposals/archive/to-frontend/`. Updated only frontend's own daily comms. No
+  product code, backend code, root audit wiring, or auditor finding was changed.
+- Fresh frontend health before this unit: typecheck clean, lint clean, Vitest 227/227.
+  Product benchmark remains **85.87 -> 86/100**.
+- Workspace at action start: `main` ahead of `origin/main` by five coordinator/auditor
+  commits; `backend/pyproject.toml` was concurrently dirty and remains untouched.
+- Next: backend coordinator consumes the pinned manifest and builds the
+  role-parameterized frontend-audit wiring. Frontend waits for validated findings,
+  then remediates only frontend-owned findings; it does not self-audit or self-clear.
+
+## Earlier change note
+
+Replaced stale 2026-08-09 product checkpoint with exact frontend-audit coordination
+state. Key boundary: frontend supplied tool requirements only; backend owns sandbox
+wiring; independent auditor owns verification.
+
+## Previous checkpoint (2026-08-09)
 
 - Provider: Codex
 - Updated: 2026-08-09 (state-reconciliation session)

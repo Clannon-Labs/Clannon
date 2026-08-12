@@ -327,6 +327,15 @@ export interface RemoteConfig {
   features?: { demo?: boolean; billing?: boolean };
   /** Overrides appConfig.limits when present. */
   limits?: { briefMinChars?: number };
+  /**
+   * `settings.WAITLIST.enabled` — whether `POST /auth/signup` requires an
+   * `approvalToken`. Filed: specification/api/requests/2026-08-10_config-waitlist-enabled-flag.md
+   * (not built server-side yet). Absent field, `null` config (unreachable
+   * backend), and explicit `true` all mean the same thing to the UI — see
+   * `useWaitlistEnabled()` in `hooks.ts`. Only an explicit `false` opens the
+   * ordinary signup form.
+   */
+  waitlistEnabled?: boolean;
 }
 
 /* ---------- auth ---------- */
@@ -336,8 +345,24 @@ export interface Credentials {
   password: string;
 }
 
-export interface SignupInput extends Credentials {
+/**
+ * Mirrors backend `SignupBody` exactly (`backend/api/app.py`), because the
+ * private-alpha gate (owner ruling 2026-08-09) makes both fields conditional
+ * on the SAME request shape rather than two endpoints: `email` is required
+ * when the waitlist is off, ignored (the token supplies it) when it's on;
+ * `approvalToken` is the reverse. The signup page decides which it has.
+ */
+export interface SignupInput {
   name: string;
+  password: string;
+  email?: string;
+  approvalToken?: string;
+}
+
+export interface WaitlistJoinInput {
+  email: string;
+  /** Free text, capped at `note_max_chars` (1000) server-side. */
+  note?: string;
 }
 
 /** The concrete "what can I do about it" options a 402 offers — rendered as

@@ -23,6 +23,14 @@ log = logging.getLogger(__name__)
 
 _CAPABILITY_PACKAGES = ("tools", "experts")
 
+# Owner-approved private-alpha policy. These capabilities are deliberately absent
+# from registry discovery, so prompt text, model output, and direct key calls cannot
+# authorize external mutation. Re-enabling one is a code-reviewed policy change,
+# not an environment toggle or prompt edit.
+PRIVATE_ALPHA_DENIED_TOOL_KEYS = frozenset({"http.request"})
+PRIVATE_ALPHA_DENIED_EXPERT_KEYS = frozenset({"delivery.notifier"})
+PRIVATE_ALPHA_DENIED_KEYS = PRIVATE_ALPHA_DENIED_TOOL_KEYS | PRIVATE_ALPHA_DENIED_EXPERT_KEYS
+
 # (module_name, error) for capability modules that raised AT IMPORT time during
 # discover(). Surfaced via import_failures() so a skipped module is visible, not
 # silent — the import-time analogue of the registry's BROKEN (malformed-metadata) list.
@@ -54,6 +62,8 @@ def tool(cls: type | None = None, *, enabled: bool = True) -> type:
             eager=getattr(target, "eager", False),
             timeout_s=getattr(target, "timeout_s", None),
         )
+        if spec.key in PRIVATE_ALPHA_DENIED_TOOL_KEYS:
+            return target
         registry.register(spec, validate(spec))
         return target
 
@@ -89,6 +99,8 @@ def expert(cls: type | None = None, *, enabled: bool = True) -> type:
             tool_grants=tuple(getattr(target, "tools", ())),
             skills=tuple(getattr(target, "skills", ())),
         )
+        if spec.key in PRIVATE_ALPHA_DENIED_EXPERT_KEYS:
+            return target
         registry.register(spec, validate(spec))
         return target
 
