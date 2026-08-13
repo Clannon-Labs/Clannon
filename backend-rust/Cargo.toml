@@ -27,7 +27,8 @@ edition = "2024"
 # serde_json = "1"
 thiserror = "2.0.19"
 
-# Add your internal workspace crates here only if the ROOT package uses them.
+# Add your internal workspace crates here whose definitions can be inherited by
+# any crate in the workspace.
 # Example:
 foundation = { path = "crates/foundation" }
 # api = { path = "crates/api" }
