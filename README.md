@@ -160,10 +160,10 @@ Useful docs:
 
 ## Installation
 
-**Clannon is proprietary and hosted. There is no public download.** It is used
-through the deployed product, not installed by end users.
+**Clannon's repository is open source but we would soon offer a hosted version too. You can see the guide below for installation.** It is used easily
+through the deployed product, but can also be installed by end users if they are okay with the configurations.
 
-What follows is for people working ON Clannon, not people using it.
+What follows is for people working ON/contributing to Clannon, not people using it.
 
 ### The Developer Path
 
